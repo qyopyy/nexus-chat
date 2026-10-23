@@ -9,6 +9,8 @@ const config: CapacitorConfig = {
   appName: "Nexus",
   webDir: "www",
   backgroundColor: "#1e1f22",
+  // "NexusFCM" tells the web app this build has Firebase (google-services.json) → real push when closed
+  appendUserAgent: process.env.NEXUS_FCM === "1" ? "NexusApp NexusFCM" : "NexusApp",
   server: {
     url,
     cleartext: false,
@@ -30,6 +32,8 @@ const config: CapacitorConfig = {
   },
   plugins: {
     Haptics: {},
+    PushNotifications: { presentationOptions: ["badge", "sound", "alert"] },
+    LocalNotifications: { iconColor: "#5865F2" },
   },
 };
 

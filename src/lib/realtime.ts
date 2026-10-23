@@ -23,6 +23,8 @@ import { isEffect, playEffect } from "./effects";
 import { isMuted } from "@/store/prefs";
 import { haptic } from "./haptics";
 import { refreshBadges } from "./admin";
+import { nativeLocalNotify, usePush } from "./push";
+import { isNativeApp } from "./useMobile";
 import type { Message, PresenceState, Profile, Reaction } from "./types";
 
 type CallEvent = { id: string; conversation_id: string; caller_id: string; kind: "ring" | "cancel" | "decline"; created_at: string };
@@ -32,8 +34,14 @@ function notify(m: Message) {
   if (s.myStatus === "dnd" || isMuted(m.conversation_id)) return;
   sfx.message();
   haptic.light();
-  if (typeof Notification === "undefined" || Notification.permission !== "granted" || !document.hidden) return;
   const author = s.profiles[m.author_id]?.display_name ?? "New message";
+  if (isNativeApp()) {
+    if (document.hidden) void nativeLocalNotify(author, m.content || m.attachment_name || "Sent an attachment", m.conversation_id);
+    return;
+  }
+  // with Web Push on, the service worker shows background notifications (no duplicates)
+  if (usePush.getState().state === "on") return;
+  if (typeof Notification === "undefined" || Notification.permission !== "granted" || !document.hidden) return;
   try {
     const n = new Notification(author, { body: m.content || m.attachment_name || "Sent an attachment", tag: m.conversation_id });
     n.onclick = () => window.focus();

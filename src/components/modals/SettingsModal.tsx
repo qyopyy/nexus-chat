@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, Camera, LogOut, Mic, Palette, Shield, Upload, User, X } from "lucide-react";
-import { useApp, closeModal } from "@/store/app";
+import { useApp, closeModal, toast } from "@/store/app";
+import { detectPush, disablePush, enablePush, usePush } from "@/lib/push";
+import { isNativeApp } from "@/lib/useMobile";
 import { useCall, leaveCall, updateSettings, type ScreenQuality } from "@/lib/call";
 import { updateMyProfile, uploadAvatar } from "@/lib/data";
 import { DECORATIONS, roleRank } from "@/lib/theme";
@@ -540,28 +542,105 @@ function VoiceSection() {
 }
 
 function NotificationSection() {
-  const [perm, setPerm] = useState<string>(() => (typeof Notification !== "undefined" ? Notification.permission : "unsupported"));
+  const { state, busy } = usePush();
+  const isOwner = useApp((s) => roleRank(s.userId ? s.profiles[s.userId]?.site_role : null) >= 4);
+  const [status, setStatus] = useState<{ web: boolean; fcm: boolean; devices: number } | null>(null);
+  const [json, setJson] = useState("");
+  const [saving, setSaving] = useState(false);
+  const loadStatus = useCallback(() => {
+    void supabase.rpc("push_status").then(({ data }) => data && setStatus(data as { web: boolean; fcm: boolean; devices: number }));
+  }, []);
+  useEffect(() => {
+    void detectPush().then((st) => usePush.setState({ state: st }));
+    loadStatus();
+  }, [loadStatus, state]);
+
+  const on = state === "on" || state === "native-push" || state === "native-local";
   return (
     <>
       <H>Notifications</H>
       <div className="rounded-xl bg-side p-4">
-        <div className="font-medium">Desktop notifications</div>
-        <p className="mt-1 mb-3 text-sm text-sub">Get notified about new messages while Nexus is in the background. Do Not Disturb silences them.</p>
-        {perm === "granted" ? (
-          <span className="text-sm font-semibold text-ok">Enabled ✓</span>
-        ) : perm === "denied" ? (
-          <span className="text-sm text-dnd">Blocked in your browser settings.</span>
-        ) : perm === "unsupported" ? (
-          <span className="text-sm text-sub">Not supported in this browser.</span>
+        <div className="font-medium">Push notifications on this device</div>
+        <p className="mt-1 mb-3 text-sm text-sub">
+          Get a notification for new messages and incoming calls — even when Nexus is closed. Muted chats and Do Not Disturb stay quiet; in spaces you only get @mentions.
+        </p>
+        {on ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-semibold text-ok">On ✓</span>
+            {state === "native-local" && <span className="text-xs text-sub">Shows while the app runs in the background.</span>}
+            {state === "on" && (
+              <button onClick={() => void disablePush()} className="rounded-md bg-white/10 px-3 py-1.5 text-sm font-semibold hover:bg-white/15">
+                Turn off
+              </button>
+            )}
+          </div>
+        ) : state === "ios-install" ? (
+          <div className="space-y-2 text-sm">
+            <div className="font-semibold">On iPhone, add Nexus to your Home Screen first:</div>
+            <ol className="list-decimal space-y-1 pl-5 text-sub">
+              <li>Open this site in Safari</li>
+              <li>Tap Share → Add to Home Screen</li>
+              <li>Open Nexus from the new icon, sign in, and come back here</li>
+            </ol>
+          </div>
+        ) : state === "denied" ? (
+          <span className="text-sm text-dnd">Blocked — allow notifications for Nexus in your {isNativeApp() ? "phone settings" : "browser / phone settings"}, then reopen.</span>
+        ) : state === "unsupported" ? (
+          <span className="text-sm text-sub">Not supported here. Use Chrome, Edge, Firefox or Safari (on iPhone: the Home Screen app).</span>
         ) : (
-          <button
-            onClick={async () => setPerm(await Notification.requestPermission())}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-2"
-          >
-            Enable notifications
+          <button disabled={busy} onClick={() => void enablePush()} className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-2 disabled:opacity-60">
+            {busy ? "Turning on…" : "Turn on notifications"}
           </button>
         )}
+        {status && <div className="mt-3 text-xs text-sub">Devices receiving your notifications: {status.devices}</div>}
       </div>
+
+      {isOwner && (
+        <div className="mt-4 rounded-xl bg-side p-4">
+          <div className="font-medium">Android app push (Firebase)</div>
+          <p className="mt-1 mb-3 text-sm text-sub">
+            Web push is {status?.web ? "ready ✓" : "not set up"}. For notifications in the Android APK while it's fully closed, paste a Firebase service-account key (Firebase console →
+            Project settings → Service accounts → Generate new private key). Status: {status?.fcm ? <b className="text-ok">connected ✓</b> : "not connected"}
+          </p>
+          <textarea
+            value={json}
+            onChange={(e) => setJson(e.target.value)}
+            rows={4}
+            placeholder='{"type": "service_account", ...}'
+            className="w-full rounded-md bg-black/30 p-2 font-mono text-xs outline-none"
+          />
+          <div className="mt-2 flex gap-2">
+            <button
+              disabled={saving || !json.trim()}
+              onClick={async () => {
+                setSaving(true);
+                const { error } = await supabase.rpc("set_fcm_service_account", { p_json: json.trim() });
+                setSaving(false);
+                if (error) toast(error.message, "error");
+                else {
+                  setJson("");
+                  toast("Firebase connected", "success");
+                  loadStatus();
+                }
+              }}
+              className="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Save
+            </button>
+            {status?.fcm && (
+              <button
+                onClick={async () => {
+                  await supabase.rpc("set_fcm_service_account", { p_json: "" });
+                  loadStatus();
+                }}
+                className="rounded-md bg-white/10 px-3 py-1.5 text-sm font-semibold"
+              >
+                Disconnect
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

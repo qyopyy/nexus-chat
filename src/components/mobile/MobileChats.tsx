@@ -10,6 +10,7 @@ import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import Sheet, { SheetGroup, SheetItem } from "@/components/ui/Sheet";
 import StoriesStrip from "./StoriesStrip";
+import PushPrompt from "./PushPrompt";
 import SwipeRow from "./SwipeRow";
 import LargeTitle from "./LargeTitle";
 import type { ChatListItem } from "@/lib/types";
@@ -130,6 +131,7 @@ export default function MobileChats() {
           )}
         </div>
 
+        {!searching && <PushPrompt />}
         {!searching && <StoriesStrip />}
 
         {/* folders */}

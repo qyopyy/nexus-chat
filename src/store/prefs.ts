@@ -20,8 +20,11 @@ export function togglePin(id: string) {
 }
 
 export function toggleMute(id: string) {
-  usePrefs.setState((s) => ({ muted: s.muted.includes(id) ? s.muted.filter((x) => x !== id) : [...s.muted, id] }));
+  const on = !usePrefs.getState().muted.includes(id);
+  usePrefs.setState((s) => ({ muted: on ? [...s.muted, id] : s.muted.filter((x) => x !== id) }));
   persist();
+  // muted chats also stop phone/browser push notifications
+  void import("@/lib/push").then((m) => m.syncMute(id, on)).catch(() => {});
 }
 
 export function isMuted(id: string) {

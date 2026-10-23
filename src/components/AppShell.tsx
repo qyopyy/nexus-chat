@@ -24,6 +24,7 @@ import MobileShell from "./mobile/MobileShell";
 import EffectsLayer from "./effects/EffectsLayer";
 import { useIsMobile } from "@/lib/useMobile";
 import { startSpotifySync } from "@/lib/spotifyUser";
+import { startPush } from "@/lib/push";
 import MusicHub from "./music/MusicHub";
 import VideosHub from "./videos/VideosHub";
 import Studio from "./studio/Studio";
@@ -62,7 +63,9 @@ export default function AppShell({ userId, initialVideo }: { userId: string; ini
     videosGo({ view: "watch", key: initialVideo });
   }, [initialVideo]);
   useEffect(() => {
-    if (bootstrapped) startSpotifySync();
+    if (!bootstrapped) return;
+    startSpotifySync();
+    void startPush();
   }, [bootstrapped]);
 
   // keep realtime JWT fresh after token refresh
