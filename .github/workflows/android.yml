@@ -23,6 +23,8 @@ jobs:
     env:
       NEXUS_URL: ${{ inputs.url || vars.NEXUS_URL || 'https://nexus-chat-plum.vercel.app' }}
       HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      # optional: Firebase google-services.json (whole file as a secret) → push notifications while the app is closed
+      GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
     steps:
       - uses: actions/checkout@v4
 
@@ -41,7 +43,9 @@ jobs:
       - name: Create Android project
         run: |
           echo "App will open: $NEXUS_URL"
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then export NEXUS_FCM=1; echo "Firebase push: on"; else echo "Firebase push: off (local notifications only)"; fi
           npx cap add android
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json; fi
           npx cap sync android
 
       - name: Permissions, icon, version
