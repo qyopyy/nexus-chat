@@ -1,0 +1,13 @@
+{
+  "name": "Nexus",
+  "short_name": "Nexus",
+  "description": "Chat, voice, video and screen sharing with your friends.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1e1f22",
+  "theme_color": "#1e1f22",
+  "icons": [
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
