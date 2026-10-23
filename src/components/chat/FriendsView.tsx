@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowLeft, Check, MessageCircle, Phone, UserMinus, Users, X } from "lucide-react";
+import { Check, MessageCircle, Phone, UserMinus, UserPlus, Users, X } from "lucide-react";
 import { useApp } from "@/store/app";
 import { startCall } from "@/lib/call";
 import { openDM, removeFriend, respondFriendRequest, sendFriendRequest } from "@/lib/data";
@@ -47,29 +47,39 @@ export default function FriendsView() {
   return (
     <div className="flex h-full min-h-0">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-2 overflow-x-auto border-b border-black/25 px-3 shadow-sm">
-          <button onClick={() => useApp.setState({ mobileSidebar: true })} className="rounded p-1 text-sub hover:text-txt md:hidden" aria-label="Back">
-            <ArrowLeft className="size-5" />
-          </button>
-          <Users className="size-5 shrink-0 text-sub" />
-          <span className="mr-2 font-semibold">Friends</span>
-          <div className="mx-1 h-6 w-px bg-line" />
-          {(["online", "all", "pending"] as const).map((t) => (
+        <header className="shrink-0 border-b border-black/25 md:flex md:h-14 md:items-center md:gap-2 md:px-3 md:shadow-sm">
+          <div className="flex items-center gap-2 px-4 pt-2 pb-2 md:p-0">
+            <Users className="hidden size-5 shrink-0 text-sub md:block" />
+            <span className="text-[34px] leading-tight font-extrabold tracking-tight md:mr-2 md:text-base md:font-semibold md:tracking-normal">Friends</span>
             <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={cn("flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium whitespace-nowrap capitalize transition", tab === t ? "bg-active text-white" : "text-sub hover:bg-hover hover:text-txt")}
+              onClick={() => setTab("add")}
+              className="ml-auto flex items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-sm font-semibold text-white active:scale-95 md:hidden"
             >
-              {t}
-              {t === "pending" && incoming > 0 && <span className="rounded-full bg-dnd px-1.5 text-xs font-bold text-white">{incoming}</span>}
+              <UserPlus className="size-4" /> Add
             </button>
-          ))}
-          <button
-            onClick={() => setTab("add")}
-            className={cn("rounded-md px-2.5 py-1 text-sm font-semibold whitespace-nowrap transition", tab === "add" ? "bg-transparent text-ok" : "bg-ok text-white hover:bg-ok/85")}
-          >
-            Add Friend
-          </button>
+          </div>
+          <div className="mx-1 hidden h-6 w-px bg-line md:block" />
+          <div className="no-scrollbar flex items-center gap-2 overflow-x-auto px-4 pb-3 md:gap-2 md:p-0">
+            {(["online", "all", "pending"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={cn(
+                  "flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold whitespace-nowrap capitalize transition md:rounded-md md:px-2.5 md:py-1 md:font-medium",
+                  tab === t ? "bg-accent text-white md:bg-active" : "bg-white/[.07] text-sub hover:text-txt md:bg-transparent md:hover:bg-hover",
+                )}
+              >
+                {t}
+                {t === "pending" && incoming > 0 && <span className="rounded-full bg-dnd px-1.5 text-xs font-bold text-white">{incoming}</span>}
+              </button>
+            ))}
+            <button
+              onClick={() => setTab("add")}
+              className={cn("hidden rounded-md px-2.5 py-1 text-sm font-semibold whitespace-nowrap transition md:block", tab === "add" ? "bg-transparent text-ok" : "bg-ok text-white hover:bg-ok/85")}
+            >
+              Add Friend
+            </button>
+          </div>
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-8">
@@ -113,7 +123,7 @@ export default function FriendsView() {
                     <RoundBtn label="Call" onClick={() => void callFriend(id)}>
                       <Phone className="size-[18px]" />
                     </RoundBtn>
-                    <RoundBtn label="Remove friend" danger onClick={() => confirm(`Remove ${p?.display_name} from friends?`) && void removeFriend(id)}>
+                    <RoundBtn label="Remove friend" danger className="hidden sm:grid" onClick={() => confirm(`Remove ${p?.display_name} from friends?`) && void removeFriend(id)}>
                       <UserMinus className="size-[18px]" />
                     </RoundBtn>
                   </div>
@@ -148,13 +158,13 @@ export default function FriendsView() {
   );
 }
 
-function RoundBtn({ children, label, onClick, danger }: { children: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
+function RoundBtn({ children, label, onClick, danger, className }: { children: React.ReactNode; label: string; onClick: () => void; danger?: boolean; className?: string }) {
   return (
     <button
       onClick={onClick}
       title={label}
       aria-label={label}
-      className={cn("grid size-9 place-items-center rounded-full bg-side text-sub transition", danger ? "hover:text-dnd" : "hover:text-txt")}
+      className={cn("grid size-10 place-items-center rounded-full bg-side text-sub transition active:scale-90 md:size-9", danger ? "hover:text-dnd" : "hover:text-txt", className)}
     >
       {children}
     </button>

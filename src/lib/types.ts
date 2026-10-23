@@ -12,6 +12,84 @@ export type Profile = {
   bio: string | null;
   banned_until: string | null;
   ban_reason: string | null;
+  links?: ProfileLink[];
+  banner_url?: string | null;
+  profile_song?: string | null;
+  now_playing?: NowPlaying | null;
+  forum_name?: string | null;
+  member_no?: number | null;
+  muted_until?: string | null;
+  mute_reason?: string | null;
+};
+
+export type ProfileLink = { type: string; url: string; label?: string };
+export type NowPlaying = { title: string; artist: string; url?: string | null; image?: string | null; at: string };
+
+export type ArtistPage = {
+  id: string;
+  spotify_id: string | null;
+  handle: string;
+  name: string;
+  image_url: string | null;
+  bio: string | null;
+  owner_id: string | null;
+  verified: boolean;
+  created_at: string;
+};
+
+export type ArtistPost = {
+  id: string;
+  page_id: string;
+  author_id: string;
+  content: string;
+  media_url: string | null;
+  media_type: string | null;
+  link_url: string | null;
+  deleted_at: string | null;
+  created_at: string;
+};
+
+export type ArtistComment = {
+  id: string;
+  post_id: string;
+  author_id: string;
+  content: string;
+  deleted_at: string | null;
+  created_at: string;
+};
+
+export type ArtistClaim = {
+  id: string;
+  spotify_id: string;
+  artist_name: string;
+  artist_image: string | null;
+  requested_handle: string;
+  user_id: string;
+  proof: string | null;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+};
+
+export type SpaceTrack = {
+  id: string;
+  space_id: string;
+  title: string;
+  artist: string | null;
+  url: string;
+  kind: "upload" | "spotify";
+  duration: number | null;
+  added_by: string | null;
+  removed_at: string | null;
+  created_at: string;
+};
+
+export type SpacePlayer = {
+  space_id: string;
+  track_id: string | null;
+  is_playing: boolean;
+  position: number;
+  updated_at: string;
+  updated_by: string | null;
 };
 
 export type Badge = {
@@ -35,6 +113,8 @@ export type AdminUserRow = {
   site_role: Profile["site_role"];
   banned_until: string | null;
   ban_reason: string | null;
+  muted_until?: string | null;
+  member_no?: number | null;
   created_at: string;
   email: string | null;
   message_count: number;
@@ -64,6 +144,7 @@ export type Space = {
   owner_id: string;
   invite_code: string;
   created_at: string;
+  music_enabled?: boolean;
 };
 
 export type SpaceMember = {
@@ -109,6 +190,8 @@ export type Message = {
   edited_at: string | null;
   deleted_at: string | null;
   created_at: string;
+  /** full-screen effect: confetti | hearts | fireworks | lasers | balloons | snow */
+  effect?: string | null;
   /** client-only: optimistic message not yet confirmed */
   pending?: boolean;
 };

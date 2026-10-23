@@ -43,6 +43,17 @@
     0%, 100% { box-shadow: 0 0 0 0 rgb(35 165 90 / .6); }
     50%      { box-shadow: 0 0 0 14px rgb(35 165 90 / 0); }
   }
+  --animate-sheet: sheet 320ms cubic-bezier(.2,.9,.25,1);
+  --animate-push: push 300ms cubic-bezier(.2,.9,.25,1);
+
+  @keyframes sheet {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+  @keyframes push {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0); }
+  }
   @keyframes shake {
     0%, 100% { transform: translateX(0); }
     20%, 60% { transform: translateX(-8px); }
@@ -56,7 +67,7 @@ html {
 }
 body {
   height: 100%;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
   box-sizing: border-box;
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
@@ -230,4 +241,69 @@ input[type="range"].vol::-moz-range-thumb {
 /* iOS: stop auto-zoom on input focus */
 @supports (-webkit-touch-callout: none) {
   input, textarea, select { font-size: max(16px, 1em); }
+}
+
+/* ---------------------------------------------------------------- mobile / iOS */
+.pb-safe   { padding-bottom: env(safe-area-inset-bottom); }
+.pb-safe-2 { padding-bottom: max(.5rem, env(safe-area-inset-bottom)); }
+.pt-safe-3 { padding-top: max(.75rem, env(safe-area-inset-top)); }
+.mb-safe-3 { margin-bottom: max(.75rem, env(safe-area-inset-bottom)); }
+@media (min-width: 640px) { .composer.pb-safe-2 { padding-bottom: .75rem; } }
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+@media (hover: none) {
+  .hover-only { display: none !important; }
+  button, a { -webkit-touch-callout: none; }
+}
+
+/* stories ring (gradient lives on ::before so it can spin without rotating the avatar) */
+.story-ring { position: relative; display: inline-block; isolation: isolate; background: none !important; }
+.story-ring::before { content: ""; position: absolute; inset: 0; border-radius: 9999px; z-index: -1; }
+.story-online::before { background: linear-gradient(135deg, #2aabee, #5865f2); }
+.story-voice::before  { background: conic-gradient(from 0deg, #23a55a, #2aabee, #23a55a); animation: deco-spin 3s linear infinite; }
+.story-live::before   { background: conic-gradient(from 0deg, #f23f43, #ff9d00, #ff73fa, #f23f43); animation: deco-spin 2s linear infinite; }
+
+/* equalizer in call pill */
+.eq { display: block; width: 3px; height: 30%; border-radius: 2px; background: currentColor; transition: height .15s; }
+.eq-on .eq { animation: eq .6s ease-in-out infinite alternate; }
+.eq-on .eq:nth-child(2) { animation-delay: .15s; }
+.eq-on .eq:nth-child(3) { animation-delay: .3s; }
+@keyframes eq { from { height: 25%; } to { height: 100%; } }
+
+/* speaking pulse on big call avatars */
+.voice-pulse { animation: voice-pulse 1s ease-out infinite; }
+@keyframes voice-pulse {
+  0% { box-shadow: 0 0 0 0 rgb(35 165 90 / .7); }
+  100% { box-shadow: 0 0 0 26px rgb(35 165 90 / 0); }
+}
+
+/* double-tap heart */
+.heart-burst { animation: heart-burst .8s cubic-bezier(.2,.9,.3,1.3) forwards; filter: drop-shadow(0 4px 12px rgb(0 0 0 / .4)); }
+@keyframes heart-burst {
+  0%   { transform: scale(0); opacity: 0; }
+  25%  { transform: scale(1.25); opacity: 1; }
+  45%  { transform: scale(.95); }
+  70%  { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1.4) translateY(-20px); opacity: 0; }
+}
+
+/* message sent with an effect */
+.effect-glow { box-shadow: 0 0 0 1px rgb(255 255 255 / .12), 0 0 18px -2px color-mix(in srgb, var(--color-accent) 70%, transparent); }
+
+/* tab bar never blocks the home indicator */
+.tabbar { -webkit-user-select: none; user-select: none; }
+
+/* ---------- verified badge: white check with a soft white glow ---------- */
+.verified-glow {
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 6px rgba(255, 255, 255, 0.65));
+  animation: verified-pulse 2.6s ease-in-out infinite;
+}
+@keyframes verified-pulse {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.9)) drop-shadow(0 0 5px rgba(255, 255, 255, 0.5)); }
+  50% { filter: drop-shadow(0 0 3px rgba(255, 255, 255, 1)) drop-shadow(0 0 10px rgba(255, 255, 255, 0.85)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .verified-glow { animation: none; }
 }

@@ -7,6 +7,7 @@ import { useCall, joinCall } from "@/lib/call";
 import { deleteSpace, leaveSpace, openConversation } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
+import SpaceMusic from "@/components/music/SpaceMusic";
 import type { Conversation } from "@/lib/types";
 
 const EMPTY: Conversation[] = [];
@@ -154,6 +155,7 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
           );
         })}
         {voice.length === 0 && text.length === 0 && <p className="px-2 text-sm text-sub">No channels yet.</p>}
+        <SpaceMusic spaceId={spaceId} />
         <p className="mt-6 flex items-center gap-1.5 px-2 text-xs text-faint">
           <MonitorUp className="size-3.5" /> Join a voice channel to talk, stream & share your screen.
         </p>

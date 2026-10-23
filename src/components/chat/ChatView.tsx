@@ -11,6 +11,10 @@ import MessageList from "./MessageList";
 import Composer from "./Composer";
 import CallStage from "@/components/call/CallStage";
 import Avatar from "@/components/ui/Avatar";
+import MobileCallScreen from "@/components/call/MobileCallScreen";
+import MobileCallBar from "@/components/mobile/MobileCallBar";
+import { useIsMobile } from "@/lib/useMobile";
+import { isMuted } from "@/lib/admin";
 
 export default function ChatView({ conversationId }: { conversationId: string }) {
   const me = useApp((s) => s.userId);
@@ -20,6 +24,15 @@ export default function ChatView({ conversationId }: { conversationId: string })
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [initialUnread] = useState(() => useApp.getState().unread[conversationId] ?? 0);
+  const mobile = useIsMobile();
+  const callMinimized = useApp((s) => s.callMinimized);
+  const myProfile = useApp((s) => (s.userId ? s.profiles[s.userId] : undefined));
+  const muted = isMuted(myProfile);
+
+  // a call that starts in this chat opens full screen on phones
+  useEffect(() => {
+    if (inThisCall) useApp.setState({ callMinimized: false });
+  }, [inThisCall]);
 
   useEffect(() => {
     void loadMessages(conversationId);
@@ -32,7 +45,7 @@ export default function ChatView({ conversationId }: { conversationId: string })
   useTypingChannel(conversationId, me);
 
   const showLobby = kind === "voice" && !inThisCall;
-  const showChat = !showLobby && !(inThisCall && expanded);
+  const showChat = mobile ? !showLobby : !showLobby && !(inThisCall && expanded);
 
   return (
     <div
@@ -53,18 +66,24 @@ export default function ChatView({ conversationId }: { conversationId: string })
         if (f) setFile(f);
       }}
     >
-      <ChatHeader conversationId={conversationId} stageExpanded={expanded} onToggleStage={() => setExpanded((v) => !v)} />
+      <ChatHeader
+        conversationId={conversationId}
+        stageExpanded={mobile ? !callMinimized : expanded}
+        onToggleStage={() => (mobile ? useApp.setState({ callMinimized: false }) : setExpanded((v) => !v))}
+      />
 
       {!inThisCall && kind !== "voice" && <OngoingCallBanner conversationId={conversationId} />}
 
-      {inThisCall && <CallStage conversationId={conversationId} expanded={expanded} onToggleExpand={() => setExpanded((v) => !v)} />}
+      {inThisCall && !mobile && <CallStage conversationId={conversationId} expanded={expanded} onToggleExpand={() => setExpanded((v) => !v)} />}
+      {inThisCall && mobile && !callMinimized && <MobileCallScreen conversationId={conversationId} />}
+      {inThisCall && mobile && callMinimized && <MobileCallBar className="absolute inset-x-0 top-14 z-30 pt-2" />}
 
       {showLobby && <VoiceLobby conversationId={conversationId} />}
 
       {showChat && (
         <>
           <MessageList conversationId={conversationId} initialUnread={initialUnread} />
-          <Composer conversationId={conversationId} file={file} setFile={setFile} />
+          {muted ? <MutedBar until={myProfile?.muted_until ?? null} reason={myProfile?.mute_reason ?? null} /> : <Composer conversationId={conversationId} file={file} setFile={setFile} />}
         </>
       )}
 
@@ -76,6 +95,18 @@ export default function ChatView({ conversationId }: { conversationId: string })
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function MutedBar({ until, reason }: { until: string | null; reason: string | null }) {
+  return (
+    <div className="m-3 mb-safe-3 rounded-2xl bg-idle/10 px-4 py-3 text-center text-sm ring-1 ring-idle/30">
+      <div className="font-semibold text-idle">You can&apos;t send messages right now</div>
+      <div className="text-sub">
+        {until === "infinity" || !until ? "Until a moderator lifts it" : `Until ${new Date(until).toLocaleString()}`}
+        {reason ? ` — ${reason}` : ""}
+      </div>
     </div>
   );
 }

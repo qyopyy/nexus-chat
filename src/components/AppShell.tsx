@@ -20,6 +20,11 @@ import FriendsView from "./chat/FriendsView";
 import IncomingCall from "./call/IncomingCall";
 import Toasts from "./ui/Toasts";
 import Modals from "./modals/Modals";
+import MobileShell from "./mobile/MobileShell";
+import EffectsLayer from "./effects/EffectsLayer";
+import { useIsMobile } from "@/lib/useMobile";
+import { startSpotifySync } from "@/lib/spotifyUser";
+import MusicHub from "./music/MusicHub";
 
 export default function AppShell({ userId }: { userId: string }) {
   const spaceId = useApp((s) => s.spaceId);
@@ -28,6 +33,8 @@ export default function AppShell({ userId }: { userId: string }) {
   const mobileSidebar = useApp((s) => s.mobileSidebar);
   const bootstrapped = useApp((s) => s.bootstrapped);
   const me = useApp((s) => s.profiles[userId]);
+  const mobile = useIsMobile();
+  const musicOpen = useApp((s) => s.musicOpen);
 
   useEffect(() => {
     useApp.setState({ userId });
@@ -40,6 +47,14 @@ export default function AppShell({ userId }: { userId: string }) {
   }, [userId]);
 
   useRealtime(bootstrapped ? userId : null);
+
+  // opening any chat leaves the music hub; Spotify "now playing" sync
+  useEffect(() => {
+    if (conversationId) useApp.setState({ musicOpen: false });
+  }, [conversationId]);
+  useEffect(() => {
+    if (bootstrapped) startSpotifySync();
+  }, [bootstrapped]);
 
   // keep realtime JWT fresh after token refresh
   useEffect(() => {
@@ -62,6 +77,19 @@ export default function AppShell({ userId }: { userId: string }) {
 
   if (isBanned(me)) return <BannedScreen profile={me!} />;
 
+  if (mobile) {
+    return (
+      <>
+        <MobileShell />
+        <IncomingCall />
+        <ProfileCard />
+        <Modals />
+        <Toasts />
+        <EffectsLayer />
+      </>
+    );
+  }
+
   return (
     <div className="flex h-full w-full overflow-hidden bg-rail">
       {/* rail + sidebar */}
@@ -76,7 +104,9 @@ export default function AppShell({ userId }: { userId: string }) {
       {/* main */}
       <main className={cn("h-full min-w-0 flex-1 md:flex", mobileSidebar ? "hidden" : "flex")}>
         <div className="flex h-full min-w-0 flex-1 flex-col bg-chat">
-          {conversationId ? (
+          {musicOpen ? (
+            <MusicHub />
+          ) : conversationId ? (
             <ChatView key={conversationId} conversationId={conversationId} />
           ) : spaceId ? (
             <div className="chat-wallpaper grid flex-1 place-items-center text-sub">Pick a channel to start chatting</div>
@@ -84,7 +114,7 @@ export default function AppShell({ userId }: { userId: string }) {
             <FriendsView />
           )}
         </div>
-        {showMembers && conversationId && (
+        {showMembers && conversationId && !musicOpen && (
           <div className="hidden h-full w-[260px] shrink-0 border-l border-black/20 bg-side lg:block">
             <MemberList conversationId={conversationId} />
           </div>
@@ -95,6 +125,7 @@ export default function AppShell({ userId }: { userId: string }) {
       <ProfileCard />
       <Modals />
       <Toasts />
+      <EffectsLayer />
     </div>
   );
 }

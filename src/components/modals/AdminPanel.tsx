@@ -1,20 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, Award, Ban, ChevronRight, Clock, MessageSquare, RotateCcw, Search, Shield, Trash2, Users } from "lucide-react";
+import { Activity, Award, Ban, ChevronRight, Clock, Lock, MessageSquare, Mic, RotateCcw, Search, Shield, Trash2, Users } from "lucide-react";
+import { ClaimsTab, VaultTab } from "@/components/admin/AdminExtras";
+import { ModerationControls } from "@/components/admin/ModTools";
 import { useApp } from "@/store/app";
 import {
   adminStats,
   auditLog,
-  banUser,
   createBadge,
   deleteBadge,
   grantBadge,
+  isMuted,
   listUsers,
   resetProfile,
   revokeBadge,
   setRole,
-  unbanUser,
 } from "@/lib/admin";
 import { loadProfiles } from "@/lib/data";
 import { ROLE_INFO, roleRank, type SiteRole } from "@/lib/theme";
@@ -23,7 +24,7 @@ import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import type { AdminAction, AdminUserRow, Profile } from "@/lib/types";
 
-type Tab = "overview" | "members" | "badges" | "audit";
+type Tab = "overview" | "members" | "badges" | "claims" | "vault" | "audit";
 const EMPTY: string[] = [];
 
 export default function AdminPanel({ focusUser }: { focusUser: string | null }) {
@@ -37,6 +38,8 @@ export default function AdminPanel({ focusUser }: { focusUser: string | null }) 
     { id: "overview", label: "Overview", icon: <Activity className="size-4" />, min: 2 },
     { id: "members", label: "Members", icon: <Users className="size-4" />, min: 2 },
     { id: "badges", label: "Badges", icon: <Award className="size-4" />, min: 3 },
+    { id: "claims", label: "Artist claims", icon: <Mic className="size-4" />, min: 3 },
+    { id: "vault", label: "File vault", icon: <Lock className="size-4" />, min: 3 },
     { id: "audit", label: "Audit Log", icon: <Clock className="size-4" />, min: 2 },
   ];
 
@@ -72,6 +75,8 @@ export default function AdminPanel({ focusUser }: { focusUser: string | null }) 
       {tab === "overview" && <Overview />}
       {tab === "members" && <Members rank={rank} focusUser={focusUser} />}
       {tab === "badges" && rank >= 3 && <BadgesTab />}
+      {tab === "claims" && rank >= 3 && <ClaimsTab />}
+      {tab === "vault" && rank >= 3 && <VaultTab />}
       {tab === "audit" && <Audit />}
     </>
   );
@@ -142,10 +147,11 @@ function Members({ rank, focusUser }: { rank: number; focusUser: string | null }
               <div className="min-w-0 flex-1">
                 <NameTag userId={u.id} className="font-semibold" />
                 <div className="truncate text-xs text-sub">
-                  @{u.username}
+                  {profilesUid(u.id)}@{u.username}
                   {u.email && ` · ${u.email}`} · {u.message_count} msgs · joined {new Date(u.created_at).toLocaleDateString()}
                 </div>
               </div>
+              <MutedChip userId={u.id} />
               {u.banned_until && (u.banned_until === "infinity" || new Date(u.banned_until) > new Date()) && (
                 <span className="rounded bg-dnd/20 px-2 py-0.5 text-xs font-semibold text-dnd">{u.banned_until === "infinity" ? "Banned" : "Timed out"}</span>
               )}
@@ -159,21 +165,12 @@ function Members({ rank, focusUser }: { rank: number; focusUser: string | null }
   );
 }
 
-const DURATIONS: [string, number | null][] = [
-  ["60 sec", 1],
-  ["10 min", 10],
-  ["1 hour", 60],
-  ["1 day", 1440],
-  ["1 week", 10080],
-  ["Permanent", null],
-];
 
 function MemberDetail({ userId, rank, onChanged }: { userId: string; rank: number; onChanged: () => void }) {
   const p = useApp((s) => s.profiles[userId]) as Profile | undefined;
   const me = useApp((s) => s.userId);
   const catalog = useApp((s) => s.badges);
   const owned = useApp((s) => s.userBadges[userId] ?? EMPTY);
-  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const badges = useMemo(() => Object.values(catalog).sort((a, b) => b.priority - a.priority), [catalog]);
   if (!p) return <div className="p-3 text-sm text-sub">Loading…</div>;
@@ -182,7 +179,6 @@ function MemberDetail({ userId, rank, onChanged }: { userId: string; rank: numbe
   const self = userId === me;
   const canManage = !self && targetRank < rank;
   const roles = (["admin", "moderator", "vip", "member"] as SiteRole[]).filter((r) => ROLE_INFO[r].rank < rank);
-  const banned = !!p.banned_until && (p.banned_until === "infinity" || new Date(p.banned_until) > new Date());
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -251,37 +247,10 @@ function MemberDetail({ userId, rank, onChanged }: { userId: string; rank: numbe
 
       {canManage && (
         <section>
-          <div className="mb-2 text-xs font-bold tracking-wide text-sub uppercase">Moderation</div>
-          {banned ? (
-            <div className="flex flex-wrap items-center gap-3 rounded-lg bg-dnd/10 p-3 text-sm">
-              <span className="text-dnd">
-                {p.banned_until === "infinity" ? "Permanently banned" : `Timed out until ${new Date(p.banned_until!).toLocaleString()}`}
-                {p.ban_reason && ` — ${p.ban_reason}`}
-              </span>
-              <button disabled={busy} onClick={() => void run(() => unbanUser(userId))} className="ml-auto rounded-md bg-ok px-3 py-1.5 font-semibold text-white hover:bg-ok/85">
-                Lift
-              </button>
-            </div>
-          ) : (
-            <>
-              <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200} placeholder="Reason (shown to the member)" className="mb-2 w-full rounded-md bg-rail px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-dnd/50" />
-              <div className="flex flex-wrap gap-1.5">
-                {DURATIONS.map(([label, mins]) => (
-                  <button
-                    key={label}
-                    disabled={busy}
-                    onClick={() => {
-                      if (mins === null && !confirm(`Permanently ban ${p.display_name}?`)) return;
-                      void run(() => banUser(userId, mins, reason));
-                    }}
-                    className={cn("rounded-md px-3 py-1.5 text-sm font-medium", mins === null ? "bg-dnd text-white hover:bg-dnd/85" : "bg-hover hover:bg-active")}
-                  >
-                    {mins === null ? "Ban" : `Timeout ${label}`}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+          <div className="mb-2 text-xs font-bold tracking-wide text-sub uppercase">Moderation — suspend or block messaging until a date &amp; time</div>
+          <div className="rounded-lg bg-side p-3">
+            <ModerationControls userId={userId} />
+          </div>
           <button
             disabled={busy}
             onClick={() => confirm("Remove this member's avatar, status, bio and decoration?") && void run(() => resetProfile(userId))}
@@ -293,6 +262,16 @@ function MemberDetail({ userId, rank, onChanged }: { userId: string; rank: numbe
       )}
     </div>
   );
+}
+
+function profilesUid(id: string) {
+  const n = useApp.getState().profiles[id]?.member_no;
+  return n != null ? `UID ${n} · ` : "";
+}
+
+function MutedChip({ userId }: { userId: string }) {
+  const muted = useApp((s) => isMuted(s.profiles[userId]));
+  return muted ? <span className="rounded bg-idle/20 px-2 py-0.5 text-xs font-semibold text-idle">Muted</span> : null;
 }
 
 function BadgesTab() {
@@ -389,6 +368,12 @@ const ACTION_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
   unban: () => "lifted the suspension of",
   reset_profile: () => "reset the profile of",
   delete_message: () => "deleted a message by",
+  ban_until: (d) => `suspended until ${d.until ? new Date(String(d.until)).toLocaleString() : "?"}${d.reason ? ` (${String(d.reason)})` : ""}`,
+  mute: (d) => `blocked messaging${d.until && d.until !== "infinity" ? ` until ${new Date(String(d.until)).toLocaleString()}` : ""}${d.reason ? ` (${String(d.reason)})` : ""} for`,
+  unmute: () => "restored messaging for",
+  approve_claim: (d) => `approved the ${String(d.artist)} artist claim by`,
+  reject_claim: (d) => `rejected the ${String(d.artist)} artist claim by`,
+  delete_post: () => "removed an artist post by",
 };
 
 function Audit() {

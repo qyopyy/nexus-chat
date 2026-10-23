@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo } from "react";
-import { ArrowLeft, Hash, Maximize2, MessageSquare, Phone, Users, Video, Volume2 } from "lucide-react";
-import { useApp, conversationTitle, findChannel } from "@/store/app";
+import { ChevronLeft, Hash, Maximize2, MessageSquare, Phone, Users, Video, Volume2 } from "lucide-react";
+import { useApp, conversationTitle, findChannel, openProfileCard } from "@/store/app";
+import { haptic } from "@/lib/haptics";
 import { useChat } from "@/store/chat";
 import { useCall, startCall } from "@/lib/call";
 import { cn } from "@/lib/utils";
 import Avatar, { statusLabel } from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
+import { useIsMobile } from "@/lib/useMobile";
 
 export default function ChatHeader({
   conversationId,
@@ -18,6 +20,7 @@ export default function ChatHeader({
   stageExpanded: boolean;
   onToggleStage: () => void;
 }) {
+  const mobile = useIsMobile();
   const title = useApp((s) => conversationTitle(s, conversationId));
   const chat = useApp((s) => s.chatList.find((c) => c.id === conversationId));
   const channel = useApp((s) => findChannel(s, conversationId));
@@ -26,6 +29,7 @@ export default function ChatHeader({
   const showMembers = useApp((s) => s.showMembers);
   const typing = useChat((s) => s.typing);
   const inThisCall = useCall((s) => s.status !== "idle" && s.conversationId === conversationId);
+  const otherUnread = useApp((s) => Object.entries(s.unread).reduce((n, [id, c]) => n + (id !== conversationId && c > 0 ? 1 : 0), 0));
 
   const typers = useMemo(() => {
     const now = Date.now();
@@ -53,13 +57,23 @@ export default function ChatHeader({
   const canCall = kind === "dm" || kind === "group";
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-black/25 bg-chat px-3 shadow-sm">
-      <button onClick={() => useApp.setState({ mobileSidebar: true })} className="rounded p-1 text-sub hover:text-txt md:hidden" aria-label="Back">
-        <ArrowLeft className="size-5" />
+    <header className="chat-header flex h-14 shrink-0 items-center gap-3 border-b border-black/25 bg-chat/90 px-3 shadow-sm backdrop-blur-xl max-md:gap-2 max-md:border-white/[.06] max-md:pl-0.5">
+      <button
+        onClick={() => {
+          haptic.light();
+          useApp.setState({ mobileSidebar: true });
+        }}
+        className="flex shrink-0 items-center text-accent active:opacity-50 md:hidden"
+        aria-label="Back"
+      >
+        <ChevronLeft className="size-8" strokeWidth={2.2} />
+        {otherUnread > 0 && <span className="-ml-1 min-w-[22px] rounded-full bg-accent px-1.5 text-center text-[13px] leading-[22px] font-bold text-white">{otherUnread}</span>}
       </button>
 
       {kind === "dm" && chat?.other_user_id ? (
-        <Avatar userId={chat.other_user_id} size={36} showStatus ringClass="ring-chat" />
+        <button onClick={(e) => openProfileCard(chat.other_user_id!, e)} className="shrink-0 rounded-full active:scale-95" aria-label="View profile">
+          <Avatar userId={chat.other_user_id} size={38} showStatus ringClass="ring-chat" />
+        </button>
       ) : kind === "group" ? (
         <Avatar name={title} color="#2aabee" size={36} />
       ) : kind === "voice" ? (
@@ -70,7 +84,7 @@ export default function ChatHeader({
 
       <div className="min-w-0 flex-1 leading-tight">
         <div className="truncate font-semibold">
-          {kind === "dm" && chat?.other_user_id ? <NameTag userId={chat.other_user_id} /> : title}
+          {kind === "dm" && chat?.other_user_id ? <NameTag userId={chat.other_user_id} maxBadges={mobile ? 3 : 6} /> : title}
         </div>
         {subtitle && <div className="truncate text-xs">{subtitle}</div>}
       </div>

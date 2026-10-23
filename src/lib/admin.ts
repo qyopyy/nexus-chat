@@ -105,3 +105,76 @@ export function isBanned(p: Profile | undefined) {
   if (!p?.banned_until) return false;
   return p.banned_until === "infinity" || new Date(p.banned_until).getTime() > Date.now();
 }
+
+/** until = ISO time, or null for permanent */
+export async function banUntil(userId: string, until: string | null, reason: string) {
+  const r = await call("admin_ban_until", { p_user: userId, p_until: until, p_reason: reason }, until ? `Suspended until ${new Date(until).toLocaleString()}` : "User banned");
+  if (r) await refreshProfile(userId);
+  return !!r;
+}
+
+/** Remove messaging ability until a time (null lifts it) */
+export async function muteUser(userId: string, until: string | null, reason: string) {
+  const r = await call("admin_mute", { p_user: userId, p_until: until, p_reason: reason }, until ? `Messaging blocked until ${new Date(until).toLocaleString()}` : "Messaging restored");
+  if (r) await refreshProfile(userId);
+  return !!r;
+}
+
+export function isMuted(p: { muted_until?: string | null } | undefined) {
+  if (!p?.muted_until) return false;
+  return p.muted_until === "infinity" || new Date(p.muted_until).getTime() > Date.now();
+}
+
+export async function toggleBadge(userId: string, badgeId: string) {
+  const has = (useApp.getState().userBadges[userId] ?? []).includes(badgeId);
+  return has ? revokeBadge(userId, badgeId) : grantBadge(userId, badgeId);
+}
+
+export async function reviewClaim(id: string, approve: boolean) {
+  return call("admin_review_claim", { p_claim: id, p_approve: approve }, approve ? "Claim approved — artist page is live" : "Claim rejected");
+}
+
+// ---------------------------------------------------------------- file vault (admin password)
+let vaultToken: { token: string; exp: number } | null = null;
+
+export const vaultUnlocked = () => !!vaultToken && vaultToken.exp > Date.now();
+
+async function vault<T>(body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke("vault", { body });
+  if (error) {
+    let msg = errorText(error);
+    try {
+      const j = await (error as { context?: Response }).context?.json();
+      if (j?.error) msg = j.error;
+      if (j?.locked) vaultToken = null;
+    } catch {
+      /* not json */
+    }
+    throw new Error(msg);
+  }
+  return data as T;
+}
+
+export async function unlockVault(password: string) {
+  const r = await vault<{ token: string; exp: number }>({ action: "unlock", password });
+  vaultToken = r;
+  return true;
+}
+
+export function lockVault() {
+  vaultToken = null;
+}
+
+export type VaultItem = { name: string; folder: boolean; size: number | null; type: string | null; created_at: string | null };
+
+export async function vaultList(bucket: string, prefix: string) {
+  return (await vault<{ items: VaultItem[] }>({ action: "list", token: vaultToken?.token, bucket, prefix })).items;
+}
+
+export async function vaultSign(bucket: string, path: string) {
+  return (await vault<{ url: string }>({ action: "sign", token: vaultToken?.token, bucket, path })).url;
+}
+
+export async function vaultSignUrl(url: string) {
+  return (await vault<{ url: string }>({ action: "sign", token: vaultToken?.token, url })).url;
+}

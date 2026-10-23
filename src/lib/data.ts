@@ -1,8 +1,10 @@
 "use client";
 
+import { primeSignedUrl, storageRef } from "./storage";
 import { supabase, errorText } from "./supabase";
 import { useApp, toast } from "@/store/app";
 import { useChat } from "@/store/chat";
+import { effectForText, playEffect, type EffectKind } from "./effects";
 import type { ChatListItem, Conversation, Friendship, Message, Profile, Reaction, Space, SpaceMember } from "./types";
 
 const PAGE = 50;
@@ -28,13 +30,45 @@ export function mergeProfiles(list: Profile[]) {
   });
 }
 
-export async function updateMyProfile(patch: Partial<Pick<Profile, "display_name" | "avatar_color" | "custom_status" | "avatar_url" | "avatar_decoration" | "banner_color" | "bio">>) {
+export async function updateMyProfile(
+  patch: Partial<
+    Pick<
+      Profile,
+      | "display_name"
+      | "avatar_color"
+      | "custom_status"
+      | "avatar_url"
+      | "avatar_decoration"
+      | "banner_color"
+      | "bio"
+      | "links"
+      | "banner_url"
+      | "profile_song"
+      | "forum_name"
+      | "now_playing"
+    >
+  >,
+  quiet = false,
+) {
   const id = get().userId;
   if (!id) return;
   const { data, error } = await supabase.from("profiles").update(patch).eq("id", id).select().single();
   if (error) return toast(errorText(error), "error");
   mergeProfiles([data as Profile]);
-  toast("Profile updated", "success");
+  if (!quiet) toast("Profile updated", "success");
+}
+
+/** Banner image (public avatars bucket, under your own folder) */
+export async function uploadBanner(file: File) {
+  const id = get().userId;
+  if (!id) return;
+  if (file.size > 8 * 1024 * 1024) return toast("Banner must be under 8 MB", "error");
+  const ext = (file.name.split(".").pop() || "png").toLowerCase();
+  const path = `${id}/banner-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from("avatars").upload(path, file, { upsert: true, contentType: file.type });
+  if (error) return toast(errorText(error), "error");
+  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+  await updateMyProfile({ banner_url: data.publicUrl });
 }
 
 export async function uploadAvatar(file: File) {
@@ -290,11 +324,13 @@ export async function markRead(convId: string) {
   await supabase.rpc("mark_read", { p_conv: convId });
 }
 
-export async function sendMessage(convId: string, content: string, file?: File | null) {
+export async function sendMessage(convId: string, content: string, file?: File | null, chosenEffect?: EffectKind | null) {
   const me = get().userId;
   if (!me) return;
   const text = content.trim();
   if (!text && !file) return;
+  const effect = chosenEffect ?? (text ? effectForText(text) : null);
+  if (effect) playEffect(effect);
   const replyTo = useChat.getState().replyTo;
   const tempId = `temp-${crypto.randomUUID()}`;
 
@@ -317,6 +353,7 @@ export async function sendMessage(convId: string, content: string, file?: File |
     edited_at: null,
     deleted_at: null,
     created_at: new Date().toISOString(),
+    effect,
     pending: true,
   };
   useChat.setState((s) => (s.conversationId === convId ? { messages: [...s.messages, optimistic], replyTo: null } : { replyTo: null }));
@@ -328,7 +365,9 @@ export async function sendMessage(convId: string, content: string, file?: File |
       dropTemp(tempId);
       return toast(`Upload failed: ${errorText(upErr)}`, "error");
     }
-    attachment.attachment_url = supabase.storage.from("attachments").getPublicUrl(path).data.publicUrl;
+    const localUrl = attachment.attachment_url;
+    attachment.attachment_url = storageRef("attachments", path);
+    if (localUrl) primeSignedUrl(attachment.attachment_url, localUrl);
   }
 
   const { data, error } = await supabase
@@ -339,6 +378,7 @@ export async function sendMessage(convId: string, content: string, file?: File |
       content: text,
       reply_to_id: replyTo?.id ?? null,
       ...attachment,
+      ...(effect ? { effect } : {}),
     })
     .select()
     .single();

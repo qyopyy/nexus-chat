@@ -19,6 +19,9 @@ import {
   removeReactionLocal,
 } from "./data";
 import { sfx } from "./sounds";
+import { isEffect, playEffect } from "./effects";
+import { isMuted } from "@/store/prefs";
+import { haptic } from "./haptics";
 import { refreshBadges } from "./admin";
 import type { Message, PresenceState, Profile, Reaction } from "./types";
 
@@ -26,8 +29,9 @@ type CallEvent = { id: string; conversation_id: string; caller_id: string; kind:
 
 function notify(m: Message) {
   const s = useApp.getState();
-  if (s.myStatus === "dnd") return;
+  if (s.myStatus === "dnd" || isMuted(m.conversation_id)) return;
   sfx.message();
+  haptic.light();
   if (typeof Notification === "undefined" || Notification.permission !== "granted" || !document.hidden) return;
   const author = s.profiles[m.author_id]?.display_name ?? "New message";
   try {
@@ -45,6 +49,7 @@ async function onMessageInsert(m: Message) {
 
   const chat = useChat.getState();
   const isOpen = chat.conversationId === m.conversation_id;
+  if (isOpen && m.author_id !== me && isEffect(m.effect) && Date.now() - new Date(m.created_at).getTime() < 60_000) playEffect(m.effect);
   if (isOpen) {
     useChat.setState((s) => {
       if (s.messages.some((x) => x.id === m.id)) return s;

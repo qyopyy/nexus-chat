@@ -8,6 +8,7 @@ import { updateMyProfile, uploadAvatar } from "@/lib/data";
 import { DECORATIONS, roleRank } from "@/lib/theme";
 import AppearanceSection from "./AppearanceSection";
 import AdminPanel from "./AdminPanel";
+import ProfileExtras from "./ProfileExtras";
 import NameTag from "@/components/ui/NameTag";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -68,14 +69,17 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
         </div>
       </aside>
       <div className="min-w-0 flex-1 overflow-y-auto">
-        <div className="flex gap-2 border-b border-line p-3 sm:hidden">
+        <div className="no-scrollbar sticky top-0 z-10 flex items-center gap-2 overflow-x-auto border-b border-line bg-chat/95 p-3 pt-safe-3 backdrop-blur sm:hidden">
+          <button onClick={closeModal} className="grid size-8 shrink-0 place-items-center rounded-full bg-hover text-sub" aria-label="Close settings">
+            <X className="size-4" />
+          </button>
           {(["account", "appearance", "voice", "notifications", ...(isStaff ? ["admin"] : [])] as Section[]).map((s) => (
-            <button key={s} onClick={() => setSection(s)} className={cn("rounded-md px-3 py-1 text-sm capitalize", section === s ? "bg-active" : "text-sub")}>
+            <button key={s} onClick={() => setSection(s)} className={cn("shrink-0 rounded-md px-3 py-1 text-sm capitalize", section === s ? "bg-active" : "text-sub")}>
               {s}
             </button>
           ))}
         </div>
-        <div className="max-w-[740px] px-6 py-10 sm:px-10 sm:py-14">
+        <div className="max-w-[740px] px-4 py-6 pb-safe-2 sm:px-10 sm:py-14">
           {section === "account" && <AccountSection />}
           {section === "appearance" && <AppearanceSection />}
           {section === "admin" && isStaff && <AdminPanel focusUser={focusUser} />}
@@ -83,7 +87,7 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
           {section === "notifications" && <NotificationSection />}
         </div>
       </div>
-      <div className="absolute top-4 right-4 flex flex-col items-center gap-1 sm:top-14 sm:right-10">
+      <div className="absolute top-14 right-10 hidden flex-col items-center gap-1 sm:flex">
         <button onClick={closeModal} className="grid size-9 place-items-center rounded-full border-2 border-sub text-sub hover:border-txt hover:text-txt" aria-label="Close settings">
           <X className="size-5" />
         </button>
@@ -125,16 +129,22 @@ function AccountSection() {
     <>
       <H>My Account</H>
       <div className="overflow-hidden rounded-xl bg-rail">
-        <div className="h-28" style={{ background: banner.startsWith("linear") ? banner : `linear-gradient(135deg, ${banner}, ${banner}66)` }} />
-        <div className="flex items-end gap-4 px-4 pb-4">
+        <div
+          className="h-28 bg-cover bg-center"
+          style={me.banner_url ? { backgroundImage: `url("${me.banner_url}")` } : { background: banner.startsWith("linear") ? banner : `linear-gradient(135deg, ${banner}, ${banner}66)` }}
+        />
+        <div className="flex flex-wrap items-end gap-4 px-4 pb-4">
           <div className="-mt-12">
             <Avatar userId={me.id} size={96} className="rounded-full ring-[6px] ring-rail" />
           </div>
-          <div className="min-w-0 flex-1 pb-1">
+          <div className="min-w-0 flex-1 basis-40 pb-1">
             <div className="truncate text-xl font-bold">
               <NameTag userId={me.id} badgeSize="md" />
             </div>
-            <div className="text-sm text-sub">@{me.username}</div>
+            <div className="text-sm text-sub">
+              @{me.username}
+              {me.member_no != null && <span className="ml-2 rounded bg-black/30 px-1.5 py-0.5 font-mono text-xs">UID #{me.member_no}</span>}
+            </div>
           </div>
           <input
             ref={file}
@@ -151,7 +161,7 @@ function AccountSection() {
               setUploading(false);
             }}
           />
-          <button onClick={() => file.current?.click()} disabled={uploading} className="flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-2 disabled:opacity-50">
+          <button onClick={() => file.current?.click()} disabled={uploading} className="flex w-full items-center justify-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-2 disabled:opacity-50 sm:w-auto">
             <Upload className="size-4" /> {uploading ? "Uploading…" : "Change avatar"}
           </button>
         </div>
@@ -183,6 +193,8 @@ function AccountSection() {
             </button>
           </div>
 
+          <ProfileExtras />
+
           <div>
             <Label>Avatar decoration</Label>
             <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
@@ -203,7 +215,7 @@ function AccountSection() {
           </div>
 
           <div>
-            <Label>Profile banner</Label>
+            <Label>Banner color</Label>
             <div className="flex flex-wrap gap-2">
               {BANNERS.map((b) => (
                 <button

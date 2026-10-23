@@ -55,6 +55,12 @@ export type AppState = {
   badges: Record<string, Badge>;
   userBadges: Record<string, string[]>;
   profileCard: ProfileCardState;
+  /** phone layout: which bottom tab is showing */
+  mobileTab: "chats" | "spaces" | "music" | "friends" | "me";
+  /** desktop: music hub replaces the main pane */
+  musicOpen: boolean;
+  /** phone layout: call screen minimized to the floating bar */
+  callMinimized: boolean;
 };
 
 export const useApp = create<AppState>(() => ({
@@ -84,6 +90,9 @@ export const useApp = create<AppState>(() => ({
   badges: {},
   userBadges: {},
   profileCard: null,
+  mobileTab: "chats",
+  musicOpen: false,
+  callMinimized: false,
 }));
 
 export function openProfileCard(userId: string, e: { clientX: number; clientY: number }) {
