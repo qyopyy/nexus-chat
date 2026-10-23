@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { Bell, ChevronRight, Copy, LogOut, Mic, Moon, Palette, Shield, Sparkles, UserPen } from "lucide-react";
+import { Bell, ChevronRight, Copy, LayoutDashboard, LogOut, Mic, Moon, Palette, Shield, Sparkles, UserPen, Users } from "lucide-react";
 import { useApp, openModal, toast } from "@/store/app";
 import { leaveCall } from "@/lib/call";
 import { supabase } from "@/lib/supabase";
@@ -26,6 +26,7 @@ export default function MobileMe() {
   const friends = useApp((s) => s.friendships.filter((f) => f.status === "accepted").length);
   const spaces = useApp((s) => s.spaces.length);
   const chats = useApp((s) => s.chatList.length);
+  const pending = useApp((s) => s.friendships.filter((f) => f.status === "pending" && f.addressee_id === s.userId).length);
   const scroller = useRef<HTMLDivElement>(null);
   if (!me) return null;
   const staff = roleRank(me.site_role) >= 2;
@@ -105,6 +106,11 @@ export default function MobileMe() {
             {s.label}
           </button>
         ))}
+      </div>
+
+      <div className="mx-4 mt-4 overflow-hidden rounded-2xl bg-side [&>button+button]:border-t [&>button+button]:border-white/[.05]">
+        {row(<Users className="size-[18px]" />, "#2aabee", "Friends", () => useApp.setState({ mobileTab: "friends" }), pending > 0 ? <span className="rounded-full bg-dnd px-2 text-xs font-bold text-white">{pending}</span> : undefined)}
+        {row(<LayoutDashboard className="size-[18px]" />, "#eb459e", "Studio — videos & music releases", () => useApp.setState({ hub: "studio" }))}
       </div>
 
       <div className="mx-4 mt-4 overflow-hidden rounded-2xl bg-side [&>button+button]:border-t [&>button+button]:border-white/[.05]">

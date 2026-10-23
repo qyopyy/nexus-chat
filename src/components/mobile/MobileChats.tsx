@@ -26,6 +26,7 @@ export default function MobileChats() {
   const profiles = useApp((s) => s.profiles);
   const unread = useApp((s) => s.unread);
   const presence = useApp((s) => s.presence);
+  const pendingFriends = useApp((s) => s.friendships.filter((f) => f.status === "pending" && f.addressee_id === s.userId).length);
   const filter = useApp((s) => s.chatFilter);
   const me = useApp((s) => s.userId);
   const { pinned, muted } = usePrefs();
@@ -86,9 +87,15 @@ export default function MobileChats() {
           title="Chats"
           scroller={scroller}
           right={
-            <button onClick={() => openModal("newGroup")} className="grid size-10 place-items-center rounded-full text-accent active:bg-white/10" aria-label="New group">
-              <SquarePen className="size-[22px]" />
-            </button>
+            <div className="flex items-center">
+              <button onClick={() => useApp.setState({ mobileTab: "friends" })} className="relative grid size-10 place-items-center rounded-full text-accent active:bg-white/10" aria-label="Friends">
+                <Users className="size-[22px]" />
+                {pendingFriends > 0 && <span className="absolute top-1 right-1 size-2.5 rounded-full bg-dnd ring-2 ring-rail" />}
+              </button>
+              <button onClick={() => openModal("newGroup")} className="grid size-10 place-items-center rounded-full text-accent active:bg-white/10" aria-label="New group">
+                <SquarePen className="size-[22px]" />
+              </button>
+            </div>
           }
         />
 

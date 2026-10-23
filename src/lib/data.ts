@@ -46,6 +46,7 @@ export async function updateMyProfile(
       | "profile_song"
       | "forum_name"
       | "now_playing"
+      | "channel_description"
     >
   >,
   quiet = false,

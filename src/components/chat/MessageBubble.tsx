@@ -14,6 +14,7 @@ import Avatar from "@/components/ui/Avatar";
 import EmojiPicker from "@/components/ui/EmojiPicker";
 import Sheet, { SheetGroup, SheetItem } from "@/components/ui/Sheet";
 import VoicePlayer from "./VoicePlayer";
+import VideoEmbed from "@/components/videos/VideoEmbed";
 import { useSignedUrl } from "@/lib/storage";
 import type { Message, Reaction } from "@/lib/types";
 
@@ -281,6 +282,7 @@ function MessageBubbleImpl({
                   <Linkified text={m.content} />
                 </span>
               )}
+              {m.content.includes("/v/") && !deleted && <VideoEmbed text={m.content} />}
             </>
           )}
 

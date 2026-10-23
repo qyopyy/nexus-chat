@@ -13,6 +13,7 @@ import MobileSpaces from "./MobileSpaces";
 import MobileMe from "./MobileMe";
 import MobileCallBar from "./MobileCallBar";
 import MusicHub from "@/components/music/MusicHub";
+import VideosHub from "@/components/videos/VideosHub";
 
 /** Phone layout: bottom tabs + push-style chat screen with swipe-from-edge to go back */
 export default function MobileShell() {
@@ -41,6 +42,7 @@ export default function MobileShell() {
               <FriendsView />
             </div>
           )}
+          {tab === "videos" && <VideosHub mobile />}
           {tab === "music" && <MusicHub mobile />}
           {tab === "me" && <MobileMe />}
           {inChat && <div className="absolute inset-0 bg-black/40" style={{ opacity: dx ? 1 - dx / window.innerWidth : 1 }} />}

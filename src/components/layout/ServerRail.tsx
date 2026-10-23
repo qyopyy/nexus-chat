@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Headphones, MessageCircle, Plus } from "lucide-react";
+import { Clapperboard, Headphones, LayoutDashboard, MessageCircle, Plus } from "lucide-react";
 import { useApp, openModal } from "@/store/app";
 import { selectHome, selectSpace } from "@/lib/data";
 import { cn, initials } from "@/lib/utils";
@@ -61,7 +61,7 @@ export default function ServerRail() {
   const channels = useApp((s) => s.channels);
   const friendships = useApp((s) => s.friendships);
   const me = useApp((s) => s.userId);
-  const musicOpen = useApp((s) => s.musicOpen);
+  const hub = useApp((s) => s.hub);
 
   const homeBadge = useMemo(() => {
     const dms = chatList.reduce((n, c) => n + (unread[c.id] ?? 0), 0);
@@ -71,11 +71,17 @@ export default function ServerRail() {
 
   return (
     <nav className="flex h-full w-[72px] shrink-0 flex-col items-center gap-2 overflow-y-auto bg-rail py-3">
-      <RailItem active={spaceId === null && !musicOpen} label="Direct Messages" onClick={() => (useApp.setState({ musicOpen: false }), selectHome())} badge={homeBadge}>
+      <RailItem active={spaceId === null && !hub} label="Direct Messages" onClick={() => (useApp.setState({ hub: null }), selectHome())} badge={homeBadge}>
         <MessageCircle className="size-6" />
       </RailItem>
-      <RailItem active={musicOpen} label="Music" onClick={() => useApp.setState({ musicOpen: true })} color={musicOpen ? "#1DB954" : undefined}>
+      <RailItem active={hub === "videos"} label="Videos" onClick={() => useApp.setState({ hub: "videos" })} color={hub === "videos" ? "#eb459e" : undefined}>
+        <Clapperboard className="size-6" />
+      </RailItem>
+      <RailItem active={hub === "music"} label="Music" onClick={() => useApp.setState({ hub: "music" })} color={hub === "music" ? "#1DB954" : undefined}>
         <Headphones className="size-6" />
+      </RailItem>
+      <RailItem active={false} label="Studio — upload videos & distribute music" onClick={() => useApp.setState({ hub: "studio" })}>
+        <LayoutDashboard className="size-6" />
       </RailItem>
       <div className="mx-auto h-0.5 w-8 rounded bg-line" />
       {spaces.map((sp) => {
@@ -83,10 +89,10 @@ export default function ServerRail() {
         return (
           <RailItem
             key={sp.id}
-            active={spaceId === sp.id && !musicOpen}
+            active={spaceId === sp.id && !hub}
             unread={spaceUnread}
             label={sp.name}
-            onClick={() => (useApp.setState({ musicOpen: false }), void selectSpace(sp.id))}
+            onClick={() => (useApp.setState({ hub: null }), void selectSpace(sp.id))}
             color={sp.icon_color}
           >
             <span className="text-base font-semibold">{initials(sp.name)}</span>

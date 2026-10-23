@@ -1,14 +1,15 @@
 "use client";
 
 import { useMemo } from "react";
-import { Headphones, LayoutGrid, MessageCircle, UserRound, Users } from "lucide-react";
+import { Clapperboard, Headphones, LayoutGrid, MessageCircle, UserRound } from "lucide-react";
 import { useApp } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { musicHome } from "@/store/music";
+import { videosHome } from "@/store/studio";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 
-type Tab = "chats" | "spaces" | "music" | "friends" | "me";
+type Tab = "chats" | "spaces" | "videos" | "music" | "friends" | "me";
 
 export default function TabBar() {
   const tab = useApp((s) => s.mobileTab);
@@ -25,11 +26,12 @@ export default function TabBar() {
   const items: { id: Tab; label: string; icon: React.ReactNode; badge?: number; dot?: boolean }[] = [
     { id: "chats", label: "Chats", icon: <MessageCircle className="size-[25px]" strokeWidth={1.9} />, badge: chatBadge },
     { id: "spaces", label: "Spaces", icon: <LayoutGrid className="size-[25px]" strokeWidth={1.9} />, dot: spaceDot },
+    { id: "videos", label: "Videos", icon: <Clapperboard className="size-[25px]" strokeWidth={1.9} /> },
     { id: "music", label: "Music", icon: <Headphones className="size-[25px]" strokeWidth={1.9} /> },
-    { id: "friends", label: "Friends", icon: <Users className="size-[25px]" strokeWidth={1.9} />, badge: pending },
     {
       id: "me",
       label: "You",
+      badge: pending,
       icon: me ? <Avatar userId={me} size={28} plain className={cn("rounded-full", tab === "me" && "ring-2 ring-accent")} /> : <UserRound className="size-[25px]" />,
     },
   ];
@@ -47,6 +49,7 @@ export default function TabBar() {
                   // tap active tab again → pop to root (iOS behaviour)
                   if (it.id === "spaces") useApp.setState({ spaceId: null });
                   if (it.id === "music") musicHome();
+                  if (it.id === "videos") videosHome();
                   window.dispatchEvent(new CustomEvent("nexus:scrolltop"));
                 } else haptic.select();
                 useApp.setState({ mobileTab: it.id, mobileSidebar: true });

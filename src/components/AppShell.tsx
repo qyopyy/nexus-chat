@@ -25,8 +25,11 @@ import EffectsLayer from "./effects/EffectsLayer";
 import { useIsMobile } from "@/lib/useMobile";
 import { startSpotifySync } from "@/lib/spotifyUser";
 import MusicHub from "./music/MusicHub";
+import VideosHub from "./videos/VideosHub";
+import Studio from "./studio/Studio";
+import { videosGo } from "@/store/studio";
 
-export default function AppShell({ userId }: { userId: string }) {
+export default function AppShell({ userId, initialVideo }: { userId: string; initialVideo?: string }) {
   const spaceId = useApp((s) => s.spaceId);
   const conversationId = useApp((s) => s.conversationId);
   const showMembers = useApp((s) => s.showMembers);
@@ -34,7 +37,7 @@ export default function AppShell({ userId }: { userId: string }) {
   const bootstrapped = useApp((s) => s.bootstrapped);
   const me = useApp((s) => s.profiles[userId]);
   const mobile = useIsMobile();
-  const musicOpen = useApp((s) => s.musicOpen);
+  const hub = useApp((s) => s.hub);
 
   useEffect(() => {
     useApp.setState({ userId });
@@ -50,8 +53,14 @@ export default function AppShell({ userId }: { userId: string }) {
 
   // opening any chat leaves the music hub; Spotify "now playing" sync
   useEffect(() => {
-    if (conversationId) useApp.setState({ musicOpen: false });
+    if (conversationId && useApp.getState().hub !== "studio") useApp.setState({ hub: null });
   }, [conversationId]);
+  // /v/<link> opens the video straight away
+  useEffect(() => {
+    if (!initialVideo) return;
+    useApp.setState({ hub: "videos", mobileTab: "videos" });
+    videosGo({ view: "watch", key: initialVideo });
+  }, [initialVideo]);
   useEffect(() => {
     if (bootstrapped) startSpotifySync();
   }, [bootstrapped]);
@@ -76,6 +85,19 @@ export default function AppShell({ userId }: { userId: string }) {
   }
 
   if (isBanned(me)) return <BannedScreen profile={me!} />;
+
+  if (hub === "studio") {
+    return (
+      <>
+        <Studio />
+        <IncomingCall />
+        <ProfileCard />
+        <Modals />
+        <Toasts />
+        <EffectsLayer />
+      </>
+    );
+  }
 
   if (mobile) {
     return (
@@ -104,8 +126,10 @@ export default function AppShell({ userId }: { userId: string }) {
       {/* main */}
       <main className={cn("h-full min-w-0 flex-1 md:flex", mobileSidebar ? "hidden" : "flex")}>
         <div className="flex h-full min-w-0 flex-1 flex-col bg-chat">
-          {musicOpen ? (
+          {hub === "music" ? (
             <MusicHub />
+          ) : hub === "videos" ? (
+            <VideosHub />
           ) : conversationId ? (
             <ChatView key={conversationId} conversationId={conversationId} />
           ) : spaceId ? (
@@ -114,7 +138,7 @@ export default function AppShell({ userId }: { userId: string }) {
             <FriendsView />
           )}
         </div>
-        {showMembers && conversationId && !musicOpen && (
+        {showMembers && conversationId && !hub && (
           <div className="hidden h-full w-[260px] shrink-0 border-l border-black/20 bg-side lg:block">
             <MemberList conversationId={conversationId} />
           </div>

@@ -20,6 +20,7 @@ export type Profile = {
   member_no?: number | null;
   muted_until?: string | null;
   mute_reason?: string | null;
+  channel_description?: string | null;
 };
 
 export type ProfileLink = { type: string; url: string; label?: string };
@@ -214,4 +215,133 @@ export type PresenceState = {
   video: boolean;
   screen: boolean;
   online_at: string;
+};
+
+// ------------------------------------------------------------------ distribution (Tunearo)
+export type DistStatus =
+  | "draft"
+  | "in_review"
+  | "changes_requested"
+  | "sending"
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "live"
+  | "takedown_requested"
+  | "taken_down"
+  | "error";
+
+export type DistArtist = {
+  id: string;
+  owner_id: string;
+  name: string;
+  spotify_id: string | null;
+  apple_id: string | null;
+  bio: string | null;
+  tunearo_id: string | null;
+  created_at: string;
+};
+
+export type DistRelease = {
+  id: string;
+  owner_id: string;
+  title: string;
+  primary_artist_name: string;
+  artist_ids: string[];
+  release_type: "Single" | "EP" | "Album";
+  primary_genre: string;
+  secondary_genre: string | null;
+  release_date: string;
+  label_name: string;
+  language: string | null;
+  explicit: boolean;
+  copyright_year: number | null;
+  copyright_holder: string | null;
+  territories_include: string;
+  territories_exclude: string | null;
+  artwork_path: string | null;
+  upc: string | null;
+  status: DistStatus;
+  staff_note: string | null;
+  rejection_reason: string | null;
+  last_error: string | null;
+  tunearo_id: string | null;
+  submitted_at: string | null;
+  reviewed_by: string | null;
+  sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DistTrack = {
+  id: string;
+  release_id: string;
+  position: number;
+  title: string;
+  primary_artist_name: string | null;
+  featured_artist_names: string | null;
+  explicit: boolean;
+  isrc: string | null;
+  language: string | null;
+  lyrics: string | null;
+  composer: string | null;
+  producer: string | null;
+  songwriter: string | null;
+  lyricist: string | null;
+  mixer: string | null;
+  mastering_engineer: string | null;
+  publisher: string | null;
+  remixer: string | null;
+  audio_path: string | null;
+  audio_name: string | null;
+  audio_bytes: number | null;
+  duration: number | null;
+  tunearo_track_id: string | null;
+  audio_sent: boolean;
+  created_at: string;
+};
+
+// ------------------------------------------------------------------ videos
+export type VideoLink = { label: string; url: string };
+
+export type Video = {
+  id: string;
+  owner_id: string;
+  title: string;
+  description: string;
+  slug: string | null;
+  links: VideoLink[];
+  tags: string[];
+  category: string | null;
+  visibility: "public" | "unlisted" | "private";
+  status: "uploading" | "ready" | "failed";
+  made_for_kids: boolean;
+  comments_enabled: boolean;
+  video_path: string | null;
+  thumb_url: string | null;
+  mime: string | null;
+  width: number | null;
+  height: number | null;
+  duration: number | null;
+  bytes: number | null;
+  views: number;
+  likes: number;
+  dislikes: number;
+  comment_count: number;
+  publish_at: string | null;
+  published_at: string | null;
+  removed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type VideoComment = {
+  id: string;
+  video_id: string;
+  author_id: string;
+  parent_id: string | null;
+  content: string;
+  pinned: boolean;
+  deleted_at: string | null;
+  created_at: string;
 };

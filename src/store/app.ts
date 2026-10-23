@@ -56,9 +56,9 @@ export type AppState = {
   userBadges: Record<string, string[]>;
   profileCard: ProfileCardState;
   /** phone layout: which bottom tab is showing */
-  mobileTab: "chats" | "spaces" | "music" | "friends" | "me";
-  /** desktop: music hub replaces the main pane */
-  musicOpen: boolean;
+  mobileTab: "chats" | "spaces" | "videos" | "music" | "friends" | "me";
+  /** a full-width hub replaces the chat pane: music, videos or the creator studio */
+  hub: "music" | "videos" | "studio" | null;
   /** phone layout: call screen minimized to the floating bar */
   callMinimized: boolean;
 };
@@ -91,7 +91,7 @@ export const useApp = create<AppState>(() => ({
   userBadges: {},
   profileCard: null,
   mobileTab: "chats",
-  musicOpen: false,
+  hub: null,
   callMinimized: false,
 }));
 
