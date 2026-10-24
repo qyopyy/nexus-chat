@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Barcode, BellRing, Library as LibraryIcon, Search, Sparkles, X } from "lucide-react";
+import { Gamepad2, ArrowLeft, Barcode, BellRing, Library as LibraryIcon, Search, Sparkles, X } from "lucide-react";
+import { useApp } from "@/store/app";
 import { useMusic, musicBack, musicGo, musicHome } from "@/store/music";
 import { listArtistPages, loadPosts, loadWatchlist, sp, spotifyConfig, fmtNum, type SpAlbum, type SpArtist, type Watch } from "@/lib/music";
 import { myRank } from "@/lib/admin";
 import { cn } from "@/lib/utils";
 import { VerifiedCheck } from "@/components/ui/NameTag";
 import ArtistView, { ReleaseGrid } from "./ArtistView";
+import ToolView, { ToolsGrid } from "./Tools";
 import Lookup from "./Lookup";
 import Library from "./Library";
 import { PostCard } from "./Posts";
@@ -31,6 +33,12 @@ export default function MusicHub({ mobile }: { mobile?: boolean }) {
         <button onClick={musicHome} className={cn("font-bold", mobile ? "text-2xl tracking-tight" : "text-base")}>
           Music
         </button>
+        <button
+          onClick={() => useApp.setState(mobile ? { mobileTab: "games" } : { hub: "games" })}
+          className="ml-auto flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ff2bd6] to-[#7c4dff] px-3.5 py-1.5 text-sm font-bold text-white active:scale-95"
+        >
+          <Gamepad2 className="size-4" /> Games
+        </button>
       </header>
       <div key={JSON.stringify(route)} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {route.view === "home" && <Home />}
@@ -38,6 +46,7 @@ export default function MusicHub({ mobile }: { mobile?: boolean }) {
         {route.view === "page" && <ArtistView handle={route.handle} />}
         {route.view === "lookup" && <Lookup initial={route.tab} />}
         {route.view === "library" && <Library />}
+        {route.view === "tool" && <ToolView tool={route.tool} />}
       </div>
     </div>
   );
@@ -140,6 +149,23 @@ function Home() {
               {isAdmin ? "Add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET as Supabase Edge Function secrets to unlock artist search, releases and the showcase." : "Ask an admin to connect it."} Code lookup (ISRC/UPC) already works.
             </div>
           )}
+
+          <button
+            onClick={() => useApp.setState(window.innerWidth < 768 ? { mobileTab: "games" } : { hub: "games" })}
+            className="flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-[#ff2bd6] to-[#2b0b5c] p-4 text-left text-white"
+          >
+            <span className="text-4xl">🎮</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-lg font-black">Games</span>
+              <span className="block text-sm text-white/80">Neon Streets city driving, Beat Bird, Blocks & more — with leaderboards</span>
+            </span>
+            <Gamepad2 className="size-6" />
+          </button>
+
+          <section>
+            <h2 className="mb-2 text-lg font-bold">Music tools</h2>
+            <ToolsGrid />
+          </section>
 
           {/* tools */}
           <div className="no-scrollbar -mx-3 flex gap-2 overflow-x-auto px-3 sm:-mx-5 sm:px-5">

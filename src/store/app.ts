@@ -37,6 +37,8 @@ export type AppState = {
   chatList: ChatListItem[];
   convMembers: Record<string, string[]>;
   convKinds: Record<string, Conversation["kind"]>;
+  /** disappearing-messages timer per chat (seconds), null = off */
+  convTtl: Record<string, number | null>;
   unread: Record<string, number>;
   presence: Record<string, PresenceState>;
   myStatus: UserStatus;
@@ -56,9 +58,9 @@ export type AppState = {
   userBadges: Record<string, string[]>;
   profileCard: ProfileCardState;
   /** phone layout: which bottom tab is showing */
-  mobileTab: "chats" | "spaces" | "videos" | "music" | "friends" | "me";
+  mobileTab: "chats" | "spaces" | "videos" | "music" | "games" | "friends" | "me";
   /** a full-width hub replaces the chat pane: music, videos or the creator studio */
-  hub: "music" | "videos" | "studio" | null;
+  hub: "music" | "videos" | "studio" | "games" | null;
   /** phone layout: call screen minimized to the floating bar */
   callMinimized: boolean;
 };
@@ -74,6 +76,7 @@ export const useApp = create<AppState>(() => ({
   chatList: [],
   convMembers: {},
   convKinds: {},
+  convTtl: {},
   unread: {},
   presence: {},
   myStatus: "online",

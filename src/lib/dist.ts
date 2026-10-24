@@ -225,6 +225,13 @@ export async function approveAndSend(releaseId: string, onProgress: (p: SendProg
         if (!r.ok) throw new Error(`Couldn't read ${j.name} (${r.status})`);
         return r.blob();
       });
+      if (j.track_id) {
+        onProgress({ step: `Shield check: ${j.name}…`, done: i, total: jobs.length });
+        const { shieldCheck } = await import("./shield");
+        const owner = (await supabase.from("dist_releases").select("owner_id").eq("id", releaseId).maybeSingle()).data?.owner_id as string | undefined;
+        const hit = await shieldCheck(new File([blob], j.name, { type: j.content_type }), "release", owner);
+        if (hit) throw new Error(`“${j.name}” matches “${hit.title}”, a song protected by Nexus Shield. It can't be distributed until its owner unlocks it.`);
+      }
       const res = await xhrPut(j.upload_url, blob, { "Content-Type": j.content_type, "x-upsert": "true" }, (p) =>
         onProgress({ step: `Uploading ${j.name} — ${Math.round(p * 100)}%`, done: i + p, total: jobs.length }),
       );

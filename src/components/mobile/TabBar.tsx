@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Clapperboard, Headphones, LayoutGrid, MessageCircle, UserRound } from "lucide-react";
+import { useGames } from "@/store/games";
 import { useApp } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { musicHome } from "@/store/music";
@@ -13,6 +14,7 @@ type Tab = "chats" | "spaces" | "videos" | "music" | "friends" | "me";
 
 export default function TabBar() {
   const tab = useApp((s) => s.mobileTab);
+  const playing = useGames((s) => s.playing);
   const me = useApp((s) => s.userId);
   const unread = useApp((s) => s.unread);
   const chatList = useApp((s) => s.chatList);
@@ -36,11 +38,12 @@ export default function TabBar() {
     },
   ];
 
+  if (playing) return null;
   return (
     <nav className="tabbar relative z-30 shrink-0 border-t border-white/[.07] bg-side/80 pb-safe backdrop-blur-2xl">
       <div className="mx-auto flex max-w-lg">
         {items.map((it) => {
-          const active = tab === it.id;
+          const active = tab === it.id || (it.id === "music" && tab === "games");
           return (
             <button
               key={it.id}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { TriangleAlert, ArrowDown, ArrowLeft, ArrowUp, CircleCheck, Disc3, FileAudio, ImagePlus, Plus, RefreshCw, Send, Trash2, Upload, X } from "lucide-react";
+import { Copy as CopyIcon, AudioWaveform, Fingerprint, Printer, Signature, TriangleAlert, ArrowDown, ArrowLeft, ArrowUp, CircleCheck, Disc3, FileAudio, ImagePlus, Plus, RefreshCw, Send, Trash2, Upload, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { useStudio } from "@/store/studio";
 import {
@@ -37,9 +37,15 @@ import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import { Card, H, StatusPill } from "./Studio";
+import { DefaultsDialog, PitchCard, PitchSummary, ReadinessCard, SmartLinkCard, Timeline } from "./ReleaseExtras";
+import { duplicateRelease, getDefaults, getPitch, getSmartLink, readiness, remoteImageSize, savePitch, statusLog, type Pitch, type SmartLink, type StatusLog } from "@/lib/distExtras";
+import { CheckPill, CheckView, Chips, ReportView, SplitEditor, printSplitSheet } from "@/components/music/AudioBits";
+import { analyzeAudio, checkStatus, clearCheckConfig, saveShieldBucket, clipFromBuffer, copyrightCheck, decodeFile, latestChecks, lyricsLookExplicit, saveCheckConfig, type AudioCheck, type AudioReport } from "@/lib/audio";
 import type { DistArtist, DistRelease, DistTrack } from "@/lib/types";
 
 // ------------------------------------------------------------------ list
+export { Artwork };
+
 export function Releases() {
   const releaseId = useStudio((s) => s.releaseId);
   if (releaseId) return <ReleaseEditor id={releaseId} />;
@@ -64,6 +70,7 @@ function Artwork({ path, className }: { path: string | null; className?: string 
 
 function ReleaseList() {
   const [rows, setRows] = useState<DistRelease[] | null>(null);
+  const [defaultsOpen, setDefaultsOpen] = useState(false);
   useEffect(() => {
     void listReleases().then(setRows);
     void tunearo("sync").catch(() => null).then(() => listReleases().then(setRows));
@@ -72,13 +79,19 @@ function ReleaseList() {
     <>
       <H
         right={
-          <button onClick={() => useStudio.setState({ releaseId: "new" })} className="flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white">
-            <Plus className="size-4" /> New release
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setDefaultsOpen(true)} className="rounded-full bg-hover px-3 py-2 text-sm font-semibold hover:bg-active">
+              Defaults
+            </button>
+            <button onClick={() => useStudio.setState({ releaseId: "new" })} className="flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white">
+              <Plus className="size-4" /> New release
+            </button>
+          </div>
         }
       >
         Music releases
       </H>
+      {defaultsOpen && <DefaultsDialog onClose={() => setDefaultsOpen(false)} />}
       <p className="-mt-3 mb-5 text-sm text-sub">Distribute to Spotify, Apple Music, TikTok, YouTube Music, Amazon, Deezer and 150+ stores via Tunearo. An admin reviews every release before it&apos;s sent.</p>
       {rows === null ? (
         <p className="text-sub">Loading…</p>
@@ -125,19 +138,33 @@ function ReleaseEditor({ id }: { id: string }) {
   const [artInfo, setArtInfo] = useState<string | null>(null);
   const artRef = useRef<HTMLInputElement>(null);
   const creating = useRef(false);
+  const [checks, setChecks] = useState<Record<string, AudioCheck>>({});
+  const [pitch, setPitch] = useState<Pitch | null>(null);
+  const [link, setLink] = useState<SmartLink | null>(null);
+  const [log, setLog] = useState<StatusLog[]>([]);
+  const [art, setArt] = useState<{ w: number; h: number } | null>(null);
 
   const load = useCallback(async (rid: string) => {
     const { release, tracks } = await getRelease(rid);
     setR(release);
     setTracks(tracks);
+    void latestChecks("track", tracks.map((t) => t.id)).then(setChecks);
+    void getPitch(rid).then(setPitch);
+    void getSmartLink(rid).then(setLink);
+    void statusLog([rid]).then(setLog);
   }, []);
+  const artPath = r?.artwork_path;
+  useEffect(() => {
+    if (!artPath) return setArt(null);
+    void distFileUrl(artPath).then((u) => u && remoteImageSize(u).then(setArt));
+  }, [artPath]);
 
   useEffect(() => {
     void listArtists().then(setArtists);
     if (id === "new") {
       if (creating.current) return;
       creating.current = true;
-      void createRelease({}).then((x) => {
+      void createRelease(getDefaults()).then((x) => {
         if (x) useStudio.setState({ releaseId: x.id });
       });
     } else void load(id);
@@ -160,6 +187,8 @@ function ReleaseEditor({ id }: { id: string }) {
   if (tracks.some((t) => !t.audio_path)) missing.push("Audio for every track");
   if (r.release_type === "Single" && tracks.length > 3) missing.push("Singles have up to 3 tracks");
   if (r.release_date < today) missing.push("Release date in the future");
+  const ready = readiness(r, tracks, checks, art, pitch, link);
+  for (const b of ready.blocking) if (!["art", "tracks", "audio", "single", "date"].includes(b.id)) missing.push(b.label);
 
   return (
     <div className="space-y-4">
@@ -169,6 +198,23 @@ function ReleaseEditor({ id }: { id: string }) {
         </button>
         <h1 className="min-w-0 flex-1 truncate text-2xl font-bold">{r.title}</h1>
         <StatusPill status={r.status} />
+        {r.owner_id === me && (
+          <button
+            onClick={async () => {
+              const name = prompt("Title for the copy (e.g. Sped Up, Remix, Deluxe)", `${r.title} (Sped Up)`);
+              if (!name) return;
+              const c = await duplicateRelease(r.id, name);
+              if (c) {
+                toast("Copied — it's a new draft", "success");
+                useStudio.setState({ releaseId: c.id });
+              }
+            }}
+            className="flex items-center gap-1.5 rounded-full bg-hover px-3 py-1.5 text-sm font-semibold hover:bg-active"
+            title="Duplicate (remix, sped up, deluxe…)"
+          >
+            <CopyIcon className="size-4" /> Duplicate
+          </button>
+        )}
       </div>
 
       {(r.staff_note && r.status === "changes_requested") || (r.rejection_reason && r.status === "rejected") || (r.last_error && r.status === "error") ? (
@@ -266,7 +312,25 @@ function ReleaseEditor({ id }: { id: string }) {
         </Card>
       </div>
 
-      <Tracks r={r} tracks={tracks} setTracks={setTracks} canEdit={canEdit} />
+      <Tracks r={r} tracks={tracks} setTracks={setTracks} canEdit={canEdit} checks={checks} setChecks={setChecks} />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ReadinessCard score={ready.score} checks={ready.checks} />
+        {r.owner_id === me || link ? <SmartLinkCard r={r} link={link} onLink={setLink} /> : null}
+        <PitchCard
+          pitch={pitch}
+          tracks={tracks}
+          canEdit={r.owner_id === me}
+          onSave={async (p) => {
+            const x = await savePitch(r.id, p);
+            if (x) {
+              setPitch(x);
+              toast("Pitch saved", "success");
+            }
+          }}
+        />
+        <Timeline log={log} />
+      </div>
 
       {/* actions */}
       <Card>
@@ -417,9 +481,27 @@ const CREDIT_FIELDS: [keyof DistTrack, string][] = [
   ["remixer", "Remixer"],
 ];
 
-function Tracks({ r, tracks, setTracks, canEdit }: { r: DistRelease; tracks: DistTrack[]; setTracks: (t: DistTrack[]) => void; canEdit: boolean }) {
+function Tracks({
+  r,
+  tracks,
+  setTracks,
+  canEdit,
+  checks,
+  setChecks,
+}: {
+  r: DistRelease;
+  tracks: DistTrack[];
+  setTracks: (t: DistTrack[]) => void;
+  canEdit: boolean;
+  checks: Record<string, AudioCheck>;
+  setChecks: (f: (m: Record<string, AudioCheck>) => Record<string, AudioCheck>) => void;
+}) {
   const [open, setOpen] = useState<string | null>(null);
   const staff = myRank() >= 3;
+  const [checkOn, setCheckOn] = useState(false);
+  useEffect(() => {
+    void checkStatus().then((st) => setCheckOn(st.configured));
+  }, []);
   const move = async (i: number, d: number) => {
     const j = i + d;
     if (j < 0 || j >= tracks.length) return;
@@ -444,6 +526,9 @@ function Tracks({ r, tracks, setTracks, canEdit }: { r: DistRelease; tracks: Dis
             canEdit={canEdit}
             staff={staff}
             open={open === t.id}
+            check={checks[t.id]}
+            checkOn={checkOn}
+            onCheck={(c) => setChecks((m) => ({ ...m, [t.id]: c }))}
             onToggle={() => setOpen(open === t.id ? null : t.id)}
             onChange={(x) => setTracks(tracks.map((y) => (y.id === x.id ? x : y)))}
             onDelete={async () => (await deleteTrack(t.id)) && setTracks(tracks.filter((y) => y.id !== t.id))}
@@ -478,15 +563,22 @@ function TrackRow(props: {
   canEdit: boolean;
   staff: boolean;
   open: boolean;
+  check?: AudioCheck;
+  checkOn: boolean;
+  onCheck: (c: AudioCheck) => void;
   onToggle: () => void;
   onChange: (t: DistTrack) => void;
   onDelete: () => void;
   onUp?: () => void;
   onDown?: () => void;
 }) {
-  const { t, r, n, canEdit, staff, open, onToggle, onChange, onDelete, onUp, onDown } = props;
+  const { t, r, n, canEdit, staff, open, check, checkOn, onCheck, onToggle, onChange, onDelete, onUp, onDown } = props;
   const [local, setLocal] = useState(t);
   const [progress, setProgress] = useState<number | null>(null);
+  const [analysis, setAnalysis] = useState<AudioReport | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [showSplits, setShowSplits] = useState(false);
   const [src, setSrc] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => setLocal(t), [t]);
@@ -500,6 +592,39 @@ function TrackRow(props: {
     onChange: (v: string) => setLocal({ ...local, [k]: v }),
     onBlur: () => void persist({ [k]: ((local[k] as string | null) ?? "").trim() || null } as Partial<DistTrack>),
   });
+
+  /** analyze (BPM, key, loudness) + copyright check; file = fresh upload, or download the stored one */
+  const inspect = async (f?: File | Blob, opts: { analyze?: boolean; check?: boolean } = { analyze: true, check: true }) => {
+    try {
+      let file = f;
+      if (!file) {
+        setBusy("Downloading audio…");
+        const url = await distFileUrl(t.audio_path);
+        if (!url) throw new Error("Audio not found");
+        file = await (await fetch(url)).blob();
+      }
+      setBusy("Decoding…");
+      const buf = await decodeFile(file);
+      if (opts.analyze) {
+        const rep = await analyzeAudio(file, setBusy, buf);
+        setAnalysis(rep);
+        if (canEdit) await persist({ bpm: rep.bpm, musical_key: rep.key && rep.camelot ? `${rep.key} (${rep.camelot})` : rep.key, lufs: rep.lufs, true_peak: rep.truePeak });
+      }
+      if (opts.check && checkOn) {
+        setBusy(null);
+        setChecking(true);
+        const c = await copyrightCheck(await clipFromBuffer(buf), { kind: "track", id: t.id });
+        onCheck(c);
+        if (c.status === "match") toast(`"${t.title}" matches a copyrighted recording — see the track for details`, "error");
+      }
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(null);
+      setChecking(false);
+    }
+  };
+  const explicitHint = !t.explicit && lyricsLookExplicit(local.lyrics);
 
   return (
     <div className="rounded-xl border border-line/70">
@@ -519,6 +644,10 @@ function TrackRow(props: {
             )}
             {t.isrc && <span className="ml-2 font-mono">ISRC {t.isrc}</span>}
             {t.explicit && <span className="ml-2 rounded bg-white/15 px-1 text-[10px]">E</span>}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <Chips bpm={t.bpm} keyName={t.musical_key} lufs={t.lufs} truePeak={t.true_peak} />
+            <CheckPill c={check} running={checking} />
           </div>
         </button>
         {canEdit && (
@@ -555,11 +684,16 @@ function TrackRow(props: {
                     e.target.value = "";
                     if (!f) return;
                     if (!/\.(wav|flac)$/i.test(f.name)) return toast("Use a WAV or FLAC file (stores don't accept MP3)", "error");
+                    const { shieldGate } = await import("@/lib/shield");
+                    if (await shieldGate(f, "release")) return;
                     const dur = await audioDuration(f);
                     setProgress(0);
                     const path = await uploadDistFile(r.id, f, "audio", setProgress);
                     setProgress(null);
-                    if (path) await persist({ audio_path: path, audio_name: f.name.slice(0, 300), audio_bytes: f.size, duration: dur, audio_sent: false });
+                    if (path) {
+                      await persist({ audio_path: path, audio_name: f.name.slice(0, 300), audio_bytes: f.size, duration: dur, audio_sent: false });
+                      void inspect(f);
+                    }
                   }}
                 />
                 <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white">
@@ -573,7 +707,22 @@ function TrackRow(props: {
               </button>
             )}
           </div>
+          {t.audio_path && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button disabled={!!busy || checking} onClick={() => void inspect(undefined, { analyze: true, check: false })} className="flex items-center gap-1.5 rounded-full bg-hover px-3.5 py-1.5 text-sm font-semibold hover:bg-active disabled:opacity-50">
+                <AudioWaveform className="size-4" /> {analysis ? "Analyze again" : "Analyze audio"}
+              </button>
+              {checkOn && (
+                <button disabled={!!busy || checking} onClick={() => void inspect(undefined, { analyze: false, check: true })} className="flex items-center gap-1.5 rounded-full bg-hover px-3.5 py-1.5 text-sm font-semibold hover:bg-active disabled:opacity-50">
+                  <Fingerprint className="size-4" /> {check ? "Check copyright again" : "Check copyright"}
+                </button>
+              )}
+              {(busy || checking) && <span className="animate-pulse text-sm text-sub">{busy ?? "Listening for copyrighted music…"}</span>}
+            </div>
+          )}
           {src && <audio src={src} controls autoPlay className="w-full" />}
+          {check && <CheckView c={check} />}
+          {analysis && <ReportView r={analysis} />}
           <fieldset disabled={!canEdit} className="grid gap-3 sm:grid-cols-2">
             <In label="Track title" {...field("title")} onBlur={() => void persist({ title: local.title.trim() || "Untitled" })} />
             <In label="Primary artist (if different)" placeholder={r.primary_artist_name} {...field("primary_artist_name")} />
@@ -591,6 +740,16 @@ function TrackRow(props: {
               <span className="text-sm">Explicit</span>
               <input type="checkbox" checked={t.explicit} onChange={(e) => void persist({ explicit: e.target.checked })} className="size-4" />
             </label>
+            {explicitHint && canEdit && (
+              <div className="flex items-center gap-2 rounded-lg bg-idle/10 px-3 py-2 text-sm ring-1 ring-idle/25 sm:col-span-2">
+                <TriangleAlert className="size-4 shrink-0 text-idle" /> The lyrics contain explicit words — stores can reject or pull tracks that aren&apos;t marked Explicit.
+                <button type="button" onClick={() => void persist({ explicit: true })} className="ml-auto shrink-0 rounded-full bg-idle px-3 py-1 text-xs font-bold text-black">
+                  Mark explicit
+                </button>
+              </div>
+            )}
+            <In label="BPM" value={local.bpm != null ? String(local.bpm) : ""} onChange={(v) => setLocal({ ...local, bpm: v ? Number(v.replace(/[^\d.]/g, "")) || null : null })} onBlur={() => void persist({ bpm: local.bpm && local.bpm >= 20 && local.bpm <= 400 ? local.bpm : null })} placeholder="Auto from audio" />
+            <In label="Key" value={local.musical_key ?? ""} onChange={(v) => setLocal({ ...local, musical_key: v.slice(0, 24) })} onBlur={() => void persist({ musical_key: local.musical_key?.trim() || null })} placeholder="Auto from audio" />
             {CREDIT_FIELDS.map(([k, l]) => (
               <In key={k} label={l} {...field(k)} />
             ))}
@@ -605,6 +764,43 @@ function TrackRow(props: {
               />
             </label>
           </fieldset>
+          <div className="rounded-xl border border-line/70 p-3">
+            <button type="button" onClick={() => setShowSplits(!showSplits)} className="flex w-full items-center gap-2 text-left">
+              <Signature className="size-4 text-sub" />
+              <span className="font-semibold">Split sheet</span>
+              <span className="text-xs text-sub">{t.splits?.length ? `${t.splits.length} people · ${t.splits.map((x) => `${x.name.split(" ")[0] || "?"} ${x.share}%`).join(", ")}` : "who owns what share of the song"}</span>
+            </button>
+            {showSplits && (
+              <div className="mt-3 space-y-3">
+                <SplitEditor splits={local.splits ?? []} disabled={!canEdit} onChange={(sp) => setLocal({ ...local, splits: sp })} />
+                <div className="flex flex-wrap gap-2">
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const sp = (local.splits ?? []).filter((x) => x.name.trim());
+                        const total = Math.round(sp.reduce((a, x) => a + x.share, 0) * 100) / 100;
+                        if (sp.length && total !== 100) return toast("Shares must add up to 100%", "error");
+                        void persist({ splits: sp }).then(() => toast("Split sheet saved", "success"));
+                      }}
+                      className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white"
+                    >
+                      Save splits
+                    </button>
+                  )}
+                  {(t.splits?.length ?? 0) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => printSplitSheet({ title: t.title, artist: t.primary_artist_name || r.primary_artist_name, isrc: t.isrc, release: r.title, date: r.release_date, label: r.label_name }, t.splits)}
+                      className="flex items-center gap-1.5 rounded-full bg-hover px-4 py-1.5 text-sm font-semibold hover:bg-active"
+                    >
+                      <Printer className="size-4" /> Print / PDF
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -742,11 +938,22 @@ function ReviewItem({ r, open, onToggle, onDone }: { r: DistRelease; open: boole
   const [note, setNote] = useState("");
   const [prog, setProg] = useState<SendProgress | null>(null);
   const [srcs, setSrcs] = useState<Record<string, string>>({});
+  const [checks, setChecks] = useState<Record<string, AudioCheck>>({});
   useEffect(() => {
-    if (open) void getRelease(r.id).then((x) => setTracks(x.tracks));
+    if (!open) return;
+    void getRelease(r.id).then((x) => {
+      setTracks(x.tracks);
+      void latestChecks("track", x.tracks.map((t) => t.id)).then(setChecks);
+    });
+  }, [open, r.id]);
+  const flagged = tracks.filter((t) => checks[t.id]?.status === "match");
+  const [pitch, setPitch] = useState<Pitch | null>(null);
+  useEffect(() => {
+    if (open) void getPitch(r.id).then(setPitch);
   }, [open, r.id]);
 
   const send = async () => {
+    if (flagged.length && !confirm(`${flagged.length} track(s) matched copyrighted recordings (${flagged.map((t) => t.title).join(", ")}). Send anyway?`)) return;
     if (!confirm(`Approve "${r.title}" and send it to Tunearo for distribution?`)) return;
     try {
       const res = await approveAndSend(r.id, setProg, r.status === "error");
@@ -786,6 +993,7 @@ function ReviewItem({ r, open, onToggle, onDone }: { r: DistRelease; open: boole
             <KV k="Territories" v={`${r.territories_include}${r.territories_exclude ? ` (not ${r.territories_exclude})` : ""}`} />
             <KV k="UPC" v={r.upc ?? "assign"} />
           </div>
+          {pitch && <PitchSummary p={pitch} tracks={tracks} />}
           <div className="space-y-1.5">
             {tracks.map((t, i) => (
               <div key={t.id} className="rounded-lg bg-black/20 p-2">
@@ -797,6 +1005,16 @@ function ReviewItem({ r, open, onToggle, onDone }: { r: DistRelease; open: boole
                     ▶ Listen
                   </button>
                 </div>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-7">
+                  <Chips bpm={t.bpm} keyName={t.musical_key} lufs={t.lufs} truePeak={t.true_peak} />
+                  {checks[t.id] ? <CheckPill c={checks[t.id]} /> : <span className="text-[11px] text-faint">not copyright-checked</span>}
+                  {t.splits?.length ? <span className="text-[11px] text-sub">splits: {t.splits.map((x) => `${x.name} ${x.share}%`).join(", ")}</span> : null}
+                </div>
+                {checks[t.id]?.status === "match" && (
+                  <div className="mt-1.5 pl-7">
+                    <CheckView c={checks[t.id]} />
+                  </div>
+                )}
                 {srcs[t.id] && <audio src={srcs[t.id]} controls className="mt-1.5 w-full" />}
                 <div className="mt-0.5 truncate pl-7 text-xs text-sub">
                   {[t.featured_artist_names, t.songwriter && `songwriter ${t.songwriter}`, t.producer && `prod. ${t.producer}`].filter(Boolean).join(" · ") || "No credits"} · {t.audio_name}
@@ -1025,6 +1243,7 @@ export function DistSettings() {
             {st?.webhook ? "Re-register webhook" : "Register webhook"}
           </button>
         </Card>
+        <CopyrightSettings />
         <Card title="Sync">
           <button disabled={busy || !st?.configured} onClick={() => void run(() => tunearo("sync"), "All release statuses refreshed")} className="flex items-center gap-1.5 rounded-full bg-hover px-4 py-2 text-sm font-semibold hover:bg-active disabled:opacity-40">
             <RefreshCw className="size-4" /> Sync all releases now
@@ -1032,5 +1251,109 @@ export function DistSettings() {
         </Card>
       </div>
     </>
+  );
+}
+
+/** admins: connect the audio-fingerprint copyright check (ACRCloud; Audible Magic needs an enterprise deal) */
+function CopyrightSettings() {
+  const [on, setOn] = useState<boolean | null>(null);
+  const [host, setHost] = useState("");
+  const [key, setKey] = useState("");
+  const [secret, setSecret] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [bucketOn, setBucketOn] = useState(false);
+  const [token, setToken] = useState("");
+  const [bucket, setBucket] = useState("");
+  const load = useCallback(
+    () =>
+      void checkStatus().then((x) => {
+        setOn(x.configured);
+        setBucketOn(!!x.shieldBucket);
+      }),
+    [],
+  );
+  useEffect(load, [load]);
+  return (
+    <Card title="Copyright check (audio fingerprint)">
+      <div className="mb-3 flex items-center gap-2 text-sm">
+        {on ? <CircleCheck className="size-5 text-ok" /> : <X className="size-5 text-sub" />}
+        {on === null ? "Checking…" : on ? "Connected — tracks and videos are checked automatically" : "Not connected"}
+      </div>
+      <p className="mb-2 text-sm text-sub">
+        Create an &quot;Audio &amp; Video Recognition&quot; project at console.acrcloud.com (bucket: ACRCloud Music), then paste its host, access key and access secret. They&apos;re stored on the server
+        only. Audible Magic works through an enterprise agreement — when you have one, send their API details to add it.
+      </p>
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          try {
+            await saveCheckConfig(host, key, secret);
+            toast("Copyright check connected", "success");
+            setKey("");
+            setSecret("");
+            load();
+          } catch (err) {
+            toast((err as Error).message, "error");
+          }
+          setBusy(false);
+        }}
+        className="grid gap-2 sm:grid-cols-3"
+      >
+        <input value={host} onChange={(e) => setHost(e.target.value)} placeholder="identify-eu-west-1.acrcloud.com" className="min-w-0 rounded-lg border border-line bg-transparent px-3 py-2 font-mono text-sm outline-none focus:border-accent" />
+        <input value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" placeholder="Access key" className="min-w-0 rounded-lg border border-line bg-transparent px-3 py-2 font-mono text-sm outline-none focus:border-accent" />
+        <input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="off" placeholder="Access secret" className="min-w-0 rounded-lg border border-line bg-transparent px-3 py-2 font-mono text-sm outline-none focus:border-accent" />
+        <div className="flex gap-2 sm:col-span-3">
+          <button disabled={busy || !host.trim() || !key.trim() || !secret.trim()} className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-white disabled:opacity-40">
+            {busy ? "Testing…" : on ? "Replace keys" : "Connect"}
+          </button>
+          {on && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!confirm("Disconnect the copyright check?")) return;
+                await clearCheckConfig().catch((err) => toast((err as Error).message, "error"));
+                load();
+              }}
+              className="rounded-full bg-hover px-4 py-2 text-sm font-semibold hover:bg-active"
+            >
+              Disconnect
+            </button>
+          )}
+        </div>
+      </form>
+
+      <div className="mt-5 border-t border-line pt-4">
+        <div className="mb-1 flex items-center gap-2 font-semibold">
+          {bucketOn ? <CircleCheck className="size-5 text-ok" /> : <X className="size-5 text-sub" />} Shield 360 → ACRCloud custom bucket
+        </div>
+        <p className="mb-2 text-sm text-sub">
+          Songs protected in Shield 360 are also uploaded to your own ACRCloud bucket, so ACRCloud recognises them as well. In console.acrcloud.com: create a <b>custom bucket</b> (Audio &amp; Video
+          Recognition → Buckets), attach it to the same project as above, then create a <b>personal access token</b> (Account → Developer settings) and paste it here with the bucket ID.
+        </p>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBusy(true);
+            try {
+              await saveShieldBucket(token, bucket);
+              toast("ACRCloud bucket connected", "success");
+              setToken("");
+              load();
+            } catch (err) {
+              toast((err as Error).message, "error");
+            }
+            setBusy(false);
+          }}
+          className="grid gap-2 sm:grid-cols-[1fr_160px_auto]"
+        >
+          <input type="password" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" placeholder="Console access token" className="min-w-0 rounded-lg border border-line bg-transparent px-3 py-2 font-mono text-sm outline-none focus:border-accent" />
+          <input value={bucket} onChange={(e) => setBucket(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="Bucket ID" className="min-w-0 rounded-lg border border-line bg-transparent px-3 py-2 font-mono text-sm outline-none focus:border-accent" />
+          <button disabled={busy || !token.trim() || !bucket} className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-white disabled:opacity-40">
+            {bucketOn ? "Replace" : "Connect"}
+          </button>
+        </form>
+      </div>
+    </Card>
   );
 }

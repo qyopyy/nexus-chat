@@ -219,14 +219,23 @@ export function inspectVideo(file: File): Promise<FileInfo> {
     const v = document.createElement("video");
     v.preload = "metadata";
     v.muted = true;
+    v.playsInline = true;
     const url = URL.createObjectURL(file);
+    let finished = false;
     const done = (info: FileInfo) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      v.removeAttribute("src");
       URL.revokeObjectURL(url);
       resolve(info);
     };
-    v.onloadedmetadata = () => done({ width: v.videoWidth, height: v.videoHeight, duration: v.duration });
+    // Safari/iPhone often never fires loadedmetadata for big or HEVC files → never block the upload
+    const timer = setTimeout(() => done({ width: v.videoWidth || 0, height: v.videoHeight || 0, duration: Number.isFinite(v.duration) ? v.duration : 0 }), 4000);
+    v.onloadedmetadata = () => done({ width: v.videoWidth, height: v.videoHeight, duration: Number.isFinite(v.duration) ? v.duration : 0 });
     v.onerror = () => done({ width: 0, height: 0, duration: 0 });
     v.src = url;
+    v.load();
   });
 }
 
@@ -339,7 +348,8 @@ export async function startVideoUpload(file: File, info: FileInfo): Promise<Vide
     headers: {
       authorization: `Bearer ${s.session?.access_token}`,
       apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
-      "x-upsert": "true",
+      // each upload gets a fresh path; upsert would also need an UPDATE policy and fails RLS
+      "x-upsert": "false",
     },
     uploadDataDuringCreation: true,
     removeFingerprintOnSuccess: true,

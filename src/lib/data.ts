@@ -47,6 +47,9 @@ export async function updateMyProfile(
       | "forum_name"
       | "now_playing"
       | "channel_description"
+      | "profile_effect"
+      | "profile_border"
+      | "profile_theme"
     >
   >,
   quiet = false,
@@ -265,11 +268,34 @@ export function openConversation(convId: string | null, spaceId: string | null) 
     spaceId,
     conversationId: convId,
     mobileSidebar: false,
+    // clicking a chat/channel (even the one already selected, e.g. #general) leaves Music/Videos
+    hub: s.hub === "studio" ? s.hub : null,
     lastChannel: spaceId && convId ? { ...s.lastChannel, [spaceId]: convId } : s.lastChannel,
   }));
 }
 
 // ------------------------------------------------------------------ messages
+
+// ------------------------------------------------------------------ disappearing messages
+export const TTL_OPTIONS: { secs: number | null; label: string; short: string }[] = [
+  { secs: null, label: "Off", short: "" },
+  { secs: 86400, label: "1 day", short: "1d" },
+  { secs: 604800, label: "1 week", short: "1w" },
+  { secs: 2592000, label: "1 month", short: "1m" },
+  { secs: 31536000, label: "1 year", short: "1y" },
+];
+export async function loadTtl(convId: string) {
+  const { data } = await supabase.from("conversations").select("message_ttl").eq("id", convId).maybeSingle();
+  set((s) => ({ convTtl: { ...s.convTtl, [convId]: (data?.message_ttl as number | null | undefined) ?? null } }));
+}
+export async function setTtl(convId: string, secs: number | null) {
+  const { error } = await supabase.rpc("set_message_ttl", { p_conv: convId, p_seconds: secs });
+  if (error) return toast(errorText(error), "error");
+  set((s) => ({ convTtl: { ...s.convTtl, [convId]: secs } }));
+}
+/** a message is gone once it's older than the chat's timer (the server removes it within ~15 min) */
+export const expired = (m: { created_at: string }, ttl: number | null | undefined, now = Date.now()) => !!ttl && now - new Date(m.created_at).getTime() > ttl * 1000;
+export const isTimerNotice = (m: { content: string | null; attachment_url?: string | null }) => !!m.content?.startsWith("⏱ ") && !m.attachment_url;
 
 export async function loadMessages(convId: string) {
   useChat.setState({
@@ -291,6 +317,7 @@ export async function loadMessages(convId: string) {
   if (useChat.getState().conversationId !== convId) return;
   const msgs = ((data ?? []) as Message[]).reverse();
   useChat.setState({ messages: msgs, loading: false, hasMore: msgs.length === PAGE });
+  void loadTtl(convId);
   await Promise.all([loadReactions(msgs.map((m) => m.id)), loadProfiles(msgs.map((m) => m.author_id)), markRead(convId)]);
 }
 
@@ -330,6 +357,11 @@ export async function sendMessage(convId: string, content: string, file?: File |
   if (!me) return;
   const text = content.trim();
   if (!text && !file) return;
+  // Nexus Shield: protected songs can't be sent (audio / video attachments, voice notes)
+  if (file && /^(audio|video)\//.test(file.type)) {
+    const { shieldGate } = await import("./shield");
+    if (await shieldGate(file, "chat")) return;
+  }
   const effect = chosenEffect ?? (text ? effectForText(text) : null);
   if (effect) playEffect(effect);
   const replyTo = useChat.getState().replyTo;

@@ -8,7 +8,8 @@ export type MusicRoute =
   | { view: "page"; handle: string }
   | { view: "lookup"; tab?: "isrc" | "upc" | "link" }
   | { view: "library" }
-  | { view: "search"; q?: string };
+  | { view: "search"; q?: string }
+  | { view: "tool"; tool: import("@/components/music/Tools").ToolId };
 
 export const useMusic = create<{ stack: MusicRoute[] }>(() => ({ stack: [{ view: "home" }] }));
 

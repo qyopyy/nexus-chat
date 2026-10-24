@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Award, ExternalLink, Gavel, MessageCircle, Phone, ShieldCheck } from "lucide-react";
+import { Award, ExternalLink, Eye, Gavel, Heart, MessageCircle, Phone, ShieldCheck } from "lucide-react";
 import { useApp, openModal, toast } from "@/store/app";
 import { openDM } from "@/lib/data";
 import { startCall } from "@/lib/call";
@@ -16,6 +16,8 @@ import Avatar, { statusLabel } from "./Avatar";
 import NameTag, { VerifiedCheck } from "./NameTag";
 import Sheet from "./Sheet";
 import { useIsMobile } from "@/lib/useMobile";
+import { cn } from "@/lib/utils";
+import { BorderRing, EffectCanvas, themeBg } from "@/components/profile/ProfileFx";
 
 const EMPTY: string[] = [];
 
@@ -69,7 +71,23 @@ export function CardBody({ userId }: { userId: string }) {
   const catalog = useApp((s) => s.badges);
   const [modOpen, setModOpen] = useState(false);
   const [badgeOpen, setBadgeOpen] = useState(false);
+  const [liked, setLiked] = useState(false);
   const badges = useMemo(() => ids.map((id) => catalog[id]).filter(Boolean).sort((a, b) => b.priority - a.priority), [ids, catalog]);
+  // all-time profile views (one per visitor per day) + likes
+  useEffect(() => {
+    if (!me) return;
+    if (userId !== me)
+      void supabase.rpc("record_profile_view", { p_profile: userId }).then(({ data }) => {
+        if (typeof data === "number") useApp.setState((s) => (s.profiles[userId] ? { profiles: { ...s.profiles, [userId]: { ...s.profiles[userId], view_count: data } } } : s));
+      });
+    void supabase
+      .from("profile_likes")
+      .select("active")
+      .eq("profile_id", userId)
+      .eq("user_id", me)
+      .maybeSingle()
+      .then(({ data }) => setLiked(!!data?.active));
+  }, [userId, me]);
   if (!p) return null;
 
   const role = ROLE_INFO[(p.site_role ?? "member") as SiteRole];
@@ -91,8 +109,22 @@ export function CardBody({ userId }: { userId: string }) {
     }
   }
 
+  const like = async () => {
+    const { data, error } = await supabase.rpc("toggle_profile_like", { p_profile: userId });
+    if (error) return toast(error.message, "error");
+    const r = data as { liked: boolean; count: number };
+    setLiked(r.liked);
+    useApp.setState((s) => (s.profiles[userId] ? { profiles: { ...s.profiles, [userId]: { ...s.profiles[userId], like_count: r.count } } } : s));
+  };
+  const theme = themeBg(p.profile_theme);
+  const bordered = !!p.profile_border && p.profile_border !== "none";
+
   return (
-    <div className="max-h-[min(86dvh,720px)] overflow-y-auto overscroll-contain rounded-2xl bg-menu shadow-2xl ring-1 ring-white/5 md:max-h-[calc(100dvh-24px)]">
+    <div className={cn("relative rounded-2xl shadow-2xl", bordered && "p-[2px]")}>
+      <BorderRing border={p.profile_border} />
+      <div className={cn("relative overflow-hidden rounded-2xl ring-1 ring-white/5", !theme && "bg-menu")} style={theme ? { background: theme } : undefined}>
+        <EffectCanvas effect={p.profile_effect} accent={p.avatar_color} seed={userId} />
+    <div className="relative z-10 max-h-[min(86dvh,720px)] overflow-y-auto overscroll-contain md:max-h-[calc(100dvh-24px)]">
       <div
         className="relative h-28 bg-cover bg-center"
         style={
@@ -117,7 +149,7 @@ export function CardBody({ userId }: { userId: string }) {
       <div className="-mt-11 px-4">
         <Avatar userId={userId} size={84} showStatus ringClass="ring-menu" className="rounded-full ring-[6px] ring-menu" />
       </div>
-      <div className="m-3 rounded-xl bg-side/70 p-3">
+      <div className="m-3 rounded-xl bg-side/60 p-3 backdrop-blur-[2px]">
         <NameTag userId={userId} className="max-w-full text-xl font-bold" badgeSize="md" />
         <div className="flex flex-wrap items-center gap-x-1.5 text-sm text-sub">
           <span>@{p.username}</span>
@@ -125,6 +157,19 @@ export function CardBody({ userId }: { userId: string }) {
           {p.forum_name && <span className="text-xs">· forum: {p.forum_name}</span>}
         </div>
         {p.custom_status && <div className="mt-1 text-sm">{p.custom_status}</div>}
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+          <span className="flex items-center gap-1 rounded-full bg-black/25 px-2.5 py-1" title="All-time profile views">
+            <Eye className="size-4 text-sub" /> <b className="tabular-nums">{(p.view_count ?? 0).toLocaleString()}</b> <span className="text-sub">views</span>
+          </span>
+          <button
+            disabled={userId === me}
+            onClick={() => void like()}
+            className={cn("flex items-center gap-1 rounded-full px-2.5 py-1 transition active:scale-95", liked ? "bg-dnd/20 text-dnd" : "bg-black/25 hover:bg-black/40", userId === me && "cursor-default")}
+            title={userId === me ? "Likes on your profile" : liked ? "Unlike" : "Like this profile"}
+          >
+            <Heart className={cn("size-4", liked && "fill-current")} /> <b className="tabular-nums">{(p.like_count ?? 0).toLocaleString()}</b>
+          </button>
+        </div>
         {isBanned(p) && <div className="mt-2 rounded-md bg-dnd/20 px-2 py-1 text-xs text-dnd">Suspended{p.ban_reason ? `: ${p.ban_reason}` : ""}</div>}
         {isMuted(p) && rank >= 2 && <div className="mt-2 rounded-md bg-idle/15 px-2 py-1 text-xs text-idle">Messaging blocked{p.mute_reason ? `: ${p.mute_reason}` : ""}</div>}
 
@@ -245,6 +290,8 @@ export function CardBody({ userId }: { userId: string }) {
             )}
           </div>
         )}
+      </div>
+    </div>
       </div>
     </div>
   );

@@ -25,6 +25,8 @@ import EffectsLayer from "./effects/EffectsLayer";
 import { useIsMobile } from "@/lib/useMobile";
 import { startSpotifySync } from "@/lib/spotifyUser";
 import { startPush } from "@/lib/push";
+import { joinGame } from "@/store/games";
+import GamesHub from "@/components/games/GamesHub";
 import MusicHub from "./music/MusicHub";
 import VideosHub from "./videos/VideosHub";
 import Studio from "./studio/Studio";
@@ -66,6 +68,11 @@ export default function AppShell({ userId, initialVideo }: { userId: string; ini
     if (!bootstrapped) return;
     startSpotifySync();
     void startPush();
+    const play = new URLSearchParams(window.location.search).get("play");
+    if (play && /^[A-Za-z2-9]{6}$/.test(play)) {
+      joinGame(play);
+      window.history.replaceState(null, "", "/");
+    }
   }, [bootstrapped]);
 
   // keep realtime JWT fresh after token refresh
@@ -129,7 +136,9 @@ export default function AppShell({ userId, initialVideo }: { userId: string; ini
       {/* main */}
       <main className={cn("h-full min-w-0 flex-1 md:flex", mobileSidebar ? "hidden" : "flex")}>
         <div className="flex h-full min-w-0 flex-1 flex-col bg-chat">
-          {hub === "music" ? (
+          {hub === "games" ? (
+            <GamesHub />
+          ) : hub === "music" ? (
             <MusicHub />
           ) : hub === "videos" ? (
             <VideosHub />

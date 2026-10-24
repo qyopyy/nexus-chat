@@ -17,6 +17,8 @@ import {
   refreshFriends,
   refreshSpaces,
   removeReactionLocal,
+  isTimerNotice,
+  loadTtl,
 } from "./data";
 import { sfx } from "./sounds";
 import { isEffect, playEffect } from "./effects";
@@ -57,6 +59,7 @@ async function onMessageInsert(m: Message) {
 
   const chat = useChat.getState();
   const isOpen = chat.conversationId === m.conversation_id;
+  if (isTimerNotice(m)) void loadTtl(m.conversation_id);
   if (isOpen && m.author_id !== me && isEffect(m.effect) && Date.now() - new Date(m.created_at).getTime() < 60_000) playEffect(m.effect);
   if (isOpen) {
     useChat.setState((s) => {

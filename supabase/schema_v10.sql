@@ -1,0 +1,13 @@
+-- =====================================================================
+-- Nexus — v10: profile views/likes/effects + Nexus Shield 360 content protection.
+-- Applied live as nexus_22_profile_plus, nexus_22b_profile_like_toggle, nexus_23_shield,
+-- nexus_23b_shield_scoring, nexus_23c_shield_test_mode (see migrations history for the full SQL).
+-- Summary:
+--   profiles: view_count, like_count (protected), profile_effect, profile_border, profile_theme
+--   profile_views (one per visitor per day) + record_profile_view(); profile_likes(active) + toggle_profile_like()
+--   shield_works (owner songs, lock/unlock/auto-unlock date/allow list, vault file), shield_hashes (fingerprints),
+--   shield_events (blocked attempts), shield_add_hashes(), shield_check() (distinct aligned landmarks >= 60 or exact SHA-256),
+--   shield_log(); private storage bucket shield-vault (owner-only).
+-- =====================================================================
+-- nexus_24_shield_acr_docs: shield_works.upc / acr_id / acr_status / acr_error (protected), shield_docs table (owner-only vault documents).
+-- audiocheck function: set_bucket, shield_upload, shield_remove (ACRCloud console API custom bucket) + custom_files matches in identify.

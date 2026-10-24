@@ -12,6 +12,7 @@ import MobileChats from "./MobileChats";
 import MobileSpaces from "./MobileSpaces";
 import MobileMe from "./MobileMe";
 import MobileCallBar from "./MobileCallBar";
+import GamesHub from "@/components/games/GamesHub";
 import MusicHub from "@/components/music/MusicHub";
 import VideosHub from "@/components/videos/VideosHub";
 
@@ -44,6 +45,7 @@ export default function MobileShell() {
           )}
           {tab === "videos" && <VideosHub mobile />}
           {tab === "music" && <MusicHub mobile />}
+          {tab === "games" && <GamesHub mobile />}
           {tab === "me" && <MobileMe />}
           {inChat && <div className="absolute inset-0 bg-black/40" style={{ opacity: dx ? 1 - dx / window.innerWidth : 1 }} />}
         </div>

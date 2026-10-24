@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Trash2, X } from "lucide-react";
+import { FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Timer, Trash2, X } from "lucide-react";
 import { useApp, conversationTitle, toast } from "@/store/app";
 import { useChat } from "@/store/chat";
-import { sendMessage } from "@/lib/data";
+import { TTL_OPTIONS, sendMessage, setTtl } from "@/lib/data";
 import { sendTyping } from "@/lib/realtime";
 import { EFFECTS, playEffect, type EffectKind } from "@/lib/effects";
 import { haptic } from "@/lib/haptics";
@@ -13,7 +13,7 @@ import EmojiPicker from "@/components/ui/EmojiPicker";
 import Sheet from "@/components/ui/Sheet";
 import { isVoice } from "./MessageBubble";
 
-const MAX_FILE = 25 * 1024 * 1024;
+const MAX_FILE = 100 * 1024 * 1024;
 const MAX_VOICE_SECONDS = 300;
 
 function voiceMime() {
@@ -44,6 +44,9 @@ export default function Composer({
   const [text, setText] = useState("");
   const [picker, setPicker] = useState(false);
   const [effects, setEffects] = useState(false);
+  const [timerOpen, setTimerOpen] = useState(false);
+  const ttl = useApp((s) => s.convTtl[conversationId]);
+  const timerAllowed = kind === "dm" || kind === "group";
   const [effect, setEffect] = useState<EffectKind | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
@@ -74,7 +77,7 @@ export default function Composer({
 
   useEffect(() => {
     if (file && file.size > MAX_FILE) {
-      toast(`That file is ${formatBytes(file.size)} — the limit is 25 MB.`, "error");
+      toast(`That file is ${formatBytes(file.size)} — the limit is 100 MB.`, "error");
       setFile(null);
     }
   }, [file, setFile]);
@@ -368,6 +371,22 @@ export default function Composer({
                 <Mic className="size-[22px]" />
               </button>
             )}
+            {timerAllowed && (
+              <button
+                onClick={() => setTimerOpen(true)}
+                className={cn(
+                  "relative grid size-11 shrink-0 place-items-center rounded-full transition active:scale-90",
+                  ttl ? "bg-accent/20 text-accent" : "bg-side text-sub hover:text-accent",
+                )}
+                title={ttl ? `Messages disappear after ${TTL_OPTIONS.find((o) => o.secs === ttl)?.label}` : "Disappearing messages"}
+                aria-label="Disappearing messages timer"
+              >
+                <Timer className="size-[21px]" />
+                {!!ttl && (
+                  <span className="absolute -top-0.5 -right-0.5 rounded-full bg-accent px-1 text-[9px] leading-[14px] font-black text-white">{TTL_OPTIONS.find((o) => o.secs === ttl)?.short}</span>
+                )}
+              </button>
+            )}
           </div>
         )}
         {editingId && (
@@ -376,6 +395,29 @@ export default function Composer({
           </div>
         )}
       </div>
+
+      <Sheet open={timerOpen} onClose={() => setTimerOpen(false)} title="Disappearing messages">
+        <p className="mb-3 text-sm text-sub">All messages in this chat — old and new, from everyone — are deleted for good once they&apos;re older than the time you pick. Files and voice messages too.</p>
+        <div className="space-y-1.5 pb-1">
+          {TTL_OPTIONS.map((o) => (
+            <button
+              key={o.label}
+              onClick={async () => {
+                setTimerOpen(false);
+                if ((ttl ?? null) === o.secs) return;
+                if (o.secs && !confirm(`Delete every message older than ${o.label} in this chat, now and from now on?`)) return;
+                haptic.select();
+                await setTtl(conversationId, o.secs);
+              }}
+              className={cn("flex w-full items-center gap-3 rounded-2xl bg-white/[.06] px-4 py-3 text-left transition active:scale-[.98]", (ttl ?? null) === o.secs && "ring-2 ring-accent")}
+            >
+              <Timer className={cn("size-5", o.secs ? "text-accent" : "text-sub")} />
+              <span className="flex-1 font-semibold">{o.label}</span>
+              {(ttl ?? null) === o.secs && <span className="text-xs font-bold text-accent">ON</span>}
+            </button>
+          ))}
+        </div>
+      </Sheet>
 
       <Sheet open={effects} onClose={() => setEffects(false)} title="Send with effect">
         <div className="grid grid-cols-3 gap-2 pb-1">

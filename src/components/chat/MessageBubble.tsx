@@ -15,6 +15,7 @@ import EmojiPicker from "@/components/ui/EmojiPicker";
 import Sheet, { SheetGroup, SheetItem } from "@/components/ui/Sheet";
 import VoicePlayer from "./VoicePlayer";
 import VideoEmbed from "@/components/videos/VideoEmbed";
+import GameInvite from "@/components/games/GameInvite";
 import { useSignedUrl } from "@/lib/storage";
 import type { Message, Reaction } from "@/lib/types";
 
@@ -283,6 +284,7 @@ function MessageBubbleImpl({
                 </span>
               )}
               {m.content.includes("/v/") && !deleted && <VideoEmbed text={m.content} />}
+              {m.content.includes("play=") && !deleted && <GameInvite text={m.content} />}
             </>
           )}
 

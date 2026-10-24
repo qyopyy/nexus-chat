@@ -8,10 +8,13 @@ export type StudioSection =
   | "analytics"
   | "comments"
   | "customization"
+  | "dist-overview"
   | "releases"
   | "royalties"
   | "review"
-  | "dist-settings";
+  | "dist-settings"
+  | "tools"
+  | "shield";
 
 export type VideosRoute = { view: "home"; q?: string; tab?: "all" | "subs" } | { view: "watch"; key: string; t?: number } | { view: "channel"; userId: string };
 

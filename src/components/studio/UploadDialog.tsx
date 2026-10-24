@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, CircleCheck, Copy, ExternalLink, ImagePlus, Link2, Plus, Trash2, CloudUpload, X } from "lucide-react";
+import { Check, CircleCheck, Copy, ExternalLink, Fingerprint, ImagePlus, Link2, Plus, Trash2, CloudUpload, X } from "lucide-react";
 import { toast } from "@/store/app";
 import { useStudio } from "@/store/studio";
 import {
@@ -21,6 +21,8 @@ import {
   type FileInfo,
 } from "@/lib/videos";
 import { cn } from "@/lib/utils";
+import { checkStatus, clipFromFile, copyrightCheck, decodeLimit, type AudioCheck } from "@/lib/audio";
+import { CHECK_INFO, CheckView } from "@/components/music/AudioBits";
 import type { Video, VideoLink } from "@/lib/types";
 
 const STEPS = ["Details", "Links", "Checks", "Visibility"] as const;
@@ -44,6 +46,24 @@ function Dialog({ editId, onClose }: { editId: string | null; onClose: () => voi
   const [file, setFile] = useState<File | null>(null);
   const [info, setInfo] = useState<FileInfo | null>(null);
   const [video, setVideo] = useState<Video | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [copy, setCopy] = useState<AudioCheck | null>(null);
+  const [copyBusy, setCopyBusy] = useState(false);
+  const [copyOn, setCopyOn] = useState(false);
+  useEffect(() => {
+    void checkStatus().then((x) => setCopyOn(x.configured));
+  }, []);
+  const runCopy = async (f: File, vid: string) => {
+    setCopyBusy(true);
+    try {
+      const c = await copyrightCheck(await clipFromFile(f), { kind: "video", id: vid });
+      setCopy(c);
+    } catch (e) {
+      toast(`Copyright check: ${(e as Error).message}`, "error");
+    } finally {
+      setCopyBusy(false);
+    }
+  };
   const [step, setStep] = useState(0);
   const [drag, setDrag] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -99,16 +119,35 @@ function Dialog({ editId, onClose }: { editId: string | null; onClose: () => voi
 
   async function choose(f: File) {
     if (!f.type.startsWith("video/") && !/\.(mp4|mov|m4v|webm|mkv)$/i.test(f.name)) return toast("Pick a video file (MP4, MOV, WebM)", "error");
-    setFile(f);
-    setPreview(URL.createObjectURL(f));
-    const i = await inspectVideo(f);
-    setInfo(i);
-    const v = await startVideoUpload(f, i);
+    if (preparing) return;
+    setPreparing(true);
+    let v: Video | null = null;
+    let i: FileInfo = { width: 0, height: 0, duration: 0 };
+    try {
+      setFile(f);
+      setPreview(URL.createObjectURL(f));
+      const { shieldGate } = await import("@/lib/shield");
+      if (await shieldGate(f, "video")) {
+        setFile(null);
+        setPreview(null);
+        return;
+      }
+      i = await inspectVideo(f);
+      setInfo(i);
+      v = await startVideoUpload(f, i);
+    } catch (e) {
+      toast(`Upload failed: ${(e as Error).message}`, "error");
+    } finally {
+      setPreparing(false);
+    }
     if (!v) return;
     setVideo(v);
     setTitle(v.title);
     const base = slugify(v.title);
     if (base.length >= 3 && (await slugFree(base, v.id))) setSlug(base);
+    if (f.size <= decodeLimit()) void checkStatus().then((x) => {
+        if (x.configured) void runCopy(f, v!.id);
+      });
     void autoThumbnails(f).then((bl) => {
       setThumbs(bl.map((b) => ({ blob: b, url: URL.createObjectURL(b) })));
       if (bl.length) setThumbPick(1 < bl.length ? 1 : 0);
@@ -134,9 +173,14 @@ function Dialog({ editId, onClose }: { editId: string | null; onClose: () => voi
       { ok: Math.min(height, width) >= 720, label: q ? `Resolution: ${q}${Math.min(height, width) >= 1080 ? " — great" : Math.min(height, width) >= 720 ? "" : " — upload 720p or higher for HD"}` : "Resolution: reading…" },
       { ok: duration > 0, label: duration ? `Length: ${fmtDuration(duration)}` : "Length: reading…" },
       { ok: !file || /mp4|quicktime|webm|x-m4v/.test(file.type), label: file ? `Format: ${file.type || "unknown"}${/mp4/.test(file.type) ? " (plays everywhere)" : ""}` : "Format: original file" },
-      { ok: true, label: "Copyright: only upload videos you own or have rights to" },
+      copyOn
+        ? {
+            ok: copy?.status === "clean" || copy?.status === "own",
+            label: copyBusy ? "Copyright: listening for copyrighted music…" : copy ? `Copyright: ${CHECK_INFO[copy.status].label.toLowerCase()}` : "Copyright: not checked yet",
+          }
+        : { ok: true, label: "Copyright: only upload videos you own or have rights to" },
     ],
-    [height, width, duration, q, file],
+    [height, width, duration, q, file, copy, copyBusy, copyOn],
   );
 
   async function save(final: boolean) {
@@ -207,8 +251,8 @@ function Dialog({ editId, onClose }: { editId: string | null; onClose: () => voi
             <div className="text-sm text-sub">Your video stays private until you publish it. 1080p, 1440p and 4K keep their full quality.</div>
           </div>
           <input ref={pickRef} type="file" accept="video/*,.mkv" hidden onChange={(e) => (e.target.files?.[0] && void choose(e.target.files[0]), (e.target.value = ""))} />
-          <button onClick={() => pickRef.current?.click()} className="rounded-full bg-txt px-5 py-2.5 font-semibold text-chat">
-            Select file
+          <button disabled={preparing} onClick={() => pickRef.current?.click()} className="rounded-full bg-txt px-5 py-2.5 font-semibold text-chat disabled:opacity-60">
+            {preparing ? "Starting upload…" : "Select file"}
           </button>
           <p className="max-w-md text-xs text-faint">By uploading you confirm you own the rights to this video. MP4 (H.264 or HEVC) plays on every phone and browser.</p>
         </div>
@@ -366,6 +410,12 @@ function Dialog({ editId, onClose }: { editId: string | null; onClose: () => voi
                   </div>
                 ))}
               </div>
+              {copy && <CheckView c={copy} />}
+              {copyOn && file && video && !copyBusy && (
+                <button onClick={() => void runCopy(file, video.id)} className="flex items-center gap-1.5 self-start rounded-full bg-hover px-4 py-2 text-sm font-semibold hover:bg-active">
+                  <Fingerprint className="size-4" /> {copy ? "Check copyright again" : "Check for copyrighted music"}
+                </button>
+              )}
               <p className="text-xs text-faint">Nexus keeps your original file, so 1080p and 4K uploads play in full quality.</p>
             </>
           )}

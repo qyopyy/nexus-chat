@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
+  AudioWaveform,
   ChartColumn,
   Copy,
   Disc3,
   ExternalLink,
+  Gauge,
   Eye,
   EyeOff,
   LayoutDashboard,
@@ -38,6 +40,9 @@ import NameTag from "@/components/ui/NameTag";
 import { Thumb } from "@/components/videos/VideoCard";
 import UploadDialog from "./UploadDialog";
 import { Releases, ReviewQueue, Royalties, DistSettings } from "./Distribution";
+import DistOverview from "./DistOverview";
+import ShieldStudio from "./ShieldStudio";
+import ToolView, { ToolsGrid, type ToolId } from "@/components/music/Tools";
 import type { DistRelease, Video, VideoComment } from "@/lib/types";
 
 const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: string; staff?: boolean }[] = [
@@ -46,8 +51,11 @@ const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: st
   { id: "analytics", label: "Analytics", icon: <ChartColumn className="size-5" /> },
   { id: "comments", label: "Comments", icon: <MessageSquare className="size-5" /> },
   { id: "customization", label: "Customization", icon: <Palette className="size-5" /> },
+  { id: "dist-overview", label: "Overview", icon: <Gauge className="size-5" />, group: "Music distribution" },
   { id: "releases", label: "Releases", icon: <Disc3 className="size-5" />, group: "Music distribution" },
   { id: "royalties", label: "Royalties", icon: <Wallet className="size-5" />, group: "Music distribution" },
+  { id: "tools", label: "Music tools", icon: <AudioWaveform className="size-5" />, group: "Music distribution" },
+  { id: "shield", label: "Shield 360", icon: <ShieldCheck className="size-5" />, group: "Music distribution" },
   { id: "review", label: "Review queue", icon: <ShieldCheck className="size-5" />, group: "Admin", staff: true },
   { id: "dist-settings", label: "Distribution settings", icon: <Settings className="size-5" />, group: "Admin", staff: true },
 ];
@@ -175,8 +183,11 @@ export default function Studio() {
             {section === "analytics" && <Analytics />}
             {section === "comments" && <CommentsSection />}
             {section === "customization" && <Customization />}
+            {section === "dist-overview" && <DistOverview />}
             {section === "releases" && <Releases />}
             {section === "royalties" && <Royalties />}
+            {section === "tools" && <StudioTools />}
+            {section === "shield" && <ShieldStudio />}
             {section === "review" && staff && <ReviewQueue />}
             {section === "dist-settings" && staff && <DistSettings />}
           </div>
@@ -315,9 +326,14 @@ function Dashboard() {
                   <StatusPill status={r.status} />
                 </button>
               ))}
-              <button onClick={() => studioGo("releases")} className="text-sm font-semibold text-accent">
-                All releases
-              </button>
+              <div className="flex gap-4">
+                <button onClick={() => studioGo("dist-overview")} className="text-sm font-semibold text-accent">
+                  Distribution overview
+                </button>
+                <button onClick={() => studioGo("releases")} className="text-sm font-semibold text-accent">
+                  All releases
+                </button>
+              </div>
             </div>
           )}
         </Card>
@@ -722,6 +738,19 @@ function Customization() {
             <EyeOff className="size-4" /> Private and unlisted videos never appear on your channel page.
           </p>
         </Card>
+      </div>
+    </>
+  );
+}
+
+function StudioTools() {
+  const [tool, setTool] = useState<ToolId>("analyzer");
+  return (
+    <>
+      <H>Music tools</H>
+      <ToolsGrid onPick={setTool} active={tool} />
+      <div className="-mx-3 mt-2 sm:-mx-5">
+        <ToolView key={tool} tool={tool} />
       </div>
     </>
   );

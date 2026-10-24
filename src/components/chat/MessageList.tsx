@@ -1,10 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Timer } from "lucide-react";
 import { useApp } from "@/store/app";
 import { useChat } from "@/store/chat";
-import { loadOlder } from "@/lib/data";
+import { TTL_OPTIONS, expired, isTimerNotice, loadOlder } from "@/lib/data";
 import { formatDay, sameDay } from "@/lib/utils";
 import MessageBubble from "./MessageBubble";
 import type { Message } from "@/lib/types";
@@ -12,7 +12,17 @@ import type { Message } from "@/lib/types";
 const GROUP_GAP = 5 * 60 * 1000;
 
 export default function MessageList({ conversationId, initialUnread }: { conversationId: string; initialUnread: number }) {
-  const messages = useChat((s) => s.messages);
+  const allMessages = useChat((s) => s.messages);
+  const ttl = useApp((s) => s.convTtl[conversationId]);
+  const profiles = useApp((s) => s.profiles);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!ttl) return;
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, [ttl]);
+  // disappearing messages: hide anything past the timer right away (the server deletes it within ~15 min)
+  const messages = useMemo(() => (ttl ? allMessages.filter((m) => !expired(m, ttl, now)) : allMessages), [allMessages, ttl, now]);
   const loading = useChat((s) => s.loading);
   const hasMore = useChat((s) => s.hasMore);
   const jumpTo = useChat((s) => s.jumpTo);
@@ -101,6 +111,11 @@ export default function MessageList({ conversationId, initialUnread }: { convers
     <div className="relative min-h-0 flex-1">
       <div ref={ref} onScroll={onScroll} className="chat-wallpaper h-full overflow-y-auto">
         <div className="mx-auto flex max-w-4xl flex-col px-2 py-4 sm:px-6">
+          {!!ttl && (
+            <div className="sticky top-2 z-20 mb-2 flex items-center gap-1.5 self-center rounded-full bg-accent/20 px-3 py-1 text-xs font-semibold text-txt backdrop-blur">
+              <Timer className="size-3.5" /> Messages disappear after {TTL_OPTIONS.find((o) => o.secs === ttl)?.label ?? "a while"}
+            </div>
+          )}
           {!hasMore && messages.length > 0 && (
             <div className="mb-6 self-center rounded-2xl bg-black/30 px-4 py-2 text-center text-sm text-sub">This is the beginning of the conversation ✨</div>
           )}
@@ -138,6 +153,13 @@ export default function MessageList({ conversationId, initialUnread }: { convers
                     <span className="rounded bg-dnd px-1.5 text-[10px] font-bold text-white">NEW</span>
                   </div>
                 )}
+                {isTimerNotice(m) ? (
+                  <div className="my-2 flex items-center gap-1.5 self-center rounded-full bg-black/30 px-3 py-1 text-xs text-sub">
+                    <Timer className="size-3.5" />
+                    <span className="font-semibold">{m.author_id === me ? "You" : (profiles[m.author_id]?.display_name ?? "Someone")}</span>
+                    <span>{m.content!.slice(2).replace(/^Set/, "set").replace(/^Turned/, "turned")}</span>
+                  </div>
+                ) : (
                 <MessageBubble
                   message={m}
                   mine={m.author_id === me}
@@ -146,6 +168,7 @@ export default function MessageList({ conversationId, initialUnread }: { convers
                   showNames={showNames}
                   replied={m.reply_to_id ? byId[m.reply_to_id] ?? null : null}
                 />
+                )}
               </Fragment>
             );
           })}

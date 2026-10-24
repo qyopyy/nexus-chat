@@ -8,6 +8,7 @@ import { PLATFORMS, linkLabel, normalizeLink, platformById, spotifyEmbed } from 
 import type { ProfileLink } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import SpotifyConnect from "@/components/music/SpotifyConnect";
+import { BORDERS, BorderRing, EFFECTS, EffectCanvas, THEMES, themeBg } from "@/components/profile/ProfileFx";
 
 const Label = ({ children }: { children: React.ReactNode }) => <div className="mb-2 text-xs font-bold tracking-wide text-sub uppercase">{children}</div>;
 
@@ -41,6 +42,7 @@ export default function ProfileExtras() {
 
   return (
     <div className="space-y-6">
+      <ProfileStyle />
       {/* banner image */}
       <div>
         <Label>Profile background image</Label>
@@ -191,6 +193,78 @@ function LinkEditRow({ link, onRemove, onUp, onDown }: { link: ProfileLink; onRe
         <button onClick={onRemove} className="grid size-8 place-items-center rounded-md text-sub hover:bg-dnd/15 hover:text-dnd" aria-label="Remove link">
           <Trash2 className="size-4" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** animated background, border and theme for your profile card */
+function ProfileStyle() {
+  const me = useApp((s) => (s.userId ? s.profiles[s.userId] : undefined));
+  const [preview, setPreview] = useState(0);
+  if (!me) return null;
+  const chip = (on: boolean) => cn("rounded-full px-3 py-1.5 text-sm font-semibold transition active:scale-95", on ? "bg-accent text-white" : "bg-rail hover:bg-hover");
+  return (
+    <div>
+      <Label>Profile animation, border & theme</Label>
+      <div className="grid gap-4 sm:grid-cols-[1fr_220px]">
+        <div className="space-y-3">
+          <div>
+            <div className="mb-1.5 text-xs text-sub">Background animation — plays when someone opens your profile</div>
+            <div className="flex flex-wrap gap-1.5">
+              {EFFECTS.map((e) => (
+                <button key={e.id} onClick={() => (void updateMyProfile({ profile_effect: e.id === "none" ? null : e.id }, true), setPreview((n) => n + 1))} className={chip((me.profile_effect ?? "none") === e.id)}>
+                  {e.emoji} {e.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="mb-1.5 text-xs text-sub">Animated border</div>
+            <div className="flex flex-wrap gap-1.5">
+              {BORDERS.map((b) => (
+                <button key={b.id} onClick={() => void updateMyProfile({ profile_border: b.id === "none" ? null : b.id }, true)} className={chip((me.profile_border ?? "none") === b.id)}>
+                  {b.css && <span className="mr-1 inline-block size-3 rounded-full align-[-1px]" style={{ background: b.css }} />}
+                  {b.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="mb-1.5 text-xs text-sub">Card theme</div>
+            <div className="flex flex-wrap gap-1.5">
+              {THEMES.map((t) => (
+                <button key={t.id} onClick={() => void updateMyProfile({ profile_theme: t.id === "none" ? null : t.id }, true)} className={chip((me.profile_theme ?? "none") === t.id)}>
+                  {t.bg && <span className="mr-1 inline-block size-3 rounded-full align-[-1px] ring-1 ring-white/20" style={{ background: t.bg }} />}
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div>
+          <div className="mb-1.5 flex items-center justify-between text-xs text-sub">
+            <span>Preview</span>
+            <button onClick={() => setPreview((n) => n + 1)} className="font-semibold text-accent">
+              Replay
+            </button>
+          </div>
+          <div className={cn("relative rounded-2xl", me.profile_border && me.profile_border !== "none" && "p-[2px]")}>
+            <BorderRing border={me.profile_border} />
+            <div className={cn("relative h-56 overflow-hidden rounded-2xl", !themeBg(me.profile_theme) && "bg-menu")} style={themeBg(me.profile_theme) ? { background: themeBg(me.profile_theme) } : undefined}>
+              <EffectCanvas key={preview} effect={me.profile_effect} accent={me.avatar_color} seed={String(preview)} />
+              <div className="relative z-10 flex h-full flex-col items-center justify-center gap-2 text-center">
+                <div className="grid size-16 place-items-center rounded-full text-2xl font-bold text-white" style={{ background: me.avatar_color }}>
+                  {me.avatar_url ? <img src={me.avatar_url} alt="" className="size-full rounded-full object-cover" /> : me.display_name.slice(0, 1)}
+                </div>
+                <div className="font-bold">{me.display_name}</div>
+                <div className="text-xs text-sub">
+                  👁 {(me.view_count ?? 0).toLocaleString()} views · ❤ {(me.like_count ?? 0).toLocaleString()}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

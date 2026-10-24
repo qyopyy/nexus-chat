@@ -207,6 +207,8 @@ export function prev() {
 }
 
 export async function uploadTrack(spaceId: string, file: File) {
+  const { shieldGate } = await import("./shield");
+  if (await shieldGate(file, "space")) return;
   if (!file.type.startsWith("audio/")) return toast("Pick an audio file (mp3, m4a, wav…)", "error");
   if (file.size > MAX) return toast("Tracks can be up to 50 MB", "error");
   const me = useApp.getState().userId!;

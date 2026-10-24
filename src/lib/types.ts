@@ -1,3 +1,7 @@
+export type ProfileEffect = "none" | "aurora" | "stars" | "hearts" | "snow" | "matrix" | "confetti" | "fire" | "bubbles" | "neon";
+export type ProfileBorder = "none" | "rainbow" | "neon" | "gold" | "fire" | "ice";
+export type ProfileTheme = "none" | "midnight" | "sunset" | "ocean" | "forest" | "candy" | "mono";
+
 export type Profile = {
   id: string;
   username: string;
@@ -16,6 +20,11 @@ export type Profile = {
   banner_url?: string | null;
   profile_song?: string | null;
   now_playing?: NowPlaying | null;
+  view_count?: number;
+  like_count?: number;
+  profile_effect?: ProfileEffect | null;
+  profile_border?: ProfileBorder | null;
+  profile_theme?: ProfileTheme | null;
   forum_name?: string | null;
   member_no?: number | null;
   muted_until?: string | null;
@@ -273,6 +282,8 @@ export type DistRelease = {
   updated_at: string;
 };
 
+export type Split = { name: string; role: string; share: number; email?: string; ipi?: string };
+
 export type DistTrack = {
   id: string;
   release_id: string;
@@ -298,6 +309,11 @@ export type DistTrack = {
   duration: number | null;
   tunearo_track_id: string | null;
   audio_sent: boolean;
+  bpm: number | null;
+  musical_key: string | null;
+  lufs: number | null;
+  true_peak: number | null;
+  splits: Split[];
   created_at: string;
 };
 
