@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Pause, Play, Square, Upload } from "lucide-react";
 import { toast } from "@/store/app";
 import { decodeFile, decodeLimit, fmtTime } from "@/lib/audio";
-import { baseName, centre, db, download, encodeWav, fades, gain, limit, lufs, master, peak, slice, undb, vibe, type MasterStyle } from "@/lib/dsp";
+import { baseName, centre, db, download, encodeWav, fades, gain, limit, lufs, master, peak, slice, undb, type MasterStyle } from "@/lib/dsp";
 import { cn } from "@/lib/utils";
 
 // ------------------------------------------------------------------ shared bits
@@ -172,57 +172,6 @@ function Knob({ label, value, min, max, step, set, fmt }: { label: string; value
       </span>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => set(Number(e.target.value))} className="vol mt-1 w-full" style={{ ["--fill" as string]: `${((value - min) / (max - min)) * 100}%` }} />
     </label>
-  );
-}
-
-// ------------------------------------------------------------------ Slowed + reverb / sped up / nightcore
-const VIBES: { id: string; name: string; speed: number; reverb: number; size: number; lowpass: number | null; bass: number }[] = [
-  { id: "slowed", name: "Slowed + reverb", speed: 0.82, reverb: 0.5, size: 3.2, lowpass: 9000, bass: 3 },
-  { id: "chill", name: "Lo-fi chill", speed: 0.9, reverb: 0.3, size: 2, lowpass: 4500, bass: 2 },
-  { id: "sped", name: "Sped up", speed: 1.22, reverb: 0, size: 1, lowpass: null, bass: 0 },
-  { id: "nightcore", name: "Nightcore", speed: 1.3, reverb: 0.12, size: 1.2, lowpass: null, bass: 1 },
-  { id: "hall", name: "Just reverb", speed: 1, reverb: 0.45, size: 4, lowpass: null, bass: 0 },
-];
-export function VibeTool() {
-  const [src, setSrc] = useState<{ buf: AudioBuffer; file: File } | null>(null);
-  const [v, setV] = useState(VIBES[0]);
-  const [out, setOut] = useState<AudioBuffer | null>(null);
-  const [busy, setBusy] = useState(false);
-  const run = async () => {
-    if (!src) return;
-    setBusy(true);
-    setOut(null);
-    try {
-      setOut(await vibe(src.buf, v));
-    } catch (e) {
-      toast((e as Error).message, "error");
-    }
-    setBusy(false);
-  };
-  if (!src) return <AudioPick onLoad={(buf, file) => setSrc({ buf, file })} />;
-  return (
-    <div className="space-y-4">
-      <Waveform buf={src.buf} h={56} />
-      <Seg value={v.id} set={(id) => setV(VIBES.find((x) => x.id === id)!)} options={VIBES.map((x) => [x.id, x.name] as [string, string])} />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Knob label="Speed" value={v.speed} min={0.6} max={1.5} step={0.01} set={(speed) => setV({ ...v, id: "custom", speed })} fmt={(x) => `${Math.round(x * 100)}%`} />
-        <Knob label="Reverb" value={v.reverb} min={0} max={0.9} step={0.01} set={(reverb) => setV({ ...v, id: "custom", reverb })} fmt={(x) => `${Math.round(x * 100)}%`} />
-        <Knob label="Room size" value={v.size} min={0.6} max={6} step={0.1} set={(size) => setV({ ...v, id: "custom", size })} fmt={(x) => `${x.toFixed(1)} s`} />
-        <Knob label="Bass boost" value={v.bass} min={0} max={8} step={0.5} set={(bass) => setV({ ...v, id: "custom", bass })} fmt={(x) => `+${x} dB`} />
-      </div>
-      <p className="text-xs text-sub">
-        Pitch follows speed (like a turntable). {v.speed < 1 ? `${Math.round(12 * Math.log2(v.speed) * 10) / 10} semitones` : v.speed > 1 ? `+${Math.round(12 * Math.log2(v.speed) * 10) / 10} semitones` : ""}
-      </p>
-      <div className="flex gap-2">
-        <button disabled={busy} onClick={() => void run()} className="flex-1 rounded-full bg-accent py-2.5 font-bold text-white disabled:opacity-50">
-          {busy ? "Rendering…" : "Make it"}
-        </button>
-        <button onClick={() => (setSrc(null), setOut(null))} className="rounded-full bg-hover px-4 font-semibold">
-          New file
-        </button>
-      </div>
-      {out && <ResultBar buf={out} name={`${baseName(src.file)} (${v.id === "custom" ? "edit" : v.name.toLowerCase()})`} />}
-    </div>
   );
 }
 
