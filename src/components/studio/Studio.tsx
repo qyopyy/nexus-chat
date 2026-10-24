@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Clapperboard,
+  Barcode,
+  BadgeCheck,
   ScrollText,
   Fingerprint,
   UserRoundCheck,
@@ -56,7 +58,8 @@ import ContentId from "@/components/protect/ContentId";
 import Licenses, { LicensesCard } from "./Licenses";
 import Defender from "@/components/protect/Defender";
 import MyVault from "@/components/protect/Vault";
-import ToolView, { ToolsGrid, type ToolId } from "@/components/music/Tools";
+import ToolView, { IsrcTool, ToolsGrid, type ToolId } from "@/components/music/Tools";
+import ProfileClaims from "./ProfileClaims";
 import type { DistRelease, Video, VideoComment } from "@/lib/types";
 
 const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: string; staff?: boolean; reviewer?: boolean }[] = [
@@ -68,6 +71,8 @@ const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: st
   { id: "dist-overview", label: "Overview", icon: <Gauge className="size-5" />, group: "Music distribution" },
   { id: "releases", label: "Releases", icon: <Disc3 className="size-5" />, group: "Music distribution" },
   { id: "royalties", label: "Royalties", icon: <Wallet className="size-5" />, group: "Music distribution" },
+  { id: "isrc", label: "ISRC codes", icon: <Barcode className="size-5" />, group: "Music distribution" },
+  { id: "claims", label: "Profile claims", icon: <BadgeCheck className="size-5" />, group: "Music distribution" },
   { id: "licenses", label: "Licenses", icon: <ScrollText className="size-5" />, group: "Music distribution" },
   { id: "tools", label: "Music tools", icon: <AudioWaveform className="size-5" />, group: "Music distribution" },
   { id: "shield", label: "Shield 360", icon: <ShieldCheck className="size-5" />, group: "Protection" },
@@ -212,6 +217,18 @@ export default function Studio() {
             {section === "royalties" && <Royalties />}
             {section === "tools" && <StudioTools />}
             {section === "shield" && <ShieldStudio />}
+            {section === "isrc" && (
+              <>
+                <H>ISRC codes</H>
+                <IsrcTool />
+              </>
+            )}
+            {section === "claims" && (
+              <>
+                <H>Profile claims</H>
+                <ProfileClaims />
+              </>
+            )}
             {section === "licenses" && (
               <>
                 <H>Licenses</H>

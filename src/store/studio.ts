@@ -20,6 +20,8 @@ export type StudioSection =
   | "defender"
   | "vault"
   | "licenses"
+  | "isrc"
+  | "claims"
   | "orders";
 
 export type VideosRoute = { view: "home"; q?: string; tab?: "all" | "subs" } | { view: "watch"; key: string; t?: number } | { view: "channel"; userId: string };

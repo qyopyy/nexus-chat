@@ -12,6 +12,7 @@ import { analyzeAudio, checkStatus, decodeLimit, clipFromFile, copyrightCheck, d
 import { toast } from "@/store/app";
 import { musicGo } from "@/store/music";
 import { cn } from "@/lib/utils";
+import { sp, type SpTrack } from "@/lib/music";
 import { CheckView, ReportView, SplitEditor, printSplitSheet } from "./AudioBits";
 import type { Split } from "@/lib/types";
 
@@ -515,9 +516,13 @@ function TunerTool() {
 type IsrcRow = { code: string; title: string | null; artist: string | null; created_at: string };
 const fmtIsrc = (c: string) => `${c.slice(0, 2)}-${c.slice(2, 5)}-${c.slice(5, 7)}-${c.slice(7)}`;
 
-function IsrcTool() {
+type Prefix = { prefix: string; label: string; members: boolean; next: number };
+type IsrcCfg = { prefix: string; next: string; allowed: boolean; admin?: boolean; prefixes?: Prefix[] };
+
+export function IsrcTool() {
   const tier = useMyTier();
-  const [cfg, setCfg] = useState<{ prefix: string; next: string; allowed: boolean; admin?: boolean } | null>(null);
+  const [cfg, setCfg] = useState<IsrcCfg | null>(null);
+  const [pre, setPre] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
   const [count, setCount] = useState(1);
@@ -528,7 +533,7 @@ function IsrcTool() {
 
   const load = async () => {
     const { data } = await supabase.rpc("isrc_config");
-    const c = data as { prefix: string; next: string; allowed: boolean; admin?: boolean } | null;
+    const c = data as IsrcCfg | null;
     setCfg(c);
     if (c) setAdmin({ prefix: c.prefix, next: String(c.next) });
     const h = await supabase.from("isrc_codes").select("code, title, artist, created_at").order("created_at", { ascending: false }).limit(200);
@@ -547,14 +552,26 @@ function IsrcTool() {
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   };
   const yy = String(new Date().getFullYear() % 100).padStart(2, "0");
+  const prefixes = cfg?.prefixes ?? [];
+  const cur = pre ?? cfg?.prefix ?? "QT6HV";
+  const curLabel = prefixes.find((p) => p.prefix === cur)?.label ?? "Audia Music Recordings";
 
   return (
     <div className="space-y-4">
       <div className="rounded-2xl p-4 text-white" style={{ background: "linear-gradient(135deg,#0f5132,#1DB954)" }}>
-        <div className="text-xs font-bold tracking-widest text-white/75 uppercase">Audia Music Recordings · registrant</div>
+        <div className="text-xs font-bold tracking-widest text-white/75 uppercase">{curLabel} · registrant</div>
         <div className="mt-1 font-mono text-3xl font-black tracking-wider">
-          {(cfg?.prefix ?? "QT6HV").slice(0, 2)}-{(cfg?.prefix ?? "QT6HV").slice(2)}-{yy}-•••••
+          {cur.slice(0, 2)}-{cur.slice(2)}-{yy}-•••••
         </div>
+        {prefixes.length > 1 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {prefixes.map((p) => (
+              <button key={p.prefix} onClick={() => setPre(p.prefix)} className={cn("rounded-full px-3 py-1 font-mono text-xs font-bold", cur === p.prefix ? "bg-white text-black" : "bg-white/15")}>
+                {p.prefix} · {p.label}
+              </button>
+            ))}
+          </div>
+        )}
         <p className="mt-1 text-sm text-white/85">Every code comes from one shared counter, so no ISRC is ever handed out twice. Codes are saved to your history.</p>
       </div>
 
@@ -572,7 +589,7 @@ function IsrcTool() {
             e.preventDefault();
             if (!gate(NEED.isrc, "Audia ISRC codes")) return;
             setBusy(true);
-            const { data, error } = await supabase.rpc("generate_isrc", { p_title: title.trim() || null, p_artist: artist.trim() || null, p_count: count });
+            const { data, error } = await supabase.rpc("generate_isrc", { p_title: title.trim() || null, p_artist: artist.trim() || null, p_count: count, ...(cur !== cfg?.prefix ? { p_prefix: cur } : {}) });
             setBusy(false);
             if (error) return toast(errorText(error), "error");
             setMade((data ?? []) as IsrcRow[]);
@@ -626,6 +643,10 @@ function IsrcTool() {
         </div>
       )}
 
+      <IsrcLookup />
+
+      {cfg?.admin && <PrefixAdmin prefixes={prefixes} onChange={load} />}
+
       {cfg?.admin && (
         <form
           onSubmit={async (e) => {
@@ -649,6 +670,139 @@ function IsrcTool() {
           <button className="rounded-full bg-accent px-4 py-1.5 font-semibold text-white">Save</button>
         </form>
       )}
+    </div>
+  );
+}
+
+/** decode + look up any existing ISRC (yours, USUM…, USRC…) */
+function IsrcLookup() {
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState<{ source: string | null; tracks: SpTrack[] } | null>(null);
+  const c = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const valid = /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(c);
+  return (
+    <div className="rounded-2xl bg-side p-4">
+      <div className="mb-2 font-semibold">Look up an ISRC</div>
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (!valid) return toast("An ISRC is 12 characters, e.g. USUM71703861", "error");
+          setBusy(true);
+          try {
+            setRes(await sp<{ source: string | null; tracks: SpTrack[] }>("isrc", { isrc: c }));
+          } catch (err) {
+            toast((err as Error).message, "error");
+          }
+          setBusy(false);
+        }}
+        className="flex gap-2"
+      >
+        <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="USUM71703861 · USRC12345678 · QT6HV2600001" className="min-w-0 flex-1 rounded-lg border border-line bg-transparent px-3 py-2 font-mono text-sm outline-none focus:border-accent" />
+        <button disabled={busy} className="rounded-full bg-hover px-4 py-2 text-sm font-semibold hover:bg-active disabled:opacity-50">
+          {busy ? "…" : "Look up"}
+        </button>
+      </form>
+      {valid && (
+        <div className="mt-2 grid grid-cols-4 gap-1.5 text-center text-xs">
+          {[
+            ["Country", c.slice(0, 2)],
+            ["Registrant", c.slice(2, 5)],
+            ["Year", `20${c.slice(5, 7)}`],
+            ["Number", c.slice(7)],
+          ].map(([k, v]) => (
+            <div key={k} className="rounded-lg bg-black/25 p-1.5">
+              <div className="text-sub">{k}</div>
+              <div className="font-mono font-bold">{v}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {res && (
+        <div className="mt-3 space-y-2">
+          {res.tracks.length === 0 ? (
+            <p className="text-sm text-sub">No released recording found for this code.</p>
+          ) : (
+            res.tracks.slice(0, 5).map((t, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl bg-black/20 p-2">
+                {t.album?.image && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={t.album.image} alt="" className="size-12 rounded-md object-cover" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">{t.name}</div>
+                  <div className="truncate text-xs text-sub">
+                    {t.artists.map((a) => a.name).join(", ")} · {t.album?.name} · {t.album?.release_date}
+                  </div>
+                </div>
+                {(t.url || t.search_url) && (
+                  <a href={t.url ?? t.search_url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-accent hover:underline">
+                    Open
+                  </a>
+                )}
+              </div>
+            ))
+          )}
+          {res.source && <p className="text-[11px] text-sub">Source: {res.source === "spotify" ? "Spotify" : "Deezer"}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** admins: registrant prefixes you own (from your national ISRC agency) */
+function PrefixAdmin({ prefixes, onChange }: { prefixes: Prefix[]; onChange: () => void }) {
+  const [v, setV] = useState({ prefix: "", label: "", next: "1", members: false, own: false });
+  return (
+    <div className="rounded-2xl border border-line/70 p-3 text-sm">
+      <div className="mb-2 text-xs font-semibold text-sub uppercase">Admin · your registrant prefixes</div>
+      <div className="space-y-1">
+        {prefixes.map((p) => (
+          <div key={p.prefix} className="flex items-center gap-2 rounded-lg bg-black/20 px-2.5 py-1.5">
+            <span className="font-mono font-bold">{p.prefix}</span>
+            <span className="min-w-0 flex-1 truncate text-sub">
+              {p.label} · {p.members ? "members can use it" : "admins only"}
+            </span>
+            <button
+              onClick={async () => {
+                if (!confirm(`Remove ${p.prefix}? Codes already issued stay valid.`)) return;
+                const { error } = await supabase.rpc("remove_isrc_prefix", { p_prefix: p.prefix });
+                if (error) toast(errorText(error), "error");
+                else onChange();
+              }}
+              className="text-xs text-dnd hover:underline"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const { error } = await supabase.rpc("add_isrc_prefix", { p_prefix: v.prefix, p_label: v.label || v.prefix, p_members: v.members, p_next: Number(v.next) || 1, p_i_own_it: v.own });
+          if (error) return toast(errorText(error), "error");
+          toast(`${v.prefix} added`, "success");
+          setV({ prefix: "", label: "", next: "1", members: false, own: false });
+          onChange();
+        }}
+        className="mt-3 grid gap-2 sm:grid-cols-[100px_1fr_90px]"
+      >
+        <input value={v.prefix} onChange={(e) => setV({ ...v, prefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5) })} placeholder="Prefix" className="rounded-lg border border-line bg-transparent px-2 py-1.5 font-mono outline-none" />
+        <input value={v.label} onChange={(e) => setV({ ...v, label: e.target.value })} placeholder="Registrant name (e.g. Audia Publishing)" className="min-w-0 rounded-lg border border-line bg-transparent px-2 py-1.5 outline-none" />
+        <input value={v.next} onChange={(e) => setV({ ...v, next: e.target.value.replace(/\D/g, "") })} placeholder="Next #" className="rounded-lg border border-line bg-transparent px-2 py-1.5 outline-none" />
+        <label className="flex items-center gap-2 sm:col-span-3">
+          <input type="checkbox" className="size-4" checked={v.members} onChange={(e) => setV({ ...v, members: e.target.checked })} />
+          Distribution members can generate codes with it
+        </label>
+        <label className="flex items-start gap-2 sm:col-span-3">
+          <input type="checkbox" className="mt-0.5 size-4" checked={v.own} onChange={(e) => setV({ ...v, own: e.target.checked })} />
+          <span>This prefix was issued to me by my national ISRC agency. (Major-label prefixes like USUM or USRC can only be used by their owners and are refused.)</span>
+        </label>
+        <button disabled={v.prefix.length !== 5 || !v.own} className="rounded-full bg-accent px-4 py-1.5 font-semibold text-white disabled:opacity-40 sm:col-span-3 sm:justify-self-start">
+          Add prefix
+        </button>
+      </form>
     </div>
   );
 }
