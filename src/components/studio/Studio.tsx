@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Clapperboard,
+  ScrollText,
   Fingerprint,
   UserRoundCheck,
   Vault,
@@ -52,6 +53,7 @@ import { NEED, gate, useCanReview } from "@/lib/premium";
 import ShieldStudio from "./ShieldStudio";
 import TakedownTool from "@/components/music/Takedown";
 import ContentId from "@/components/protect/ContentId";
+import Licenses, { LicensesCard } from "./Licenses";
 import Defender from "@/components/protect/Defender";
 import MyVault from "@/components/protect/Vault";
 import ToolView, { ToolsGrid, type ToolId } from "@/components/music/Tools";
@@ -66,6 +68,7 @@ const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: st
   { id: "dist-overview", label: "Overview", icon: <Gauge className="size-5" />, group: "Music distribution" },
   { id: "releases", label: "Releases", icon: <Disc3 className="size-5" />, group: "Music distribution" },
   { id: "royalties", label: "Royalties", icon: <Wallet className="size-5" />, group: "Music distribution" },
+  { id: "licenses", label: "Licenses", icon: <ScrollText className="size-5" />, group: "Music distribution" },
   { id: "tools", label: "Music tools", icon: <AudioWaveform className="size-5" />, group: "Music distribution" },
   { id: "shield", label: "Shield 360", icon: <ShieldCheck className="size-5" />, group: "Protection" },
   { id: "content-id", label: "Content ID", icon: <Fingerprint className="size-5" />, group: "Protection" },
@@ -209,6 +212,12 @@ export default function Studio() {
             {section === "royalties" && <Royalties />}
             {section === "tools" && <StudioTools />}
             {section === "shield" && <ShieldStudio />}
+            {section === "licenses" && (
+              <>
+                <H>Licenses</H>
+                <Licenses />
+              </>
+            )}
             {section === "content-id" && <ContentId />}
             {section === "defender" && <Defender />}
             {section === "vault" && <MyVault />}
@@ -294,6 +303,9 @@ function Dashboard() {
   return (
     <>
       <H>Channel dashboard</H>
+      <div className="mb-5">
+        <LicensesCard />
+      </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {videos && videos.length === 0 ? (
           <Card className="flex flex-col items-center justify-center gap-3 py-10 text-center">

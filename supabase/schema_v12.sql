@@ -6,3 +6,4 @@
 --   shield_check() now files a claim (+ Nexus Bot DM, once per uploader/day) for non-blocking matches
 -- Profile Defender: defender_watch, defender_alerts, defender_limit(); pg_cron 'nexus-profile-defender' every 3 h → functions/v1/defender
 -- Takedowns: takedown_notices, email_codes, verified_emails (direct sending via functions/v1/takedown + Resend)
+-- nexus_27a_licenses: licenses (rows → Exclusive Artwork License PDFs, built in the browser by src/lib/pdf.ts), license_profiles (licensor details per user)

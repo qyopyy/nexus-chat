@@ -19,6 +19,7 @@ export type StudioSection =
   | "content-id"
   | "defender"
   | "vault"
+  | "licenses"
   | "orders";
 
 export type VideosRoute = { view: "home"; q?: string; tab?: "all" | "subs" } | { view: "watch"; key: string; t?: number } | { view: "channel"; userId: string };
