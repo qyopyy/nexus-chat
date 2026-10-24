@@ -17,7 +17,7 @@ export default function Library() {
   const [now, setNow] = useState<{ item: T | null; is_playing: boolean } | null>(null);
   const [topArtists, setTopArtists] = useState<{ id: string; name: string; images: Img }[]>([]);
   const [liked, setLiked] = useState<T[]>([]);
-  const [playlists, setPlaylists] = useState<{ id: string; name: string; images: Img | null; tracks: { total: number }; external_urls: { spotify: string } }[]>([]);
+  const [playlists, setPlaylists] = useState<{ id: string; name: string; images: Img | null; tracks?: { total: number }; items?: { total: number }; external_urls: { spotify: string } }[]>([]);
   const [recent, setRecent] = useState<T[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
@@ -121,7 +121,7 @@ export default function Library() {
             <a key={p.id} href={p.external_urls.spotify} target="_blank" rel="noreferrer" className="rounded-xl bg-side p-2 hover:bg-hover">
               <div className="aspect-square overflow-hidden rounded-lg bg-rail">{p.images?.[0] && <img src={p.images[0].url} alt="" className="size-full object-cover" />}</div>
               <div className="mt-2 truncate text-sm font-semibold">{p.name}</div>
-              <div className="text-xs text-sub">{p.tracks?.total ?? 0} songs</div>
+              <div className="text-xs text-sub">{p.items?.total ?? p.tracks?.total ?? 0} songs</div>
             </a>
           ))}
         </div>

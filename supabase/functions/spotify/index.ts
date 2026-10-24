@@ -77,6 +77,18 @@ async function deezerIsrc(isrc: string) {
     source: "deezer",
   };
 }
+/** Spotify stopped returning follower counts (Feb 2026) — use Deezer fans as a stand-in */
+async function deezerFans(name: string): Promise<number | null> {
+  try {
+    const r = await fetch(`https://api.deezer.com/search/artist?limit=10&q=${encodeURIComponent(name)}`);
+    const j = await r.json();
+    const same = (j?.data ?? []).filter((a: any) => String(a.name).toLowerCase() === name.toLowerCase());
+    const best = Math.max(0, ...same.map((a: any) => Number(a.nb_fan) || 0));
+    return best || null;
+  } catch {
+    return null;
+  }
+}
 async function deezerUpc(upc: string) {
   const r = await fetch(`https://api.deezer.com/2.0/album/upc:${encodeURIComponent(upc)}`);
   const j = await r.json();
@@ -131,8 +143,8 @@ Deno.serve(async (req: Request) => {
         const r = await sp(`/search?type=album&limit=10&q=${encodeURIComponent(`upc:${upc}`)}`);
         const ids = (r?.albums?.items ?? []).map((a: any) => a.id).slice(0, 20);
         if (ids.length) {
-          const full = await sp(`/albums?ids=${ids.join(",")}`);
-          return json({ source: "spotify", albums: (full?.albums ?? []).filter(Boolean).map(albumLite) });
+          const full = await Promise.all(ids.slice(0, 10).map((x: string) => sp(`/albums/${x}`).catch(() => null)));
+          return json({ source: "spotify", albums: full.filter(Boolean).map(albumLite) });
         }
       }
       let d = await deezerUpc(upc);
@@ -151,9 +163,10 @@ Deno.serve(async (req: Request) => {
         if (p.kind === "track") return json({ kind: "track", track: trackLite(await sp(`/tracks/${p.id}`)) });
         if (p.kind === "album") {
           const a = await sp(`/albums/${p.id}`);
-          const ids = (a?.tracks?.items ?? []).map((t: any) => t.id).slice(0, 50);
-          const tracks = ids.length ? (await sp(`/tracks?ids=${ids.join(",")}`))?.tracks ?? [] : [];
-          return json({ kind: "album", album: albumLite(a), tracks: tracks.map(trackLite) });
+          // Spotify removed batch "/tracks?ids=" (Feb 2026) — fetch tracks one by one for their ISRCs
+          const ids = (a?.tracks?.items ?? []).map((t: any) => t.id).filter(Boolean).slice(0, 40);
+          const tracks = await Promise.all(ids.map((id: string) => sp(`/tracks/${id}`).catch(() => null)));
+          return json({ kind: "album", album: albumLite(a), tracks: tracks.filter(Boolean).map(trackLite) });
         }
         return json({ kind: "artist", artist: artistLite(await sp(`/artists/${p.id}`)) });
       }
@@ -161,33 +174,40 @@ Deno.serve(async (req: Request) => {
         const q = String(b.q ?? "").trim().slice(0, 100);
         const type = ["artist", "track", "album"].includes(b.type) ? b.type : "artist";
         if (!q) return json({ items: [] });
-        const r = await sp(`/search?type=${type}&limit=12&q=${encodeURIComponent(q)}`, 120_000);
+        const r = await sp(`/search?type=${type}&limit=10&q=${encodeURIComponent(q)}`, 120_000);
         const items = r?.[`${type}s`]?.items ?? [];
         return json({ items: items.map(type === "artist" ? artistLite : type === "album" ? albumLite : trackLite) });
       }
       case "artist": {
         const id = String(b.id ?? "");
         if (!ID.test(id)) return json({ error: "Bad artist id" }, 400);
-        const [a, albums, top] = await Promise.all([
+        const [a, albums, more] = await Promise.all([
           sp(`/artists/${id}`),
-          sp(`/artists/${id}/albums?include_groups=album,single&limit=20`),
-          sp(`/artists/${id}/top-tracks?market=US`).catch(() => null),
+          sp(`/artists/${id}/albums?include_groups=album,single&limit=10`),
+          sp(`/artists/${id}/albums?include_groups=album,single&limit=10&offset=10`).catch(() => null),
         ]);
         if (!a) return json({ error: "Artist not found" }, 404);
+        // "top tracks" endpoint was removed — use a search for the artist's tracks instead
+        const found = await sp(`/search?type=track&limit=10&q=${encodeURIComponent(`artist:"${a.name}"`)}`).catch(() => null);
+        const top = { tracks: (found?.tracks?.items ?? []).filter((t: any) => (t.artists ?? []).some((x: any) => x.id === id)) };
+        const fans = await deezerFans(a.name);
+        if (fans != null && a.followers?.total == null) a.followers = { total: fans };
+        if (albums && more?.items) albums.items = [...(albums.items ?? []), ...more.items];
         const rel = (albums?.items ?? []).map(albumLite).sort((x: any, y: any) => String(y.release_date).localeCompare(String(x.release_date)));
         return json({ artist: artistLite(a), releases: rel, top: (top?.tracks ?? []).slice(0, 10).map(trackLite) });
       }
       case "artists": {
         const ids = (Array.isArray(b.ids) ? b.ids : []).filter((x: string) => ID.test(x)).slice(0, 50);
         if (!ids.length) return json({ artists: [] });
-        const r = await sp(`/artists?ids=${ids.join(",")}`);
-        return json({ artists: (r?.artists ?? []).filter(Boolean).map(artistLite) });
+        // batch "/artists?ids=" was removed — fetch each artist
+        const list = await Promise.all(ids.slice(0, 30).map((x: string) => sp(`/artists/${x}`).catch(() => null)));
+        return json({ artists: list.filter(Boolean).map(artistLite) });
       }
       case "releases": {
         // latest releases from a list of watched artists
         const ids = (Array.isArray(b.ids) ? b.ids : []).filter((x: string) => ID.test(x)).slice(0, 25);
         const lists = await Promise.all(
-          ids.map((id: string) => sp(`/artists/${id}/albums?include_groups=album,single&limit=5`).catch(() => null)),
+          ids.map((id: string) => sp(`/artists/${id}/albums?include_groups=album,single&limit=5`, 900_000).catch(() => null)),
         );
         const seen = new Set<string>();
         const all = lists.flatMap((l) => l?.items ?? []).filter((a: any) => (seen.has(a.id) ? false : (seen.add(a.id), true)));
@@ -195,8 +215,11 @@ Deno.serve(async (req: Request) => {
         return json({ releases: all.slice(0, 40).map(albumLite) });
       }
       case "new_releases": {
-        const r = await sp(`/browse/new-releases?limit=20`, 900_000).catch(() => null);
-        return json({ releases: (r?.albums?.items ?? []).map(albumLite) });
+        // "/browse/new-releases" was removed — search albums tagged new (last two weeks)
+        const pages = await Promise.all([0, 10].map((o) => sp(`/search?type=album&limit=10&offset=${o}&q=tag%3Anew`, 900_000).catch(() => null)));
+        const seen = new Set<string>();
+        const items = pages.flatMap((r) => r?.albums?.items ?? []).filter((x: any) => x && !seen.has(x.id) && seen.add(x.id));
+        return json({ releases: items.map(albumLite) });
       }
       default:
         return json({ error: "Unknown action" }, 400);

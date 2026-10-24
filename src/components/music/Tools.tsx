@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { AudioWaveform, Barcode, Calculator, Copy, Download, Drum, Fingerprint, Mic, Printer, Signature, Upload } from "lucide-react";
 import { supabase, errorText } from "@/lib/supabase";
 import { NEED, gate, useMyTier } from "@/lib/premium";
-import { openModal } from "@/store/app";
+import { openModal, useApp } from "@/store/app";
+import { studioGo } from "@/store/studio";
+import { myRank } from "@/lib/admin";
 import { analyzeAudio, checkStatus, decodeLimit, clipFromFile, copyrightCheck, decodeFile, myToolChecks, type AudioCheck, type AudioReport } from "@/lib/audio";
 import { toast } from "@/store/app";
 import { musicGo } from "@/store/music";
@@ -152,7 +154,18 @@ function AnalyzerTool({ copyrightFirst }: { copyrightFirst?: boolean }) {
     <div className="space-y-4">
       {copyrightFirst && configured === false && (
         <div className="rounded-xl bg-idle/10 p-3 text-sm ring-1 ring-idle/25">
-          The copyright check isn&apos;t connected yet — an admin adds ACRCloud keys in Studio → Distribution → Settings. The audio analyzer works without it.
+          The copyright check isn&apos;t connected yet — an admin adds ACRCloud keys in Studio → Admin → Distribution settings. The audio analyzer works without it.
+          {myRank() >= 3 && (
+            <button
+              onClick={() => {
+                studioGo("dist-settings");
+                useApp.setState({ hub: "studio" });
+              }}
+              className="mt-2 block rounded-full bg-idle px-4 py-1.5 text-sm font-bold text-black"
+            >
+              Open Distribution settings
+            </button>
+          )}
         </div>
       )}
       <DropZone
