@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import Modal, { Button } from "@/components/ui/Modal";
 import Avatar from "@/components/ui/Avatar";
 import SettingsModal from "./SettingsModal";
+import PremiumModal from "@/components/premium/PremiumModal";
 
 export default function Modals() {
   const modal = useApp((s) => s.modal);
@@ -15,6 +16,8 @@ export default function Modals() {
   switch (modal) {
     case "settings":
       return <SettingsModal initial={arg} />;
+    case "premium":
+      return <PremiumModal focus={arg} />;
     case "createSpace":
       return <CreateSpaceModal />;
     case "newGroup":

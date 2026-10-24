@@ -25,6 +25,7 @@ import {
   type StatusLog,
 } from "@/lib/distExtras";
 import { cn } from "@/lib/utils";
+import { NEED, gate } from "@/lib/premium";
 import NameTag from "@/components/ui/NameTag";
 import { Card } from "./Studio";
 import type { DistRelease, DistTrack } from "@/lib/types";
@@ -103,6 +104,7 @@ export function SmartLinkCard({ r, link, onLink }: { r: DistRelease; link: Smart
         <p className="mb-3 text-sm text-sub">One page for every store: share it before release as a pre-save countdown, then fans pick Spotify, Apple Music, YouTube and more. Views and clicks are tracked.</p>
         <button
           onClick={async () => {
+            if (!gate(NEED.smartlinks, "Smart links & pre-save pages")) return;
             const l = await createSmartLink(r);
             if (l) onLink(l);
           }}

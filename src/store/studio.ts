@@ -14,7 +14,8 @@ export type StudioSection =
   | "review"
   | "dist-settings"
   | "tools"
-  | "shield";
+  | "shield"
+  | "orders";
 
 export type VideosRoute = { view: "home"; q?: string; tab?: "all" | "subs" } | { view: "watch"; key: string; t?: number } | { view: "channel"; userId: string };
 

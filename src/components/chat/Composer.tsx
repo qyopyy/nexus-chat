@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Timer, Trash2, X } from "lucide-react";
 import { useApp, conversationTitle, toast } from "@/store/app";
 import { useChat } from "@/store/chat";
-import { TTL_OPTIONS, sendMessage, setTtl } from "@/lib/data";
+import { TTL_OPTIONS, runBotCommand, sendMessage, setTtl } from "@/lib/data";
+import { NEED, gate, myTier } from "@/lib/premium";
 import { sendTyping } from "@/lib/realtime";
 import { EFFECTS, playEffect, type EffectKind } from "@/lib/effects";
 import { haptic } from "@/lib/haptics";
@@ -13,7 +14,8 @@ import EmojiPicker from "@/components/ui/EmojiPicker";
 import Sheet from "@/components/ui/Sheet";
 import { isVoice } from "./MessageBubble";
 
-const MAX_FILE = 100 * 1024 * 1024;
+const MAX_FREE = 25 * 1024 * 1024;
+const MAX_PREMIUM = 100 * 1024 * 1024;
 const MAX_VOICE_SECONDS = 300;
 
 function voiceMime() {
@@ -76,8 +78,11 @@ export default function Composer({
   }, [file]);
 
   useEffect(() => {
-    if (file && file.size > MAX_FILE) {
-      toast(`That file is ${formatBytes(file.size)} — the limit is 100 MB.`, "error");
+    if (!file) return;
+    const max = myTier() >= NEED.uploads100 ? MAX_PREMIUM : MAX_FREE;
+    if (file.size > max) {
+      if (max === MAX_FREE && file.size <= MAX_PREMIUM) gate(NEED.uploads100, "Files up to 100 MB");
+      else toast(`That file is ${formatBytes(file.size)} — the limit is ${max / 1048576} MB.`, "error");
       setFile(null);
     }
   }, [file, setFile]);
@@ -95,7 +100,11 @@ export default function Composer({
   function submit(withEffect: EffectKind | null = effect) {
     if (!text.trim() && !file) return;
     haptic.light();
-    void sendMessage(conversationId, text, file, withEffect);
+    const t = text.trim();
+    const isCmd = !file && /^\/(help|roll|flip|8ball|choose|isrc|song|upc|premium|orders)\b/i.test(t);
+    void sendMessage(conversationId, text, file, withEffect).then(() => {
+      if (isCmd) void runBotCommand(conversationId, t);
+    });
     setText("");
     setFile(null);
     setEffect(null);

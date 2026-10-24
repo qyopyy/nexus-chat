@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { ChevronLeft, Hash, Maximize2, MessageSquare, Phone, Users, Video, Volume2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Bot, ChevronLeft, Hash, Maximize2, MessageSquare, Phone, Users, Video, Volume2 } from "lucide-react";
 import { useApp, conversationTitle, findChannel, openProfileCard } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { useChat } from "@/store/chat";
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import Avatar, { statusLabel } from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import { useIsMobile } from "@/lib/useMobile";
+import BotsPanel from "./BotsPanel";
 
 export default function ChatHeader({
   conversationId,
@@ -21,6 +22,7 @@ export default function ChatHeader({
   onToggleStage: () => void;
 }) {
   const mobile = useIsMobile();
+  const [bots, setBots] = useState(false);
   const title = useApp((s) => conversationTitle(s, conversationId));
   const chat = useApp((s) => s.chatList.find((c) => c.id === conversationId));
   const channel = useApp((s) => findChannel(s, conversationId));
@@ -106,11 +108,17 @@ export default function ChatHeader({
           </HeaderBtn>
         )}
         {kind !== "voice" && (
+          <HeaderBtn label="Bots & webhooks" onClick={() => setBots(true)}>
+            <Bot className="size-5" />
+          </HeaderBtn>
+        )}
+        {kind !== "voice" && (
           <HeaderBtn label={showMembers ? "Hide member list" : "Show member list"} active={showMembers} onClick={() => useApp.setState({ showMembers: !showMembers })} className="hidden lg:grid">
             <Users className="size-5" />
           </HeaderBtn>
         )}
       </div>
+      {bots && <BotsPanel conversationId={conversationId} open onClose={() => setBots(false)} />}
     </header>
   );
 }

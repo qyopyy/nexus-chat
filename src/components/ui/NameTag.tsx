@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { activePlan } from "@/lib/premium";
 import { useApp } from "@/store/app";
 import { ROLE_INFO, type SiteRole } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -89,6 +90,15 @@ export default function NameTag({
       <span className={cn("truncate", info.nameClass)} style={!info.nameClass && fallbackColor ? { color: fallbackColor } : undefined}>
         {p?.display_name ?? "…"}
       </span>
+      {p?.is_bot && <span className="shrink-0 rounded bg-accent px-1 text-[9px] leading-[14px] font-black text-white">BOT</span>}
+      {badges && (() => {
+        const plan = activePlan(p);
+        return plan ? (
+          <span className="shrink-0 text-[0.85em]" title={plan.name} style={{ filter: `drop-shadow(0 0 4px ${plan.color})` }}>
+            {plan.emoji}
+          </span>
+        ) : null;
+      })()}
       {badges && <Badges userId={userId} size={badgeSize} max={maxBadges} />}
     </span>
   );

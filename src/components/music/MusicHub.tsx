@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Gamepad2, ArrowLeft, Barcode, BellRing, Library as LibraryIcon, Search, Sparkles, X } from "lucide-react";
-import { useApp } from "@/store/app";
+import { useApp, openModal } from "@/store/app";
+import { activePlan } from "@/lib/premium";
 import { useMusic, musicBack, musicGo, musicHome } from "@/store/music";
 import { listArtistPages, loadPosts, loadWatchlist, sp, spotifyConfig, fmtNum, type SpAlbum, type SpArtist, type Watch } from "@/lib/music";
 import { myRank } from "@/lib/admin";
@@ -33,9 +34,10 @@ export default function MusicHub({ mobile }: { mobile?: boolean }) {
         <button onClick={musicHome} className={cn("font-bold", mobile ? "text-2xl tracking-tight" : "text-base")}>
           Music
         </button>
+        <PremiumPill />
         <button
           onClick={() => useApp.setState(mobile ? { mobileTab: "games" } : { hub: "games" })}
-          className="ml-auto flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ff2bd6] to-[#7c4dff] px-3.5 py-1.5 text-sm font-bold text-white active:scale-95"
+          className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ff2bd6] to-[#7c4dff] px-3.5 py-1.5 text-sm font-bold text-white active:scale-95"
         >
           <Gamepad2 className="size-4" /> Games
         </button>
@@ -265,6 +267,19 @@ function Tool({ icon, label, onClick, color }: { icon: React.ReactNode; label: s
         {icon}
       </span>
       {label}
+    </button>
+  );
+}
+
+function PremiumPill() {
+  const plan = useApp((s) => activePlan(s.userId ? s.profiles[s.userId] : null));
+  return (
+    <button
+      onClick={() => openModal("premium", plan?.id ?? null)}
+      className="ml-auto flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-black text-black active:scale-95"
+      style={{ background: plan?.color ?? "linear-gradient(90deg,#ffd400,#ffb000)" }}
+    >
+      {plan ? `${plan.emoji} ${plan.short}` : "⚡ Premium"}
     </button>
   );
 }

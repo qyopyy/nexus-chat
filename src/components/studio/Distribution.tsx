@@ -21,7 +21,6 @@ import {
   LANGUAGES,
   listArtists,
   listReleases,
-  makeIsrc,
   requestChanges,
   saveRelease,
   saveTrack,
@@ -33,6 +32,8 @@ import {
   type SendProgress,
 } from "@/lib/dist";
 import { myRank } from "@/lib/admin";
+import { supabase, errorText } from "@/lib/supabase";
+import { NEED, gate, useCanReview, useMyTier } from "@/lib/premium";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
@@ -41,7 +42,7 @@ import { DefaultsDialog, PitchCard, PitchSummary, ReadinessCard, SmartLinkCard, 
 import { duplicateRelease, getDefaults, getPitch, getSmartLink, readiness, remoteImageSize, savePitch, statusLog, type Pitch, type SmartLink, type StatusLog } from "@/lib/distExtras";
 import { CheckPill, CheckView, Chips, ReportView, SplitEditor, printSplitSheet } from "@/components/music/AudioBits";
 import { analyzeAudio, checkStatus, clearCheckConfig, saveShieldBucket, clipFromBuffer, copyrightCheck, decodeFile, latestChecks, lyricsLookExplicit, saveCheckConfig, type AudioCheck, type AudioReport } from "@/lib/audio";
-import type { DistArtist, DistRelease, DistTrack } from "@/lib/types";
+import type { DistArtist, DistRelease, DistStatus, DistTrack } from "@/lib/types";
 
 // ------------------------------------------------------------------ list
 export { Artwork };
@@ -130,6 +131,7 @@ function ReleaseList() {
 // ------------------------------------------------------------------ editor
 function ReleaseEditor({ id }: { id: string }) {
   const me = useApp((s) => s.userId)!;
+  const tier = useMyTier();
   const [r, setR] = useState<DistRelease | null>(null);
   const [tracks, setTracks] = useState<DistTrack[]>([]);
   const [artists, setArtists] = useState<DistArtist[]>([]);
@@ -156,7 +158,9 @@ function ReleaseEditor({ id }: { id: string }) {
   const artPath = r?.artwork_path;
   useEffect(() => {
     if (!artPath) return setArt(null);
-    void distFileUrl(artPath).then((u) => u && remoteImageSize(u).then(setArt));
+    void distFileUrl(artPath).then((u) => {
+      if (u) void remoteImageSize(u).then(setArt);
+    });
   }, [artPath]);
 
   useEffect(() => {
@@ -198,6 +202,7 @@ function ReleaseEditor({ id }: { id: string }) {
         </button>
         <h1 className="min-w-0 flex-1 truncate text-2xl font-bold">{r.title}</h1>
         <StatusPill status={r.status} />
+        <StatusControl r={r} onDone={() => void load(r.id)} />
         {r.owner_id === me && (
           <button
             onClick={async () => {
@@ -358,13 +363,14 @@ function ReleaseEditor({ id }: { id: string }) {
             <button
               disabled={busy || missing.length > 0}
               onClick={async () => {
+                if (!gate(NEED.distribution, "Sending music to stores")) return;
                 setBusy(true);
                 if (await submitRelease(r.id)) await load(r.id);
                 setBusy(false);
               }}
               className="flex items-center gap-1.5 rounded-full bg-accent px-5 py-2.5 font-semibold text-white disabled:opacity-40"
             >
-              <Send className="size-4" /> Submit for review
+              <Send className="size-4" /> {tier >= NEED.distribution ? "Submit for review" : "🎵 Submit — Distribution plan"}
             </button>
           </div>
         ) : (
@@ -572,7 +578,7 @@ function TrackRow(props: {
   onUp?: () => void;
   onDown?: () => void;
 }) {
-  const { t, r, n, canEdit, staff, open, check, checkOn, onCheck, onToggle, onChange, onDelete, onUp, onDown } = props;
+  const { t, r, n, canEdit, open, check, checkOn, onCheck, onToggle, onChange, onDelete, onUp, onDown } = props;
   const [local, setLocal] = useState(t);
   const [progress, setProgress] = useState<number | null>(null);
   const [analysis, setAnalysis] = useState<AudioReport | null>(null);
@@ -733,7 +739,7 @@ function TrackRow(props: {
                 if (v && !isrcValid(v)) return toast("ISRC looks like CC-XXX-YY-NNNNN (12 characters)", "error");
                 void persist({ isrc: v || null });
               }} />
-              {staff && canEdit && !local.isrc && <IsrcGen onPick={(v) => (setLocal({ ...local, isrc: v }), void persist({ isrc: v }))} />}
+              {canEdit && !local.isrc && <IsrcGen title={local.title || t.title} artist={local.primary_artist_name || r.primary_artist_name} onPick={(v) => (setLocal({ ...local, isrc: v }), void persist({ isrc: v }))} />}
             </div>
             <Sel label="Language" value={local.language ?? r.language ?? "English"} options={LANGUAGES} onChange={(v) => void persist({ language: v })} />
             <label className="flex items-center justify-between gap-3 rounded-lg border border-line px-3 py-2 sm:mt-5">
@@ -807,41 +813,61 @@ function TrackRow(props: {
   );
 }
 
-/** admins: next code from your own registrant prefix (kept in this browser) */
-function IsrcGen({ onPick }: { onPick: (isrc: string) => void }) {
-  const KEY = "nexus:isrc";
-  const read = () => {
-    try {
-      return JSON.parse(localStorage.getItem(KEY) ?? "null") as { prefix: string; next: number } | null;
-    } catch {
-      return null;
-    }
-  };
+/** next Audia ISRC (QT6HV) from the shared, server-side counter — never hands out the same code twice */
+function IsrcGen({ title, artist, onPick }: { title: string; artist: string; onPick: (isrc: string) => void }) {
+  const [busy, setBusy] = useState(false);
   return (
     <button
       type="button"
-      onClick={() => {
-        let s = read();
-        if (!s) {
-          const prefix = prompt("Your ISRC registrant prefix (country + registrant, 5 characters):", "QT6HV");
-          if (!prefix) return;
-          const start = Number(prompt("Next designation number to use this year (5 digits, must not be used before):", "1"));
-          if (!start) return;
-          s = { prefix: prefix.toUpperCase(), next: start };
+      disabled={busy}
+      onClick={async () => {
+        if (!gate(NEED.isrc, "Audia ISRC codes")) return;
+        setBusy(true);
+        const { data, error } = await supabase.rpc("generate_isrc", { p_title: title || null, p_artist: artist || null, p_count: 1 });
+        setBusy(false);
+        if (error) return toast(errorText(error), "error");
+        const code = (data as { code: string }[] | null)?.[0]?.code;
+        if (code) {
+          onPick(code);
+          toast(`Assigned ${code}`, "success");
         }
-        const code = makeIsrc(s.prefix, new Date().getFullYear(), s.next);
-        if (!confirm(`Assign ${code}? Make sure it hasn't been used on another recording.`)) return;
-        try {
-          localStorage.setItem(KEY, JSON.stringify({ ...s, next: s.next + 1 }));
-        } catch {
-          /* storage unavailable */
-        }
-        onPick(code);
       }}
-      className="mt-1 text-xs font-semibold text-accent"
+      className="mt-1 text-xs font-semibold text-accent disabled:opacity-50"
     >
-      Generate from my prefix
+      {busy ? "Generating…" : "⚡ Generate Audia ISRC"}
     </button>
+  );
+}
+
+/** admins, moderators and Moderator-badge members set the submission status */
+const ALL_STATUSES = Object.keys(STATUS_INFO) as DistStatus[];
+function StatusControl({ r, onDone }: { r: DistRelease; onDone: () => void }) {
+  const can = useCanReview();
+  if (!can) return null;
+  return (
+    <select
+      value={r.status}
+      onChange={async (e) => {
+        const st = e.target.value as DistStatus;
+        if (st === r.status) return;
+        const needNote = st === "changes_requested" || st === "rejected";
+        const note = needNote ? prompt(st === "rejected" ? "Reason (shown to the artist)" : "What should they fix?") : null;
+        if (needNote && note === null) return;
+        const { error } = await supabase.rpc("set_release_status", { p_release: r.id, p_status: st, p_note: note || null });
+        if (error) return toast(errorText(error), "error");
+        toast(`Status → ${STATUS_INFO[st].label}`, "success");
+        onDone();
+      }}
+      onClick={(e) => e.stopPropagation()}
+      className="rounded-full border border-line bg-side px-2.5 py-1.5 text-xs font-semibold outline-none"
+      title="Change submission status (staff)"
+    >
+      {ALL_STATUSES.map((st) => (
+        <option key={st} value={st}>
+          {STATUS_INFO[st].label}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -982,6 +1008,11 @@ function ReviewItem({ r, open, onToggle, onDone }: { r: DistRelease; open: boole
         </div>
         <StatusPill status={r.status} />
       </button>
+      {open && (
+        <div className="flex items-center gap-2 border-t border-line/60 px-3 pt-3 text-sm text-sub">
+          Submission status <StatusControl r={r} onDone={onDone} />
+        </div>
+      )}
       {open && (
         <div className="space-y-3 border-t border-line/60 p-3">
           {r.last_error && <div className="rounded-lg bg-dnd/10 p-2.5 text-sm text-dnd">{r.last_error}</div>}

@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AudioWaveform, Calculator, Drum, Fingerprint, Mic, Printer, Signature, Upload } from "lucide-react";
+import { AudioWaveform, Barcode, Calculator, Copy, Download, Drum, Fingerprint, Mic, Printer, Signature, Upload } from "lucide-react";
+import { supabase, errorText } from "@/lib/supabase";
+import { NEED, gate, useMyTier } from "@/lib/premium";
+import { openModal } from "@/store/app";
 import { analyzeAudio, checkStatus, decodeLimit, clipFromFile, copyrightCheck, decodeFile, myToolChecks, type AudioCheck, type AudioReport } from "@/lib/audio";
 import { toast } from "@/store/app";
 import { musicGo } from "@/store/music";
@@ -9,9 +12,10 @@ import { cn } from "@/lib/utils";
 import { CheckView, ReportView, SplitEditor, printSplitSheet } from "./AudioBits";
 import type { Split } from "@/lib/types";
 
-export type ToolId = "analyzer" | "copyright" | "splits" | "tempo" | "tuner" | "royalties";
+export type ToolId = "isrc" | "analyzer" | "copyright" | "splits" | "tempo" | "tuner" | "royalties";
 
 export const TOOLS: { id: ToolId; label: string; sub: string; color: string; icon: React.ReactNode }[] = [
+  { id: "isrc", label: "Audia ISRC generator", sub: "Official QT6HV codes", color: "#1DB954", icon: <Barcode className="size-5" /> },
   { id: "analyzer", label: "Audio analyzer", sub: "BPM, key, LUFS, true peak", color: "#F0B232", icon: <AudioWaveform className="size-5" /> },
   { id: "copyright", label: "Copyright check", sub: "Find copyrighted music", color: "#ED4245", icon: <Fingerprint className="size-5" /> },
   { id: "splits", label: "Split sheet", sub: "Who owns what %", color: "#9B59B6", icon: <Signature className="size-5" /> },
@@ -55,6 +59,7 @@ export default function ToolView({ tool }: { tool: ToolId }) {
           <p className="text-sm text-sub">{t.sub}</p>
         </div>
       </div>
+      {tool === "isrc" && <IsrcTool />}
       {tool === "analyzer" && <AnalyzerTool />}
       {tool === "copyright" && <AnalyzerTool copyrightFirst />}
       {tool === "splits" && <SplitTool />}
@@ -486,6 +491,148 @@ function TunerTool() {
           Hz
         </label>
       </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ Audia ISRC generator
+type IsrcRow = { code: string; title: string | null; artist: string | null; created_at: string };
+const fmtIsrc = (c: string) => `${c.slice(0, 2)}-${c.slice(2, 5)}-${c.slice(5, 7)}-${c.slice(7)}`;
+
+function IsrcTool() {
+  const tier = useMyTier();
+  const [cfg, setCfg] = useState<{ prefix: string; next: string; allowed: boolean; admin?: boolean } | null>(null);
+  const [title, setTitle] = useState("");
+  const [artist, setArtist] = useState("");
+  const [count, setCount] = useState(1);
+  const [busy, setBusy] = useState(false);
+  const [made, setMade] = useState<IsrcRow[]>([]);
+  const [history, setHistory] = useState<IsrcRow[]>([]);
+  const [admin, setAdmin] = useState({ prefix: "", next: "" });
+
+  const load = async () => {
+    const { data } = await supabase.rpc("isrc_config");
+    const c = data as { prefix: string; next: string; allowed: boolean; admin?: boolean } | null;
+    setCfg(c);
+    if (c) setAdmin({ prefix: c.prefix, next: String(c.next) });
+    const h = await supabase.from("isrc_codes").select("code, title, artist, created_at").order("created_at", { ascending: false }).limit(200);
+    setHistory((h.data ?? []) as IsrcRow[]);
+  };
+  useEffect(() => void load(), [tier]);
+
+  const copy = (t: string) => void navigator.clipboard.writeText(t).then(() => toast("Copied", "success"));
+  const csv = () => {
+    const rows = [["ISRC", "Title", "Artist", "Created"], ...history.map((r) => [r.code, r.title ?? "", r.artist ?? "", r.created_at])];
+    const blob = new Blob([rows.map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "audia-isrc-codes.csv";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+  const yy = String(new Date().getFullYear() % 100).padStart(2, "0");
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl p-4 text-white" style={{ background: "linear-gradient(135deg,#0f5132,#1DB954)" }}>
+        <div className="text-xs font-bold tracking-widest text-white/75 uppercase">Audia Music Recordings · registrant</div>
+        <div className="mt-1 font-mono text-3xl font-black tracking-wider">
+          {(cfg?.prefix ?? "QT6HV").slice(0, 2)}-{(cfg?.prefix ?? "QT6HV").slice(2)}-{yy}-•••••
+        </div>
+        <p className="mt-1 text-sm text-white/85">Every code comes from one shared counter, so no ISRC is ever handed out twice. Codes are saved to your history.</p>
+      </div>
+
+      {cfg && !cfg.allowed ? (
+        <div className="rounded-2xl bg-side p-4 text-sm">
+          <div className="font-semibold">🎵 Audia ISRC codes come with Music Distribution</div>
+          <p className="mt-1 text-sub">Get the Nexus Lighting Premium + Music Distribution plan to generate official codes for your releases.</p>
+          <button onClick={() => openModal("premium", "dist")} className="mt-3 rounded-full bg-[#1DB954] px-4 py-2 font-bold text-black">
+            See plans
+          </button>
+        </div>
+      ) : (
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!gate(NEED.isrc, "Audia ISRC codes")) return;
+            setBusy(true);
+            const { data, error } = await supabase.rpc("generate_isrc", { p_title: title.trim() || null, p_artist: artist.trim() || null, p_count: count });
+            setBusy(false);
+            if (error) return toast(errorText(error), "error");
+            setMade((data ?? []) as IsrcRow[]);
+            toast(`${(data as IsrcRow[]).length} code(s) generated`, "success");
+            void load();
+          }}
+          className="grid gap-2 rounded-2xl bg-side p-4 sm:grid-cols-[1fr_1fr_90px_auto]"
+        >
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Track title (optional)" className="min-w-0 rounded-lg border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent" />
+          <input value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Artist (optional)" className="min-w-0 rounded-lg border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent" />
+          <input type="number" min={1} max={50} value={count} onChange={(e) => setCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} title="How many codes" className="rounded-lg border border-line bg-transparent px-2 py-2 text-sm outline-none" />
+          <button disabled={busy} className="rounded-full bg-[#1DB954] px-5 py-2 text-sm font-bold text-black disabled:opacity-50">
+            {busy ? "Generating…" : count > 1 ? `Generate ${count}` : "Generate"}
+          </button>
+        </form>
+      )}
+
+      {made.length > 0 && (
+        <div className="rounded-2xl border border-[#1DB954]/40 bg-[#1DB954]/10 p-3">
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+            <span className="flex-1">New codes</span>
+            <button onClick={() => copy(made.map((r) => r.code).join("\n"))} className="flex items-center gap-1 rounded-full bg-hover px-3 py-1 text-xs hover:bg-active">
+              <Copy className="size-3.5" /> Copy all
+            </button>
+          </div>
+          {made.map((r) => (
+            <button key={r.code} onClick={() => copy(r.code)} className="block w-full rounded-lg px-2 py-1 text-left font-mono text-lg font-bold hover:bg-white/5">
+              {fmtIsrc(r.code)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {history.length > 0 && (
+        <div className="rounded-2xl bg-side p-3">
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+            <span className="flex-1">History ({history.length})</span>
+            <button onClick={csv} className="flex items-center gap-1 rounded-full bg-hover px-3 py-1 text-xs hover:bg-active">
+              <Download className="size-3.5" /> CSV
+            </button>
+          </div>
+          <div className="max-h-80 space-y-0.5 overflow-y-auto">
+            {history.map((r) => (
+              <button key={r.code} onClick={() => copy(r.code)} className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-hover">
+                <span className="font-mono font-semibold">{r.code}</span>
+                <span className="min-w-0 flex-1 truncate text-sub">{[r.title, r.artist].filter(Boolean).join(" — ")}</span>
+                <span className="text-xs text-sub">{new Date(r.created_at).toLocaleDateString([], { dateStyle: "short" })}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {cfg?.admin && (
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const { error } = await supabase.rpc("set_isrc_config", { p_prefix: admin.prefix.trim().toUpperCase(), p_next: Number(admin.next) || 1 });
+            if (error) return toast(errorText(error), "error");
+            toast("ISRC settings saved", "success");
+            void load();
+          }}
+          className="flex flex-wrap items-end gap-2 rounded-2xl border border-line/70 p-3 text-sm"
+        >
+          <div className="w-full text-xs font-semibold text-sub uppercase">Admin · registrant settings</div>
+          <label className="block">
+            <span className="text-xs text-sub">Prefix</span>
+            <input value={admin.prefix} onChange={(e) => setAdmin({ ...admin, prefix: e.target.value.toUpperCase().slice(0, 5) })} className="block w-28 rounded-lg border border-line bg-transparent px-2 py-1.5 font-mono outline-none" />
+          </label>
+          <label className="block">
+            <span className="text-xs text-sub">Next number (min)</span>
+            <input type="number" min={1} max={99999} value={admin.next} onChange={(e) => setAdmin({ ...admin, next: e.target.value })} className="block w-32 rounded-lg border border-line bg-transparent px-2 py-1.5 outline-none" />
+          </label>
+          <button className="rounded-full bg-accent px-4 py-1.5 font-semibold text-white">Save</button>
+        </form>
+      )}
     </div>
   );
 }

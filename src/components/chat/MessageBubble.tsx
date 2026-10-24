@@ -255,7 +255,14 @@ function MessageBubbleImpl({
               onClick={(e) => openProfileCard(m.author_id, e)}
               className={cn("mb-0.5 block max-w-full text-left text-sm font-semibold hover:underline", onlyMedia && "px-2.5 pt-1.5")}
             >
-              <NameTag userId={m.author_id} fallbackColor={author?.avatar_color ?? "#2aabee"} />
+              {m.bot_name ? (
+                <span className="inline-flex items-center gap-1">
+                  <span style={{ color: author?.avatar_color ?? "#5865f2" }}>{m.bot_name}</span>
+                  <span className="rounded bg-[#5865f2] px-1 text-[9px] leading-4 font-black text-white">WEBHOOK</span>
+                </span>
+              ) : (
+                <NameTag userId={m.author_id} fallbackColor={author?.avatar_color ?? "#2aabee"} />
+              )}
             </button>
           )}
 

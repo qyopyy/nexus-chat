@@ -2,7 +2,8 @@
 
 import { useRef, useState } from "react";
 import { ImagePlus, Plus, Trash2 } from "lucide-react";
-import { useApp, toast } from "@/store/app";
+import { useApp, toast, openModal } from "@/store/app";
+import { NEED, gate, useMyTier } from "@/lib/premium";
 import { updateMyProfile, uploadBanner } from "@/lib/data";
 import { PLATFORMS, linkLabel, normalizeLink, platformById, spotifyEmbed } from "@/lib/links";
 import type { ProfileLink } from "@/lib/types";
@@ -202,18 +203,26 @@ function LinkEditRow({ link, onRemove, onUp, onDown }: { link: ProfileLink; onRe
 function ProfileStyle() {
   const me = useApp((s) => (s.userId ? s.profiles[s.userId] : undefined));
   const [preview, setPreview] = useState(0);
+  const tier = useMyTier();
   if (!me) return null;
+  const locked = (id: string) => tier < NEED.flair && id !== "none";
+  const tryPick = (id: string, fn: () => void) => (locked(id) ? void gate(NEED.flair, "Profile animations, borders and themes") : fn());
   const chip = (on: boolean) => cn("rounded-full px-3 py-1.5 text-sm font-semibold transition active:scale-95", on ? "bg-accent text-white" : "bg-rail hover:bg-hover");
   return (
     <div>
       <Label>Profile animation, border & theme</Label>
+      {tier < NEED.flair && (
+        <button onClick={() => openModal("premium", "lighting")} className="mb-3 flex w-full items-center gap-2 rounded-xl bg-[#ffd400]/10 px-3 py-2 text-left text-sm ring-1 ring-[#ffd400]/30">
+          ⚡ <span className="flex-1">These are Nexus Lighting perks — tap to get Lighting ($3.99/mo). You can preview them for free.</span>
+        </button>
+      )}
       <div className="grid gap-4 sm:grid-cols-[1fr_220px]">
         <div className="space-y-3">
           <div>
             <div className="mb-1.5 text-xs text-sub">Background animation — plays when someone opens your profile</div>
             <div className="flex flex-wrap gap-1.5">
               {EFFECTS.map((e) => (
-                <button key={e.id} onClick={() => (void updateMyProfile({ profile_effect: e.id === "none" ? null : e.id }, true), setPreview((n) => n + 1))} className={chip((me.profile_effect ?? "none") === e.id)}>
+                <button key={e.id} onClick={() => tryPick(e.id, () => (void updateMyProfile({ profile_effect: e.id === "none" ? null : e.id }, true), setPreview((n) => n + 1)))} className={chip((me.profile_effect ?? "none") === e.id)}>
                   {e.emoji} {e.label}
                 </button>
               ))}
@@ -223,7 +232,7 @@ function ProfileStyle() {
             <div className="mb-1.5 text-xs text-sub">Animated border</div>
             <div className="flex flex-wrap gap-1.5">
               {BORDERS.map((b) => (
-                <button key={b.id} onClick={() => void updateMyProfile({ profile_border: b.id === "none" ? null : b.id }, true)} className={chip((me.profile_border ?? "none") === b.id)}>
+                <button key={b.id} onClick={() => tryPick(b.id, () => void updateMyProfile({ profile_border: b.id === "none" ? null : b.id }, true))} className={chip((me.profile_border ?? "none") === b.id)}>
                   {b.css && <span className="mr-1 inline-block size-3 rounded-full align-[-1px]" style={{ background: b.css }} />}
                   {b.label}
                 </button>
@@ -234,7 +243,7 @@ function ProfileStyle() {
             <div className="mb-1.5 text-xs text-sub">Card theme</div>
             <div className="flex flex-wrap gap-1.5">
               {THEMES.map((t) => (
-                <button key={t.id} onClick={() => void updateMyProfile({ profile_theme: t.id === "none" ? null : t.id }, true)} className={chip((me.profile_theme ?? "none") === t.id)}>
+                <button key={t.id} onClick={() => tryPick(t.id, () => void updateMyProfile({ profile_theme: t.id === "none" ? null : t.id }, true))} className={chip((me.profile_theme ?? "none") === t.id)}>
                   {t.bg && <span className="mr-1 inline-block size-3 rounded-full align-[-1px] ring-1 ring-white/20" style={{ background: t.bg }} />}
                   {t.label}
                 </button>

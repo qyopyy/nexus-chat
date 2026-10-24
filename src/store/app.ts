@@ -14,6 +14,7 @@ import type {
 } from "@/lib/types";
 
 export type ModalKind =
+  | "premium"
   | "settings"
   | "createSpace"
   | "newGroup"

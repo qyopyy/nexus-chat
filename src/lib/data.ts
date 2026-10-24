@@ -276,6 +276,14 @@ export function openConversation(convId: string | null, spaceId: string | null) 
 
 // ------------------------------------------------------------------ messages
 
+// ------------------------------------------------------------------ bots
+/** slash commands (/help, /roll, /isrc …) — the matching bot replies in the chat */
+export async function runBotCommand(convId: string, text: string) {
+  const { data, error } = await supabase.functions.invoke("bots", { body: { action: "cmd", conversation_id: convId, text } });
+  if (error) toast("The bot couldn't answer right now", "error");
+  return data as { ok: boolean } | null;
+}
+
 // ------------------------------------------------------------------ disappearing messages
 export const TTL_OPTIONS: { secs: number | null; label: string; short: string }[] = [
   { secs: null, label: "Off", short: "" },

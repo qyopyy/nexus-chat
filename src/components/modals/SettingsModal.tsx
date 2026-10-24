@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, Camera, LogOut, Mic, Palette, Shield, Upload, User, X } from "lucide-react";
-import { useApp, closeModal, toast } from "@/store/app";
+import { Bell, Camera, Crown, LogOut, Mic, Palette, Shield, Upload, User, X } from "lucide-react";
+import { useApp, closeModal, openModal, toast } from "@/store/app";
 import { detectPush, disablePush, enablePush, usePush } from "@/lib/push";
 import { isNativeApp } from "@/lib/useMobile";
 import { useCall, leaveCall, updateSettings, type ScreenQuality } from "@/lib/call";
@@ -51,6 +51,10 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
           {nav("appearance", "Appearance", <Palette className="size-4" />)}
           {nav("voice", "Voice & Video", <Mic className="size-4" />)}
           {nav("notifications", "Notifications", <Bell className="size-4" />)}
+          <button onClick={() => openModal("premium")} className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left font-semibold text-[#f0b232] transition hover:bg-hover">
+            <Crown className="size-4" />
+            Nexus Premium
+          </button>
           {isStaff && (
             <>
               <p className="px-2.5 pt-4 pb-1 text-xs font-bold tracking-wide text-sub uppercase">Staff</p>

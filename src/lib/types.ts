@@ -1,3 +1,4 @@
+export type PremiumTier = "lighting" | "premium" | "dist" | "dist_pro" | "dist_video";
 export type ProfileEffect = "none" | "aurora" | "stars" | "hearts" | "snow" | "matrix" | "confetti" | "fire" | "bubbles" | "neon";
 export type ProfileBorder = "none" | "rainbow" | "neon" | "gold" | "fire" | "ice";
 export type ProfileTheme = "none" | "midnight" | "sunset" | "ocean" | "forest" | "candy" | "mono";
@@ -21,6 +22,9 @@ export type Profile = {
   profile_song?: string | null;
   now_playing?: NowPlaying | null;
   view_count?: number;
+  premium_tier?: PremiumTier | null;
+  premium_until?: string | null;
+  is_bot?: boolean;
   like_count?: number;
   profile_effect?: ProfileEffect | null;
   profile_border?: ProfileBorder | null;
@@ -202,6 +206,8 @@ export type Message = {
   created_at: string;
   /** full-screen effect: confetti | hearts | fireworks | lasers | balloons | snow */
   effect?: string | null;
+  /** display name of a webhook / bot post */
+  bot_name?: string | null;
   /** client-only: optimistic message not yet confirmed */
   pending?: boolean;
 };
@@ -323,6 +329,8 @@ export type VideoLink = { label: string; url: string };
 export type Video = {
   id: string;
   owner_id: string;
+  mv_status?: "requested" | "approved" | "live" | "rejected" | null;
+  mv_note?: string | null;
   title: string;
   description: string;
   slug: string | null;

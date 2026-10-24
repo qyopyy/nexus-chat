@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CloudUpload, Download, FileText, Lock, LockOpen, Paperclip, RefreshCw, ShieldCheck, Trash2, Upload, UserPlus, X } from "lucide-react";
-import { useApp, toast } from "@/store/app";
+import { useApp, toast, openModal } from "@/store/app";
 import { friendIds } from "@/lib/data";
 import { myRank } from "@/lib/admin";
 import {
@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import { Card, H } from "./Studio";
+import { NEED, gate, needPlan, useMyTier } from "@/lib/premium";
 
 type Draft = { id: string; file: File; title: string; artist: string; isrc: string; upc: string; docs: { file: File; kind: DocKind }[]; lockUntil: string; keep: boolean; allow: string[]; step?: RegisterStep; error?: string; done?: boolean };
 
@@ -41,6 +42,7 @@ export default function ShieldStudio() {
   const me = useApp((s) => s.userId)!;
   const myName = useApp((s) => s.profiles[s.userId ?? ""]?.display_name ?? "");
   const staff = myRank() >= 3;
+  const tier = useMyTier();
   const [all, setAll] = useState(false);
   const [works, setWorks] = useState<ShieldWork[] | null>(null);
   const [events, setEvents] = useState<ShieldEvent[]>([]);
@@ -70,6 +72,7 @@ export default function ShieldStudio() {
   const patch = (id: string, p: Partial<Draft>) => setDrafts((d) => d.map((x) => (x.id === id ? { ...x, ...p } : x)));
 
   const protectAll = async () => {
+    if (!gate(NEED.shield, "Shield 360 protection")) return;
     setBusy(true);
     for (const d of drafts.filter((x) => !x.done)) {
       try {
@@ -122,8 +125,14 @@ export default function ShieldStudio() {
           Upload your songs once. Nexus stores an audio fingerprint and keeps the original in your private vault (only you can download it). Until you unlock a song, nobody else can send it in chats, post
           it as a video, play it in a space or submit it for distribution — even re-encoded, cut or quieter copies are recognised.
         </p>
+        {tier < NEED.shield && (
+          <button onClick={() => openModal("premium", needPlan(NEED.shield).id)} className="mt-3 flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-black text-black">
+            💎 Shield 360 comes with Nexus Lighting Premium — $5.99/mo
+          </button>
+        )}
         <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
           <span className="rounded-full bg-white/15 px-3 py-1">🧬 Nexus fingerprint · on</span>
+          <span className="rounded-full bg-white/15 px-3 py-1">🎚 {tier >= 4 ? "Unlimited songs" : tier >= 3 ? "Up to 25 songs" : tier >= 2 ? "Up to 10 songs" : "Premium plan needed"}</span>
           <span className={cn("rounded-full px-3 py-1", acr?.shieldBucket ? "bg-[#00ff9c]/25" : "bg-white/10 text-white/60")}>
             ☁️ ACRCloud bucket · {acr?.shieldBucket ? "connected" : staffHint(staff)}
           </span>
@@ -339,9 +348,20 @@ function WorkRow({ w, mine, blocked, onChange, onRemoved }: { w: ShieldWork; min
   const [open, setOpen] = useState(false);
   const live = isLive(w);
   const autoAt = w.unlock_at ? new Date(w.unlock_at) : null;
+  const [flip, setFlip] = useState(false);
+  const toggleLock = async () => {
+    setFlip(true);
+    const x = await updateWork(w.id, live ? { status: "unlocked" } : { status: "locked", unlock_at: autoAt && autoAt < new Date() ? null : w.unlock_at });
+    setFlip(false);
+    if (x) {
+      onChange(x);
+      toast(live ? "Unlocked — anyone can upload it now" : "Locked — uploads of this song are blocked again", "success");
+    }
+  };
   return (
     <div className="rounded-xl border border-line/70">
-      <button onClick={() => setOpen(!open)} className="flex w-full items-center gap-3 p-3 text-left">
+      <div className="flex items-center gap-2 pr-3">
+      <button onClick={() => setOpen(!open)} className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left">
         <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", live ? "bg-accent/20 text-accent" : "bg-white/10 text-sub")}>{live ? <Lock className="size-5" /> : <LockOpen className="size-5" />}</span>
         <span className="min-w-0 flex-1">
           <span className="block truncate font-semibold">{w.title}</span>
@@ -360,18 +380,29 @@ function WorkRow({ w, mine, blocked, onChange, onRemoved }: { w: ShieldWork; min
           {blocked > 0 && <span className="block text-dnd">{blocked} blocked</span>}
         </span>
       </button>
+        {mine && (
+          <button
+            disabled={flip}
+            onClick={() => void toggleLock()}
+            role="switch"
+            aria-checked={live}
+            aria-label={live ? "Unlock song" : "Lock song"}
+            title={live ? "Tap to unlock" : "Tap to lock"}
+            className={cn("relative h-7 w-12 shrink-0 rounded-full transition disabled:opacity-50", live ? "bg-accent" : "bg-white/15")}
+          >
+            <span className={cn("absolute top-0.5 grid size-6 place-items-center rounded-full bg-white text-black shadow transition-all", live ? "left-[22px]" : "left-0.5")}>
+              {live ? <Lock className="size-3.5" /> : <LockOpen className="size-3.5" />}
+            </span>
+          </button>
+        )}
+      </div>
       {open && (
         <div className="space-y-3 border-t border-line/60 p-3">
           {mine && (
             <div className="flex flex-wrap gap-2">
               <button
-                onClick={async () => {
-                  const x = await updateWork(w.id, live ? { status: "unlocked" } : { status: "locked", unlock_at: autoAt && autoAt < new Date() ? null : w.unlock_at });
-                  if (x) {
-                    onChange(x);
-                    toast(live ? "Unlocked — anyone can upload it now" : "Locked again", "success");
-                  }
-                }}
+                disabled={flip}
+                onClick={() => void toggleLock()}
                 className={cn("flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold", live ? "bg-hover hover:bg-active" : "bg-accent text-white")}
               >
                 {live ? <LockOpen className="size-4" /> : <Lock className="size-4" />} {live ? "Unlock" : "Lock again"}
@@ -528,6 +559,7 @@ function AcrRow({ w, mine, onChange }: { w: ShieldWork; mine: boolean; onChange:
         <button
           disabled={busy}
           onClick={async () => {
+            if (!gate(NEED.acr, "ACRCloud sync")) return;
             setBusy(true);
             const r = await syncAcr(w.id);
             setBusy(false);

@@ -133,6 +133,15 @@ Deno.serve(async (req: Request) => {
     const needStaff = () => {
       if (!staff) throw new HttpError(403, "Admins only");
     };
+    // reviewers = admins, moderators and members with the Moderator badge (they approve & send releases)
+    let reviewer = rank >= 2;
+    if (!reviewer) {
+      const { data: mb } = await admin.from("user_badges").select("badge:badges!inner(key)").eq("user_id", uid).is("revoked_at", null).eq("badge.key", "moderator").limit(1);
+      reviewer = !!mb?.length;
+    }
+    const needReviewer = () => {
+      if (!reviewer) throw new HttpError(403, "Only admins and moderators can do that");
+    };
 
     const b = await req.json().catch(() => ({}));
     const action = String(b.action ?? "");
@@ -168,7 +177,7 @@ Deno.serve(async (req: Request) => {
 
       // 1) create/refresh artists, release and tracks on Tunearo; hand back pre-signed upload URLs
       case "prepare": {
-        needStaff();
+        needReviewer();
         const { r, tracks } = await loadRelease(String(b.release_id));
         if (!["in_review", "error", "rejected", "sending"].includes(r.status)) throw new HttpError(409, `Release is ${r.status}`);
         if (!tracks.length) throw new HttpError(400, "No tracks");
@@ -237,7 +246,7 @@ Deno.serve(async (req: Request) => {
 
       // 2) after the browser PUT the files: save artwork path, mark audio, submit for Tunearo review
       case "finalize": {
-        needStaff();
+        needReviewer();
         const { r } = await loadRelease(String(b.release_id));
         if (!r.tunearo_id) throw new HttpError(409, "Run prepare first");
         try {
@@ -254,7 +263,7 @@ Deno.serve(async (req: Request) => {
       }
 
       case "fail": {
-        needStaff();
+        needReviewer();
         await setRelease(String(b.release_id), { status: "error", last_error: String(b.message ?? "Upload failed").slice(0, 500) });
         return json({ ok: true });
       }
@@ -264,7 +273,7 @@ Deno.serve(async (req: Request) => {
         const { data: rows } = b.release_id ? await q.eq("id", String(b.release_id)) : staff ? await q.in("status", ["pending", "approved", "live", "takedown_requested", "sending", "error"]) : await q.eq("owner_id", uid);
         const out: Record<string, string> = {};
         for (const row of rows ?? []) {
-          if (row.owner_id !== uid && !staff) continue;
+          if (row.owner_id !== uid && !reviewer) continue;
           if (row.status === "sending") continue;
           const s = await tn(`/releases/${row.tunearo_id}/status`).catch(() => null);
           if (!s) continue;

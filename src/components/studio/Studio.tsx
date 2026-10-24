@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Clapperboard,
   ArrowLeft,
   AudioWaveform,
   ChartColumn,
+  Crown,
   Copy,
   Disc3,
   ExternalLink,
@@ -27,11 +29,11 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { useApp, toast } from "@/store/app";
+import { useApp, toast, openModal } from "@/store/app";
 import { studioGo, useStudio, videosGo, type StudioSection } from "@/store/studio";
 import { dailyViews, deleteVideo, fmtDuration, fmtViews, myVideos, qualityLabel, removeComment, timeAgo, useUploads, videoLink } from "@/lib/videos";
 import { listReleases, STATUS_INFO } from "@/lib/dist";
-import { supabase } from "@/lib/supabase";
+import { supabase, errorText } from "@/lib/supabase";
 import { updateMyProfile, uploadBanner } from "@/lib/data";
 import { myRank } from "@/lib/admin";
 import { cn } from "@/lib/utils";
@@ -41,11 +43,13 @@ import { Thumb } from "@/components/videos/VideoCard";
 import UploadDialog from "./UploadDialog";
 import { Releases, ReviewQueue, Royalties, DistSettings } from "./Distribution";
 import DistOverview from "./DistOverview";
+import OrdersAdmin from "./OrdersAdmin";
+import { NEED, gate, useCanReview } from "@/lib/premium";
 import ShieldStudio from "./ShieldStudio";
 import ToolView, { ToolsGrid, type ToolId } from "@/components/music/Tools";
 import type { DistRelease, Video, VideoComment } from "@/lib/types";
 
-const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: string; staff?: boolean }[] = [
+const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: string; staff?: boolean; reviewer?: boolean }[] = [
   { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="size-5" /> },
   { id: "content", label: "Content", icon: <Upload className="size-5" /> },
   { id: "analytics", label: "Analytics", icon: <ChartColumn className="size-5" /> },
@@ -56,7 +60,8 @@ const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: st
   { id: "royalties", label: "Royalties", icon: <Wallet className="size-5" />, group: "Music distribution" },
   { id: "tools", label: "Music tools", icon: <AudioWaveform className="size-5" />, group: "Music distribution" },
   { id: "shield", label: "Shield 360", icon: <ShieldCheck className="size-5" />, group: "Music distribution" },
-  { id: "review", label: "Review queue", icon: <ShieldCheck className="size-5" />, group: "Admin", staff: true },
+  { id: "review", label: "Review queue", icon: <ShieldCheck className="size-5" />, group: "Admin", reviewer: true },
+  { id: "orders", label: "Orders & requests", icon: <Crown className="size-5" />, group: "Admin", staff: true },
   { id: "dist-settings", label: "Distribution settings", icon: <Settings className="size-5" />, group: "Admin", staff: true },
 ];
 
@@ -68,9 +73,10 @@ export default function Studio() {
   const [createOpen, setCreateOpen] = useState(false);
   const [pending, setPending] = useState(0);
   const staff = myRank() >= 3;
+  const reviewer = useCanReview();
 
   useEffect(() => {
-    if (!staff) return;
+    if (!reviewer) return;
     const load = () =>
       void supabase
         .from("dist_releases")
@@ -80,7 +86,7 @@ export default function Studio() {
     load();
     const t = setInterval(load, 60_000);
     return () => clearInterval(t);
-  }, [staff]);
+  }, [reviewer]);
 
   const nav = (
     <nav className="flex h-full flex-col overflow-y-auto py-3">
@@ -91,7 +97,7 @@ export default function Studio() {
           <NameTag userId={me} className="text-sm text-sub" badges={false} />
         </div>
       </div>
-      {NAV.filter((n) => !n.staff || staff).map((n, i, arr) => (
+      {NAV.filter((n) => (n.reviewer ? reviewer : !n.staff || staff)).map((n, i, arr) => (
         <div key={n.id}>
           {n.group && n.group !== arr[i - 1]?.group && <div className="mx-4 mt-4 mb-1 border-t border-line pt-3 text-[11px] font-bold tracking-wide text-sub uppercase">{n.group}</div>}
           <button
@@ -111,6 +117,9 @@ export default function Studio() {
         </div>
       ))}
       <div className="mt-auto px-3 pt-4">
+        <button onClick={() => openModal("premium")} className="mb-1 flex w-full items-center gap-3 rounded-lg bg-gradient-to-r from-[#ffd400]/15 to-[#ff2bd6]/15 px-3 py-2.5 text-sm font-semibold hover:from-[#ffd400]/25 hover:to-[#ff2bd6]/25">
+          <Crown className="size-4 text-[#ffd400]" /> Nexus Premium
+        </button>
         <button onClick={() => useApp.setState({ hub: null })} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-sub hover:bg-hover hover:text-txt">
           <ArrowLeft className="size-4" /> Back to Nexus
         </button>
@@ -188,7 +197,8 @@ export default function Studio() {
             {section === "royalties" && <Royalties />}
             {section === "tools" && <StudioTools />}
             {section === "shield" && <ShieldStudio />}
-            {section === "review" && staff && <ReviewQueue />}
+            {section === "review" && reviewer && <ReviewQueue />}
+            {section === "orders" && staff && <OrdersAdmin />}
             {section === "dist-settings" && staff && <DistSettings />}
           </div>
         </main>
@@ -450,6 +460,7 @@ function ContentRow({ v, onChange }: { v: Video; onChange: () => void }) {
         </button>
         <div className="min-w-0">
           <div className="line-clamp-2 text-sm font-semibold">{v.title}</div>
+          {v.mv_status && <div className="mt-0.5 text-[11px] font-semibold text-[#ff2bd6]">🎬 Music video · {v.mv_status}</div>}
           <div className="mt-0.5 line-clamp-1 text-xs text-sub group-hover:hidden">{v.status === "uploading" ? "Uploading…" : v.status === "failed" ? "Upload failed" : v.description || "Add description"}</div>
           <div className="mt-0.5 hidden items-center gap-0.5 group-hover:flex">
             <IconBtn title="Details" onClick={() => useStudio.setState({ editVideoId: v.id })}>
@@ -472,6 +483,20 @@ function ContentRow({ v, onChange }: { v: Video; onChange: () => void }) {
               }}
             >
               <ExternalLink className="size-4" />
+            </IconBtn>
+            <IconBtn
+              title={v.mv_status ? `Official music video: ${v.mv_status}` : "Distribute as official music video"}
+              onClick={async () => {
+                if (v.mv_status && v.mv_status !== "rejected") return toast(`Music video request: ${v.mv_status}${v.mv_note ? ` — ${v.mv_note}` : ""}`, "info");
+                if (!gate(NEED.musicVideo, "Official music video distribution")) return;
+                if (!confirm(`Send "${v.title}" to the label for official music video distribution (YouTube & video stores)?`)) return;
+                const { error } = await supabase.rpc("request_mv_distribution", { p_video: v.id });
+                if (error) return toast(errorText(error), "error");
+                toast("Requested — the label will review it", "success");
+                onChange();
+              }}
+            >
+              <Clapperboard className="size-4" />
             </IconBtn>
             <IconBtn
               title="Delete forever"
