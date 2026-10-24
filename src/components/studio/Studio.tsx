@@ -218,7 +218,8 @@ function MenuBtn({ icon, label, onClick }: { icon: React.ReactNode; label: strin
 }
 
 function UploadPill() {
-  const items = useUploads((s) => Object.values(s.items).filter((i) => i.status === "uploading"));
+  const all = useUploads((s) => s.items);
+  const items = useMemo(() => Object.values(all).filter((i) => i.status === "uploading"), [all]);
   if (!items.length) return null;
   const sent = items.reduce((a, i) => a + i.sent, 0);
   const total = items.reduce((a, i) => a + i.bytes, 0);
