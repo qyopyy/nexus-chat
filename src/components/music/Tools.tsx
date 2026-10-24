@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AudioWaveform, Barcode, Calculator, Copy, Download, Drum, Fingerprint, Mic, Printer, ShieldAlert, Signature, Upload } from "lucide-react";
+import { AudioWaveform, Barcode, Calculator, Clapperboard, Copy, Download, Drum, Fingerprint, Grid3x3, Mic, MicVocal, Piano, Printer, Scissors, ShieldAlert, Signature, SlidersHorizontal, Upload, Waves } from "lucide-react";
+import { BeatTool, ConvertTool, KaraokeTool, MasterTool, ScaleTool, VibeTool } from "./Tools2";
+import VisualizerMaker from "@/components/media/VisualizerMaker";
 import TakedownTool from "./Takedown";
 import { supabase, errorText } from "@/lib/supabase";
 import { NEED, gate, useMyTier } from "@/lib/premium";
@@ -16,17 +18,24 @@ import { sp, type SpTrack } from "@/lib/music";
 import { CheckView, ReportView, SplitEditor, printSplitSheet } from "./AudioBits";
 import type { Split } from "@/lib/types";
 
-export type ToolId = "isrc" | "takedown" | "analyzer" | "copyright" | "splits" | "tempo" | "tuner" | "royalties";
+export type ToolId = "isrc" | "takedown" | "analyzer" | "copyright" | "splits" | "tempo" | "tuner" | "royalties" | "master" | "vibe" | "visualizer" | "beats" | "convert" | "karaoke" | "scales";
 
 export const TOOLS: { id: ToolId; label: string; sub: string; color: string; icon: React.ReactNode }[] = [
   { id: "isrc", label: "Audia ISRC generator", sub: "Official QT6HV codes", color: "#1DB954", icon: <Barcode className="size-5" /> },
   { id: "takedown", label: "Takedown notice", sub: "Spotify & Apple Music", color: "#E5484D", icon: <ShieldAlert className="size-5" /> },
+  { id: "master", label: "Quick master", sub: "Loud, clean, streaming-ready", color: "#8B5CFF", icon: <SlidersHorizontal className="size-5" /> },
+  { id: "vibe", label: "Slowed / sped up", sub: "Slowed + reverb, nightcore", color: "#FF2BD6", icon: <Waves className="size-5" /> },
+  { id: "visualizer", label: "Visualizer video", sub: "Song → TikTok / Reels video", color: "#00B8D9", icon: <Clapperboard className="size-5" /> },
+  { id: "beats", label: "Beat maker", sub: "16-step drums + 808", color: "#FF9F40", icon: <Grid3x3 className="size-5" /> },
   { id: "analyzer", label: "Audio analyzer", sub: "BPM, key, LUFS, true peak", color: "#F0B232", icon: <AudioWaveform className="size-5" /> },
   { id: "copyright", label: "Copyright check", sub: "Find copyrighted music", color: "#ED4245", icon: <Fingerprint className="size-5" /> },
   { id: "splits", label: "Split sheet", sub: "Who owns what %", color: "#9B59B6", icon: <Signature className="size-5" /> },
   { id: "royalties", label: "Royalty calculator", sub: "Streams → money", color: "#3BA55D", icon: <Calculator className="size-5" /> },
   { id: "tempo", label: "Tap tempo & metronome", sub: "Tap or click along", color: "#2AABEE", icon: <Drum className="size-5" /> },
   { id: "tuner", label: "Tuner", sub: "Tune with your mic", color: "#EB459E", icon: <Mic className="size-5" /> },
+  { id: "convert", label: "Trim & convert", sub: "Cut, fade, normalize → WAV", color: "#5865F2", icon: <Scissors className="size-5" /> },
+  { id: "karaoke", label: "Vocal remover", sub: "Instrumental / a cappella", color: "#36D39A", icon: <MicVocal className="size-5" /> },
+  { id: "scales", label: "Scales & chords", sub: "Find chords in any key", color: "#C9B8FF", icon: <Piano className="size-5" /> },
 ];
 
 export function ToolsGrid({ onPick, active }: { onPick?: (t: ToolId) => void; active?: ToolId | null }) {
@@ -54,7 +63,7 @@ export function ToolsGrid({ onPick, active }: { onPick?: (t: ToolId) => void; ac
 export default function ToolView({ tool }: { tool: ToolId }) {
   const t = TOOLS.find((x) => x.id === tool)!;
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-3 sm:p-5">
+    <div className={cn("mx-auto space-y-4 p-3 sm:p-5", tool === "visualizer" || tool === "beats" ? "max-w-5xl" : "max-w-3xl")}>
       <div className="flex items-center gap-3">
         <span className="grid size-11 place-items-center rounded-xl text-white" style={{ background: t.color }}>
           {t.icon}
@@ -72,6 +81,13 @@ export default function ToolView({ tool }: { tool: ToolId }) {
       {tool === "royalties" && <RoyaltyTool />}
       {tool === "tempo" && <TempoTool />}
       {tool === "tuner" && <TunerTool />}
+      {tool === "master" && <MasterTool />}
+      {tool === "vibe" && <VibeTool />}
+      {tool === "visualizer" && <VisualizerMaker />}
+      {tool === "beats" && <BeatTool />}
+      {tool === "convert" && <ConvertTool />}
+      {tool === "karaoke" && <KaraokeTool />}
+      {tool === "scales" && <ScaleTool />}
     </div>
   );
 }

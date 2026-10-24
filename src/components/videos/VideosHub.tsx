@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Clapperboard, Copy, ExternalLink, MessageCircle, Pin, Search, Send, Share2, ThumbsDown, ThumbsUp, Trash2, Upload, X } from "lucide-react";
+import { ArrowLeft, Bookmark, Clapperboard, Copy, ExternalLink, MessageCircle, Pin, Scissors, Search, Send, Share2, Sparkles, ThumbsDown, ThumbsUp, Trash2, Upload, X } from "lucide-react";
+import { addHistory, clearHistory, history, isLater, toggleLater, watchLater } from "@/lib/videoLists";
+import ClipToShort from "./ClipToShort";
+import VisualizerMaker from "@/components/media/VisualizerMaker";
 import { useApp, openProfileCard, toast } from "@/store/app";
 import { useStudio, videosBack, videosGo, videosHome, type VideosRoute } from "@/store/studio";
 import {
@@ -42,6 +45,13 @@ export default function VideosHub({ mobile }: { mobile?: boolean }) {
         {route.view === "home" && <Home q={route.q} tab={route.tab} />}
         {route.view === "watch" && <Watch k={route.key} t={route.t} />}
         {route.view === "channel" && <Channel userId={route.userId} />}
+        {route.view === "create" && (
+          <div className="mx-auto max-w-5xl p-3 sm:p-5">
+            <h1 className="text-xl font-bold">Create a music video</h1>
+            <p className="mb-4 text-sm text-sub">Turn a song + cover art into an animated visualizer for Videos, NexusGram Shorts, TikTok or Reels.</p>
+            <VisualizerMaker />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -77,6 +87,9 @@ function TopBar({ mobile, canBack, route }: { mobile?: boolean; canBack: boolean
           </button>
         )}
       </form>
+      <button onClick={() => videosGo({ view: "create" })} className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-side px-3 text-sm font-semibold hover:bg-hover" title="Create a music visualizer video">
+        <Sparkles className="size-4" /> <span className="hidden sm:inline">Create</span>
+      </button>
       <button
         onClick={() => {
           useApp.setState({ hub: "studio" });
@@ -94,10 +107,17 @@ function TopBar({ mobile, canBack, route }: { mobile?: boolean; canBack: boolean
   );
 }
 
-function Home({ q, tab = "all" }: { q?: string; tab?: "all" | "subs" }) {
+async function byIds(ids: string[]) {
+  const vids = await Promise.all(ids.slice(0, 60).map((id) => getVideo(id).catch(() => null)));
+  return vids.filter((x): x is Video => !!x);
+}
+function Home({ q, tab = "all" }: { q?: string; tab?: "all" | "subs" | "later" | "history" }) {
   const [list, setList] = useState<Video[] | null>(null);
   useEffect(() => {
-    void feed({ q, subsOnly: tab === "subs" }).then(setList);
+    setList(null);
+    if (tab === "later") void byIds(watchLater()).then(setList);
+    else if (tab === "history") void byIds(history().map((h) => h.id)).then(setList);
+    else void feed({ q, subsOnly: tab === "subs" }).then(setList);
   }, [q, tab]);
   useEffect(() => {
     const on = () => void feed({ q, subsOnly: tab === "subs" }).then(setList);
@@ -112,6 +132,8 @@ function Home({ q, tab = "all" }: { q?: string; tab?: "all" | "subs" }) {
           [
             ["all", "All"],
             ["subs", "Subscriptions"],
+            ["later", "Watch later"],
+            ["history", "History"],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -123,6 +145,11 @@ function Home({ q, tab = "all" }: { q?: string; tab?: "all" | "subs" }) {
           </button>
         ))}
         {q && <span className="flex shrink-0 items-center rounded-lg bg-accent/15 px-3 py-1.5 text-sm text-accent">“{q}”</span>}
+        {tab === "history" && (list?.length ?? 0) > 0 && (
+          <button onClick={() => (clearHistory(), setList([]))} className="ml-auto shrink-0 rounded-lg px-3 py-1.5 text-sm text-sub hover:bg-hover">
+            Clear history
+          </button>
+        )}
       </div>
       {list === null ? (
         <Grid>
@@ -137,7 +164,7 @@ function Home({ q, tab = "all" }: { q?: string; tab?: "all" | "subs" }) {
       ) : list.length === 0 ? (
         <div className="mx-auto max-w-sm py-16 text-center">
           <div className="mx-auto mb-3 grid size-16 place-items-center rounded-full bg-side text-3xl">🎬</div>
-          <div className="text-lg font-bold">{q ? "No videos found" : tab === "subs" ? "Nothing from your subscriptions yet" : "No videos yet"}</div>
+          <div className="text-lg font-bold">{q ? "No videos found" : tab === "subs" ? "Nothing from your subscriptions yet" : tab === "later" ? "Nothing saved yet — tap Save on any video" : tab === "history" ? "No watch history on this device" : "No videos yet"}</div>
           <p className="mt-1 text-sm text-sub">Upload the first one in 1080p or 4K from Studio.</p>
           <button
             onClick={() => {
@@ -174,11 +201,15 @@ function Watch({ k, t }: { k: string; t?: number }) {
   const [more, setMore] = useState<Video[]>([]);
   const [descOpen, setDescOpen] = useState(false);
   const [share, setShare] = useState(false);
+  const [later, setLater] = useState(false);
+  const [clip, setClip] = useState(false);
 
   useEffect(() => {
     void getVideo(k).then((x) => {
       setV(x);
       if (!x) return;
+      addHistory(x.slug ?? x.id);
+      setLater(isLater(x.slug ?? x.id));
       setCounts({ likes: x.likes, dislikes: x.dislikes });
       void myReaction(x.id).then(setMine);
       void subscription(x.owner_id).then(setSub);
@@ -212,7 +243,7 @@ function Watch({ k, t }: { k: string; t?: number }) {
   return (
     <div className="mx-auto flex max-w-[1700px] flex-col gap-6 pb-12 lg:flex-row lg:px-6 lg:pt-5">
       <div className="min-w-0 flex-1">
-        <Player v={v} start={t} className="lg:rounded-2xl" />
+        <Player v={v} start={t} className="lg:rounded-2xl" tools />
         <div className="px-3 lg:px-0">
           <h1 className="mt-3 text-lg leading-snug font-bold sm:text-xl">{v.title}</h1>
           <div className="mt-2.5 flex flex-wrap items-center gap-3">
@@ -247,6 +278,21 @@ function Watch({ k, t }: { k: string; t?: number }) {
               <button onClick={() => setShare(true)} className="flex items-center gap-1.5 rounded-full bg-side px-3.5 py-2 text-sm font-semibold hover:bg-hover">
                 <Share2 className="size-[18px]" /> Share
               </button>
+              <button
+                onClick={() => {
+                  const on = toggleLater(v.slug ?? v.id);
+                  setLater(on);
+                  toast(on ? "Saved to Watch later" : "Removed from Watch later", "success");
+                }}
+                className={cn("flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-semibold", later ? "bg-txt text-chat" : "bg-side hover:bg-hover")}
+              >
+                <Bookmark className={cn("size-[18px]", later && "fill-current")} /> {later ? "Saved" : "Save"}
+              </button>
+              {me === v.owner_id && (
+                <button onClick={() => setClip(true)} className="flex items-center gap-1.5 rounded-full bg-side px-3.5 py-2 text-sm font-semibold hover:bg-hover" title="Cut a vertical Short from this video">
+                  <Scissors className="size-[18px]" /> Make a Short
+                </button>
+              )}
               {myRank() >= 2 && me !== v.owner_id && (
                 <button
                   onClick={async () => {
@@ -307,6 +353,7 @@ function Watch({ k, t }: { k: string; t?: number }) {
       </aside>
 
       <ShareSheet open={share} onClose={() => setShare(false)} v={v} />
+      {clip && <ClipToShort v={v} onClose={() => setClip(false)} />}
     </div>
   );
 }

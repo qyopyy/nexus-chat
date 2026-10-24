@@ -188,7 +188,7 @@ function kWeighting(rate: number) {
   return (x: number) => s2(s1(x));
 }
 
-async function integratedLoudness(chs: Float32Array[], rate: number): Promise<number | null> {
+export async function integratedLoudness(chs: Float32Array[], rate: number): Promise<number | null> {
   const block = Math.round(0.4 * rate);
   const hop = Math.round(0.1 * rate);
   const n = chs[0].length;

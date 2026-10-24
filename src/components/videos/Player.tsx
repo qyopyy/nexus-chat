@@ -1,15 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { playbackUrl, qualityLabel, recordView } from "@/lib/videos";
+import { Camera, Gauge, Link2, PictureInPicture2, Repeat } from "lucide-react";
+import { toast } from "@/store/app";
+import { playbackUrl, qualityLabel, recordView, videoLink } from "@/lib/videos";
 import { cn } from "@/lib/utils";
 import type { Video } from "@/lib/types";
 
 /** Video player: original-quality file (up to 4K), keyboard shortcuts, view counting, timestamp seeking */
-export default function Player({ v, start, className }: { v: Video; start?: number; className?: string }) {
+export default function Player({ v, start, className, tools }: { v: Video; start?: number; className?: string; tools?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [cors, setCors] = useState(true); // allows frame snapshots; dropped if the file host refuses
+  const [speed, setSpeed] = useState(1);
+  const [loop, setLoop] = useState(false);
   const counted = useRef(false);
   const watched = useRef(0);
 
@@ -19,6 +24,7 @@ export default function Player({ v, start, className }: { v: Video; start?: numb
     watched.current = 0;
     setSrc(null);
     setFailed(false);
+    setCors(true);
     void playbackUrl(v).then((u) => alive && (u ? setSrc(u) : setFailed(true)));
     return () => {
       alive = false;
@@ -60,14 +66,58 @@ export default function Player({ v, start, className }: { v: Video; start?: numb
   }, []);
 
   const q = qualityLabel(v.height, v.width);
+  useEffect(() => {
+    if (ref.current) ref.current.playbackRate = speed;
+  }, [speed, src]);
+
+  const snapshot = () => {
+    const el = ref.current;
+    if (!el || !el.videoWidth) return;
+    try {
+      const c = document.createElement("canvas");
+      c.width = el.videoWidth;
+      c.height = el.videoHeight;
+      c.getContext("2d")!.drawImage(el, 0, 0);
+      c.toBlob((b) => {
+        if (!b) return;
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(b);
+        a.download = `${(v.title || "frame").replace(/[^\w\- ]+/g, "").slice(0, 40)} ${Math.floor(el.currentTime)}s.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+      }, "image/png");
+    } catch {
+      toast("Snapshots aren't available for this video", "error");
+    }
+  };
+  const pip = async () => {
+    const el = ref.current as (HTMLVideoElement & { webkitSetPresentationMode?: (m: string) => void }) | null;
+    if (!el) return;
+    try {
+      if (document.pictureInPictureElement) await document.exitPictureInPicture();
+      else if (el.requestPictureInPicture) await el.requestPictureInPicture();
+      else el.webkitSetPresentationMode?.("picture-in-picture");
+    } catch {
+      toast("Picture-in-picture isn't available here", "error");
+    }
+  };
+  const linkAt = () => {
+    const t = Math.floor(ref.current?.currentTime ?? 0);
+    void navigator.clipboard?.writeText(`${videoLink(v)}${t ? `?t=${t}` : ""}`);
+    toast(`Link copied at ${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`, "success");
+  };
 
   return (
+    <div className={tools ? "w-full" : "contents"}>
     <div className={cn("relative aspect-video w-full overflow-hidden bg-black", className)}>
       {src ? (
         <video
           ref={ref}
-          key={src}
+          key={src + String(cors)}
+          data-nexus-player=""
           src={src}
+          crossOrigin={cors ? "anonymous" : undefined}
+          loop={loop}
           poster={v.thumb_url ?? undefined}
           controls
           playsInline
@@ -87,7 +137,7 @@ export default function Player({ v, start, className }: { v: Video; start?: numb
             }
           }}
           onPause={() => watched.current > 1 && void recordView(v.id, watched.current)}
-          onError={() => setFailed(true)}
+          onError={() => (cors ? setCors(false) : setFailed(true))}
         />
       ) : failed ? (
         <div className="grid size-full place-items-center p-6 text-center text-sm text-white/70">
@@ -100,5 +150,39 @@ export default function Player({ v, start, className }: { v: Video; start?: numb
       )}
       {q && src && <span className="pointer-events-none absolute top-2 right-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[11px] font-bold text-white backdrop-blur">{q}</span>}
     </div>
+    {tools && src && (
+      <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto px-3 pt-2 text-sm lg:px-0">
+        <label className="flex shrink-0 items-center gap-1 rounded-full bg-side px-3 py-1.5 font-semibold" title="Playback speed">
+          <Gauge className="size-4" />
+          <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))} className="bg-transparent outline-none">
+            {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((x) => (
+              <option key={x} value={x} className="bg-menu">
+                {x === 1 ? "Normal" : `${x}×`}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button onClick={() => setLoop(!loop)} className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 font-semibold", loop ? "bg-accent text-white" : "bg-side hover:bg-hover")}>
+          <Repeat className="size-4" /> Loop
+        </button>
+        <button onClick={() => void pip()} className="flex shrink-0 items-center gap-1.5 rounded-full bg-side px-3 py-1.5 font-semibold hover:bg-hover">
+          <PictureInPicture2 className="size-4" /> Mini player
+        </button>
+        {cors && (
+          <button onClick={snapshot} className="flex shrink-0 items-center gap-1.5 rounded-full bg-side px-3 py-1.5 font-semibold hover:bg-hover">
+            <Camera className="size-4" /> Snapshot
+          </button>
+        )}
+        <button onClick={linkAt} className="flex shrink-0 items-center gap-1.5 rounded-full bg-side px-3 py-1.5 font-semibold hover:bg-hover">
+          <Link2 className="size-4" /> Link at this time
+        </button>
+      </div>
+    )}
+    </div>
   );
+}
+
+/** the <video> element of the current watch page (for clip tools) */
+export function currentVideoEl(): HTMLVideoElement | null {
+  return document.querySelector("video[data-nexus-player]");
 }
