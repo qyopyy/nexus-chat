@@ -33,7 +33,7 @@ export type RemoteParticipant = {
 };
 
 export type NoiseMode = "off" | "standard" | "ai";
-export type VoiceQuality = 64 | 128 | 320;
+export type VoiceQuality = 64 | 128 | 256;
 
 export type ScreenQuality = "720p30" | "1080p30" | "1080p60" | "source";
 
@@ -54,8 +54,6 @@ export type VoiceSettings = {
   noiseMode: NoiseMode;
   /** Opus bitrate in kbps (Discord: 64 default, 96–384 boosted) */
   voiceQuality: VoiceQuality;
-  /** settings schema bump: v2 moved everyone to 320 kbps */
-  qualityV?: number;
   soundboardVolume: number; // 0..1
 };
 
@@ -102,8 +100,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   vadThreshold: 0.02,
   screenQuality: "1080p30",
   noiseMode: "ai",
-  voiceQuality: 320,
-  qualityV: 2,
+  voiceQuality: 128,
   soundboardVolume: 0.7,
 };
 
@@ -829,10 +826,7 @@ function stopStream(s: MediaStream | null) {
 function migrateSettings(saved: Partial<VoiceSettings>): VoiceSettings {
   const s = { ...DEFAULT_SETTINGS, ...saved };
   if (!saved.noiseMode) s.noiseMode = saved.noiseSuppression === false ? "off" : "ai";
-  if (saved.qualityV !== 2 || ![64, 128, 320].includes(s.voiceQuality)) {
-    s.voiceQuality = 320;
-    s.qualityV = 2;
-  }
+  if (![64, 128, 256].includes(s.voiceQuality)) s.voiceQuality = 128;
   return s;
 }
 

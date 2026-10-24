@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { GATE_COOKIE, tokenValid } from "@/lib/gate-server";
 import GateScreen from "@/components/GateScreen";
 import ThemeBoot from "@/components/ThemeBoot";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -30,7 +31,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <head>
         <ThemeBoot />
       </head>
-      <body>{unlocked ? children : <GateScreen />}</body>
+      <body>
+        {unlocked ? children : <GateScreen />}
+        <Analytics />
+      </body>
     </html>
   );
 }

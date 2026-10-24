@@ -19,6 +19,8 @@ export type Profile = {
   ban_reason: string | null;
   links?: ProfileLink[];
   banner_url?: string | null;
+  /** V-Avatar look (anime call avatar) */
+  vavatar?: Record<string, unknown> | null;
   profile_song?: string | null;
   now_playing?: NowPlaying | null;
   view_count?: number;

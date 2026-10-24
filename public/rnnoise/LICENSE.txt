@@ -1,0 +1,2 @@
+rnnoise.wasm — RNNoise (Xiph.Org / Jean-Marc Valin, BSD-3-Clause) compiled to WebAssembly by
+jitsi/rnnoise-wasm (Apache License 2.0). https://github.com/jitsi/rnnoise-wasm

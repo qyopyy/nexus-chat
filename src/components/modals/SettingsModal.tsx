@@ -516,9 +516,9 @@ function VoiceSection() {
         <div className="grid gap-2 sm:grid-cols-3">
           {(
             [
-              [64, "Standard", "64 kbps · saves data"],
-              [128, "High", "128 kbps"],
-              [320, "Studio", "320 kbps stereo · 5× Discord"],
+              [64, "Standard", "64 kbps"],
+              [128, "High", "128 kbps · 2× Discord"],
+              [256, "Studio", "256 kbps stereo · best for music"],
             ] as [VoiceQuality, string, string][]
           ).map(([q, label, hint]) => (
             <button key={q} onClick={() => void updateSettings({ voiceQuality: q })} className={cn("rounded-xl p-3 text-left ring-2 transition", s.voiceQuality === q ? "bg-accent/15 ring-accent" : "bg-side ring-transparent hover:bg-hover")}>

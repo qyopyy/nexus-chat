@@ -50,6 +50,7 @@ export async function updateMyProfile(
       | "profile_effect"
       | "profile_border"
       | "profile_theme"
+      | "vavatar"
     >
   >,
   quiet = false,
