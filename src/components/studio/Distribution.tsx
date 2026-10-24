@@ -34,6 +34,7 @@ import {
 import { myRank } from "@/lib/admin";
 import { supabase, errorText } from "@/lib/supabase";
 import { NEED, gate, useCanReview, useMyTier } from "@/lib/premium";
+import { protectTrack, releaseLink } from "@/lib/protect";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
@@ -203,6 +204,30 @@ function ReleaseEditor({ id }: { id: string }) {
         <h1 className="min-w-0 flex-1 truncate text-2xl font-bold">{r.title}</h1>
         <StatusPill status={r.status} />
         <StatusControl r={r} onDone={() => void load(r.id)} />
+        {r.link_code && (
+          <button
+            onClick={() => void navigator.clipboard.writeText(releaseLink(r)).then(() => toast("Release link copied — it opens this release for you and reviewers", "success"))}
+            className="flex items-center gap-1.5 rounded-full bg-hover px-3 py-1.5 text-sm font-semibold hover:bg-active"
+            title={`/release/${r.link_code}`}
+          >
+            🔗 /release/{r.link_code}
+          </button>
+        )}
+        {r.owner_id === me && (
+          <button
+            onClick={async () => {
+              const x = await saveRelease(r.id, { shield_auto: !(r.shield_auto ?? true) });
+              if (x) {
+                setR(x);
+                toast(x.shield_auto ? "Shield 360 will protect new audio in this release" : "Shield 360 auto-protect is off for this release", "info");
+              }
+            }}
+            className={cn("flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold", r.shield_auto ?? true ? "bg-accent/20 text-accent" : "bg-hover text-sub")}
+            title="Fingerprint every uploaded track into Shield 360 — locked until release day, then tracked by Content ID"
+          >
+            🛡️ Shield 360 {r.shield_auto ?? true ? "on" : "off"}
+          </button>
+        )}
         {r.owner_id === me && (
           <button
             onClick={async () => {
@@ -587,7 +612,29 @@ function TrackRow(props: {
   const [showSplits, setShowSplits] = useState(false);
   const [src, setSrc] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [shielding, setShielding] = useState<string | null>(null);
   useEffect(() => setLocal(t), [t]);
+  /** same upload, two jobs: the release file + a Shield 360 fingerprint (locked until release day) */
+  const shield = async (f?: File) => {
+    try {
+      let file = f;
+      if (!file) {
+        setShielding("Downloading audio…");
+        const url = await distFileUrl(t.audio_path);
+        if (!url) throw new Error("Audio not found");
+        const blob = await (await fetch(url)).blob();
+        file = new File([blob], t.audio_name ?? "audio.wav", { type: blob.type || "audio/wav" });
+      }
+      setShielding("Fingerprinting…");
+      const x = await protectTrack(file, t, r, setShielding);
+      onChange(x);
+      toast(`🛡️ “${t.title}” is protected by Shield 360${r.release_date && new Date(r.release_date) > new Date() ? ` until ${r.release_date}` : ""}`, "success");
+    } catch (e) {
+      toast(`Shield 360 skipped: ${(e as Error).message}`, "info");
+    } finally {
+      setShielding(null);
+    }
+  };
   const persist = async (patch: Partial<DistTrack>) => {
     if (!canEdit) return;
     const x = await saveTrack(t.id, patch);
@@ -654,6 +701,11 @@ function TrackRow(props: {
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <Chips bpm={t.bpm} keyName={t.musical_key} lufs={t.lufs} truePeak={t.true_peak} />
             <CheckPill c={check} running={checking} />
+            {shielding ? (
+              <span className="animate-pulse rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-semibold text-accent">🛡️ {shielding}</span>
+            ) : t.shield_work ? (
+              <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-semibold text-accent">🛡️ Shield 360</span>
+            ) : null}
           </div>
         </button>
         {canEdit && (
@@ -699,6 +751,7 @@ function TrackRow(props: {
                     if (path) {
                       await persist({ audio_path: path, audio_name: f.name.slice(0, 300), audio_bytes: f.size, duration: dur, audio_sent: false });
                       void inspect(f);
+                      if (r.shield_auto ?? true) void shield(f);
                     }
                   }}
                 />
@@ -706,6 +759,11 @@ function TrackRow(props: {
                   <Upload className="size-4" /> {t.audio_path ? "Replace audio" : "Upload WAV / FLAC"}
                 </button>
               </>
+            )}
+            {t.audio_path && !t.shield_work && r.owner_id === useApp.getState().userId && (
+              <button disabled={!!shielding} onClick={() => void shield()} className="rounded-full bg-hover px-4 py-2 text-sm font-semibold hover:bg-active disabled:opacity-50">
+                🛡️ Protect with Shield 360
+              </button>
             )}
             {t.audio_path && (
               <button onClick={async () => setSrc(await distFileUrl(t.audio_path))} className="rounded-full bg-hover px-4 py-2 text-sm font-semibold hover:bg-active">

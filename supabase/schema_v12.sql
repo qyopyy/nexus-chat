@@ -1,0 +1,8 @@
+-- v12 (applied live): nexus_26a_takedowns, nexus_26b_takedown_send, nexus_26c_vault_contentid_defender
+-- My Vault: storage bucket user-vault (owner folder RLS), vault_files (+ vault_quota trigger: 1/5/20/50/200 GB by plan),
+--   vault_shares (token, expiry, max downloads, bcrypt password, view-only), vault_share_create(), vault_share_resolve() [service only], vault_usage()
+-- Releases: dist_releases.link_code (unique /release/<code>), dist_releases.shield_auto, dist_tracks.shield_work, release_by_code()
+-- Content ID: shield_works.policy ('block'|'track'), shield_works.content_id, content_claims, claim_set(), claim_dispute(),
+--   shield_check() now files a claim (+ Nexus Bot DM, once per uploader/day) for non-blocking matches
+-- Profile Defender: defender_watch, defender_alerts, defender_limit(); pg_cron 'nexus-profile-defender' every 3 h → functions/v1/defender
+-- Takedowns: takedown_notices, email_codes, verified_emails (direct sending via functions/v1/takedown + Resend)

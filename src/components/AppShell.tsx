@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { useApp } from "@/store/app";
+import { useApp, toast } from "@/store/app";
 import { initCallEngine } from "@/lib/call";
 import { useRealtime } from "@/lib/realtime";
 import { loadProfiles, refreshChatList, refreshFriends, refreshSpaces, refreshUnread } from "@/lib/data";
@@ -30,9 +30,10 @@ import GamesHub from "@/components/games/GamesHub";
 import MusicHub from "./music/MusicHub";
 import VideosHub from "./videos/VideosHub";
 import Studio from "./studio/Studio";
-import { videosGo } from "@/store/studio";
+import { useStudio, videosGo } from "@/store/studio";
+import { releaseByCode } from "@/lib/protect";
 
-export default function AppShell({ userId, initialVideo }: { userId: string; initialVideo?: string }) {
+export default function AppShell({ userId, initialVideo, initialRelease }: { userId: string; initialVideo?: string; initialRelease?: string }) {
   const spaceId = useApp((s) => s.spaceId);
   const conversationId = useApp((s) => s.conversationId);
   const showMembers = useApp((s) => s.showMembers);
@@ -64,6 +65,16 @@ export default function AppShell({ userId, initialVideo }: { userId: string; ini
     useApp.setState({ hub: "videos", mobileTab: "videos" });
     videosGo({ view: "watch", key: initialVideo });
   }, [initialVideo]);
+  // /release/<code> opens that release in Studio (owner + reviewers)
+  useEffect(() => {
+    if (!bootstrapped || !initialRelease) return;
+    void releaseByCode(initialRelease).then((id) => {
+      window.history.replaceState(null, "", "/");
+      if (!id) return toast("That release link isn't yours, or the release was removed", "error");
+      useStudio.setState({ section: "releases", releaseId: id });
+      useApp.setState({ hub: "studio" });
+    });
+  }, [bootstrapped, initialRelease]);
   useEffect(() => {
     if (!bootstrapped) return;
     startSpotifySync();

@@ -258,6 +258,8 @@ export type DistArtist = {
 };
 
 export type DistRelease = {
+  link_code?: string;
+  shield_auto?: boolean;
   id: string;
   owner_id: string;
   title: string;
@@ -291,6 +293,7 @@ export type DistRelease = {
 export type Split = { name: string; role: string; share: number; email?: string; ipi?: string };
 
 export type DistTrack = {
+  shield_work?: string | null;
   id: string;
   release_id: string;
   position: number;

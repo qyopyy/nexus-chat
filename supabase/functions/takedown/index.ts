@@ -19,7 +19,10 @@ const URL_ = Deno.env.get("SUPABASE_URL")!;
 const admin = createClient(URL_, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const RESEND = Deno.env.get("RESEND_API_KEY") ?? "";
 const FROM = Deno.env.get("TAKEDOWN_FROM") ?? "Nexus Takedowns <takedowns@nexusproject.cc>";
-const TEST_TO = Deno.env.get("TAKEDOWN_TEST_TO") ?? "";
+// tolerate quotes / spaces / "Name <email>" in the secret — keep just the address
+const TEST_RAW = (Deno.env.get("TAKEDOWN_TEST_TO") ?? "").trim();
+const TEST_TO = (TEST_RAW.match(/[^\s<>"'@,;]+@[^\s<>"'@,;]+\.[^\s<>"'@,;]+/) ?? [""])[0].toLowerCase();
+const TEST_BAD = !!TEST_RAW && !TEST_TO;
 const NEXUS_BOT = "00000000-0000-4000-8000-00000000b001";
 
 const PLATFORM: Record<string, { name: string; email: string }> = {
@@ -176,9 +179,11 @@ Deno.serve(async (req: Request) => {
       const { count } = await admin.from("takedown_notices").select("id", { count: "exact", head: true }).eq("owner_id", uid).eq("sent_via", "nexus").gte("sent_at", dayAgo);
       if ((count ?? 0) >= 10) return json({ error: "Daily limit reached (10 notices) — try again tomorrow" }, 429);
       if (!Array.isArray(n.infringing) || !n.infringing.length) return json({ error: "Add the infringing links" }, 400);
+      if (TEST_BAD) return json({ error: "TAKEDOWN_TEST_TO secret isn't an email address — fix or remove it in Supabase secrets" }, 500);
 
       const subject = `Copyright infringement notice (DMCA) — “${String(n.work_title).trim()}”${n.work_artist ? ` by ${String(n.work_artist).trim()}` : ""}`;
-      const id = await mail({ to: [TEST_TO || P.email], cc: [email], reply_to: email, subject, text: noticeText(n) });
+      const to = TEST_TO || P.email;
+      const id = await mail({ to: [to], ...(to !== email ? { cc: [email] } : {}), reply_to: email, subject, text: noticeText(n) });
       const now = new Date().toISOString();
       await admin.from("takedown_notices").update({ status: "sent", sent_via: "nexus", sent_at: now, provider_id: id, updated_at: now }).eq("id", n.id);
       await botTell(uid, `🛡️ Your copyright notice for “${n.work_title}” was sent to ${P.name}${TEST_TO ? " (test mode)" : ""}. A copy is in your inbox — ${P.name} will reply to ${email}.`);

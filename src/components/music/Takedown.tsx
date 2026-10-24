@@ -26,6 +26,7 @@ import {
   verifyCode,
   splitLinks,
   subject,
+  takePrefill,
   type Contact,
   type Draft,
   type Platform,
@@ -79,6 +80,11 @@ export default function TakedownTool({ initial }: { initial?: Platform }) {
 
   useEffect(() => {
     setD((x) => ({ ...x, contact: loadContact() }));
+    const pre = takePrefill();
+    if (pre) {
+      setD((x) => ({ ...x, platform: pre.platform ?? x.platform, work_title: pre.work_title ?? x.work_title, work_artist: pre.work_artist ?? x.work_artist, description: pre.description ?? x.description }));
+      if (pre.links?.length) setLinks(pre.links.join("\n"));
+    }
     void listWorks().then(setWorks);
     void listTakedowns().then(setHistory);
     void sendStatus().then(setSrv);

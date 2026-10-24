@@ -187,6 +187,8 @@ export type ShieldWork = {
   duration: number | null;
   sha256: string | null;
   hash_count: number;
+  policy?: "block" | "track";
+  content_id?: boolean;
   created_at: string;
   updated_at: string;
 };

@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Clapperboard,
+  Fingerprint,
+  UserRoundCheck,
+  Vault,
   ShieldAlert,
   ArrowLeft,
   AudioWaveform,
@@ -48,6 +51,9 @@ import OrdersAdmin from "./OrdersAdmin";
 import { NEED, gate, useCanReview } from "@/lib/premium";
 import ShieldStudio from "./ShieldStudio";
 import TakedownTool from "@/components/music/Takedown";
+import ContentId from "@/components/protect/ContentId";
+import Defender from "@/components/protect/Defender";
+import MyVault from "@/components/protect/Vault";
 import ToolView, { ToolsGrid, type ToolId } from "@/components/music/Tools";
 import type { DistRelease, Video, VideoComment } from "@/lib/types";
 
@@ -61,8 +67,11 @@ const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: st
   { id: "releases", label: "Releases", icon: <Disc3 className="size-5" />, group: "Music distribution" },
   { id: "royalties", label: "Royalties", icon: <Wallet className="size-5" />, group: "Music distribution" },
   { id: "tools", label: "Music tools", icon: <AudioWaveform className="size-5" />, group: "Music distribution" },
-  { id: "shield", label: "Shield 360", icon: <ShieldCheck className="size-5" />, group: "Music distribution" },
-  { id: "takedowns", label: "Takedowns", icon: <ShieldAlert className="size-5" />, group: "Music distribution" },
+  { id: "shield", label: "Shield 360", icon: <ShieldCheck className="size-5" />, group: "Protection" },
+  { id: "content-id", label: "Content ID", icon: <Fingerprint className="size-5" />, group: "Protection" },
+  { id: "defender", label: "Profile Defender", icon: <UserRoundCheck className="size-5" />, group: "Protection" },
+  { id: "takedowns", label: "Takedowns", icon: <ShieldAlert className="size-5" />, group: "Protection" },
+  { id: "vault", label: "My Vault", icon: <Vault className="size-5" />, group: "Protection" },
   { id: "review", label: "Review queue", icon: <ShieldCheck className="size-5" />, group: "Admin", reviewer: true },
   { id: "orders", label: "Orders & requests", icon: <Crown className="size-5" />, group: "Admin", staff: true },
   { id: "dist-settings", label: "Distribution settings", icon: <Settings className="size-5" />, group: "Admin", staff: true },
@@ -200,6 +209,9 @@ export default function Studio() {
             {section === "royalties" && <Royalties />}
             {section === "tools" && <StudioTools />}
             {section === "shield" && <ShieldStudio />}
+            {section === "content-id" && <ContentId />}
+            {section === "defender" && <Defender />}
+            {section === "vault" && <MyVault />}
             {section === "takedowns" && (
               <>
                 <H>Takedown notices</H>

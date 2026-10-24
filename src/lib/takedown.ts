@@ -228,7 +228,22 @@ async function fn<T>(body: Record<string, unknown>): Promise<T> {
   }
   return data as T;
 }
-export const sendStatus = () => fn<{ configured: boolean; test: boolean; verified: string[] }>({ action: "status" }).catch(() => ({ configured: false, test: false, verified: [] as string[] }));
+export const sendStatus = () =>
+  fn<{ configured?: boolean; test?: boolean; verified?: string[] }>({ action: "status" })
+    .then((r) => ({ configured: !!r?.configured, test: !!r?.test, verified: Array.isArray(r?.verified) ? r.verified : [] }))
+    .catch(() => ({ configured: false, test: false, verified: [] as string[] }));
 export const sendCode = (email: string) => fn<{ ok: boolean }>({ action: "send_code", email });
 export const verifyCode = (email: string, code: string) => fn<{ ok: boolean }>({ action: "verify", email, code });
 export const sendDirect = (id: string) => fn<{ ok: boolean; to: string }>({ action: "send", id });
+
+// ------------------------------------------------------------------ prefill (e.g. from Profile Defender)
+export type Prefill = { platform?: Platform; work_title?: string; work_artist?: string; links?: string[]; description?: string };
+let pending: Prefill | null = null;
+export function prefillTakedown(p: Prefill) {
+  pending = p;
+}
+export function takePrefill() {
+  const p = pending;
+  pending = null;
+  return p;
+}
