@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Hash, HeadphoneOff, LogOut, MicOff, MonitorUp, Plus, Trash2, UserPlus, Video, Volume2 } from "lucide-react";
+import { CalendarDays, ChevronDown, Gauge, Hash, LayoutDashboard, Trophy, HeadphoneOff, LogOut, MicOff, MonitorUp, Plus, Trash2, UserPlus, Video, Volume2 } from "lucide-react";
 import { useApp, openModal } from "@/store/app";
 import { useCall, joinCall } from "@/lib/call";
 import { deleteSpace, leaveSpace, openConversation } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import SpaceMusic from "@/components/music/SpaceMusic";
+import ServerHub, { WelcomeGate } from "@/components/space/ServerHub";
 import type { Conversation } from "@/lib/types";
 
 const EMPTY: Conversation[] = [];
@@ -24,6 +25,7 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
   const participants = useCall((s) => s.participants);
   const mySpeaking = useCall((s) => s.speaking);
   const [menu, setMenu] = useState(false);
+  const [hub, setHub] = useState<null | "home" | "events" | "levels" | "members">(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const isOwner = space?.owner_id === me;
 
@@ -60,6 +62,9 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
         {menu && (
           <div className="absolute inset-x-2 top-14 z-30 animate-pop rounded-lg bg-menu p-1.5 text-sm shadow-2xl">
             <MenuItem icon={<UserPlus className="size-4" />} label="Invite People" accent onClick={() => (setMenu(false), openModal("spaceInvite", spaceId))} />
+            <MenuItem icon={<LayoutDashboard className="size-4" />} label="Server Hub" onClick={() => (setMenu(false), setHub("home"))} />
+            <MenuItem icon={<CalendarDays className="size-4" />} label="Events" onClick={() => (setMenu(false), setHub("events"))} />
+            <MenuItem icon={<Trophy className="size-4" />} label="Levels & Leaderboard" onClick={() => (setMenu(false), setHub("levels"))} />
             {isOwner && (
               <MenuItem icon={<Plus className="size-4" />} label="Create Channel" onClick={() => (setMenu(false), openModal("createChannel", spaceId))} />
             )}
@@ -89,7 +94,21 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
         )}
       </div>
 
+      {hub && <ServerHub spaceId={spaceId} initial={hub} onClose={() => setHub(null)} />}
+      <WelcomeGate spaceId={spaceId} />
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+        <div className="mb-3 grid grid-cols-3 gap-1">
+          {([
+            ["home", "Hub", <LayoutDashboard key="h" className="size-4" />],
+            ["events", "Events", <CalendarDays key="e" className="size-4" />],
+            ["levels", "Levels", <Trophy key="l" className="size-4" />],
+          ] as const).map(([id, label, icon]) => (
+            <button key={id} onClick={() => setHub(id)} className="flex flex-col items-center gap-0.5 rounded-lg bg-black/15 py-1.5 text-[11px] font-semibold text-sub transition hover:bg-hover hover:text-txt">
+              {icon}
+              {label}
+            </button>
+          ))}
+        </div>
         <Category label="Text Channels" onAdd={isOwner ? () => openModal("createChannel", spaceId) : undefined} />
         {text.map((c) => {
           const n = unread[c.id] ?? 0;
@@ -106,6 +125,7 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
               {n > 0 && !active && <span className="absolute top-1/2 -left-2 h-2 w-1 -translate-y-1/2 rounded-r-full bg-white" />}
               <Hash className="size-5 shrink-0 opacity-70" />
               <span className={cn("truncate", n > 0 && "font-semibold")}>{c.name}</span>
+              {!!c.slowmode && <Gauge className="size-3.5 shrink-0 opacity-60" aria-label="Slow mode" />}
               {n > 0 && !active && (
                 <span className="ml-auto rounded-full bg-dnd px-1.5 text-[11px] font-bold text-white">{n}</span>
               )}

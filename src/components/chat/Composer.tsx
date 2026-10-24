@@ -1,19 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChartColumn, FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Timer, Trash2, X } from "lucide-react";
+import { FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Timer, Trash2, X } from "lucide-react";
 import { useApp, conversationTitle, toast } from "@/store/app";
 import { useChat } from "@/store/chat";
 import { TTL_OPTIONS, runBotCommand, sendMessage, setTtl } from "@/lib/data";
 import { NEED, gate, myTier } from "@/lib/premium";
-import { sendTyping } from "@/lib/realtime";
+import { sendLive, sendTyping } from "@/lib/realtime";
 import { EFFECTS, playEffect, type EffectKind } from "@/lib/effects";
 import { haptic } from "@/lib/haptics";
 import { cn, formatBytes } from "@/lib/utils";
 import EmojiPicker from "@/components/ui/EmojiPicker";
 import Sheet from "@/components/ui/Sheet";
 import { isVoice } from "./MessageBubble";
-import { PollCreator } from "./Poll";
+import { ComposerPlus } from "./Extras";
 
 const MAX_FREE = 25 * 1024 * 1024;
 const MAX_PREMIUM = 100 * 1024 * 1024;
@@ -48,8 +48,14 @@ export default function Composer({
   const [picker, setPicker] = useState(false);
   const [effects, setEffects] = useState(false);
   const [timerOpen, setTimerOpen] = useState(false);
-  const [pollOpen, setPollOpen] = useState(false);
   const ttl = useApp((s) => s.convTtl[conversationId]);
+  const slow = useApp((s) => {
+    for (const list of Object.values(s.channels)) {
+      const c = list.find((x) => x.id === conversationId);
+      if (c) return c.slowmode ?? 0;
+    }
+    return 0;
+  });
   const timerAllowed = kind === "dm" || kind === "group";
   const [effect, setEffect] = useState<EffectKind | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -108,6 +114,7 @@ export default function Composer({
       if (isCmd) void runBotCommand(conversationId, t);
     });
     setText("");
+    if (me) sendLive(me, "");
     setFile(null);
     setEffect(null);
   }
@@ -209,6 +216,11 @@ export default function Composer({
   return (
     <div className="composer shrink-0 bg-wall px-2 pt-1.5 pb-safe-2 sm:px-6 sm:pb-3">
       <div className="mx-auto max-w-4xl">
+        {slow > 0 && (
+          <div className="mb-1 flex items-center gap-1.5 px-2 text-xs font-semibold text-sub">
+            <span className="animate-pulse">🐢</span> Slow mode is on · one message every {slow >= 60 ? `${Math.round(slow / 60)} min` : `${slow}s`}
+          </div>
+        )}
         {(replyTo || file || chosen) && !recording && (
           <div className="mb-1.5 flex animate-fade flex-col gap-1.5 rounded-2xl bg-side px-3 py-2">
             {replyTo && (
@@ -292,10 +304,7 @@ export default function Composer({
             <button onClick={() => fileInput.current?.click()} className="grid size-11 shrink-0 place-items-center rounded-full text-sub transition hover:text-txt active:scale-90" title="Attach a file">
               <Paperclip className="size-[22px]" />
             </button>
-            <button onClick={() => setPollOpen(true)} className="-ml-2 grid size-11 shrink-0 place-items-center rounded-full text-sub transition hover:text-txt active:scale-90" title="Create a poll">
-              <ChartColumn className="size-[21px]" />
-            </button>
-            {pollOpen && <PollCreator conversationId={conversationId} onClose={() => setPollOpen(false)} />}
+            <ComposerPlus conversationId={conversationId} />
 
             <div className="flex min-h-11 min-w-0 flex-1 items-end rounded-[22px] border border-white/[.06] bg-side pr-1">
               <textarea
@@ -307,6 +316,7 @@ export default function Composer({
                 onChange={(e) => {
                   setText(e.target.value);
                   if (me && e.target.value) sendTyping(me);
+                  if (me) sendLive(me, e.target.value);
                 }}
                 onPaste={(e) => {
                   const f = e.clipboardData.files?.[0];

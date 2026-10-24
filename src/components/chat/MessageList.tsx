@@ -1,5 +1,8 @@
 "use client";
 
+import TypingBubbles from "./TypingBubbles";
+import { HighFivePrompt } from "./Extras";
+
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Timer } from "lucide-react";
 import { useApp } from "@/store/app";
@@ -172,6 +175,7 @@ export default function MessageList({ conversationId, initialUnread }: { convers
               </Fragment>
             );
           })}
+          <TypingBubbles />
         </div>
       </div>
       {showJump && (
@@ -183,6 +187,7 @@ export default function MessageList({ conversationId, initialUnread }: { convers
           <ChevronDown className="size-6" />
         </button>
       )}
+      <HighFivePrompt />
     </div>
   );
 }

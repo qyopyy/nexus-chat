@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, Camera, Crown, LogOut, Mic, Palette, Shield, Sparkles, Upload, User, X } from "lucide-react";
+import { Bell, Camera, Crown, Keyboard, LogOut, Mic, Palette, Shield, Sparkles, Upload, User, X } from "lucide-react";
+import { LIVE_STYLES, TYPING_STYLES, setChatFx, useChatFx } from "@/lib/chatFx";
+import { LiveText, TypingAnim } from "@/components/chat/TypingBubbles";
 import { useApp, closeModal, openModal, toast } from "@/store/app";
 import { detectPush, disablePush, enablePush, usePush } from "@/lib/push";
 import { isNativeApp } from "@/lib/useMobile";
@@ -17,12 +19,12 @@ import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 
-type Section = "account" | "appearance" | "voice" | "vavatar" | "notifications" | "admin";
+type Section = "account" | "appearance" | "chat" | "voice" | "vavatar" | "notifications" | "admin";
 
 export default function SettingsModal({ initial }: { initial: string | null }) {
   const [section, setSection] = useState<Section>(() => {
     const base = (initial ?? "voice").split(":")[0];
-    return (["account", "appearance", "voice", "vavatar", "notifications", "admin"] as const).includes(base as Section) ? (base as Section) : "voice";
+    return (["account", "appearance", "chat", "voice", "vavatar", "notifications", "admin"] as const).includes(base as Section) ? (base as Section) : "voice";
   });
   const focusUser = initial?.startsWith("admin:") ? initial.slice(6) : null;
   const isStaff = useApp((s) => roleRank(s.userId ? s.profiles[s.userId]?.site_role : null) >= 2);
@@ -50,6 +52,7 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
           <p className="px-2.5 pb-1 text-xs font-bold tracking-wide text-sub uppercase">User Settings</p>
           {nav("account", "My Account", <User className="size-4" />)}
           {nav("appearance", "Appearance", <Palette className="size-4" />)}
+          {nav("chat", "Chat & Typing", <Keyboard className="size-4" />)}
           {nav("voice", "Voice & Video", <Mic className="size-4" />)}
           {nav("vavatar", "V-Avatar", <Sparkles className="size-4" />)}
           {nav("notifications", "Notifications", <Bell className="size-4" />)}
@@ -81,7 +84,7 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
           <button onClick={closeModal} className="grid size-8 shrink-0 place-items-center rounded-full bg-hover text-sub" aria-label="Close settings">
             <X className="size-4" />
           </button>
-          {(["account", "appearance", "voice", "vavatar", "notifications", ...(isStaff ? ["admin"] : [])] as Section[]).map((s) => (
+          {(["account", "appearance", "chat", "voice", "vavatar", "notifications", ...(isStaff ? ["admin"] : [])] as Section[]).map((s) => (
             <button key={s} onClick={() => setSection(s)} className={cn("shrink-0 rounded-md px-3 py-1 text-sm capitalize", section === s ? "bg-active" : "text-sub")}>
               {s === "vavatar" ? "V-Avatar" : s}
             </button>
@@ -91,6 +94,7 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
           {section === "account" && <AccountSection />}
           {section === "appearance" && <AppearanceSection />}
           {section === "admin" && isStaff && <AdminPanel focusUser={focusUser} />}
+          {section === "chat" && <ChatSection />}
           {section === "voice" && <VoiceSection />}
           {section === "vavatar" && (
             <>
@@ -516,9 +520,9 @@ function VoiceSection() {
         <div className="grid gap-2 sm:grid-cols-3">
           {(
             [
-              [64, "Standard", "64 kbps"],
-              [128, "High", "128 kbps · 2× Discord"],
-              [256, "Studio", "256 kbps stereo · best for music"],
+              [64, "Standard", "64 kbps · saves data"],
+              [128, "High", "128 kbps"],
+              [320, "Studio", "320 kbps stereo · 5× Discord"],
             ] as [VoiceQuality, string, string][]
           ).map(([q, label, hint]) => (
             <button key={q} onClick={() => void updateSettings({ voiceQuality: q })} className={cn("rounded-xl p-3 text-left ring-2 transition", s.voiceQuality === q ? "bg-accent/15 ring-accent" : "bg-side ring-transparent hover:bg-hover")}>
@@ -694,6 +698,60 @@ function NotificationSection() {
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+function ChatSection() {
+  const fx = useChatFx();
+  const [demo, setDemo] = useState("");
+  useEffect(() => {
+    const full = "this is how my live typing looks ✨";
+    let i = 0;
+    const id = setInterval(() => {
+      i = i > full.length + 12 ? 0 : i + 1;
+      setDemo(full.slice(0, Math.min(i, full.length)));
+    }, 110);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <>
+      <H>Chat &amp; Typing</H>
+      <Label>Privacy</Label>
+      <Toggle label="Show when I'm typing" hint="Others see a typing animation while you write. Turn off to type invisibly." checked={fx.showTyping} onChange={(v) => setChatFx({ showTyping: v })} />
+      <Toggle
+        label="Live typing (share my words as I type)"
+        hint="Your friends see your message appear letter by letter before you send it — only in the chat you're typing in. Off by default."
+        checked={fx.liveTyping && fx.showTyping}
+        onChange={(v) => setChatFx({ liveTyping: v, ...(v ? { showTyping: true } : {}) })}
+      />
+
+      <div className="my-8 h-px bg-line" />
+      <Label>Typing animation</Label>
+      <p className="mb-3 text-sm text-sub">How other people&apos;s typing looks to you.</p>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {TYPING_STYLES.map(([id, name]) => (
+          <button key={id} onClick={() => setChatFx({ style: id })} className={cn("flex flex-col items-center gap-2 rounded-xl p-3 ring-2 transition", fx.style === id ? "bg-accent/15 ring-accent" : "bg-side ring-transparent hover:bg-hover")}>
+            <span className="grid h-8 place-items-center text-sub">
+              <TypingAnim style={id} />
+            </span>
+            <span className="text-sm font-semibold">{name}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="my-8 h-px bg-line" />
+      <Label>Live typing animation</Label>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {LIVE_STYLES.map(([id, name]) => (
+          <button key={id} onClick={() => setChatFx({ liveStyle: id })} className={cn("rounded-xl p-3 text-left ring-2 transition", fx.liveStyle === id ? "bg-accent/15 ring-accent" : "bg-side ring-transparent hover:bg-hover")}>
+            <div className="text-xs font-bold tracking-wide text-sub uppercase">{name}</div>
+            <div className="mt-1 min-h-6 text-[15px]">
+              <LiveText text={demo} style={id} />
+            </div>
+          </button>
+        ))}
+      </div>
     </>
   );
 }

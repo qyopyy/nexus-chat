@@ -161,6 +161,8 @@ export type Space = {
   invite_code: string;
   created_at: string;
   music_enabled?: boolean;
+  welcome?: string | null;
+  rules?: string | null;
 };
 
 export type SpaceMember = {
@@ -180,6 +182,8 @@ export type Conversation = {
   position: number;
   created_at: string;
   last_message_at: string | null;
+  /** seconds between messages for regular members (0 = off) */
+  slowmode?: number;
 };
 
 export type ChatListItem = {

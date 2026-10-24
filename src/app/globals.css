@@ -54,6 +54,19 @@
     from { transform: translateX(100%); }
     to   { transform: translateX(0); }
   }
+  @keyframes typwave { 0%, 60%, 100% { transform: translateY(0); opacity: .55 } 30% { transform: translateY(-6px); opacity: 1 } }
+  @keyframes typfade { 0%, 100% { opacity: .3 } 50% { opacity: 1 } }
+  @keyframes typkey { 0% { background: rgba(255,255,255,.85); transform: translateY(1px) } 12% { background: rgba(255,255,255,.25); transform: none } }
+  @keyframes typdraw { 0% { stroke-dashoffset: 70 } 60%, 100% { stroke-dashoffset: 0 } }
+  @keyframes typpen { 0% { left: 0; top: 8px } 30% { left: 18px; top: 0 } 60% { left: 38px; top: 4px } 100% { left: 0; top: 8px } }
+  @keyframes typeq { 0%, 100% { height: 4px } 50% { height: 18px } }
+  @keyframes typin { from { opacity: 0; transform: translateY(8px) scale(.96) } to { opacity: 1; transform: none } }
+  @keyframes livepop { from { opacity: 0; transform: translateY(6px) scale(.4) } to { opacity: 1; transform: none } }
+  @keyframes liveglow { from { color: #fff; text-shadow: 0 0 8px #ff2bd6, 0 0 18px #8b5cff } to { text-shadow: none } }
+  @keyframes liveblur { from { opacity: 0; filter: blur(6px) } to { opacity: 1; filter: none } }
+  @keyframes livematrix { 0% { color: #36d39a; text-shadow: 0 0 6px #36d39a; transform: translateY(-4px) } 100% { text-shadow: none; transform: none } }
+  @keyframes liverainbow { to { background-position: 200% 0 } }
+  @keyframes blink { 50% { opacity: 0 } }
   @keyframes reactfloat {
     0%   { opacity: 0; transform: translateY(20px) scale(.6); }
     12%  { opacity: 1; transform: translateY(0) scale(1.15); }

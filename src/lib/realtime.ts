@@ -21,6 +21,7 @@ import {
   loadTtl,
 } from "./data";
 import { sfx } from "./sounds";
+import { useChatFx } from "./chatFx";
 import { onInviteRow, loadPendingInvites } from "./gameInvites";
 import { isEffect, playEffect } from "./effects";
 import { isMuted } from "@/store/prefs";
@@ -65,7 +66,9 @@ async function onMessageInsert(m: Message) {
   if (isOpen) {
     useChat.setState((s) => {
       if (s.messages.some((x) => x.id === m.id)) return s;
-      return { messages: [...s.messages, m], typing: { ...s.typing, [m.author_id]: 0 } };
+      const live = { ...s.live };
+      delete live[m.author_id];
+      return { messages: [...s.messages, m], typing: { ...s.typing, [m.author_id]: 0 }, live };
     });
   }
 
@@ -264,7 +267,29 @@ export function useTypingChannel(convId: string | null, userId: string | null) {
       const from = (payload as { from: string }).from;
       if (from === userId) return;
       useChat.setState((s) => ({ typing: { ...s.typing, [from]: Date.now() + 4000 } }));
-    }).subscribe();
+    })
+      .on("broadcast", { event: "five" }, ({ payload }) => {
+        const { from, kind, to } = payload as { from: string; kind: "ask" | "back"; to?: string };
+        if (from === userId) return;
+        if (kind === "ask") useChat.setState({ five: { from, at: Date.now() } });
+        else if (kind === "back" && to === userId) {
+          playEffect("fireworks");
+          haptic.heavy();
+          const n = useApp.getState().profiles[from]?.display_name ?? "Your friend";
+          toast(`🙌 ${n} high-fived you back!`, "success");
+        }
+      })
+      .on("broadcast", { event: "live" }, ({ payload }) => {
+        const { from, text } = payload as { from: string; text: string };
+        if (from === userId || typeof text !== "string") return;
+        useChat.setState((s) => {
+          const live = { ...s.live };
+          if (text) live[from] = { text: text.slice(0, 500), exp: Date.now() + 6000 };
+          else delete live[from];
+          return { live, typing: { ...s.typing, [from]: text ? Date.now() + 4000 : 0 } };
+        });
+      })
+      .subscribe();
     typingChannel = ch;
     const sweep = setInterval(() => {
       const now = Date.now();
@@ -274,9 +299,16 @@ export function useTypingChannel(convId: string | null, userId: string | null) {
         for (const [k, v] of Object.entries(t)) if (v > now) next[k] = v;
         useChat.setState({ typing: next });
       }
+      const lv = useChat.getState().live;
+      if (Object.values(lv).some((x) => x.exp < now)) {
+        const next: typeof lv = {};
+        for (const [k, v] of Object.entries(lv)) if (v.exp > now) next[k] = v;
+        useChat.setState({ live: next });
+      }
     }, 1000);
     return () => {
       clearInterval(sweep);
+      useChat.setState({ live: {} });
       if (typingChannel === ch) typingChannel = null;
       void supabase.removeChannel(ch);
     };
@@ -287,7 +319,51 @@ let typingChannel: RealtimeChannel | null = null;
 let lastTypingSent = 0;
 export function sendTyping(userId: string) {
   const now = Date.now();
+  if (!useChatFx.getState().showTyping) return;
   if (!typingChannel || now - lastTypingSent < 2500) return;
   lastTypingSent = now;
   void typingChannel.send({ type: "broadcast", event: "typing", payload: { from: userId } });
+}
+
+/** live typing: others see your draft as you type (only if you turned it on) */
+let liveTimer: ReturnType<typeof setTimeout> | null = null;
+let lastLive = 0;
+let pendingLive: string | null = null;
+let liveShown = false;
+export function sendLive(userId: string, text: string) {
+  const fx = useChatFx.getState();
+  if (!typingChannel || !fx.showTyping || !fx.liveTyping) {
+    if (liveShown && typingChannel) void typingChannel.send({ type: "broadcast", event: "live", payload: { from: userId, text: "" } });
+    liveShown = false;
+    return;
+  }
+  pendingLive = text;
+  const flush = () => {
+    liveTimer = null;
+    if (pendingLive === null || !typingChannel) return;
+    lastLive = Date.now();
+    liveShown = !!pendingLive;
+    void typingChannel.send({ type: "broadcast", event: "live", payload: { from: userId, text: pendingLive.slice(0, 500) } });
+    pendingLive = null;
+  };
+  if (!text) return flush(); // clear immediately (sent / deleted)
+  if (liveTimer) return;
+  const wait = Math.max(0, 110 - (Date.now() - lastLive));
+  liveTimer = setTimeout(flush, wait);
+}
+
+/** ✋ ask everyone in the open chat for a high five */
+let lastFive = 0;
+export function sendFive(userId: string) {
+  if (!typingChannel || Date.now() - lastFive < 3000) return false;
+  lastFive = Date.now();
+  void typingChannel.send({ type: "broadcast", event: "five", payload: { from: userId, kind: "ask" } });
+  return true;
+}
+export function answerFive(userId: string, to: string) {
+  useChat.setState({ five: null });
+  if (!typingChannel) return;
+  void typingChannel.send({ type: "broadcast", event: "five", payload: { from: userId, kind: "back", to } });
+  playEffect("fireworks");
+  haptic.heavy();
 }

@@ -12,6 +12,10 @@ export type ChatState = {
   replyTo: Message | null;
   editingId: string | null;
   typing: Record<string, number>;
+  /** live text others are typing right now */
+  live: Record<string, { text: string; exp: number }>;
+  /** someone asked me for a high five */
+  five: { from: string; at: number } | null;
   /** message id to scroll to + flash */
   jumpTo: string | null;
 };
@@ -25,5 +29,7 @@ export const useChat = create<ChatState>(() => ({
   replyTo: null,
   editingId: null,
   typing: {},
+  live: {},
+  five: null,
   jumpTo: null,
 }));

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 // ------------------------------------------------------------------ shared bits
 let previewCtx: AudioContext | null = null;
-const pctx = () => (previewCtx ??= new AudioContext());
+export const pctx = () => (previewCtx ??= new AudioContext());
 
 /** play an AudioBuffer (one at a time across all tools) */
 function usePreview() {
@@ -421,8 +421,8 @@ export function KaraokeTool() {
 }
 
 // ------------------------------------------------------------------ beat maker
-type Inst = "kick" | "snare" | "clap" | "hat" | "open" | "808" | "rim" | "perc";
-const INSTS: { id: Inst; name: string; color: string }[] = [
+export type Inst = "kick" | "snare" | "clap" | "hat" | "open" | "808" | "rim" | "perc";
+export const INSTS: { id: Inst; name: string; color: string }[] = [
   { id: "kick", name: "Kick", color: "#ff4d6d" },
   { id: "808", name: "808", color: "#ff9f40" },
   { id: "snare", name: "Snare", color: "#ffd400" },
@@ -432,9 +432,9 @@ const INSTS: { id: Inst; name: string; color: string }[] = [
   { id: "rim", name: "Rim", color: "#8b5cff" },
   { id: "perc", name: "Perc", color: "#ff2bd6" },
 ];
-type Pattern = Record<Inst, boolean[]>;
+export type Pattern = Record<Inst, boolean[]>;
 const row = (on: number[]) => Array.from({ length: 16 }, (_, i) => on.includes(i));
-const PRESETS: Record<string, { bpm: number; swing: number; p: Pattern }> = {
+export const BEAT_PRESETS: Record<string, { bpm: number; swing: number; p: Pattern }> = {
   Trap: { bpm: 140, swing: 0, p: { kick: row([0, 7, 10]), "808": row([0, 7, 10]), snare: row([8]), clap: row([8]), hat: row([0, 2, 4, 6, 8, 10, 11, 12, 14, 15]), open: row([]), rim: row([13]), perc: row([]) } },
   Drill: { bpm: 142, swing: 0, p: { kick: row([0, 11]), "808": row([0, 3, 11, 14]), snare: row([6, 14]), clap: row([6, 14]), hat: row([0, 3, 6, 8, 10, 12]), open: row([]), rim: row([9]), perc: row([4]) } },
   "Boom bap": { bpm: 90, swing: 0.18, p: { kick: row([0, 3, 9, 10]), "808": row([]), snare: row([4, 12]), clap: row([]), hat: row([0, 2, 4, 6, 8, 10, 12, 14]), open: row([14]), rim: row([7]), perc: row([]) } },
@@ -442,7 +442,7 @@ const PRESETS: Record<string, { bpm: number; swing: number; p: Pattern }> = {
   Reggaeton: { bpm: 96, swing: 0, p: { kick: row([0, 4, 8, 12]), "808": row([0, 8]), snare: row([3, 6, 11, 14]), clap: row([]), hat: row([0, 2, 4, 6, 8, 10, 12, 14]), open: row([]), rim: row([]), perc: row([]) } },
   Empty: { bpm: 120, swing: 0, p: { kick: row([]), "808": row([]), snare: row([]), clap: row([]), hat: row([]), open: row([]), rim: row([]), perc: row([]) } },
 };
-const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+export const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const noiseCache = new WeakMap<BaseAudioContext, AudioBuffer>();
 function noise(c: BaseAudioContext) {
   let b = noiseCache.get(c);
@@ -454,7 +454,7 @@ function noise(c: BaseAudioContext) {
   }
   return b;
 }
-function hit(c: BaseAudioContext, out: AudioNode, inst: Inst, t: number, root: number) {
+export function hit(c: BaseAudioContext, out: AudioNode, inst: Inst, t: number, root: number) {
   const env = (g: GainNode, peak: number, dec: number) => {
     g.gain.setValueAtTime(peak, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
@@ -533,9 +533,9 @@ export function BeatTool() {
   const KEY = "nexus:beat";
   const [p, setP] = useState<Pattern>(() => {
     try {
-      return { ...PRESETS.Trap.p, ...(JSON.parse(localStorage.getItem(KEY) ?? "null")?.p ?? {}) };
+      return { ...BEAT_PRESETS.Trap.p, ...(JSON.parse(localStorage.getItem(KEY) ?? "null")?.p ?? {}) };
     } catch {
-      return PRESETS.Trap.p;
+      return BEAT_PRESETS.Trap.p;
     }
   });
   const [bpm, setBpm] = useState(140);
@@ -614,7 +614,7 @@ export function BeatTool() {
         </button>
         <select
           onChange={(e) => {
-            const pr = PRESETS[e.target.value];
+            const pr = BEAT_PRESETS[e.target.value];
             if (!pr) return;
             setP(pr.p);
             setBpm(pr.bpm);
@@ -627,7 +627,7 @@ export function BeatTool() {
           <option value="" disabled>
             Load a pattern…
           </option>
-          {Object.keys(PRESETS).map((k) => (
+          {Object.keys(BEAT_PRESETS).map((k) => (
             <option key={k}>{k}</option>
           ))}
         </select>

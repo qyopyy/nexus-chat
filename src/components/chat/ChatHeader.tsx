@@ -1,5 +1,8 @@
 "use client";
 
+import { useChatFx } from "@/lib/chatFx";
+import { TypingAnim } from "./TypingBubbles";
+
 import { useMemo, useState } from "react";
 import { Bot, ChevronLeft, Hash, Maximize2, MessageSquare, Phone, Users, Video, Volume2 } from "lucide-react";
 import { useApp, conversationTitle, findChannel, openProfileCard } from "@/store/app";
@@ -156,6 +159,10 @@ function HeaderBtn({
 }
 
 export function TypingDots() {
+  const style = useChatFx((s) => s.style);
+  return <TypingAnim style={style} className="origin-left scale-[.6]" />;
+}
+export function TypingDotsClassic() {
   return (
     <span className="inline-flex items-center gap-0.5">
       {[0, 150, 300].map((d) => (
