@@ -17,6 +17,14 @@ export type HairStyle =
   | "curly"
   | "afro"
   | "dreads"
+  | "shortlocs"
+  | "rasta"
+  | "twists"
+  | "cornrows"
+  | "waves"
+  | "wolfcut"
+  | "mullet"
+  | "emo"
   | "long"
   | "wavy"
   | "hime"
@@ -25,8 +33,27 @@ export type HairStyle =
   | "braids"
   | "twintails"
   | "ponytail";
-export type Outfit = "tee" | "hoodie" | "zipup" | "tank" | "jersey" | "polo" | "puffer" | "varsity" | "uniform" | "jacket" | "sweater" | "suit";
-export type Extra = "none" | "glasses" | "shades" | "catEars" | "headphones" | "halo" | "horns" | "bow" | "cap" | "beanie";
+export type Outfit =
+  | "tee"
+  | "acidtee"
+  | "hoodie"
+  | "zipup"
+  | "tank"
+  | "jersey"
+  | "polo"
+  | "flannel"
+  | "denim"
+  | "bomber"
+  | "track"
+  | "puffer"
+  | "varsity"
+  | "uniform"
+  | "jacket"
+  | "sweater"
+  | "suit";
+export type Extra = "none" | "catEars" | "headphones" | "halo" | "horns" | "bow" | "crown" | "flowerCrown" | "butterflies" | "wings" | "mask";
+export type Hat = "none" | "cap" | "backcap" | "beanie" | "bucket" | "durag" | "bandana" | "tam" | "headband";
+export type Eyewear = "none" | "glasses" | "shades" | "round" | "rimless" | "heart" | "visor";
 export type VAvatar = {
   v: 1;
   body: "masc" | "fem";
@@ -49,13 +76,21 @@ export type VAvatar = {
   shirtText: string;
   textColor: string;
   textStyle: "bold" | "script" | "gothic" | "graffiti" | "mono";
+  /** printed graphic on the shirt */
+  graphic: "none" | "brokenHeart" | "butterfly" | "skull" | "lightning" | "flames" | "stars";
   extra: Extra;
   extraColor: string;
+  hat: Hat;
+  hatColor: string;
+  eyewear: Eyewear;
+  eyewearColor: string;
+  piercing: "none" | "noseRing" | "noseStud" | "septum" | "lipRing" | "eyebrow";
+  tattoo: "none" | "teardrop" | "cross" | "heart" | "star" | "stitches";
   // jewellery
   metal: "gold" | "silver" | "rose" | "iced";
   earrings: "none" | "stud" | "bigStud" | "hoop" | "cross" | "dangle" | "pearl";
   chain: "none" | "cubanIced" | "cuban" | "rope" | "tennis" | "figaro" | "pearls" | "layered";
-  pendant: "none" | "cross" | "diamond" | "heart" | "letter" | "star";
+  pendant: "none" | "cross" | "diamond" | "heart" | "brokenHeart" | "butterfly" | "lock" | "letter" | "star";
   grillz: "none" | "gold" | "silver" | "iced";
   bg: "galaxy" | "sunset" | "sakura" | "neon" | "mint" | "room" | "solid" | "green";
   bgColor: string;
@@ -82,8 +117,15 @@ export const DEFAULT_AVATAR: VAvatar = {
   shirtText: "",
   textColor: "#ffffff",
   textStyle: "bold",
+  graphic: "none",
   extra: "headphones",
   extraColor: "#00c2ff",
+  hat: "none",
+  hatColor: "#111318",
+  eyewear: "none",
+  eyewearColor: "#111318",
+  piercing: "none",
+  tattoo: "none",
   metal: "iced",
   earrings: "none",
   chain: "none",
@@ -100,14 +142,19 @@ export const OPTIONS = {
   brows: ["soft", "bold", "angry"],
   mouth: ["smile", "cat", "neutral", "fang"],
   marks: ["none", "freckles", "bandage", "whiskers", "star"],
-  hair: ["short", "spiky", "messy", "sidepart", "slick", "buzz", "undercut", "mohawk", "curly", "afro", "dreads", "long", "wavy", "hime", "bob", "bun", "braids", "twintails", "ponytail"],
-  shirt: ["tee", "hoodie", "zipup", "tank", "jersey", "polo", "puffer", "varsity", "uniform", "jacket", "sweater", "suit"],
+  hair: ["short", "spiky", "messy", "sidepart", "slick", "buzz", "waves", "cornrows", "undercut", "mohawk", "wolfcut", "mullet", "emo", "curly", "afro", "twists", "shortlocs", "dreads", "rasta", "long", "wavy", "hime", "bob", "bun", "braids", "twintails", "ponytail"],
+  shirt: ["tee", "acidtee", "hoodie", "zipup", "tank", "jersey", "polo", "flannel", "denim", "bomber", "track", "puffer", "varsity", "uniform", "jacket", "sweater", "suit"],
   textStyle: ["bold", "script", "gothic", "graffiti", "mono"],
-  extra: ["none", "glasses", "shades", "catEars", "headphones", "halo", "horns", "bow", "cap", "beanie"],
+  graphic: ["none", "brokenHeart", "butterfly", "skull", "lightning", "flames", "stars"],
+  extra: ["none", "headphones", "catEars", "halo", "horns", "bow", "crown", "flowerCrown", "butterflies", "wings", "mask"],
+  hat: ["none", "cap", "backcap", "beanie", "bucket", "durag", "bandana", "tam", "headband"],
+  eyewear: ["none", "glasses", "shades", "round", "rimless", "heart", "visor"],
+  piercing: ["none", "noseRing", "noseStud", "septum", "lipRing", "eyebrow"],
+  tattoo: ["none", "teardrop", "cross", "heart", "star", "stitches"],
   metal: ["iced", "gold", "silver", "rose"],
   earrings: ["none", "stud", "bigStud", "hoop", "cross", "dangle", "pearl"],
   chain: ["none", "cubanIced", "cuban", "rope", "tennis", "figaro", "pearls", "layered"],
-  pendant: ["none", "cross", "diamond", "heart", "letter", "star"],
+  pendant: ["none", "cross", "diamond", "heart", "brokenHeart", "butterfly", "lock", "letter", "star"],
   grillz: ["none", "gold", "silver", "iced"],
   bg: ["galaxy", "sunset", "sakura", "neon", "mint", "room", "solid", "green"],
 } as const;
@@ -134,7 +181,9 @@ export function randomAvatar(): VAvatar {
     mouth: pick(OPTIONS.mouth),
     blush: Math.round(Math.random() * 10) / 10,
     marks: Math.random() < 0.6 ? "none" : pick(OPTIONS.marks),
-    hair: fem ? pick(["long", "wavy", "hime", "bob", "bun", "braids", "twintails", "ponytail", "curly", "messy"] as const) : pick(["short", "spiky", "messy", "sidepart", "slick", "buzz", "undercut", "mohawk", "curly", "afro", "dreads"] as const),
+    hair: fem
+      ? pick(["long", "wavy", "hime", "bob", "bun", "braids", "twintails", "ponytail", "curly", "messy", "wolfcut", "emo", "rasta"] as const)
+      : pick(["short", "spiky", "messy", "sidepart", "slick", "buzz", "waves", "cornrows", "undercut", "mohawk", "mullet", "curly", "afro", "twists", "shortlocs", "dreads", "rasta"] as const),
     hairColor: pick(SWATCH.hair),
     hairTip: Math.random() < 0.4 ? pick(SWATCH.hair) : null,
     shirt: pick(OPTIONS.shirt),
@@ -143,8 +192,15 @@ export function randomAvatar(): VAvatar {
     shirtText: "",
     textColor: "#ffffff",
     textStyle: pick(OPTIONS.textStyle),
-    extra: Math.random() < 0.5 ? "none" : pick(OPTIONS.extra),
+    graphic: Math.random() < 0.6 ? "none" : pick(OPTIONS.graphic),
+    extra: Math.random() < 0.6 ? "none" : pick(OPTIONS.extra),
     extraColor: pick(SWATCH.cloth),
+    hat: Math.random() < 0.6 ? "none" : pick(OPTIONS.hat),
+    hatColor: pick(SWATCH.cloth),
+    eyewear: Math.random() < 0.6 ? "none" : pick(OPTIONS.eyewear),
+    eyewearColor: pick(["#111318", "#f5b301", "#c9d1dc", "#ff2bd6", "#2fa8ff"]),
+    piercing: Math.random() < 0.75 ? "none" : pick(OPTIONS.piercing),
+    tattoo: Math.random() < 0.8 ? "none" : pick(OPTIONS.tattoo),
     metal: pick(OPTIONS.metal),
     earrings: Math.random() < 0.5 ? "none" : pick(OPTIONS.earrings),
     chain: Math.random() < 0.4 ? "none" : pick(OPTIONS.chain),
@@ -184,8 +240,16 @@ export function normalizeAvatar(x: unknown): VAvatar {
     shirtText: cleanShirtText(o.shirtText),
     textColor: col("textColor"),
     textStyle: one("textStyle"),
+    graphic: one("graphic"),
     extra: one("extra"),
     extraColor: col("extraColor"),
+    // older saves kept caps/beanies/glasses in "extra"
+    hat: (["cap", "beanie"].includes(o.extra as string) && !o.hat ? o.extra : one("hat")) as Hat,
+    hatColor: o.hatColor ? col("hatColor") : col("extraColor"),
+    eyewear: (["glasses", "shades"].includes(o.extra as string) && !o.eyewear ? o.extra : one("eyewear")) as Eyewear,
+    eyewearColor: o.eyewearColor ? col("eyewearColor") : ["glasses", "shades"].includes(o.extra as string) ? col("extraColor") : DEFAULT_AVATAR.eyewearColor,
+    piercing: one("piercing"),
+    tattoo: one("tattoo"),
     metal: one("metal"),
     earrings: one("earrings"),
     chain: one("chain"),
@@ -356,6 +420,221 @@ function blob(g: G, path: Path2D, fill: string | CanvasGradient, line: string, l
   g.fill(path);
 }
 
+// ------------------------------------------------------------------ locs / twists / cornrows / waves / wolf cut / mullet / emo
+function qpt(p0: number[], c: number[], p1: number[], t: number) {
+  return [(1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * c[0] + t * t * p1[0], (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * c[1] + t * t * p1[1]];
+}
+/** one loc/twist: outlined rounded stroke, optional dyed tip, little wrap marks */
+function loc(g: G, cfg: VAvatar, p0: number[], c: number[], p1: number[], w: number, fill: string | CanvasGradient, line: string, twist = false) {
+  g.lineCap = "round";
+  g.lineJoin = "round";
+  g.strokeStyle = line;
+  g.lineWidth = w + 5;
+  g.beginPath();
+  g.moveTo(p0[0], p0[1]);
+  g.quadraticCurveTo(c[0], c[1], p1[0], p1[1]);
+  g.stroke();
+  g.strokeStyle = fill;
+  g.lineWidth = w;
+  g.stroke();
+  if (cfg.hairTip) {
+    g.strokeStyle = cfg.hairTip;
+    g.lineWidth = w;
+    g.beginPath();
+    for (let i = 0; i <= 8; i++) {
+      const [x, y] = qpt(p0, c, p1, 0.66 + (i / 8) * 0.34);
+      if (i) g.lineTo(x, y);
+      else g.moveTo(x, y);
+    }
+    g.stroke();
+  }
+  g.strokeStyle = "rgba(0,0,0,.22)";
+  g.lineWidth = 1.6;
+  const n = twist ? 5 : 4;
+  for (let k = 1; k <= n; k++) {
+    const t = k / (n + 1);
+    const [x, y] = qpt(p0, c, p1, t);
+    const [x2, y2] = qpt(p0, c, p1, Math.min(1, t + 0.02));
+    const a = Math.atan2(y2 - y, x2 - x) + Math.PI / 2;
+    const r = w * 0.45;
+    g.beginPath();
+    g.moveTo(x - Math.cos(a) * r, y - Math.sin(a) * r - (twist ? 2 : 0));
+    g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r + (twist ? 2 : 0));
+    g.stroke();
+  }
+}
+
+const NEW_HAIR = new Set<HairStyle>(["shortlocs", "rasta", "twists", "cornrows", "waves", "wolfcut", "mullet", "emo"]);
+
+function backHair2(g: G, cfg: VAvatar, fill: CanvasGradient, line: string) {
+  const h = cfg.hair;
+  if (h === "rasta") {
+    // long, thick locs falling past the shoulders
+    for (let x = -140; x <= 140; x += 19) {
+      const len = 250 + (((x * 53) % 70) + 70) % 70;
+      loc(g, cfg, [x * 0.8, -70], [x * 1.18, 80], [x * 1.05 + (x > 0 ? 18 : -18), len], 20, fill, line);
+    }
+  }
+  if (h === "mullet") {
+    g.beginPath();
+    g.moveTo(-104, 0);
+    g.bezierCurveTo(-118, 80, -96, 170, -70, 214);
+    g.lineTo(-40, 196);
+    g.lineTo(-16, 222);
+    g.lineTo(10, 198);
+    g.lineTo(36, 222);
+    g.lineTo(70, 214);
+    g.bezierCurveTo(96, 170, 118, 80, 104, 0);
+    g.closePath();
+    g.fill();
+    g.stroke();
+  }
+  if (h === "wolfcut" || h === "emo") {
+    // choppy layered back
+    g.beginPath();
+    g.moveTo(-120, -40);
+    const pts = h === "wolfcut" ? [[-138, 60], [-118, 80], [-130, 128], [-100, 120], [-96, 160], [-60, 128]] : [[-130, 50], [-112, 70], [-118, 110], [-90, 100]];
+    for (const [x, y] of pts) g.lineTo(x, y);
+    for (const [x, y] of [...pts].reverse()) g.lineTo(-x, y);
+    g.lineTo(120, -40);
+    g.closePath();
+    g.fill();
+    g.stroke();
+  }
+  // scalp volume
+  g.beginPath();
+  const tight = h === "cornrows" || h === "waves" || h === "shortlocs" || h === "twists";
+  g.ellipse(0, -32, tight ? 113 : 120, tight ? 104 : 110, 0, Math.PI * 0.92, Math.PI * 2.08);
+  g.closePath();
+  g.fill();
+  g.stroke();
+}
+
+function frontHair2(g: G, cfg: VAvatar, fill: CanvasGradient, line: string) {
+  const h = cfg.hair;
+  if (h === "waves" || h === "cornrows") {
+    const cap = capPath(h === "waves" ? -64 : -60);
+    g.fill(cap);
+    g.stroke(cap);
+    g.save();
+    g.clip(cap);
+    if (h === "waves") {
+      // 360 waves
+      g.strokeStyle = "rgba(255,255,255,.2)";
+      g.lineWidth = 3;
+      for (let r = 20; r < 170; r += 13) {
+        g.beginPath();
+        for (let a = Math.PI * 1.05; a <= Math.PI * 1.95; a += 0.05) {
+          const rr = r + Math.sin(a * 22) * 2.5;
+          const x = Math.cos(a) * rr * 1.1;
+          const y = -150 + Math.sin(a) * -rr * 0.2 + r * 0.95;
+          if (a === Math.PI * 1.05) g.moveTo(x, y);
+          else g.lineTo(x, y);
+        }
+        g.stroke();
+      }
+    } else {
+      // straight-back cornrows
+      for (let x = -100; x <= 100; x += 25) {
+        g.strokeStyle = line;
+        g.lineWidth = 3;
+        g.beginPath();
+        g.moveTo(x - 12, -60);
+        g.quadraticCurveTo(x * 0.9 - 12, -110, x * 0.4 - 6, -150);
+        g.stroke();
+        g.strokeStyle = "rgba(255,255,255,.25)";
+        g.lineWidth = 2;
+        for (let k = 0; k < 7; k++) {
+          const t = k / 7;
+          const yy = -64 - t * 80;
+          const xx = x + (x * 0.4 - x) * t;
+          g.beginPath();
+          g.moveTo(xx - 6, yy + 3);
+          g.lineTo(xx + 4, yy - 3);
+          g.stroke();
+        }
+      }
+    }
+    g.restore();
+    return;
+  }
+  if (h === "shortlocs" || h === "twists") {
+    const cap = capPath(-56);
+    g.fill(cap);
+    g.stroke(cap);
+    const len = h === "twists" ? 30 : 58;
+    const w = h === "twists" ? 13 : 15;
+    // locs sprouting from the crown, flopping outward (emo-rap / freeform look)
+    for (let i = 0; i < 15; i++) {
+      const a = Math.PI * 1.02 + (i / 14) * Math.PI * 0.96;
+      const bx = Math.cos(a) * 92;
+      const by = -34 + Math.sin(a) * 92;
+      const ex = bx + Math.cos(a) * len;
+      const ey = by + Math.sin(a) * len * 0.7 + (Math.abs(Math.cos(a)) > 0.6 ? len * 0.5 : -6);
+      loc(g, cfg, [bx, by], [bx + Math.cos(a) * len * 0.6, by + Math.sin(a) * len * 0.6 - 8], [ex, ey], w, fill, line, h === "twists");
+    }
+    // a few hanging over the forehead
+    for (const [x, ey] of [
+      [-52, 4],
+      [-14, -6],
+      [26, 2],
+      [62, 10],
+    ]) loc(g, cfg, [x * 0.8, -90], [x, -40], [x * 1.05, ey - (h === "twists" ? 30 : 0)], w, fill, line, h === "twists");
+    return;
+  }
+  if (h === "rasta") {
+    const cap = capPath(-58);
+    g.fill(cap);
+    g.stroke(cap);
+    for (const [x, x2, y2] of [
+      [-70, -122, 220],
+      [-40, -112, 260],
+      [40, 112, 260],
+      [70, 122, 220],
+      [-20, -96, 120],
+      [20, 96, 120],
+    ]) loc(g, cfg, [x, -80], [x2 * 0.95, 20], [x2, y2], 20, fill, line);
+    return;
+  }
+  // fringe styles
+  const tips: Record<string, [number, number][]> = {
+    wolfcut: [[-118, 46], [-96, 20], [-70, 36], [-40, 8], [-8, 24], [26, 4], [58, 30], [90, 16], [118, 44]],
+    mullet: [[-108, 2], [-72, -4], [-34, 8], [6, 0], [44, 10], [82, -2], [112, 12]],
+    emo: [[-114, 10], [-90, -8], [-56, -20], [-10, 20], [30, 50], [62, 66], [96, 74], [118, 60]],
+  };
+  const list = tips[h];
+  g.beginPath();
+  g.moveTo(-124, 34);
+  g.bezierCurveTo(-130, -95, -70, -142, 0, -142);
+  g.bezierCurveTo(70, -142, 130, -95, 124, 34);
+  for (let i = list.length - 1; i >= 0; i--) {
+    const [x, y] = list[i];
+    const prevX = i < list.length - 1 ? list[i + 1][0] : 124;
+    const notchX = (x + prevX) / 2;
+    const notchY = h === "emo" ? Math.min(y, list[Math.min(i + 1, list.length - 1)][1]) - 26 : -36 + Math.abs(notchX) * 0.1;
+    if (i < list.length - 1) g.quadraticCurveTo(notchX + 4, notchY + 10, notchX, notchY);
+    g.quadraticCurveTo((x + notchX) / 2 + 4, (y + notchY) / 2, x, y);
+  }
+  g.quadraticCurveTo(-120, 10, -124, 34);
+  g.closePath();
+  g.fill();
+  g.stroke();
+  if (h === "wolfcut") {
+    for (const s of [-1, 1]) {
+      g.beginPath();
+      g.moveTo(s * 124, 0);
+      g.lineTo(s * 132, 60);
+      g.lineTo(s * 116, 52);
+      g.lineTo(s * 120, 104);
+      g.lineTo(s * 100, 70);
+      g.lineTo(s * 98, 10);
+      g.closePath();
+      g.fill();
+      g.stroke();
+    }
+  }
+}
+
 function backHair(g: G, cfg: VAvatar, dx: number) {
   g.save();
   g.translate(-dx * 0.5, 0);
@@ -363,6 +642,11 @@ function backHair(g: G, cfg: VAvatar, dx: number) {
   const h = cfg.hair;
   const fill = g.fillStyle as CanvasGradient;
   const line = g.strokeStyle as string;
+  if (NEW_HAIR.has(h)) {
+    backHair2(g, cfg, fill, line);
+    g.restore();
+    return;
+  }
 
   if (h === "afro") {
     const p = new Path2D();
@@ -534,6 +818,12 @@ function frontHair(g: G, cfg: VAvatar, dx: number) {
   hairFill(g, cfg, -140, 60);
   const fill = g.fillStyle as CanvasGradient;
   const line = g.strokeStyle as string;
+  if (NEW_HAIR.has(h)) {
+    frontHair2(g, cfg, fill, line);
+    if (h !== "waves" && h !== "cornrows") hairShine(g);
+    g.restore();
+    return;
+  }
 
   // ---- styles without a fringe
   if (h === "buzz" || h === "slick" || h === "undercut" || h === "mohawk" || h === "bun" || h === "dreads" || h === "braids") {
@@ -1202,6 +1492,30 @@ function pendant(g: G, cfg: VAvatar, x: number, y: number, t: number) {
       g.stroke();
       if (iced) for (const [a, b] of [[-9, 12], [9, 12], [0, 20], [-5, 26], [5, 26]]) gem(g, a, b, 2.4, "silver");
       break;
+    case "brokenHeart":
+    case "butterfly":
+      graphicArt(g, cfg.pendant, 0, 20, 34, METAL[m][1], iced ? "#e9f8ff" : METAL[m][1]);
+      if (iced) for (const [a, b] of [[-8, 14], [8, 14], [0, 24]]) gem(g, a, b, 2.2, "silver");
+      break;
+    case "lock":
+      g.lineWidth = 5;
+      g.strokeStyle = iced ? "#cfe9ff" : METAL[m][1];
+      g.beginPath();
+      g.arc(0, 16, 10, Math.PI, 0);
+      g.stroke();
+      g.lineWidth = 2;
+      g.strokeStyle = METAL[m][2];
+      g.beginPath();
+      g.roundRect(-16, 16, 32, 26, 5);
+      g.fill();
+      g.stroke();
+      g.fillStyle = METAL[m][2];
+      g.beginPath();
+      g.arc(0, 26, 3.5, 0, Math.PI * 2);
+      g.fill();
+      g.fillRect(-1.5, 27, 3, 8);
+      if (iced) for (const [a, b] of [[-9, 21], [9, 21], [-9, 36], [9, 36]]) gem(g, a, b, 2.2, "silver");
+      break;
     case "star":
       g.beginPath();
       for (let i = 0; i < 10; i++) {
@@ -1299,8 +1613,16 @@ function shirtPrint(g: G, cfg: VAvatar, cx: number, cy: number, maxW: number, si
   g.restore();
 }
 
-const BIG_PRINT = new Set<Outfit>(["tee", "hoodie", "sweater", "tank", "jersey"]);
-const SMALL_PRINT: Partial<Record<Outfit, [number, number, number]>> = { zipup: [74, 232, 64], polo: [74, 236, 62], puffer: [80, 244, 60], jacket: [96, 236, 46] };
+const BIG_PRINT = new Set<Outfit>(["tee", "acidtee", "hoodie", "sweater", "tank", "jersey"]);
+const SMALL_PRINT: Partial<Record<Outfit, [number, number, number]>> = {
+  zipup: [74, 232, 64],
+  polo: [74, 236, 62],
+  puffer: [80, 244, 60],
+  jacket: [96, 236, 46],
+  denim: [96, 250, 44],
+  bomber: [74, 236, 62],
+  track: [74, 236, 62],
+};
 
 function outfit(g: G, cfg: VAvatar) {
   const c = cfg.shirtColor;
@@ -1389,6 +1711,70 @@ function outfit(g: G, cfg: VAvatar) {
     torso();
     g.fill();
     g.stroke();
+    // fabric patterns (clipped to the torso)
+    if (["acidtee", "flannel", "denim", "bomber", "track"].includes(cfg.shirt)) {
+      g.save();
+      torso();
+      g.clip();
+      if (cfg.shirt === "acidtee") {
+        let sd = 11;
+        const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+        for (let i = 0; i < 26; i++) {
+          const x = -220 + rnd() * 440,
+            y = 180 + rnd() * 280,
+            rr = 18 + rnd() * 40;
+          const rg = g.createRadialGradient(x, y, 0, x, y, rr);
+          rg.addColorStop(0, alpha(shade(c, 0.6), 0.55));
+          rg.addColorStop(1, alpha(shade(c, 0.6), 0));
+          g.fillStyle = rg;
+          g.fillRect(x - rr, y - rr, rr * 2, rr * 2);
+        }
+      } else if (cfg.shirt === "flannel") {
+        g.fillStyle = alpha(a, 0.4);
+        for (let x = -240; x < 240; x += 52) g.fillRect(x, 160, 20, 320);
+        for (let y = 170; y < 470; y += 52) g.fillRect(-250, y, 500, 20);
+        g.fillStyle = "rgba(0,0,0,.22)";
+        for (let x = -230; x < 240; x += 52) g.fillRect(x + 30, 160, 4, 320);
+        for (let y = 180; y < 470; y += 52) g.fillRect(-250, y + 30, 500, 4);
+      } else if (cfg.shirt === "denim") {
+        g.strokeStyle = "rgba(255,255,255,.08)";
+        g.lineWidth = 1.5;
+        for (let x = -300; x < 300; x += 6) {
+          g.beginPath();
+          g.moveTo(x, 160);
+          g.lineTo(x + 120, 470);
+          g.stroke();
+        }
+        // faded/washed areas
+        for (const [x, y] of [
+          [-120, 300],
+          [130, 320],
+        ]) {
+          const rg = g.createRadialGradient(x, y, 0, x, y, 90);
+          rg.addColorStop(0, "rgba(255,255,255,.18)");
+          rg.addColorStop(1, "rgba(255,255,255,0)");
+          g.fillStyle = rg;
+          g.fillRect(x - 90, y - 90, 180, 180);
+        }
+      } else if (cfg.shirt === "bomber") {
+        g.fillStyle = "rgba(255,255,255,.07)";
+        g.beginPath();
+        g.ellipse(-110, 270, 40, 90, 0.2, 0, Math.PI * 2);
+        g.ellipse(120, 280, 30, 80, -0.2, 0, Math.PI * 2);
+        g.fill();
+      } else if (cfg.shirt === "track") {
+        for (const s2 of [-1, 1])
+          for (const k of [0, 1, 2]) {
+            g.strokeStyle = k === 1 ? a : "#ffffff";
+            g.lineWidth = 6;
+            g.beginPath();
+            g.moveTo(s2 * (150 + k * 10), 205);
+            g.lineTo(s2 * (205 + k * 12), 470);
+            g.stroke();
+          }
+      }
+      g.restore();
+    }
     if (cfg.shirt === "varsity") {
       // contrast sleeves
       g.fillStyle = shade(a, 0.05);
@@ -1416,12 +1802,152 @@ function outfit(g: G, cfg: VAvatar) {
   if (BIG_PRINT.has(cfg.shirt)) {
     const txt = cfg.shirtText.trim() || (cfg.shirt === "jersey" ? "23" : "");
     if (txt) shirtPrint(g, { ...cfg, shirtText: txt }, 0, cfg.shirt === "jersey" ? 284 : 280, 176 * bx, cfg.shirt === "jersey" ? 50 : 42);
+    if (cfg.graphic !== "none") {
+      if (txt) graphicArt(g, cfg.graphic, 78 * bx, 236, 30, cfg.textColor, cfg.accentColor);
+      else if (cfg.pendant !== "none" || cfg.chain === "layered") graphicArt(g, cfg.graphic, 0, 286, 50, cfg.textColor, cfg.accentColor);
+      else graphicArt(g, cfg.graphic, 0, 266, 62, cfg.textColor, cfg.accentColor);
+    }
   }
 
   g.save();
   g.scale(bx, 1);
   g.lineWidth = 3;
   switch (cfg.shirt) {
+    case "flannel":
+    case "denim": {
+      // open shirt/jacket over a tee
+      const inner = cfg.shirt === "flannel" ? a : shade(a, 0);
+      g.fillStyle = cfg.shirt === "flannel" ? "#f4f4f8" : inner;
+      g.strokeStyle = shade(inner, -0.4);
+      g.beginPath();
+      g.moveTo(-46, 184);
+      g.lineTo(-30, 460);
+      g.lineTo(30, 460);
+      g.lineTo(46, 184);
+      g.quadraticCurveTo(0, 214, -46, 184);
+      g.fill();
+      g.stroke();
+      g.strokeStyle = cfg.shirt === "flannel" ? "#d8d8e0" : shade(inner, -0.25);
+      g.lineWidth = 5;
+      g.beginPath();
+      g.moveTo(-40, 186);
+      g.quadraticCurveTo(0, 214, 40, 186);
+      g.stroke();
+      // collar points
+      g.fillStyle = shade(c, -0.08);
+      g.strokeStyle = line;
+      g.lineWidth = 3;
+      for (const s2 of [-1, 1]) {
+        g.beginPath();
+        g.moveTo(s2 * 30, 176);
+        g.lineTo(s2 * 70, 182);
+        g.lineTo(s2 * 62, 236);
+        g.closePath();
+        g.fill();
+        g.stroke();
+        // panel edge
+        g.beginPath();
+        g.moveTo(s2 * 46, 190);
+        g.lineTo(s2 * 34, 460);
+        g.stroke();
+      }
+      if (cfg.shirt === "denim") {
+        // chest pockets + copper stitching + rips
+        g.strokeStyle = "#e8a04a";
+        g.lineWidth = 2;
+        g.setLineDash([4, 3]);
+        for (const s2 of [-1, 1]) {
+          g.strokeRect(s2 > 0 ? 70 : -130, 238, 60, 44);
+          g.beginPath();
+          g.moveTo(s2 * 60, 200);
+          g.quadraticCurveTo(s2 * 140, 196, s2 * 200, 236);
+          g.stroke();
+        }
+        g.setLineDash([]);
+        g.fillStyle = "#c9d1dc";
+        for (const x of [-100, 100]) {
+          g.beginPath();
+          g.arc(x, 256, 4, 0, Math.PI * 2);
+          g.fill();
+        }
+        for (const [x, y, w] of [
+          [-150, 300, 34],
+          [140, 282, 26],
+        ]) {
+          g.fillStyle = "rgba(245,245,250,.85)";
+          g.beginPath();
+          g.ellipse(x, y, w, 9, 0.1, 0, Math.PI * 2);
+          g.fill();
+          g.strokeStyle = "rgba(255,255,255,.95)";
+          g.lineWidth = 1.5;
+          for (let k = -2; k <= 2; k++) {
+            g.beginPath();
+            g.moveTo(x - w, y + k * 3.5);
+            g.lineTo(x + w, y + k * 3.5 + 1);
+            g.stroke();
+          }
+        }
+      } else {
+        g.fillStyle = "#f4f4f8";
+        for (const y of [252, 292]) {
+          g.beginPath();
+          g.arc(-40, y, 3.4, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+      break;
+    }
+    case "bomber":
+    case "track": {
+      const bomber = cfg.shirt === "bomber";
+      if (bomber) {
+        for (const [col2, w] of [
+          [a, 16],
+          ["#ffffff", 4],
+        ] as const) {
+          g.strokeStyle = col2;
+          g.lineWidth = w;
+          g.beginPath();
+          g.moveTo(-50, 184);
+          g.quadraticCurveTo(0, 222, 50, 184);
+          g.stroke();
+        }
+      } else {
+        g.fillStyle = shade(c, 0.05);
+        g.strokeStyle = line;
+        g.lineWidth = 3;
+        g.beginPath();
+        g.moveTo(-44, 156);
+        g.lineTo(-48, 206);
+        g.quadraticCurveTo(0, 220, 48, 206);
+        g.lineTo(44, 156);
+        g.quadraticCurveTo(0, 168, -44, 156);
+        g.fill();
+        g.stroke();
+      }
+      g.strokeStyle = "#c9d1dc";
+      g.lineWidth = 3;
+      g.beginPath();
+      g.moveTo(0, bomber ? 206 : 166);
+      g.lineTo(0, 460);
+      g.stroke();
+      g.fillStyle = "#dfe5ec";
+      g.beginPath();
+      g.roundRect(-5, bomber ? 214 : 176, 10, 18, 3);
+      g.fill();
+      if (bomber) {
+        // sleeve utility pocket
+        g.fillStyle = shade(c, -0.1);
+        g.strokeStyle = line;
+        g.lineWidth = 2;
+        g.beginPath();
+        g.roundRect(-196, 262, 34, 40, 4);
+        g.fill();
+        g.stroke();
+      }
+      break;
+    }
+    case "acidtee":
     case "tee":
       g.strokeStyle = a;
       g.lineWidth = 7;
@@ -1725,27 +2251,16 @@ function outfit(g: G, cfg: VAvatar) {
 
   const small = SMALL_PRINT[cfg.shirt];
   if (small) shirtPrint(g, cfg, small[0] * bx, small[1], small[2] * bx, 22);
+  if ((small || cfg.shirt === "flannel") && cfg.graphic !== "none") graphicArt(g, cfg.graphic, -78 * bx, 240, 30, cfg.textColor, cfg.accentColor);
 }
 
-function extraBack(g: G, cfg: VAvatar, t: number) {
-  if (cfg.extra === "halo") {
-    g.save();
-    g.shadowColor = cfg.extraColor;
-    g.shadowBlur = 24;
-    g.strokeStyle = cfg.extraColor;
-    g.lineWidth = 9;
-    g.beginPath();
-    g.ellipse(0, -172 + Math.sin(t * 2) * 4, 82, 20, 0, 0, Math.PI * 2);
-    g.stroke();
-    g.restore();
-  }
-}
 
-function extraFront(g: G, cfg: VAvatar, dx: number) {
-  const col = cfg.extraColor;
+// ------------------------------------------------------------------ eyewear
+function eyewear(g: G, cfg: VAvatar, dx: number) {
+  const col = cfg.eyewearColor;
   const dark = shade(col, -0.45);
   g.lineJoin = "round";
-  switch (cfg.extra) {
+  switch (cfg.eyewear) {
     case "shades": {
       g.save();
       g.translate(dx, 0);
@@ -1763,7 +2278,7 @@ function extraFront(g: G, cfg: VAvatar, dx: number) {
         g.stroke();
         const sh = g.createLinearGradient(s * 10, 0, s * 70, 40);
         sh.addColorStop(0, "rgba(255,255,255,0)");
-        sh.addColorStop(0.5, alpha(col, 0.55));
+        sh.addColorStop(0.5, alpha(col === "#111318" ? "#8b5cff" : col, 0.55));
         sh.addColorStop(1, "rgba(255,255,255,0)");
         g.fillStyle = sh;
         g.fill();
@@ -1777,6 +2292,115 @@ function extraFront(g: G, cfg: VAvatar, dx: number) {
       g.restore();
       break;
     }
+    case "glasses":
+      g.save();
+      g.translate(dx, 0);
+      g.strokeStyle = dark;
+      g.lineWidth = 5;
+      g.fillStyle = "rgba(180,220,255,.12)";
+      for (const s of [-1, 1]) {
+        g.beginPath();
+        g.roundRect(s * 44 - 33, -4, 66, 54, 18);
+        g.fill();
+        g.stroke();
+      }
+      g.beginPath();
+      g.moveTo(-11, 14);
+      g.quadraticCurveTo(0, 6, 11, 14);
+      g.stroke();
+      g.restore();
+      break;
+    case "round":
+    case "rimless":
+    case "heart": {
+      g.save();
+      g.translate(dx, 0);
+      const tint = cfg.eyewear === "heart" ? "rgba(255,60,140,.55)" : cfg.eyewear === "round" ? alpha(col === "#111318" ? "#3a2a1a" : col, 0.6) : "rgba(160,200,255,.18)";
+      g.strokeStyle = cfg.eyewear === "rimless" ? alpha(shade(col, 0.4), 0.9) : col === "#111318" ? "#c8a24a" : col;
+      g.lineWidth = cfg.eyewear === "rimless" ? 2 : 3.5;
+      for (const s of [-1, 1]) {
+        g.fillStyle = tint;
+        g.beginPath();
+        if (cfg.eyewear === "round") g.arc(s * 44, 22, 26, 0, Math.PI * 2);
+        else if (cfg.eyewear === "rimless") g.roundRect(s * 44 - 34, 2, 68, 42, 8);
+        else {
+          const x = s * 44,
+            y = 14;
+          g.moveTo(x, y + 36);
+          g.bezierCurveTo(x - 40, y + 14, x - 24, y - 16, x, y + 2);
+          g.bezierCurveTo(x + 24, y - 16, x + 40, y + 14, x, y + 36);
+        }
+        g.fill();
+        g.stroke();
+        g.fillStyle = "rgba(255,255,255,.35)";
+        g.beginPath();
+        g.ellipse(s * 44 - 10, 12, 6, 3, -0.5, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.beginPath();
+      g.moveTo(-18, 18);
+      g.quadraticCurveTo(0, 10, 18, 18);
+      g.stroke();
+      g.restore();
+      break;
+    }
+    case "visor": {
+      g.save();
+      g.translate(dx, 0);
+      const vg = g.createLinearGradient(-110, 0, 110, 0);
+      const c2 = col === "#111318" ? "#00e0ff" : col;
+      vg.addColorStop(0, alpha(c2, 0.85));
+      vg.addColorStop(0.5, alpha(shade(c2, 0.5), 0.9));
+      vg.addColorStop(1, alpha(c2, 0.85));
+      g.shadowColor = c2;
+      g.shadowBlur = 18;
+      g.fillStyle = vg;
+      g.beginPath();
+      g.moveTo(-112, 4);
+      g.quadraticCurveTo(0, -12, 112, 4);
+      g.lineTo(104, 40);
+      g.quadraticCurveTo(0, 30, -104, 40);
+      g.closePath();
+      g.fill();
+      g.shadowBlur = 0;
+      g.strokeStyle = "rgba(255,255,255,.6)";
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(-90, 12);
+      g.quadraticCurveTo(0, 0, 90, 12);
+      g.stroke();
+      g.restore();
+      break;
+    }
+  }
+}
+
+// ------------------------------------------------------------------ hats
+function hatBack(g: G, cfg: VAvatar) {
+  const col = cfg.hatColor;
+  if (cfg.hat === "durag") {
+    // silky tails hanging behind
+    g.fillStyle = shade(col, -0.1);
+    g.strokeStyle = shade(col, -0.5);
+    g.lineWidth = 3;
+    for (const s of [-1, 1]) {
+      g.beginPath();
+      g.moveTo(s * 70, -40);
+      g.bezierCurveTo(s * 120, 60, s * 110, 180, s * 130, 260);
+      g.lineTo(s * 96, 262);
+      g.bezierCurveTo(s * 84, 170, s * 92, 70, s * 50, -30);
+      g.closePath();
+      g.fill();
+      g.stroke();
+    }
+  }
+}
+
+function hat(g: G, cfg: VAvatar, dx: number) {
+  const col = cfg.hatColor;
+  const dark = shade(col, -0.45);
+  g.lineJoin = "round";
+  switch (cfg.hat) {
     case "cap": {
       const cg = g.createLinearGradient(0, -170, 0, -60);
       cg.addColorStop(0, shade(col, 0.15));
@@ -1856,24 +2480,560 @@ function extraFront(g: G, cfg: VAvatar, dx: number) {
       g.fill();
       break;
     }
-    case "glasses":
-      g.save();
-      g.translate(dx, 0);
+    case "backcap": {
+      const cg = g.createLinearGradient(0, -170, 0, -60);
+      cg.addColorStop(0, shade(col, 0.15));
+      cg.addColorStop(1, shade(col, -0.15));
+      g.fillStyle = cg;
       g.strokeStyle = dark;
-      g.lineWidth = 5;
-      g.fillStyle = "rgba(180,220,255,.12)";
-      for (const s of [-1, 1]) {
+      g.lineWidth = 3;
+      g.beginPath();
+      g.moveTo(-124, -54);
+      g.bezierCurveTo(-130, -150, -70, -170, 0, -170);
+      g.bezierCurveTo(70, -170, 130, -150, 124, -54);
+      g.quadraticCurveTo(0, -84, -124, -54);
+      g.fill();
+      g.stroke();
+      // strap opening + snap on the front (it's on backwards)
+      g.fillStyle = shade(col, -0.3);
+      g.beginPath();
+      g.ellipse(0, -76, 34, 16, 0, Math.PI, 0);
+      g.fill();
+      g.fillStyle = "#c9d1dc";
+      g.beginPath();
+      g.arc(0, -92, 4, 0, Math.PI * 2);
+      g.fill();
+      // brim peeking out at the back-top
+      g.fillStyle = shade(col, -0.25);
+      g.strokeStyle = dark;
+      g.beginPath();
+      g.ellipse(dx * -0.3, -168, 70, 14, 0, Math.PI, 0);
+      g.closePath();
+      g.fill();
+      g.stroke();
+      break;
+    }
+    case "bucket": {
+      const bgd = g.createLinearGradient(0, -175, 0, -40);
+      bgd.addColorStop(0, shade(col, 0.12));
+      bgd.addColorStop(1, shade(col, -0.12));
+      g.fillStyle = bgd;
+      g.strokeStyle = dark;
+      g.lineWidth = 3;
+      g.beginPath();
+      g.moveTo(-112, -60);
+      g.bezierCurveTo(-118, -170, 118, -170, 112, -60);
+      g.closePath();
+      g.fill();
+      g.stroke();
+      g.save();
+      g.translate(dx * 0.4, 0);
+      g.beginPath();
+      g.moveTo(-112, -66);
+      g.quadraticCurveTo(0, -84, 112, -66);
+      g.lineTo(156, -26);
+      g.quadraticCurveTo(0, -40, -156, -26);
+      g.closePath();
+      g.fill();
+      g.stroke();
+      g.strokeStyle = alpha(dark, 0.45);
+      g.lineWidth = 2;
+      g.setLineDash([5, 4]);
+      g.beginPath();
+      g.moveTo(-138, -40);
+      g.quadraticCurveTo(0, -56, 138, -40);
+      g.stroke();
+      g.setLineDash([]);
+      g.restore();
+      break;
+    }
+    case "durag": {
+      const dg = g.createLinearGradient(-110, -150, 110, -40);
+      dg.addColorStop(0, shade(col, 0.25));
+      dg.addColorStop(0.5, col);
+      dg.addColorStop(1, shade(col, -0.2));
+      g.fillStyle = dg;
+      g.strokeStyle = dark;
+      g.lineWidth = 3;
+      g.beginPath();
+      g.moveTo(-116, -10);
+      g.bezierCurveTo(-124, -110, -66, -150, 0, -150);
+      g.bezierCurveTo(66, -150, 124, -110, 116, -10);
+      g.quadraticCurveTo(100, -60, 0, -66);
+      g.quadraticCurveTo(-100, -60, -116, -10);
+      g.closePath();
+      g.fill();
+      g.stroke();
+      // satin shine + centre seam
+      g.strokeStyle = "rgba(255,255,255,.4)";
+      g.lineWidth = 7;
+      g.beginPath();
+      g.arc(0, -20, 112, Math.PI * 1.3, Math.PI * 1.45);
+      g.stroke();
+      g.strokeStyle = alpha(dark, 0.6);
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(0, -150);
+      g.lineTo(0, -66);
+      g.stroke();
+      break;
+    }
+    case "bandana": {
+      g.fillStyle = col;
+      g.strokeStyle = dark;
+      g.lineWidth = 3;
+      g.beginPath();
+      g.moveTo(-122, -14);
+      g.bezierCurveTo(-130, -130, 130, -130, 122, -14);
+      g.quadraticCurveTo(0, -66, -122, -14);
+      g.closePath();
+      g.fill();
+      g.stroke();
+      // paisley-ish dots
+      g.fillStyle = "rgba(255,255,255,.75)";
+      for (let i = 0; i < 26; i++) {
+        const x = -100 + (i * 37) % 200;
+        const y = -100 + ((i * 23) % 60);
         g.beginPath();
-        g.roundRect(s * 44 - 33, -4, 66, 54, 18);
+        g.arc(x, y, i % 3 ? 2.2 : 4, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.strokeStyle = "rgba(255,255,255,.7)";
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(-112, -30);
+      g.quadraticCurveTo(0, -76, 112, -30);
+      g.stroke();
+      break;
+    }
+    case "tam": {
+      // big knitted rasta tam
+      g.save();
+      g.beginPath();
+      g.ellipse(0, -110, 150, 92, 0, 0, Math.PI * 2);
+      g.clip();
+      const bands = ["#e8344e", "#f5c400", "#2fa84f", "#111318"];
+      for (let i = 0; i < 4; i++) {
+        g.fillStyle = bands[i];
+        g.fillRect(-160, -210 + i * 46, 320, 46);
+      }
+      g.strokeStyle = "rgba(0,0,0,.18)";
+      g.lineWidth = 2;
+      for (let x = -150; x <= 150; x += 10) {
+        g.beginPath();
+        g.moveTo(x, -210);
+        g.lineTo(x + 6, -20);
+        g.stroke();
+      }
+      g.restore();
+      g.strokeStyle = "#111318";
+      g.lineWidth = 3;
+      g.beginPath();
+      g.ellipse(0, -110, 150, 92, 0, 0, Math.PI * 2);
+      g.stroke();
+      g.fillStyle = "#111318";
+      g.beginPath();
+      g.roundRect(-118, -64, 236, 26, 12);
+      g.fill();
+      break;
+    }
+    case "headband": {
+      g.fillStyle = col;
+      g.strokeStyle = dark;
+      g.lineWidth = 3;
+      g.beginPath();
+      g.moveTo(-122, -40);
+      g.quadraticCurveTo(0, -96, 122, -40);
+      g.lineTo(124, -14);
+      g.quadraticCurveTo(0, -70, -124, -14);
+      g.closePath();
+      g.fill();
+      g.stroke();
+      g.strokeStyle = "rgba(255,255,255,.55)";
+      g.lineWidth = 3;
+      g.beginPath();
+      g.moveTo(-110, -30);
+      g.quadraticCurveTo(0, -80, 110, -30);
+      g.stroke();
+      break;
+    }
+  }
+}
+
+// ------------------------------------------------------------------ piercings & face tattoos
+function piercing(g: G, cfg: VAvatar) {
+  if (cfg.piercing === "none") return;
+  const m = cfg.metal === "iced" ? "silver" : cfg.metal;
+  g.strokeStyle = metalFill(g, m, 50, 110);
+  g.fillStyle = metalFill(g, m, 50, 110);
+  g.lineWidth = 2.6;
+  switch (cfg.piercing) {
+    case "noseRing":
+      g.beginPath();
+      g.arc(-9, 66, 5, -0.4, Math.PI * 1.4);
+      g.stroke();
+      break;
+    case "noseStud":
+      gem(g, -8, 62, 2.6, m);
+      break;
+    case "septum":
+      g.beginPath();
+      g.arc(0, 68, 5, 0.1, Math.PI - 0.1);
+      g.stroke();
+      break;
+    case "lipRing":
+      g.beginPath();
+      g.arc(10, 96, 5, -0.6, Math.PI * 1.1);
+      g.stroke();
+      break;
+    case "eyebrow":
+      g.beginPath();
+      g.arc(62, -30, 2.6, 0, Math.PI * 2);
+      g.arc(68, -14, 2.6, 0, Math.PI * 2);
+      g.fill();
+      break;
+  }
+}
+
+function tattoo(g: G, cfg: VAvatar) {
+  if (cfg.tattoo === "none") return;
+  const ink = "rgba(30,30,45,.82)";
+  g.fillStyle = ink;
+  g.strokeStyle = ink;
+  g.lineWidth = 2.4;
+  g.lineCap = "round";
+  switch (cfg.tattoo) {
+    case "teardrop":
+      g.beginPath();
+      g.moveTo(-56, 52);
+      g.quadraticCurveTo(-61, 62, -56, 66);
+      g.quadraticCurveTo(-51, 62, -56, 52);
+      g.fill();
+      break;
+    case "cross":
+      g.beginPath();
+      g.moveTo(-74, 50);
+      g.lineTo(-74, 68);
+      g.moveTo(-80, 55);
+      g.lineTo(-68, 55);
+      g.stroke();
+      break;
+    case "heart":
+      g.beginPath();
+      g.moveTo(-60, 66);
+      g.bezierCurveTo(-72, 58, -66, 48, -60, 54);
+      g.bezierCurveTo(-54, 48, -48, 58, -60, 66);
+      g.stroke();
+      break;
+    case "star":
+      g.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const r = i % 2 ? 3 : 7.5;
+        const a = (i * Math.PI) / 5 - Math.PI / 2;
+        g.lineTo(-62 + Math.cos(a) * r, 58 + Math.sin(a) * r);
+      }
+      g.closePath();
+      g.stroke();
+      break;
+    case "stitches":
+      g.beginPath();
+      g.moveTo(52, -50);
+      g.lineTo(76, -6);
+      for (let k = 0; k < 4; k++) {
+        const x = 54 + k * 6.5,
+          y = -46 + k * 11.5;
+        g.moveTo(x - 6, y + 4);
+        g.lineTo(x + 6, y - 3);
+      }
+      g.stroke();
+      break;
+  }
+}
+
+// ------------------------------------------------------------------ shirt graphics
+function graphicArt(g: G, kind: VAvatar["graphic"], x: number, y: number, size: number, col: string, accent: string) {
+  if (kind === "none") return;
+  g.save();
+  g.translate(x, y);
+  g.scale(size / 50, size / 50);
+  g.lineJoin = "round";
+  g.lineCap = "round";
+  g.strokeStyle = shade(col, -0.6);
+  g.lineWidth = 3;
+  switch (kind) {
+    case "brokenHeart": {
+      g.fillStyle = accent;
+      for (const s of [-1, 1]) {
+        g.save();
+        g.translate(s * 3, s * 2);
+        g.rotate(s * 0.08);
+        g.beginPath();
+        g.moveTo(0, -12);
+        if (s < 0) {
+          g.bezierCurveTo(-14, -30, -40, -16, -26, 6);
+          g.lineTo(0, 26);
+          g.lineTo(-4, 12);
+          g.lineTo(4, 2);
+          g.lineTo(-4, -6);
+        } else {
+          g.bezierCurveTo(14, -30, 40, -16, 26, 6);
+          g.lineTo(0, 26);
+          g.lineTo(-4, 12);
+          g.lineTo(4, 2);
+          g.lineTo(-4, -6);
+        }
+        g.closePath();
+        g.fill();
+        g.stroke();
+        g.restore();
+      }
+      break;
+    }
+    case "butterfly": {
+      for (const s of [-1, 1]) {
+        g.fillStyle = accent;
+        g.beginPath();
+        g.moveTo(0, -2);
+        g.bezierCurveTo(s * 18, -30, s * 44, -22, s * 30, 0);
+        g.bezierCurveTo(s * 40, 14, s * 22, 30, 0, 6);
+        g.closePath();
+        g.fill();
+        g.stroke();
+        g.fillStyle = "rgba(255,255,255,.55)";
+        g.beginPath();
+        g.arc(s * 20, -10, 4, 0, Math.PI * 2);
+        g.arc(s * 16, 12, 3, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.fillStyle = shade(col, -0.6);
+      g.beginPath();
+      g.ellipse(0, 2, 3, 14, 0, 0, Math.PI * 2);
+      g.fill();
+      g.beginPath();
+      g.moveTo(0, -12);
+      g.quadraticCurveTo(-4, -22, -10, -24);
+      g.moveTo(0, -12);
+      g.quadraticCurveTo(4, -22, 10, -24);
+      g.stroke();
+      break;
+    }
+    case "skull":
+      g.fillStyle = col;
+      g.beginPath();
+      g.arc(0, -6, 22, Math.PI * 0.85, Math.PI * 2.15);
+      g.lineTo(12, 22);
+      g.lineTo(-12, 22);
+      g.closePath();
+      g.fill();
+      g.stroke();
+      g.fillStyle = shade(col, -0.75);
+      g.beginPath();
+      g.ellipse(-9, -4, 6, 7, 0, 0, Math.PI * 2);
+      g.ellipse(9, -4, 6, 7, 0, 0, Math.PI * 2);
+      g.fill();
+      g.beginPath();
+      g.moveTo(0, 6);
+      g.lineTo(-3, 11);
+      g.lineTo(3, 11);
+      g.closePath();
+      g.fill();
+      g.beginPath();
+      for (const xx of [-6, 0, 6]) {
+        g.moveTo(xx, 16);
+        g.lineTo(xx, 22);
+      }
+      g.stroke();
+      break;
+    case "lightning":
+      g.fillStyle = accent;
+      g.beginPath();
+      g.moveTo(6, -28);
+      g.lineTo(-14, 4);
+      g.lineTo(-1, 4);
+      g.lineTo(-8, 28);
+      g.lineTo(16, -6);
+      g.lineTo(2, -6);
+      g.closePath();
+      g.fill();
+      g.stroke();
+      break;
+    case "flames": {
+      const fg = g.createLinearGradient(0, 26, 0, -30);
+      fg.addColorStop(0, "#ffd400");
+      fg.addColorStop(0.5, "#ff7a00");
+      fg.addColorStop(1, "#ff2b4d");
+      g.fillStyle = fg;
+      g.beginPath();
+      g.moveTo(-34, 24);
+      for (const [a, b, c2, d] of [
+        [-40, -6, -22, -28],
+        [-18, -8, -6, -2],
+        [-4, -24, 6, -36],
+        [12, -14, 16, -4],
+        [28, -22, 30, -30],
+        [42, -4, 34, 24],
+      ])
+        g.quadraticCurveTo(a, b, c2, d);
+      g.closePath();
+      g.fill();
+      g.stroke();
+      break;
+    }
+    case "stars":
+      g.fillStyle = accent;
+      for (const [sx, sy, r] of [
+        [-18, -6, 14],
+        [16, -14, 9],
+        [12, 16, 7],
+      ]) {
+        g.beginPath();
+        for (let i = 0; i < 10; i++) {
+          const rr = i % 2 ? r * 0.45 : r;
+          const a = (i * Math.PI) / 5 - Math.PI / 2;
+          g.lineTo(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr);
+        }
+        g.closePath();
         g.fill();
         g.stroke();
       }
-      g.beginPath();
-      g.moveTo(-11, 14);
-      g.quadraticCurveTo(0, 6, 11, 14);
-      g.stroke();
-      g.restore();
       break;
+  }
+  g.restore();
+}
+
+// ------------------------------------------------------------------ extras behind the body / floating
+function wings(g: G, cfg: VAvatar, t: number) {
+  if (cfg.extra !== "wings") return;
+  const flap = Math.sin(t * 2) * 0.05;
+  for (const s of [-1, 1]) {
+    g.save();
+    g.translate(s * 60, 220);
+    g.rotate(s * (0.15 + flap));
+    g.fillStyle = cfg.extraColor === "#111318" ? "#1a1a24" : "#fbfbff";
+    g.strokeStyle = shade(cfg.extraColor, -0.3);
+    g.lineWidth = 3;
+    for (let k = 0; k < 4; k++) {
+      g.beginPath();
+      g.moveTo(0, 0);
+      g.quadraticCurveTo(s * (160 + k * 20), -170 + k * 50, s * (300 - k * 30), -120 + k * 70);
+      g.quadraticCurveTo(s * (200 - k * 20), -40 + k * 40, 0, 30);
+      g.closePath();
+      g.fill();
+      g.stroke();
+    }
+    g.restore();
+  }
+}
+
+function butterflies(g: G, cfg: VAvatar, t: number) {
+  if (cfg.extra !== "butterflies") return;
+  for (const [x0, y0, ph, sc] of [
+    [-150, -140, 0, 0.7],
+    [160, -60, 2, 0.6],
+    [130, -180, 4, 0.5],
+  ]) {
+    const flap = 0.45 + Math.abs(Math.sin(t * 7 + ph)) * 0.55;
+    g.save();
+    g.translate(x0 + Math.sin(t * 0.8 + ph) * 14, y0 + Math.cos(t * 1.1 + ph) * 10);
+    g.scale(sc * flap, sc);
+    graphicArt(g, "butterfly", 0, 0, 50, "#ffffff", cfg.extraColor);
+    g.restore();
+  }
+}
+
+function crowns(g: G, cfg: VAvatar) {
+  if (cfg.extra === "crown") {
+    const gg = metalFill(g, "gold", -200, -120);
+    g.fillStyle = gg;
+    g.strokeStyle = "#8a5a00";
+    g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(-62, -128);
+    g.lineTo(-70, -192);
+    g.lineTo(-36, -160);
+    g.lineTo(0, -206);
+    g.lineTo(36, -160);
+    g.lineTo(70, -192);
+    g.lineTo(62, -128);
+    g.quadraticCurveTo(0, -140, -62, -128);
+    g.closePath();
+    g.fill();
+    g.stroke();
+    for (const [x, y, c] of [
+      [0, -150, "#e8344e"],
+      [-40, -144, "#2fa8ff"],
+      [40, -144, "#36d39a"],
+    ] as const) {
+      g.fillStyle = c;
+      g.beginPath();
+      g.arc(x, y, 7, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  if (cfg.extra === "flowerCrown") {
+    const cols = [cfg.extraColor, "#ffd1e8", "#fff2a8", "#ffffff"];
+    for (let i = 0; i < 9; i++) {
+      const a = Math.PI * 1.08 + (i / 8) * Math.PI * 0.84;
+      const x = Math.cos(a) * 122;
+      const y = -40 + Math.sin(a) * 112;
+      for (let p = 0; p < 5; p++) {
+        const pa = (p / 5) * Math.PI * 2;
+        g.fillStyle = cols[i % cols.length];
+        g.beginPath();
+        g.ellipse(x + Math.cos(pa) * 8, y + Math.sin(pa) * 8, 7, 5, pa, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.fillStyle = "#ffb02e";
+      g.beginPath();
+      g.arc(x, y, 4.5, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+}
+
+function faceMask(g: G, cfg: VAvatar) {
+  if (cfg.extra !== "mask") return;
+  const c = cfg.extraColor;
+  g.fillStyle = c;
+  g.strokeStyle = shade(c, -0.5);
+  g.lineWidth = 3;
+  g.beginPath();
+  g.moveTo(-92, 50);
+  g.quadraticCurveTo(0, 36, 92, 50);
+  g.quadraticCurveTo(84, 118, 0, 132);
+  g.quadraticCurveTo(-84, 118, -92, 50);
+  g.closePath();
+  g.fill();
+  g.stroke();
+  g.strokeStyle = alpha(shade(c, -0.5), 0.5);
+  g.lineWidth = 2;
+  for (const y of [70, 92]) {
+    g.beginPath();
+    g.moveTo(-84, y);
+    g.quadraticCurveTo(0, y - 8, 84, y);
+    g.stroke();
+  }
+}
+
+function extraBack(g: G, cfg: VAvatar, t: number) {
+  if (cfg.extra === "halo") {
+    g.save();
+    g.shadowColor = cfg.extraColor;
+    g.shadowBlur = 24;
+    g.strokeStyle = cfg.extraColor;
+    g.lineWidth = 9;
+    g.beginPath();
+    g.ellipse(0, -172 + Math.sin(t * 2) * 4, 82, 20, 0, 0, Math.PI * 2);
+    g.stroke();
+    g.restore();
+  }
+}
+
+function extraFront(g: G, cfg: VAvatar, dx: number) {
+  const col = cfg.extraColor;
+  const dark = shade(col, -0.45);
+  g.lineJoin = "round";
+  switch (cfg.extra) {
     case "catEars":
       for (const s of [-1, 1]) {
         g.fillStyle = cfg.hairColor;
@@ -2045,12 +3205,14 @@ export function drawAvatar(g: G, cfg: VAvatar, p: Pose, W: number, H: number, t:
   headTransform();
   extraBack(g, cfg, t);
   backHair(g, cfg, dx);
+  hatBack(g, cfg);
   g.restore();
 
   // body (moves a little with the head)
   g.save();
   g.translate(yaw * 10, breathe - 16);
   g.rotate(roll * 0.18);
+  wings(g, cfg, t);
   outfit(g, cfg);
   jewellery(g, cfg, t);
   g.restore();
@@ -2111,6 +3273,7 @@ export function drawAvatar(g: G, cfg: VAvatar, p: Pose, W: number, H: number, t:
     }
   }
   marks(g, cfg);
+  tattoo(g, cfg);
   // brows
   g.strokeStyle = shade(cfg.hairColor, -0.35);
   g.lineCap = "round";
@@ -2134,10 +3297,16 @@ export function drawAvatar(g: G, cfg: VAvatar, p: Pose, W: number, H: number, t:
   g.lineTo(-3, 64);
   g.stroke();
   mouth(g, cfg, p);
+  piercing(g, cfg);
+  faceMask(g, cfg);
   g.restore();
 
   frontHair(g, cfg, dx);
+  eyewear(g, cfg, dx);
+  hat(g, cfg, dx);
   extraFront(g, cfg, dx);
+  crowns(g, cfg);
+  butterflies(g, cfg, t);
   g.restore();
   g.restore();
 }

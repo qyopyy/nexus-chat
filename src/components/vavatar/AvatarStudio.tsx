@@ -106,13 +106,83 @@ const LABEL: Record<string, string> = {
   heart: "Heart",
   letter: "Initial",
   cross: "Cross",
+  shortlocs: "Short locs",
+  rasta: "Rasta locs",
+  twists: "Twists",
+  cornrows: "Cornrows",
+  waves: "360 waves",
+  wolfcut: "Wolf cut",
+  mullet: "Mullet",
+  emo: "Emo fringe",
+  acidtee: "Acid-wash tee",
+  flannel: "Flannel",
+  denim: "Distressed denim",
+  bomber: "Bomber",
+  track: "Track jacket",
+  brokenHeart: "Broken heart",
+  butterfly: "Butterfly",
+  skull: "Skull",
+  lightning: "Lightning",
+  flames: "Flames",
+  stars: "Stars",
+  crown: "Crown",
+  flowerCrown: "Flower crown",
+  butterflies: "Butterflies ✨",
+  wings: "Wings",
+  mask: "Face mask",
+  backcap: "Backwards cap",
+  bucket: "Bucket hat",
+  durag: "Durag",
+  bandana: "Bandana",
+  tam: "Rasta tam",
+  headband: "Headband",
+  rimless: "Rimless",
+  visor: "Cyber visor",
+  noseRing: "Nose ring",
+  noseStud: "Nose stud",
+  septum: "Septum",
+  lipRing: "Lip ring",
+  eyebrow: "Eyebrow",
+  teardrop: "Teardrop",
+  stitches: "Stitches",
+  lock: "Padlock",
 };
 
-type Tab = "face" | "eyes" | "hair" | "outfit" | "jewelry" | "extras" | "scene";
+/** one-tap looks (original styles — no real people, brands or logos) */
+const PRESETS: { name: string; look: Partial<VAvatar> }[] = [
+  {
+    name: "Emo-rap 💔",
+    look: { body: "masc", hair: "shortlocs", hairColor: "#1b1b2a", hairTip: "#36d39a", shirt: "acidtee", shirtColor: "#2b2d52", accentColor: "#ff4d6d", graphic: "brokenHeart", textColor: "#ffffff", metal: "iced", chain: "cubanIced", pendant: "butterfly", earrings: "stud", grillz: "none", hat: "none", eyewear: "none", extra: "none", piercing: "none", tattoo: "none", bg: "neon" },
+  },
+  {
+    name: "Distressed denim",
+    look: { hair: "waves", hairColor: "#1b1b2a", hairTip: null, shirt: "denim", shirtColor: "#3d5f8c", accentColor: "#f4f4f8", graphic: "none", hat: "bucket", hatColor: "#111318", metal: "iced", chain: "tennis", pendant: "cross", earrings: "bigStud", grillz: "iced", eyewear: "rimless", eyewearColor: "#c9d1dc", extra: "none", bg: "room" },
+  },
+  {
+    name: "Rasta",
+    look: { hair: "rasta", hairColor: "#2a1a10", hairTip: "#a8693c", hat: "tam", shirt: "tee", shirtColor: "#2fa84f", accentColor: "#f5c400", graphic: "stars", metal: "gold", chain: "rope", pendant: "none", eyewear: "round", eyewearColor: "#111318", extra: "none", bg: "sunset" },
+  },
+  {
+    name: "Trap star",
+    look: { hair: "twists", hairColor: "#111318", hairTip: "#ff4d6d", shirt: "puffer", shirtColor: "#111318", accentColor: "#ff4d6d", hat: "durag", hatColor: "#8b5cff", metal: "iced", chain: "layered", pendant: "letter", earrings: "bigStud", grillz: "iced", eyewear: "shades", eyewearColor: "#111318", tattoo: "teardrop", extra: "none", bg: "galaxy" },
+  },
+  {
+    name: "Anime idol",
+    look: { body: "fem", hair: "twintails", hairColor: "#ff7ab8", hairTip: "#ffffff", shirt: "uniform", shirtColor: "#f4f4f8", accentColor: "#5865f2", extra: "flowerCrown", extraColor: "#ff7ab8", earrings: "pearl", chain: "none", pendant: "none", hat: "none", eyewear: "none", bg: "sakura" },
+  },
+  {
+    name: "Gamer",
+    look: { hair: "messy", shirt: "hoodie", shirtColor: "#1f1b3a", extra: "headphones", extraColor: "#00c2ff", eyewear: "visor", eyewearColor: "#00e0ff", hat: "none", chain: "none", bg: "neon" },
+  },
+];
+
+type Tab = "styles" | "face" | "eyes" | "hair" | "headwear" | "outfit" | "jewelry" | "extras" | "scene";
 const TABS: [Tab, string][] = [
+  ["styles", "Styles"],
   ["face", "Body & face"],
   ["eyes", "Eyes"],
   ["hair", "Hair"],
+  ["headwear", "Hats & glasses"],
   ["outfit", "Outfit"],
   ["jewelry", "Jewelry"],
   ["extras", "Extras"],
@@ -125,7 +195,7 @@ export default function AvatarStudio() {
   const myName = useApp((s) => (s.userId ? s.profiles[s.userId]?.username : "") ?? "");
   const avatarOn = useCall((s) => s.avatarOn);
   const [cfg, setCfg] = useState<VAvatar>(saved);
-  const [tab, setTab] = useState<Tab>("face");
+  const [tab, setTab] = useState<Tab>("styles");
   const [cam, setCam] = useState(false);
   const [mode, setMode] = useState<"loading" | "face" | "voice">("voice");
   const [saving, setSaving] = useState(false);
@@ -218,7 +288,7 @@ export default function AvatarStudio() {
       </div>
 
       <div className="min-w-0">
-        <div className="no-scrollbar mb-3 flex gap-1 overflow-x-auto">
+        <div className="mb-3 flex flex-wrap gap-1">
           {TABS.map(([k, l]) => (
             <button key={k} onClick={() => setTab(k)} className={cn("shrink-0 rounded-full px-3.5 py-1.5 text-sm font-bold", tab === k ? "bg-white text-black" : "bg-hover text-sub hover:text-txt")}>
               {l}
@@ -237,6 +307,7 @@ export default function AvatarStudio() {
                 <input type="range" min={0} max={1} step={0.05} value={cfg.blush} onChange={(e) => set("blush", Number(e.target.value))} className="vol w-full" style={{ ["--fill" as string]: `${cfg.blush * 100}%` }} />
               </Field>
               {choice("marks", "Face details")}
+              {choice("tattoo", "Face tattoo")}
             </>
           )}
           {tab === "eyes" && (
@@ -251,6 +322,25 @@ export default function AvatarStudio() {
               {choice("hair", "Hairstyle")}
               {color("hairColor", "Hair color", SWATCH.hair)}
               {color("hairTip", "Dyed tips", SWATCH.hair, true)}
+            </>
+          )}
+          {tab === "styles" && (
+            <Field title="Quick styles — tap one, then tweak anything">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {PRESETS.map((p) => (
+                  <button key={p.name} onClick={() => setCfg((c) => ({ ...c, ...p.look }))} className="rounded-xl bg-hover px-3 py-3 text-left text-sm font-bold hover:bg-active">
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          )}
+          {tab === "headwear" && (
+            <>
+              {choice("hat", "Hat")}
+              {cfg.hat !== "none" && cfg.hat !== "tam" && color("hatColor", "Hat color", SWATCH.cloth)}
+              {choice("eyewear", "Glasses")}
+              {cfg.eyewear !== "none" && color("eyewearColor", "Frame / lens color", ["#111318", "#f5b301", "#c9d1dc", ...SWATCH.cloth.slice(3)])}
             </>
           )}
           {tab === "outfit" && (
@@ -280,6 +370,7 @@ export default function AvatarStudio() {
                 </div>
                 <p className="mt-1.5 text-[11px] text-sub">Big print on T-shirts, hoodies, tanks, jerseys & turtlenecks · chest logo on zip hoodies, polos, puffers & jackets · varsity & “Initial” pendant use the first letter.</p>
               </Field>
+              {choice("graphic", "Graphic")}
               {choice("textStyle", "Print style")}
               {color("textColor", "Print color", ["#ffffff", "#111318", ...SWATCH.cloth.slice(3)])}
             </>
@@ -291,6 +382,7 @@ export default function AvatarStudio() {
               {choice("pendant", "Pendant")}
               {choice("earrings", "Earrings")}
               {choice("grillz", "Grillz (shows when you talk)")}
+              {choice("piercing", "Piercing")}
             </>
           )}
           {tab === "extras" && (
