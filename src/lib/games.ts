@@ -4,7 +4,7 @@ import { supabase } from "./supabase";
 import { useApp } from "@/store/app";
 import { loadProfiles } from "./data";
 
-export type GameId = "streets" | "blocks" | "snake" | "2048" | "beatbird";
+export type GameId = "streets" | "blocks" | "snake" | "2048" | "beatbird" | "geo" | "swing" | "four";
 export type Row = { user_id: string; best: number; at: string };
 
 export async function submitScore(game: GameId, score: number) {

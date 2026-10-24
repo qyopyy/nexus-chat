@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Timer, Trash2, X } from "lucide-react";
+import { ChartColumn, FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Timer, Trash2, X } from "lucide-react";
 import { useApp, conversationTitle, toast } from "@/store/app";
 import { useChat } from "@/store/chat";
 import { TTL_OPTIONS, runBotCommand, sendMessage, setTtl } from "@/lib/data";
@@ -13,6 +13,7 @@ import { cn, formatBytes } from "@/lib/utils";
 import EmojiPicker from "@/components/ui/EmojiPicker";
 import Sheet from "@/components/ui/Sheet";
 import { isVoice } from "./MessageBubble";
+import { PollCreator } from "./Poll";
 
 const MAX_FREE = 25 * 1024 * 1024;
 const MAX_PREMIUM = 100 * 1024 * 1024;
@@ -47,6 +48,7 @@ export default function Composer({
   const [picker, setPicker] = useState(false);
   const [effects, setEffects] = useState(false);
   const [timerOpen, setTimerOpen] = useState(false);
+  const [pollOpen, setPollOpen] = useState(false);
   const ttl = useApp((s) => s.convTtl[conversationId]);
   const timerAllowed = kind === "dm" || kind === "group";
   const [effect, setEffect] = useState<EffectKind | null>(null);
@@ -290,6 +292,10 @@ export default function Composer({
             <button onClick={() => fileInput.current?.click()} className="grid size-11 shrink-0 place-items-center rounded-full text-sub transition hover:text-txt active:scale-90" title="Attach a file">
               <Paperclip className="size-[22px]" />
             </button>
+            <button onClick={() => setPollOpen(true)} className="-ml-2 grid size-11 shrink-0 place-items-center rounded-full text-sub transition hover:text-txt active:scale-90" title="Create a poll">
+              <ChartColumn className="size-[21px]" />
+            </button>
+            {pollOpen && <PollCreator conversationId={conversationId} onClose={() => setPollOpen(false)} />}
 
             <div className="flex min-h-11 min-w-0 flex-1 items-end rounded-[22px] border border-white/[.06] bg-side pr-1">
               <textarea

@@ -47,6 +47,7 @@ export default function VideoTile({
 
   const hasVideo = !!tile.stream;
   const avatarOn = useCall((s) => s.avatarOn);
+  const hand = useCall((s) => (tile.kind !== "cam" ? false : tile.isMe ? s.myHand : !!s.participants[tile.userId]?.hand));
   const mirror = tile.isMe && tile.kind === "cam" && !avatarOn; // the V-Avatar already moves like a reflection
   const name = tile.isMe ? `${profile?.display_name ?? "You"}` : profile?.display_name ?? "…";
 
@@ -93,6 +94,7 @@ export default function VideoTile({
       {tile.kind === "screen" && (
         <span className="absolute top-2 left-2 rounded bg-dnd px-1.5 py-0.5 text-[10px] font-bold text-white">LIVE</span>
       )}
+      {hand && <span className="absolute top-2 left-2 animate-pop rounded-full bg-[#f0b232] px-2 py-0.5 text-sm shadow-lg" title="Hand raised">✋</span>}
       {tile.connecting && (
         <span className="absolute top-2 left-2 rounded bg-black/60 px-2 py-0.5 text-[11px] text-idle">connecting…</span>
       )}

@@ -16,6 +16,8 @@ import Sheet, { SheetGroup, SheetItem } from "@/components/ui/Sheet";
 import VoicePlayer from "./VoicePlayer";
 import VideoEmbed from "@/components/videos/VideoEmbed";
 import GameInvite from "@/components/games/GameInvite";
+import { PollCard } from "./Poll";
+import { POLL_RE } from "@/lib/polls";
 import { useSignedUrl } from "@/lib/storage";
 import type { Message, Reaction } from "@/lib/types";
 
@@ -285,7 +287,9 @@ function MessageBubbleImpl({
           ) : (
             <>
               <Attachment m={m} mine={mine} />
-              {m.content && (
+              {POLL_RE.test(m.content) ? (
+                <PollCard id={m.content.match(POLL_RE)![1]} mine={mine} />
+              ) : m.content && (
                 <span className={cn("break-words whitespace-pre-wrap", bigEmoji ? "text-5xl leading-tight" : "msg-text", m.attachment_url && "mt-1 block")}>
                   <Linkified text={m.content} />
                 </span>

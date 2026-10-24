@@ -30,10 +30,11 @@ export type RemoteParticipant = {
   screenStream: MediaStream | null;
   connection: RTCPeerConnectionState;
   avatar: boolean;
+  hand: boolean;
 };
 
 export type NoiseMode = "off" | "standard" | "ai";
-export type VoiceQuality = 64 | 128 | 256;
+export type VoiceQuality = 64 | 128 | 320;
 
 export type ScreenQuality = "720p30" | "1080p30" | "1080p60" | "source";
 
@@ -54,6 +55,8 @@ export type VoiceSettings = {
   noiseMode: NoiseMode;
   /** Opus bitrate in kbps (Discord: 64 default, 96–384 boosted) */
   voiceQuality: VoiceQuality;
+  /** settings schema bump: v2 moved everyone to 320 kbps */
+  qualityV?: number;
   soundboardVolume: number; // 0..1
 };
 
@@ -84,6 +87,9 @@ type CallState = {
   clearActive: boolean | null;
   /** last soundboard sound played by anyone in the call (for the little toast) */
   soundToast: { from: string; name: string; emoji: string; at: number } | null;
+  /** floating emoji reactions over the call */
+  reactions: { id: number; from: string; emoji: string; x: number }[];
+  myHand: boolean;
 };
 
 export const DEFAULT_SETTINGS: VoiceSettings = {
@@ -100,7 +106,8 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   vadThreshold: 0.02,
   screenQuality: "1080p30",
   noiseMode: "ai",
-  voiceQuality: 128,
+  voiceQuality: 320,
+  qualityV: 2,
   soundboardVolume: 0.7,
 };
 
@@ -126,6 +133,8 @@ export const useCall = create<CallState>(() => ({
   avatarOn: false,
   clearActive: null,
   soundToast: null,
+  reactions: [],
+  myHand: false,
 }));
 
 const get = useCall.getState;
@@ -168,6 +177,7 @@ type StatePayload = Envelope & {
   camStreamId: string | null;
   screenStreamId: string | null;
   avatar?: boolean;
+  hand?: boolean;
 };
 
 function iceServers(): RTCIceServer[] {
@@ -439,6 +449,7 @@ function broadcastState() {
     camStreamId: st.localCam?.id ?? null,
     screenStreamId: st.localScreen?.id ?? null,
     avatar: st.avatarOn,
+    hand: st.myHand,
   });
 }
 
@@ -547,6 +558,7 @@ function ensurePeer(id: string, session?: string | null): Peer {
         screenStream: null,
         connection: "new",
         avatar: false,
+        hand: false,
       },
     },
   });
@@ -679,7 +691,7 @@ function onState(msg: StatePayload) {
   if (!me || msg.from === me || isStale(msg)) return;
   const p = ensurePeer(msg.from, msg.session);
   p.meta = { camStreamId: msg.camStreamId, screenStreamId: msg.screenStreamId };
-  updateParticipant(msg.from, { muted: msg.muted, deafened: msg.deafened, video: msg.video, screen: msg.screen, avatar: !!msg.avatar });
+  updateParticipant(msg.from, { muted: msg.muted, deafened: msg.deafened, video: msg.video, screen: msg.screen, avatar: !!msg.avatar, hand: !!msg.hand });
   syncPeerStreams(p);
 }
 
@@ -817,6 +829,30 @@ function onSoundStop(msg: Envelope) {
   });
 }
 
+// ------------------------------------------------------------------ reactions & raise hand
+export const REACTIONS = ["👍", "😂", "❤️", "🔥", "👏", "😮", "🎉", "💀"];
+let reactSeq = 0;
+let lastReact = 0;
+function pushReaction(from: string, emoji: string) {
+  const id = ++reactSeq;
+  set({ reactions: [...get().reactions.slice(-24), { id, from, emoji, x: 10 + Math.random() * 80 }] });
+  setTimeout(() => set({ reactions: get().reactions.filter((r) => r.id !== id) }), 3200);
+}
+export function sendReaction(emoji: string) {
+  if (!REACTIONS.includes(emoji) || get().status === "idle" || !me) return;
+  const now = Date.now();
+  if (now - lastReact < 250) return;
+  lastReact = now;
+  pushReaction(me, emoji);
+  send("react", { emoji });
+}
+export function toggleHand() {
+  if (get().status === "idle") return;
+  set({ myHand: !get().myHand });
+  broadcastState();
+  if (get().myHand) sfx.unmute();
+}
+
 function stopStream(s: MediaStream | null) {
   s?.getTracks().forEach((t) => t.stop());
 }
@@ -826,7 +862,10 @@ function stopStream(s: MediaStream | null) {
 function migrateSettings(saved: Partial<VoiceSettings>): VoiceSettings {
   const s = { ...DEFAULT_SETTINGS, ...saved };
   if (!saved.noiseMode) s.noiseMode = saved.noiseSuppression === false ? "off" : "ai";
-  if (![64, 128, 256].includes(s.voiceQuality)) s.voiceQuality = 128;
+  if (saved.qualityV !== 2 || ![64, 128, 320].includes(s.voiceQuality)) {
+    s.voiceQuality = 320;
+    s.qualityV = 2;
+  }
   return s;
 }
 
@@ -891,6 +930,11 @@ export async function joinCall(conversationId: string, opts: { video?: boolean }
     .on("broadcast", { event: "state" }, ({ payload }) => onState(payload as StatePayload))
     .on("broadcast", { event: "sound" }, ({ payload }) => onSound(payload as SoundMsg))
     .on("broadcast", { event: "soundstop" }, ({ payload }) => onSoundStop(payload as Envelope))
+    .on("broadcast", { event: "react" }, ({ payload }) => {
+      const m = payload as Envelope & { emoji?: string };
+      if (!me || m.from === me || isStale(m) || !peers.has(m.from) || !REACTIONS.includes(m.emoji ?? "")) return;
+      pushReaction(m.from, m.emoji!);
+    })
     .on("broadcast", { event: "bye" }, ({ payload }) => {
       const msg = payload as Envelope;
       const p = peers.get(msg.from);
@@ -984,6 +1028,8 @@ export async function leaveCall() {
     localScreen: null,
     avatarOn: false,
     soundToast: null,
+    reactions: [],
+    myHand: false,
     startedAt: null,
     focused: null,
     outgoingRing: null,

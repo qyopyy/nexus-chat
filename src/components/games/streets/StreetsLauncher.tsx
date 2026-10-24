@@ -12,6 +12,7 @@ import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import NeonStreets, { type StreetsMode } from "./NeonStreets";
 import { joinRoom, newCode, validCode, type Net } from "./net";
+import { sendGameInvites } from "@/lib/gameInvites";
 
 const COLORS = ["#ff2bd6", "#00e5ff", "#ffd400", "#00ff9c", "#ff6b2b", "#7c4dff", "#ff4d6d", "#ffffff"];
 
@@ -20,7 +21,7 @@ export const inviteLink = (code: string) => `${typeof window !== "undefined" ? w
 export default function StreetsLauncher({ onBack, mobile }: { onBack: () => void; mobile?: boolean }) {
   const me = useApp((s) => s.userId)!;
   const myName = useApp((s) => s.profiles[s.userId ?? ""]?.display_name ?? "Driver");
-  const pending = useGames((s) => s.joinCode);
+  const pending = useGames((s) => (s.joinGame === "streets" ? s.joinCode : null));
   const [color, setColor] = useState(() => {
     try {
       return localStorage.getItem("nexus:streets-color") ?? COLORS[0];
@@ -225,6 +226,7 @@ function InviteSheet({ code, onClose }: { code: string; onClose: () => void }) {
     const { data, error } = await supabase.rpc("get_or_create_dm", { p_user: uid });
     if (error) return toast(errorText(error), "error");
     await sendMessage(data as string, `🎮 Join me in Neon Streets! Room code: ${code}\n${inviteLink(code)}`);
+    void sendGameInvites("streets", code, [uid]); // live "Join?" pop-up too
     setSent((s) => ({ ...s, [uid]: true }));
   };
   return (

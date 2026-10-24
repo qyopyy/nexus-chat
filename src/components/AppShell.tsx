@@ -18,6 +18,7 @@ import MemberList from "./layout/MemberList";
 import ChatView from "./chat/ChatView";
 import FriendsView from "./chat/FriendsView";
 import IncomingCall from "./call/IncomingCall";
+import InvitePopup from "./games/InvitePopup";
 import Toasts from "./ui/Toasts";
 import Modals from "./modals/Modals";
 import MobileShell from "./mobile/MobileShell";
@@ -87,9 +88,11 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
     if (!bootstrapped) return;
     startSpotifySync();
     void startPush();
-    const play = new URLSearchParams(window.location.search).get("play");
+    const q = new URLSearchParams(window.location.search);
+    const play = q.get("play");
+    const g = q.get("g");
     if (play && /^[A-Za-z2-9]{6}$/.test(play)) {
-      joinGame(play);
+      joinGame(play, g === "geo" || g === "four" ? g : "streets");
       window.history.replaceState(null, "", "/");
     }
   }, [bootstrapped]);
@@ -120,6 +123,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       <>
         <Studio />
         <IncomingCall />
+        <InvitePopup />
         <ProfileCard />
         <Modals />
         <Toasts />
@@ -133,6 +137,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       <>
         <MobileShell />
         <IncomingCall />
+        <InvitePopup />
         <ProfileCard />
         <Modals />
         <Toasts />
@@ -179,6 +184,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       </main>
 
       <IncomingCall />
+        <InvitePopup />
       <ProfileCard />
       <Modals />
       <Toasts />

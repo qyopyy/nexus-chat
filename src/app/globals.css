@@ -54,6 +54,12 @@
     from { transform: translateX(100%); }
     to   { transform: translateX(0); }
   }
+  @keyframes reactfloat {
+    0%   { opacity: 0; transform: translateY(20px) scale(.6); }
+    12%  { opacity: 1; transform: translateY(0) scale(1.15); }
+    20%  { transform: translateY(-10px) scale(1); }
+    100% { opacity: 0; transform: translateY(-46vh) translateX(18px) scale(.9); }
+  }
   @keyframes gramheart {
     0%   { opacity: 0; transform: scale(.3); }
     15%  { opacity: 1; transform: scale(1.15); }

@@ -21,6 +21,7 @@ import {
   loadTtl,
 } from "./data";
 import { sfx } from "./sounds";
+import { onInviteRow, loadPendingInvites } from "./gameInvites";
 import { isEffect, playEffect } from "./effects";
 import { isMuted } from "@/store/prefs";
 import { haptic } from "./haptics";
@@ -184,6 +185,9 @@ export function useRealtime(userId: string | null) {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "call_events" }, ({ new: row }) => {
         onCallEvent(row as CallEvent);
       })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "game_invites" }, ({ new: row }) => {
+        onInviteRow(row as Parameters<typeof onInviteRow>[0]);
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "user_badges" }, () => {
         void refreshBadges();
       })
@@ -194,7 +198,9 @@ export function useRealtime(userId: string | null) {
         const p = row as Profile;
         if (useApp.getState().profiles[p.id]) mergeProfiles([p]);
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") void loadPendingInvites();
+      });
 
     const online = supabase.channel("online", { config: { private: true, presence: { key: userId } } });
     online

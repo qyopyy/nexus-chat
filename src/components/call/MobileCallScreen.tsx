@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Headphones, HeadphoneOff, Mic, MicOff, MonitorUp, PhoneOff, Video, VideoOff } from "lucide-react";
 import { useApp, conversationTitle } from "@/store/app";
 import { SoundboardButton, SoundToast } from "./Soundboard";
+import { ReactButton, ReactionsOverlay } from "./Reactions";
 import AvatarButton from "@/components/vavatar/AvatarButton";
 import { useCall, canScreenShare, leaveCall, setFocused, toggleDeafen, toggleMute, toggleScreen, toggleVideo } from "@/lib/call";
 import { haptic } from "@/lib/haptics";
@@ -76,6 +77,7 @@ export default function MobileCallScreen({ conversationId }: { conversationId: s
       }}
     >
       <SoundToast />
+      <ReactionsOverlay />
       {/* header — drag down to minimize */}
       <div
         className="flex touch-none items-center gap-3 px-3 pt-safe-3 pb-2"
@@ -164,6 +166,7 @@ export default function MobileCallScreen({ conversationId }: { conversationId: s
         <div className="mb-3 flex items-center justify-center gap-8">
           <AvatarButton mobile />
           <SoundboardButton mobile />
+          <ReactButton mobile />
         </div>
         <div className="flex items-center justify-around">
           <Ctl label={localCam ? "Camera off" : "Camera"} on={!!localCam} onClick={() => void toggleVideo()}>

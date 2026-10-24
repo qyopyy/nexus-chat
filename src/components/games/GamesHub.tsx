@@ -13,9 +13,15 @@ import Blocks from "./Blocks";
 import Snake from "./Snake";
 import G2048 from "./G2048";
 import BeatBird from "./BeatBird";
+import WebSwing from "./WebSwing";
+import GeoGuess from "./GeoGuess";
+import FourInRow from "./FourInRow";
 
-const GAMES: { id: GameId; name: string; tag: string; desc: string; bg: string; emoji: string; C: typeof Blocks | null }[] = [
+const GAMES: { id: GameId; name: string; tag: string; desc: string; bg: string; emoji: string; C: typeof Blocks | null; isNew?: boolean }[] = [
   { id: "streets", name: "Neon Streets", tag: "Open-city driving", desc: "Open-world island city. Jobs, cash, cops — and play live with friends using an invite code.", bg: "linear-gradient(135deg,#ff2bd6,#2b0b5c)", emoji: "🚗", C: null },
+  { id: "geo", name: "GeoGuess", tag: "Real places · multiplayer", desc: "Real photos from around the world — pin where you think you are.", bg: "linear-gradient(135deg,#00c96b,#0b2a5c)", emoji: "🌍", C: null, isNew: true },
+  { id: "swing", name: "Web Swing", tag: "Action · swing the city", desc: "Hold to web the rooftops, release to fly. Flip for combos, dodge drones, never touch the street.", bg: "linear-gradient(135deg,#8b5cff,#ff2bd6)", emoji: "🕸️", C: WebSwing, isNew: true },
+  { id: "four", name: "Four in a Row", tag: "Vs friends or bot", desc: "Connect four discs before your opponent does.", bg: "linear-gradient(135deg,#ff4d6d,#2b5cff)", emoji: "🔴", C: null, isNew: true },
   { id: "blocks", name: "Neon Blocks", tag: "Puzzle", desc: "Stack falling blocks and clear lines. It speeds up every 10 lines.", bg: "linear-gradient(135deg,#00e5ff,#0b1a5c)", emoji: "🧱", C: Blocks },
   { id: "beatbird", name: "Beat Bird", tag: "Arcade · with sound", desc: "Flap through the speaker stacks — every gap plays a note.", bg: "linear-gradient(135deg,#ffd400,#5c0b3a)", emoji: "🐦", C: BeatBird },
   { id: "snake", name: "Snake", tag: "Classic", desc: "Eat the notes, grow longer, don't bite yourself.", bg: "linear-gradient(135deg,#00ff9c,#0b3a2a)", emoji: "🐍", C: Snake },
@@ -37,11 +43,16 @@ const WEB_GAMES: { name: string; url: string; tag: string; color: string }[] = [
 
 export default function GamesHub({ mobile }: { mobile?: boolean }) {
   const [open, setOpen] = useState<GameId | null>(null);
+  const [frame, setFrame] = useState<(typeof WEB_GAMES)[number] | null>(null);
   const joinCode = useGames((s) => s.joinCode);
+  const joinFor = useGames((s) => s.joinGame);
   useEffect(() => {
-    if (joinCode) setOpen("streets");
-  }, [joinCode]);
+    if (joinCode) setOpen(joinFor);
+  }, [joinCode, joinFor]);
+  if (frame) return <WebFrame game={frame} onBack={() => setFrame(null)} mobile={mobile} />;
   if (open === "streets") return <StreetsLauncher onBack={() => setOpen(null)} mobile={mobile} />;
+  if (open === "geo") return <GeoGuess onBack={() => setOpen(null)} mobile={mobile} />;
+  if (open === "four") return <FourInRow onBack={() => setOpen(null)} mobile={mobile} />;
   if (open) return <GameScreen id={open} onBack={() => setOpen(null)} mobile={mobile} />;
   return (
     <div className="flex h-full min-h-0 flex-col bg-chat">
@@ -56,6 +67,19 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto max-w-5xl space-y-6 p-3 sm:p-5">
+          {/* new: GeoGuess */}
+          <button onClick={() => setOpen("geo")} className="group relative block w-full overflow-hidden rounded-3xl text-left" style={{ background: "radial-gradient(120% 140% at 0% 0%, #00c96b 0%, #0b2a5c 65%, #06140e 100%)" }}>
+            <div className="relative z-10 p-5 sm:p-8">
+              <div className="text-xs font-bold tracking-widest text-white/80 uppercase">New · real photos · play with friends</div>
+              <div className="mt-1 text-3xl font-black text-white sm:text-5xl">GeoGuess</div>
+              <p className="mt-2 max-w-md text-sm text-white/85">Dropped somewhere on Earth — read the clues, pin the map. Daily challenge, solo, or live rooms with your friends.</p>
+              <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 font-bold text-black transition group-hover:scale-105">
+                <Play className="size-4 fill-current" /> Play now
+              </span>
+            </div>
+            <div className="absolute -right-6 -bottom-10 text-[140px] opacity-90 sm:text-[200px]">🌍</div>
+          </button>
+
           {/* featured */}
           <button onClick={() => setOpen("streets")} className="group relative block w-full overflow-hidden rounded-3xl text-left" style={{ background: GAMES[0].bg }}>
             <div className="relative z-10 p-5 sm:p-8">
@@ -71,11 +95,12 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
 
           <section>
             <h2 className="mb-3 text-lg font-bold">Nexus games</h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {GAMES.map((g) => (
                 <button key={g.id} onClick={() => setOpen(g.id)} className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5">
-                  <div className="grid aspect-[4/3] place-items-center text-5xl" style={{ background: g.bg }}>
+                  <div className="relative grid aspect-[4/3] place-items-center text-5xl" style={{ background: g.bg }}>
                     <span className="transition group-hover:scale-110">{g.emoji}</span>
+                    {g.isNew && <span className="absolute top-2 left-2 rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-black">NEW</span>}
                   </div>
                   <div className="p-2.5">
                     <div className="truncate font-semibold">{g.name}</div>
@@ -89,10 +114,10 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
 
           <section>
             <h2 className="mb-1 text-lg font-bold">Play on the web</h2>
-            <p className="mb-3 text-sm text-sub">Free browser games from their official sites — they open in a new tab.</p>
+            <p className="mb-3 text-sm text-sub">Free browser games from their official sites — play them right here in Nexus, or open them in a new tab.</p>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {WEB_GAMES.map((g) => (
-                <a key={g.url} href={g.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-2xl bg-side p-3 hover:bg-hover">
+                <div key={g.url} className="flex items-center gap-3 rounded-2xl bg-side p-3">
                   <span className="grid size-11 shrink-0 place-items-center rounded-xl text-lg font-black text-black" style={{ background: g.color }}>
                     {g.name[0]}
                   </span>
@@ -100,8 +125,13 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
                     <span className="block truncate font-semibold">{g.name}</span>
                     <span className="block truncate text-xs text-sub">{g.tag}</span>
                   </span>
-                  <ExternalLink className="size-4 shrink-0 text-sub" />
-                </a>
+                  <button onClick={() => setFrame(g)} className="flex items-center gap-1 rounded-full bg-accent px-3 py-1.5 text-xs font-bold text-white">
+                    <Play className="size-3 fill-current" /> Play
+                  </button>
+                  <a href={g.url} target="_blank" rel="noreferrer" className="grid size-8 place-items-center rounded-full hover:bg-hover" aria-label={`Open ${g.name} in a new tab`}>
+                    <ExternalLink className="size-4 text-sub" />
+                  </a>
+                </div>
               ))}
             </div>
             <p className="mt-3 text-xs text-faint">
@@ -240,6 +270,58 @@ function GameScreen({ id, onBack, mobile }: { id: GameId; onBack: () => void; mo
             ))}
           </div>
         </aside>
+      </div>
+    </div>
+  );
+}
+
+/** plays an official web game inside Nexus (sites that refuse embedding get the new-tab button) */
+function WebFrame({ game, onBack, mobile }: { game: (typeof WEB_GAMES)[number]; onBack: () => void; mobile?: boolean }) {
+  const [loaded, setLoaded] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 6000);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-black text-white">
+      <header className={cn("flex shrink-0 items-center gap-2 border-b border-white/10 px-3", mobile ? "pt-safe-3 pb-2" : "h-12")}>
+        <button onClick={onBack} className="grid size-9 place-items-center rounded-full hover:bg-white/10" aria-label="Back to games">
+          <ArrowLeft className="size-5" />
+        </button>
+        <span className="min-w-0 flex-1 truncate font-bold">{game.name}</span>
+        <button onClick={() => void box.current?.requestFullscreen?.().catch(() => {})} className="grid size-9 place-items-center rounded-full hover:bg-white/10" aria-label="Full screen">
+          <Maximize className="size-4" />
+        </button>
+        <a href={game.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold">
+          <ExternalLink className="size-3.5" /> New tab
+        </a>
+      </header>
+      <div ref={box} className="relative min-h-0 flex-1 bg-black">
+        <iframe
+          src={game.url}
+          title={game.name}
+          onLoad={() => setLoaded(true)}
+          allow="fullscreen; autoplay; gamepad; pointer-lock; clipboard-write"
+          allowFullScreen
+          className="absolute inset-0 size-full border-0"
+        />
+        {!loaded && (
+          <div className="absolute inset-0 grid place-items-center p-6 text-center">
+            <div>
+              <div className="mx-auto size-10 animate-spin rounded-full border-4 border-white/20 border-t-white" />
+              <p className="mt-3 text-sm text-white/70">Loading {game.name}…</p>
+            </div>
+          </div>
+        )}
+        {slow && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+            <a href={game.url} target="_blank" rel="noreferrer" className="pointer-events-auto rounded-full bg-black/80 px-4 py-2 text-xs backdrop-blur">
+              Blank screen? {game.name} doesn&apos;t allow playing inside other sites — <b className="underline">open it in a new tab</b>
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );

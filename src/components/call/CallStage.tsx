@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import VideoTile, { type Tile } from "./VideoTile";
 import { SoundboardButton, SoundToast } from "./Soundboard";
+import { ReactButton, ReactionsOverlay } from "./Reactions";
 import AvatarButton from "@/components/vavatar/AvatarButton";
 
 export default function CallStage({
@@ -104,6 +105,7 @@ export default function CallStage({
   return (
     <section className={cn("relative flex shrink-0 flex-col bg-black", expanded ? "min-h-0 flex-1" : "h-[46vh] min-h-[280px]")}>
       <SoundToast />
+      <ReactionsOverlay />
       {/* top bar */}
       <div className="flex items-center gap-2 px-4 pt-3 text-sm text-white/80">
         <span className={cn("size-2 rounded-full", status === "connected" ? "bg-ok" : "bg-idle")} />
@@ -239,6 +241,7 @@ function CallControls() {
 
       <AvatarButton />
       <SoundboardButton />
+      <ReactButton />
       <CtlBtn label={muted ? "Unmute" : "Mute"} off={muted || deafened} onClick={toggleMute}>
         {muted || deafened ? <MicOff className="size-6" /> : <Mic className="size-6" />}
       </CtlBtn>
