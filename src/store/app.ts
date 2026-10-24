@@ -59,9 +59,9 @@ export type AppState = {
   userBadges: Record<string, string[]>;
   profileCard: ProfileCardState;
   /** phone layout: which bottom tab is showing */
-  mobileTab: "chats" | "spaces" | "videos" | "music" | "games" | "friends" | "me";
+  mobileTab: "chats" | "spaces" | "videos" | "music" | "games" | "friends" | "me" | "gram";
   /** a full-width hub replaces the chat pane: music, videos or the creator studio */
-  hub: "music" | "videos" | "studio" | "games" | null;
+  hub: "music" | "videos" | "studio" | "games" | "gram" | null;
   /** phone layout: call screen minimized to the floating bar */
   callMinimized: boolean;
 };

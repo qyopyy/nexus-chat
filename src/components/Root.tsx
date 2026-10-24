@@ -7,7 +7,7 @@ import AuthScreen, { ResetPasswordScreen, type AuthMode } from "@/components/Aut
 import AppShell from "@/components/AppShell";
 import SetupScreen from "@/components/SetupScreen";
 
-export default function Root({ mode, initialVideo, initialRelease }: { mode?: AuthMode; initialVideo?: string; initialRelease?: string }) {
+export default function Root({ mode, initialVideo, initialRelease, initialGram }: { mode?: AuthMode; initialVideo?: string; initialRelease?: string; initialGram?: string }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [recovering, setRecovering] = useState(false);
 
@@ -36,5 +36,5 @@ export default function Root({ mode, initialVideo, initialRelease }: { mode?: Au
   }
   if (recovering && session) return <ResetPasswordScreen onDone={() => setRecovering(false)} />;
   if (!session) return <AuthScreen initialMode={mode ?? "login"} />;
-  return <AppShell key={session.user.id} userId={session.user.id} initialVideo={initialVideo} initialRelease={initialRelease} />;
+  return <AppShell key={session.user.id} userId={session.user.id} initialVideo={initialVideo} initialRelease={initialRelease} initialGram={initialGram} />;
 }

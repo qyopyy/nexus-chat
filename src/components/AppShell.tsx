@@ -32,8 +32,10 @@ import VideosHub from "./videos/VideosHub";
 import Studio from "./studio/Studio";
 import { useStudio, videosGo } from "@/store/studio";
 import { releaseByCode } from "@/lib/protect";
+import NexusGram from "./gram/NexusGram";
+import { openGram } from "@/lib/gram";
 
-export default function AppShell({ userId, initialVideo, initialRelease }: { userId: string; initialVideo?: string; initialRelease?: string }) {
+export default function AppShell({ userId, initialVideo, initialRelease, initialGram }: { userId: string; initialVideo?: string; initialRelease?: string; initialGram?: string }) {
   const spaceId = useApp((s) => s.spaceId);
   const conversationId = useApp((s) => s.conversationId);
   const showMembers = useApp((s) => s.showMembers);
@@ -65,6 +67,12 @@ export default function AppShell({ userId, initialVideo, initialRelease }: { use
     useApp.setState({ hub: "videos", mobileTab: "videos" });
     videosGo({ view: "watch", key: initialVideo });
   }, [initialVideo]);
+  // /gram/<username> opens that NexusGram profile (from the public /u/ page)
+  useEffect(() => {
+    if (!bootstrapped || initialGram === undefined) return;
+    window.history.replaceState(null, "", "/");
+    openGram(initialGram ? { view: "profile", username: initialGram } : { view: "home" });
+  }, [bootstrapped, initialGram]);
   // /release/<code> opens that release in Studio (owner + reviewers)
   useEffect(() => {
     if (!bootstrapped || !initialRelease) return;
@@ -147,7 +155,9 @@ export default function AppShell({ userId, initialVideo, initialRelease }: { use
       {/* main */}
       <main className={cn("h-full min-w-0 flex-1 md:flex", mobileSidebar ? "hidden" : "flex")}>
         <div className="flex h-full min-w-0 flex-1 flex-col bg-chat">
-          {hub === "games" ? (
+          {hub === "gram" ? (
+            <NexusGram />
+          ) : hub === "games" ? (
             <GamesHub />
           ) : hub === "music" ? (
             <MusicHub />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Clapperboard, Gamepad2, Headphones, LayoutDashboard, MessageCircle, Plus } from "lucide-react";
+import { Aperture, Clapperboard, Gamepad2, Headphones, LayoutDashboard, MessageCircle, Plus } from "lucide-react";
 import { useApp, openModal } from "@/store/app";
 import { selectHome, selectSpace } from "@/lib/data";
 import { cn, initials } from "@/lib/utils";
@@ -73,6 +73,9 @@ export default function ServerRail() {
     <nav className="flex h-full w-[72px] shrink-0 flex-col items-center gap-2 overflow-y-auto bg-rail py-3">
       <RailItem active={spaceId === null && !hub} label="Direct Messages" onClick={() => (useApp.setState({ hub: null }), selectHome())} badge={homeBadge}>
         <MessageCircle className="size-6" />
+      </RailItem>
+      <RailItem active={hub === "gram"} label="NexusGram — posts, Shorts & stories" onClick={() => useApp.setState({ hub: "gram" })} color={hub === "gram" ? "#c13584" : undefined}>
+        <Aperture className="size-6" />
       </RailItem>
       <RailItem active={hub === "videos"} label="Videos" onClick={() => useApp.setState({ hub: "videos" })} color={hub === "videos" ? "#eb459e" : undefined}>
         <Clapperboard className="size-6" />

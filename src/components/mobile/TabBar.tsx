@@ -1,16 +1,17 @@
 "use client";
 
 import { useMemo } from "react";
-import { Clapperboard, Headphones, LayoutGrid, MessageCircle, UserRound } from "lucide-react";
+import { Aperture, Clapperboard, Headphones, LayoutGrid, MessageCircle, UserRound } from "lucide-react";
 import { useGames } from "@/store/games";
 import { useApp } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { musicHome } from "@/store/music";
 import { videosHome } from "@/store/studio";
+import { gramHome } from "@/lib/gram";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 
-type Tab = "chats" | "spaces" | "videos" | "music" | "friends" | "me";
+type Tab = "chats" | "spaces" | "gram" | "videos" | "music" | "friends" | "me";
 
 export default function TabBar() {
   const tab = useApp((s) => s.mobileTab);
@@ -28,6 +29,7 @@ export default function TabBar() {
   const items: { id: Tab; label: string; icon: React.ReactNode; badge?: number; dot?: boolean }[] = [
     { id: "chats", label: "Chats", icon: <MessageCircle className="size-[25px]" strokeWidth={1.9} />, badge: chatBadge },
     { id: "spaces", label: "Spaces", icon: <LayoutGrid className="size-[25px]" strokeWidth={1.9} />, dot: spaceDot },
+    { id: "gram", label: "Gram", icon: <Aperture className="size-[25px]" strokeWidth={1.9} /> },
     { id: "videos", label: "Videos", icon: <Clapperboard className="size-[25px]" strokeWidth={1.9} /> },
     { id: "music", label: "Music", icon: <Headphones className="size-[25px]" strokeWidth={1.9} /> },
     {
@@ -53,6 +55,7 @@ export default function TabBar() {
                   if (it.id === "spaces") useApp.setState({ spaceId: null });
                   if (it.id === "music") musicHome();
                   if (it.id === "videos") videosHome();
+                  if (it.id === "gram") gramHome();
                   window.dispatchEvent(new CustomEvent("nexus:scrolltop"));
                 } else haptic.select();
                 useApp.setState({ mobileTab: it.id, mobileSidebar: true });

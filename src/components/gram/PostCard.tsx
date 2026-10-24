@@ -1,0 +1,224 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Heart, MessageCircle, Ellipsis, Send, Share2, Trash2, X } from "lucide-react";
+import { useApp, toast } from "@/store/app";
+import { haptic } from "@/lib/haptics";
+import { cn } from "@/lib/utils";
+import { addComment, ago, comments, fmt, gramGo, mediaUrl, publicProfileUrl, removeComment, removePost, setLike, type Comment, type Post } from "@/lib/gram";
+import Avatar from "@/components/ui/Avatar";
+import NameTag from "@/components/ui/NameTag";
+
+export function Author({ userId, sub, size = 34 }: { userId: string; sub?: string; size?: number }) {
+  const p = useApp((s) => s.profiles[userId]);
+  return (
+    <button onClick={() => p && gramGo({ view: "profile", username: p.username })} className="flex min-w-0 items-center gap-2.5 text-left">
+      <Avatar userId={userId} size={size} plain />
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold">
+          <NameTag userId={userId} badges={false} />
+        </span>
+        {sub && <span className="block truncate text-xs text-sub">{sub}</span>}
+      </span>
+    </button>
+  );
+}
+
+/** big heart that pops on double-tap */
+function Burst({ show }: { show: number }) {
+  if (!show) return null;
+  return (
+    <div key={show} className="pointer-events-none absolute inset-0 grid place-items-center">
+      <Heart className="size-28 animate-[gramheart_.8s_ease-out_forwards] fill-white text-white drop-shadow-[0_6px_20px_rgba(0,0,0,.45)]" />
+    </div>
+  );
+}
+
+export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: () => void }) {
+  const meId = useApp((s) => s.userId);
+  const author = useApp((s) => s.profiles[post.author_id]);
+  const [liked, setLiked] = useState(!!post.liked);
+  const [likes, setLikes] = useState(post.like_count);
+  const [i, setI] = useState(0);
+  const [burst, setBurst] = useState(0);
+  const [showComments, setShowComments] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [more, setMore] = useState(false);
+  const lastTap = useRef(0);
+  const m = post.media[i];
+
+  const toggle = (force?: boolean) => {
+    const on = force ?? !liked;
+    if (on === liked) return;
+    haptic.light();
+    setLiked(on);
+    setLikes((n) => n + (on ? 1 : -1));
+    void setLike(post.id, on);
+  };
+  const tap = () => {
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      toggle(true);
+      setBurst(now);
+    }
+    lastTap.current = now;
+  };
+
+  return (
+    <article className="overflow-hidden border-line/60 bg-chat sm:rounded-2xl sm:border">
+      <header className="flex items-center gap-2 px-3 py-2.5">
+        <div className="min-w-0 flex-1">
+          <Author userId={post.author_id} sub={ago(post.created_at)} />
+        </div>
+        <div className="relative">
+          <button onClick={() => setMenu(!menu)} className="grid size-8 place-items-center rounded-full hover:bg-hover" aria-label="More">
+            <Ellipsis className="size-5" />
+          </button>
+          {menu && (
+            <div className="absolute top-9 right-0 z-20 w-48 rounded-xl bg-menu p-1 shadow-2xl" onMouseLeave={() => setMenu(false)}>
+              {author && (
+                <button
+                  onClick={() => {
+                    void navigator.clipboard.writeText(publicProfileUrl(author.username));
+                    toast("Profile link copied", "success");
+                    setMenu(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-hover"
+                >
+                  <Share2 className="size-4" /> Copy profile link
+                </button>
+              )}
+              {(post.author_id === meId || (useApp.getState().profiles[meId ?? ""]?.site_role ?? "member") !== "member") && (
+                <button
+                  onClick={async () => {
+                    setMenu(false);
+                    if (confirm("Delete this post?") && (await removePost(post.id))) onRemoved?.();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-dnd hover:bg-dnd/10"
+                >
+                  <Trash2 className="size-4" /> Delete
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </header>
+
+      <div className="relative bg-black select-none" onClick={tap}>
+        {m.type === "video" ? (
+          <video src={mediaUrl(m.path)} poster={mediaUrl(m.poster)} controls playsInline loop className="max-h-[78vh] w-full object-contain" />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={mediaUrl(m.path)} alt="" loading="lazy" draggable={false} className="max-h-[78vh] w-full object-contain" style={m.w && m.h ? { aspectRatio: `${m.w}/${m.h}` } : undefined} />
+        )}
+        <Burst show={burst} />
+        {post.media.length > 1 && (
+          <>
+            {i > 0 && (
+              <button onClick={(e) => (e.stopPropagation(), setI(i - 1))} className="absolute top-1/2 left-2 grid size-8 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-black shadow" aria-label="Previous">
+                <ChevronLeft className="size-5" />
+              </button>
+            )}
+            {i < post.media.length - 1 && (
+              <button onClick={(e) => (e.stopPropagation(), setI(i + 1))} className="absolute top-1/2 right-2 grid size-8 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-black shadow" aria-label="Next">
+                <ChevronRight className="size-5" />
+              </button>
+            )}
+            <div className="absolute inset-x-0 bottom-2 flex justify-center gap-1">
+              {post.media.map((_, k) => (
+                <span key={k} className={cn("size-1.5 rounded-full", k === i ? "bg-white" : "bg-white/45")} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="px-3 pt-2 pb-3">
+        <div className="flex items-center gap-1">
+          <button onClick={() => toggle()} className="grid size-10 place-items-center rounded-full active:scale-90" aria-label={liked ? "Unlike" : "Like"}>
+            <Heart className={cn("size-7 transition", liked ? "fill-[#ff3040] text-[#ff3040]" : "")} />
+          </button>
+          <button onClick={() => setShowComments(true)} className="grid size-10 place-items-center rounded-full active:scale-90" aria-label="Comments">
+            <MessageCircle className="size-7 -scale-x-100" />
+          </button>
+          <span className="ml-auto text-xs text-sub">{fmt(post.view_count)} views</span>
+        </div>
+        <div className="px-1 text-sm font-semibold">{fmt(likes)} likes</div>
+        {post.caption && (
+          <p className={cn("px-1 text-sm whitespace-pre-wrap", !more && "line-clamp-2")} onClick={() => setMore(true)}>
+            <b className="mr-1.5">{author?.username}</b>
+            {post.caption}
+          </p>
+        )}
+        {post.comment_count > 0 && (
+          <button onClick={() => setShowComments(true)} className="px-1 pt-1 text-sm text-sub">
+            View all {post.comment_count} comments
+          </button>
+        )}
+      </div>
+      {showComments && <CommentsSheet post={post} onClose={() => setShowComments(false)} />}
+    </article>
+  );
+}
+
+export function CommentsSheet({ post, onClose }: { post: Post; onClose: () => void }) {
+  const meId = useApp((s) => s.userId);
+  const [rows, setRows] = useState<Comment[] | null>(null);
+  const [text, setText] = useState("");
+  useEffect(() => void comments(post.id).then(setRows), [post.id]);
+  return (
+    <div className="fixed inset-0 z-[85] flex items-end justify-center bg-black/60 sm:items-center" onClick={onClose}>
+      <div className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-t-3xl bg-chat sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center border-b border-line/60 px-4 py-3">
+          <div className="flex-1 text-center font-bold">Comments</div>
+          <button onClick={onClose} className="grid size-8 place-items-center rounded-full hover:bg-hover" aria-label="Close">
+            <X className="size-5" />
+          </button>
+        </div>
+        <div className="min-h-40 flex-1 space-y-3 overflow-y-auto p-4">
+          {rows === null ? (
+            <p className="text-center text-sm text-sub">Loading…</p>
+          ) : rows.length === 0 ? (
+            <p className="py-8 text-center text-sm text-sub">No comments yet. Start the conversation.</p>
+          ) : (
+            rows.map((c) => (
+              <div key={c.id} className="group flex gap-2.5">
+                <Avatar userId={c.author_id} size={32} plain />
+                <div className="min-w-0 flex-1 text-sm">
+                  <span className="mr-1.5 font-semibold">
+                    <NameTag userId={c.author_id} badges={false} />
+                  </span>
+                  <span className="text-xs text-sub">{ago(c.created_at)}</span>
+                  <p className="break-words whitespace-pre-wrap">{c.body}</p>
+                </div>
+                {(c.author_id === meId || post.author_id === meId) && (
+                  <button onClick={async () => (await removeComment(c.id)) && setRows((r) => (r ?? []).filter((x) => x.id !== c.id))} className="text-sub opacity-0 group-hover:opacity-100 hover:text-dnd" aria-label="Delete comment">
+                    <Trash2 className="size-4" />
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!text.trim()) return;
+            const c = await addComment(post.id, text);
+            if (c) {
+              setRows((r) => [...(r ?? []), c]);
+              setText("");
+            }
+          }}
+          className="flex items-center gap-2 border-t border-line/60 p-3 pb-safe-3"
+        >
+          {meId && <Avatar userId={meId} size={32} plain />}
+          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a comment…" maxLength={1000} className="min-w-0 flex-1 rounded-full bg-black/25 px-4 py-2 text-sm outline-none" />
+          <button disabled={!text.trim()} className="grid size-9 place-items-center rounded-full bg-accent text-white disabled:opacity-40" aria-label="Post comment">
+            <Send className="size-4" />
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}

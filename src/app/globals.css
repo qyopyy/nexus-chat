@@ -54,6 +54,14 @@
     from { transform: translateX(100%); }
     to   { transform: translateX(0); }
   }
+  @keyframes gramheart {
+    0%   { opacity: 0; transform: scale(.3); }
+    15%  { opacity: 1; transform: scale(1.15); }
+    30%  { transform: scale(.95); }
+    45%  { transform: scale(1); }
+    80%  { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.1) translateY(-18px); }
+  }
   @keyframes shake {
     0%, 100% { transform: translateX(0); }
     20%, 60% { transform: translateX(-8px); }

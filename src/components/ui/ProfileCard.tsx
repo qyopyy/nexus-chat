@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Award, ExternalLink, Eye, Gavel, Heart, MessageCircle, Phone, ShieldCheck } from "lucide-react";
+import { Aperture, Award, ExternalLink, Eye, Gavel, Heart, MessageCircle, Phone, ShieldCheck } from "lucide-react";
+import { openGram } from "@/lib/gram";
 import { useApp, openModal, toast } from "@/store/app";
 import { openDM } from "@/lib/data";
 import { startCall } from "@/lib/call";
@@ -239,6 +240,15 @@ export function CardBody({ userId }: { userId: string }) {
         <div className="mt-1 text-sm">{new Date(p.created_at).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" })}</div>
         <div className="mt-1 text-xs text-sub">{statusLabel(status)}</div>
 
+        <button
+          onClick={() => {
+            close();
+            openGram({ view: "profile", username: p.username });
+          }}
+          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#ff2bd6]/25 via-[#8b5cff]/25 to-[#00c2ff]/25 py-2.5 text-sm font-semibold hover:brightness-125 active:scale-[.98]"
+        >
+          <Aperture className="size-4" /> {userId === me ? "My NexusGram" : "NexusGram profile"}
+        </button>
         {userId !== me && (
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button

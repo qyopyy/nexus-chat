@@ -1,0 +1,278 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Eye, Heart, Plus, Trash2, X } from "lucide-react";
+import { useApp } from "@/store/app";
+import { haptic } from "@/lib/haptics";
+import { cn } from "@/lib/utils";
+import { ago, gramGo, likeStory, mediaUrl, myStoryState, removeStory, storiesOf, storyTray, storyViewers, useGram, viewStory, type Story, type TrayItem } from "@/lib/gram";
+import Avatar from "@/components/ui/Avatar";
+import NameTag from "@/components/ui/NameTag";
+
+/** gradient ring: colourful when there's something unseen */
+export function Ring({ userId, size, unseen, onClick, add }: { userId: string; size: number; unseen: boolean; onClick?: () => void; add?: boolean }) {
+  return (
+    <button onClick={onClick} className="relative shrink-0 rounded-full p-[3px] active:scale-95" style={{ background: unseen ? "conic-gradient(from 200deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5, #feda75)" : "rgba(255,255,255,.25)" }}>
+      <span className="block rounded-full bg-chat p-[2px]">
+        <Avatar userId={userId} size={size} plain />
+      </span>
+      {add && (
+        <span className="absolute right-0 bottom-0 grid size-6 place-items-center rounded-full bg-accent text-white ring-2 ring-chat">
+          <Plus className="size-4" />
+        </span>
+      )}
+    </button>
+  );
+}
+
+export function StoryTray() {
+  const meId = useApp((s) => s.userId)!;
+  const [tray, setTray] = useState<TrayItem[]>([]);
+  const open = useGram((s) => s.story);
+  useEffect(() => {
+    if (!open) void storyTray().then(setTray);
+  }, [open]);
+  const mine = tray.find((t) => t.author_id === meId);
+  const others = tray.filter((t) => t.author_id !== meId);
+  const authors = [...(mine ? [meId] : []), ...others.map((t) => t.author_id)];
+  return (
+    <div className="flex gap-3 overflow-x-auto px-3 py-3 [scrollbar-width:none]">
+      <div className="flex w-[74px] shrink-0 flex-col items-center gap-1">
+        <Ring userId={meId} size={62} unseen={!!mine?.unseen} add={!mine} onClick={() => (mine ? useGram.setState({ story: { authors, index: 0 } }) : useGram.setState({ create: "story" }))} />
+        <span className="w-full truncate text-center text-xs">{mine ? "Your story" : "Add story"}</span>
+      </div>
+      {others.map((t) => (
+        <TrayItemView key={t.author_id} t={t} onOpen={() => useGram.setState({ story: { authors, index: authors.indexOf(t.author_id) } })} />
+      ))}
+      {!others.length && <div className="self-center text-xs text-sub">Follow people to see their stories here.</div>}
+    </div>
+  );
+}
+function TrayItemView({ t, onOpen }: { t: TrayItem; onOpen: () => void }) {
+  const p = useApp((s) => s.profiles[t.author_id]);
+  return (
+    <div className="flex w-[74px] shrink-0 flex-col items-center gap-1">
+      <Ring userId={t.author_id} size={62} unseen={t.unseen > 0} onClick={onOpen} />
+      <span className={cn("w-full truncate text-center text-xs", t.unseen ? "" : "text-sub")}>{p?.username ?? "…"}</span>
+    </div>
+  );
+}
+
+/** full-screen viewer: progress bars, tap to skip, hold to pause, like, viewers on your own */
+export function StoryViewer() {
+  const st = useGram((s) => s.story);
+  const meId = useApp((s) => s.userId);
+  const [stories, setStories] = useState<Story[] | null>(null);
+  const [i, setI] = useState(0);
+  const [t, setT] = useState(0);
+  const [hold, setHold] = useState(false);
+  const [liked, setLiked] = useState<Set<string>>(new Set());
+  const [viewers, setViewers] = useState<string[] | null>(null);
+  const vid = useRef<HTMLVideoElement>(null);
+  const author = st ? st.authors[st.index] : null;
+
+  const close = useCallback(() => useGram.setState({ story: null }), []);
+  const nextAuthor = useCallback(() => {
+    if (!st) return;
+    if (st.index + 1 < st.authors.length) useGram.setState({ story: { ...st, index: st.index + 1 } });
+    else close();
+  }, [st, close]);
+  const prevAuthor = () => st && st.index > 0 && useGram.setState({ story: { ...st, index: st.index - 1 } });
+
+  useEffect(() => {
+    if (!author) return;
+    setStories(null);
+    setViewers(null);
+    void storiesOf(author).then(async (list) => {
+      const state = await myStoryState(list.map((s) => s.id));
+      setLiked(state.liked);
+      const firstUnseen = list.findIndex((s) => !state.seen.has(s.id));
+      setI(firstUnseen >= 0 && author !== meId ? firstUnseen : 0);
+      setT(0);
+      setStories(list);
+      if (!list.length) nextAuthor();
+    });
+  }, [author]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const s = stories?.[i];
+  useEffect(() => {
+    if (s) viewStory(s.id);
+    setT(0);
+    setViewers(null);
+  }, [s?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // timer for photos (6 s); videos follow their own time
+  useEffect(() => {
+    if (!s || hold || viewers) return;
+    if (s.media.type === "video") return;
+    const id = setInterval(() => setT((x) => x + 0.05 / 6), 50);
+    return () => clearInterval(id);
+  }, [s, hold, viewers]);
+  useEffect(() => {
+    if (t >= 1 && stories) {
+      if (i + 1 < stories.length) setI(i + 1);
+      else nextAuthor();
+    }
+  }, [t]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const v = vid.current;
+    if (!v) return;
+    if (hold || viewers) v.pause();
+    else void v.play().catch(() => {});
+  }, [hold, viewers, s?.id]);
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+      if (e.key === "ArrowRight") go(1);
+      if (e.key === "ArrowLeft") go(-1);
+    };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  });
+
+  const go = (d: number) => {
+    if (!stories) return;
+    const n = i + d;
+    if (n < 0) prevAuthor();
+    else if (n >= stories.length) nextAuthor();
+    else setI(n);
+  };
+
+  if (!st || !author) return null;
+  const p = useApp.getState().profiles[author];
+  const mine = author === meId;
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black">
+      <div className="relative h-full w-full max-w-[480px] overflow-hidden bg-black sm:h-[92vh] sm:rounded-2xl">
+        {s &&
+          (s.media.type === "video" ? (
+            <video
+              key={s.id}
+              ref={vid}
+              src={mediaUrl(s.media.path)}
+              poster={mediaUrl(s.media.poster)}
+              autoPlay
+              playsInline
+              onTimeUpdate={(e) => setT(e.currentTarget.currentTime / Math.max(0.1, e.currentTarget.duration))}
+              onEnded={() => setT(1)}
+              className="absolute inset-0 h-full w-full object-contain"
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={s.id} src={mediaUrl(s.media.path)} alt="" className="absolute inset-0 h-full w-full object-contain" />
+          ))}
+
+        {/* tap zones */}
+        <div className="absolute inset-0 flex" onPointerDown={() => setHold(true)} onPointerUp={() => setHold(false)} onPointerLeave={() => setHold(false)}>
+          <button className="h-full w-1/3" onClick={() => go(-1)} aria-label="Previous" />
+          <div className="h-full w-1/3" />
+          <button className="h-full w-1/3" onClick={() => go(1)} aria-label="Next" />
+        </div>
+
+        {/* top bar */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 to-transparent px-3 pt-safe-3 pb-10">
+          <div className="flex gap-1">
+            {(stories ?? []).map((x, k) => (
+              <div key={x.id} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/35">
+                <div className="h-full bg-white" style={{ width: `${k < i ? 100 : k === i ? Math.min(100, t * 100) : 0}%` }} />
+              </div>
+            ))}
+          </div>
+          <div className="pointer-events-auto mt-3 flex items-center gap-2 text-white">
+            <button
+              onClick={() => {
+                close();
+                if (p) gramGo({ view: "profile", username: p.username });
+              }}
+              className="flex items-center gap-2"
+            >
+              <Avatar userId={author} size={34} plain />
+              <span className="text-sm font-bold">{p?.username}</span>
+            </button>
+            {s && <span className="text-xs text-white/70">{ago(s.created_at)} · {s.duration_h}h</span>}
+            <button onClick={close} className="ml-auto grid size-9 place-items-center rounded-full hover:bg-white/10" aria-label="Close">
+              <X className="size-6" />
+            </button>
+          </div>
+        </div>
+
+        {s?.caption && <div className="pointer-events-none absolute inset-x-0 bottom-24 px-6 text-center text-lg font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.8)]">{s.caption}</div>}
+
+        {/* bottom actions */}
+        {s && (
+          <div className="absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/70 to-transparent px-4 pt-10 pb-safe-4 text-white">
+            {mine ? (
+              <>
+                <button
+                  onClick={async () => setViewers(await storyViewers(s.id))}
+                  className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-sm font-semibold"
+                >
+                  <Eye className="size-4" /> {s.view_count} · <Heart className="size-4" /> {s.like_count}
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!confirm("Delete this story?")) return;
+                    if (await removeStory(s.id)) {
+                      const rest = (stories ?? []).filter((x) => x.id !== s.id);
+                      if (!rest.length) close();
+                      else {
+                        setStories(rest);
+                        setI(Math.min(i, rest.length - 1));
+                      }
+                    }
+                  }}
+                  className="ml-auto grid size-10 place-items-center rounded-full bg-white/15"
+                  aria-label="Delete story"
+                >
+                  <Trash2 className="size-5" />
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="flex-1 text-xs text-white/70">Expires {new Date(s.expires_at).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                <button
+                  onClick={() => {
+                    const on = !liked.has(s.id);
+                    haptic.light();
+                    setLiked((l) => {
+                      const n = new Set(l);
+                      if (on) n.add(s.id);
+                      else n.delete(s.id);
+                      return n;
+                    });
+                    void likeStory(s.id, on);
+                  }}
+                  className="grid size-11 place-items-center rounded-full active:scale-90"
+                  aria-label="Like story"
+                >
+                  <Heart className={cn("size-8", liked.has(s.id) && "fill-[#ff3040] text-[#ff3040]")} />
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {viewers && (
+          <div className="absolute inset-x-0 bottom-0 max-h-[60%] overflow-y-auto rounded-t-3xl bg-chat p-4 text-txt" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 flex items-center">
+              <span className="flex-1 font-bold">Viewers ({viewers.length})</span>
+              <button onClick={() => setViewers(null)} className="grid size-8 place-items-center rounded-full hover:bg-hover" aria-label="Close viewers">
+                <X className="size-5" />
+              </button>
+            </div>
+            {viewers.length === 0 ? (
+              <p className="text-sm text-sub">No views yet.</p>
+            ) : (
+              viewers.map((v) => (
+                <div key={v} className="flex items-center gap-2.5 py-1.5">
+                  <Avatar userId={v} size={34} plain />
+                  <NameTag userId={v} badges={false} />
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

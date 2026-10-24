@@ -15,6 +15,7 @@ import MobileCallBar from "./MobileCallBar";
 import GamesHub from "@/components/games/GamesHub";
 import MusicHub from "@/components/music/MusicHub";
 import VideosHub from "@/components/videos/VideosHub";
+import NexusGram from "@/components/gram/NexusGram";
 
 /** Phone layout: bottom tabs + push-style chat screen with swipe-from-edge to go back */
 export default function MobileShell() {
@@ -43,6 +44,7 @@ export default function MobileShell() {
               <FriendsView />
             </div>
           )}
+          {tab === "gram" && <NexusGram mobile />}
           {tab === "videos" && <VideosHub mobile />}
           {tab === "music" && <MusicHub mobile />}
           {tab === "games" && <GamesHub mobile />}
