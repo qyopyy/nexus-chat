@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AudioWaveform, Barcode, Calculator, Copy, Download, Drum, Fingerprint, Mic, Printer, Signature, Upload } from "lucide-react";
+import { AudioWaveform, Barcode, Calculator, Copy, Download, Drum, Fingerprint, Mic, Printer, ShieldAlert, Signature, Upload } from "lucide-react";
+import TakedownTool from "./Takedown";
 import { supabase, errorText } from "@/lib/supabase";
 import { NEED, gate, useMyTier } from "@/lib/premium";
 import { openModal, useApp } from "@/store/app";
@@ -14,10 +15,11 @@ import { cn } from "@/lib/utils";
 import { CheckView, ReportView, SplitEditor, printSplitSheet } from "./AudioBits";
 import type { Split } from "@/lib/types";
 
-export type ToolId = "isrc" | "analyzer" | "copyright" | "splits" | "tempo" | "tuner" | "royalties";
+export type ToolId = "isrc" | "takedown" | "analyzer" | "copyright" | "splits" | "tempo" | "tuner" | "royalties";
 
 export const TOOLS: { id: ToolId; label: string; sub: string; color: string; icon: React.ReactNode }[] = [
   { id: "isrc", label: "Audia ISRC generator", sub: "Official QT6HV codes", color: "#1DB954", icon: <Barcode className="size-5" /> },
+  { id: "takedown", label: "Takedown notice", sub: "Spotify & Apple Music", color: "#E5484D", icon: <ShieldAlert className="size-5" /> },
   { id: "analyzer", label: "Audio analyzer", sub: "BPM, key, LUFS, true peak", color: "#F0B232", icon: <AudioWaveform className="size-5" /> },
   { id: "copyright", label: "Copyright check", sub: "Find copyrighted music", color: "#ED4245", icon: <Fingerprint className="size-5" /> },
   { id: "splits", label: "Split sheet", sub: "Who owns what %", color: "#9B59B6", icon: <Signature className="size-5" /> },
@@ -62,6 +64,7 @@ export default function ToolView({ tool }: { tool: ToolId }) {
         </div>
       </div>
       {tool === "isrc" && <IsrcTool />}
+      {tool === "takedown" && <TakedownTool />}
       {tool === "analyzer" && <AnalyzerTool />}
       {tool === "copyright" && <AnalyzerTool copyrightFirst />}
       {tool === "splits" && <SplitTool />}

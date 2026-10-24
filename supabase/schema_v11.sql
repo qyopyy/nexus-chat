@@ -490,3 +490,17 @@ grant execute on all functions in schema public to authenticated, service_role;
 revoke execute on function public.expired_messages(int) from authenticated;
 revoke execute on function public.dm_between(uuid, uuid) from authenticated;
 revoke execute on function public.bot_say(uuid, uuid, text) from authenticated;
+
+-- ---------------------------------------------------------------- v12: takedown notices (Spotify / Apple Music)
+-- applied live as nexus_26a_takedowns (see migration)
+create table if not exists public.takedown_notices (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references public.profiles (id) on delete cascade,
+  platform text not null check (platform in ('spotify','apple')),
+  status text not null default 'draft' check (status in ('draft','sent','resolved','rejected')),
+  work_title text not null, work_artist text, isrc text, upc text, original_url text,
+  infringing text[] not null default '{}', description text not null, contact jsonb not null default '{}'::jsonb,
+  signature text not null, shield_work uuid references public.shield_works (id) on delete set null,
+  note text, sent_at timestamptz, created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+);
+-- RLS: owner read/insert/update/remove; admins read (see live migration nexus_26a_takedowns)

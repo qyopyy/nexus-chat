@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Clapperboard,
+  ShieldAlert,
   ArrowLeft,
   AudioWaveform,
   ChartColumn,
@@ -46,6 +47,7 @@ import DistOverview from "./DistOverview";
 import OrdersAdmin from "./OrdersAdmin";
 import { NEED, gate, useCanReview } from "@/lib/premium";
 import ShieldStudio from "./ShieldStudio";
+import TakedownTool from "@/components/music/Takedown";
 import ToolView, { ToolsGrid, type ToolId } from "@/components/music/Tools";
 import type { DistRelease, Video, VideoComment } from "@/lib/types";
 
@@ -60,6 +62,7 @@ const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: st
   { id: "royalties", label: "Royalties", icon: <Wallet className="size-5" />, group: "Music distribution" },
   { id: "tools", label: "Music tools", icon: <AudioWaveform className="size-5" />, group: "Music distribution" },
   { id: "shield", label: "Shield 360", icon: <ShieldCheck className="size-5" />, group: "Music distribution" },
+  { id: "takedowns", label: "Takedowns", icon: <ShieldAlert className="size-5" />, group: "Music distribution" },
   { id: "review", label: "Review queue", icon: <ShieldCheck className="size-5" />, group: "Admin", reviewer: true },
   { id: "orders", label: "Orders & requests", icon: <Crown className="size-5" />, group: "Admin", staff: true },
   { id: "dist-settings", label: "Distribution settings", icon: <Settings className="size-5" />, group: "Admin", staff: true },
@@ -197,6 +200,13 @@ export default function Studio() {
             {section === "royalties" && <Royalties />}
             {section === "tools" && <StudioTools />}
             {section === "shield" && <ShieldStudio />}
+            {section === "takedowns" && (
+              <>
+                <H>Takedown notices</H>
+                <p className="-mt-3 mb-4 text-sm text-sub">Someone uploaded your music to Spotify or Apple Music? Fill this in and send an official copyright notice in one go.</p>
+                <TakedownTool />
+              </>
+            )}
             {section === "review" && reviewer && <ReviewQueue />}
             {section === "orders" && staff && <OrdersAdmin />}
             {section === "dist-settings" && staff && <DistSettings />}

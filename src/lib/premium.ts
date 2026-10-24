@@ -28,7 +28,7 @@ export const PLANS: Plan[] = [
     price: 5.99,
     color: "#00e5ff",
     emoji: "💎",
-    perks: ["Everything in Lighting", "Shield 360 content protection — up to 10 songs", "Private vault for originals & documents", "Priority support from qyopy"],
+    perks: ["Everything in Lighting", "Shield 360 content protection — up to 10 songs", "Spotify & Apple Music takedown notices", "Private vault for originals & documents", "Priority support from qyopy"],
   },
   {
     id: "dist",
@@ -84,7 +84,7 @@ export function activePlan(p?: Profile | null) {
   return planOf(p.premium_tier);
 }
 
-export const NEED = { flair: 1, uploads100: 1, shield: 2, distribution: 3, isrc: 3, smartlinks: 3, acr: 4, musicVideo: 5 } as const;
+export const NEED = { flair: 1, uploads100: 1, shield: 2, takedown: 2, distribution: 3, isrc: 3, smartlinks: 3, acr: 4, musicVideo: 5 } as const;
 export function needPlan(rank: number) {
   return PLANS.find((p) => p.rank >= rank)!;
 }
