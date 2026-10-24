@@ -57,6 +57,7 @@ import TakedownTool from "@/components/music/Takedown";
 import ContentId from "@/components/protect/ContentId";
 import Licenses, { LicensesCard } from "./Licenses";
 import Defender from "@/components/protect/Defender";
+import Checkmark from "@/components/protect/Checkmark";
 import MyVault from "@/components/protect/Vault";
 import ToolView, { IsrcTool, ToolsGrid, type ToolId } from "@/components/music/Tools";
 import ProfileClaims from "./ProfileClaims";
@@ -77,6 +78,7 @@ const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: st
   { id: "tools", label: "Music tools", icon: <AudioWaveform className="size-5" />, group: "Music distribution" },
   { id: "shield", label: "Shield 360", icon: <ShieldCheck className="size-5" />, group: "Protection" },
   { id: "content-id", label: "Content ID", icon: <Fingerprint className="size-5" />, group: "Protection" },
+  { id: "checkmark", label: "Spotify checkmark", icon: <BadgeCheck className="size-5" />, group: "Protection" },
   { id: "defender", label: "Profile Defender", icon: <UserRoundCheck className="size-5" />, group: "Protection" },
   { id: "takedowns", label: "Takedowns", icon: <ShieldAlert className="size-5" />, group: "Protection" },
   { id: "vault", label: "My Vault", icon: <Vault className="size-5" />, group: "Protection" },
@@ -237,6 +239,7 @@ export default function Studio() {
             )}
             {section === "content-id" && <ContentId />}
             {section === "defender" && <Defender />}
+            {section === "checkmark" && <Checkmark />}
             {section === "vault" && <MyVault />}
             {section === "takedowns" && (
               <>

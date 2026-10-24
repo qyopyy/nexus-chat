@@ -29,6 +29,7 @@ import {
 } from "@/lib/shield";
 import { checkStatus, clipFromFile, copyrightCheck } from "@/lib/audio";
 import { cn } from "@/lib/utils";
+import { buildCertificate } from "@/lib/certificate";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import { Card, H } from "./Studio";
@@ -430,6 +431,23 @@ function WorkRow({ w, mine, blocked, onChange, onRemoved }: { w: ShieldWork; min
                   <Download className="size-4" /> Original
                 </button>
               )}
+              <button
+                onClick={() => {
+                  const st = useApp.getState();
+                  const p = st.profiles[w.owner_id];
+                  const bytes = buildCertificate(w, { name: p?.display_name ?? p?.username ?? "Owner", username: p?.username ?? "user" });
+                  const url = URL.createObjectURL(new Blob([bytes.buffer as ArrayBuffer], { type: "application/pdf" }));
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `Shield 360 Certificate – ${w.title.replace(/[\\/:*?"<>|]+/g, "")}.pdf`;
+                  a.click();
+                  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                }}
+                className="flex items-center gap-1.5 rounded-full bg-hover px-4 py-2 text-sm font-semibold hover:bg-active"
+                title="Proof-of-creation certificate (PDF): registration time, file hash, fingerprint"
+              >
+                <FileText className="size-4" /> Certificate
+              </button>
             </div>
           )}
           {mine && <CodesRow w={w} onChange={onChange} />}

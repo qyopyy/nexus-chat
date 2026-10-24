@@ -22,6 +22,7 @@ export type StudioSection =
   | "licenses"
   | "isrc"
   | "claims"
+  | "checkmark"
   | "orders";
 
 export type VideosRoute = { view: "home"; q?: string; tab?: "all" | "subs" } | { view: "watch"; key: string; t?: number } | { view: "channel"; userId: string };

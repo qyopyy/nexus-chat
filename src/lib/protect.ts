@@ -130,12 +130,12 @@ export async function setWorkPolicy(id: string, patch: { policy?: "block" | "tra
 }
 
 // ================================================================ Profile Defender
-export type Watch = { id: string; owner_id: string; spotify_id: string; name: string | null; image: string | null; known: string[]; alerts_on: boolean; last_scan: string | null; created_at: string };
-export type DefAlert = { id: number; watch_id: string; kind: "new_release" | "name" | "image" | "removed"; item: { id?: string; name?: string; image?: string; url?: string; release_date?: string; type?: string; artists?: string; from?: string; to?: string }; status: "new" | "mine" | "not_mine" | "reported"; created_at: string };
+export type Watch = { id: string; owner_id: string; spotify_id: string; name: string | null; image: string | null; known: string[]; alerts_on: boolean; last_scan: string | null; created_at: string; snapshot?: { history?: { t: string; n: number }[]; lookalikes?: string[] } };
+export type DefAlert = { id: number; watch_id: string; kind: "new_release" | "name" | "image" | "removed" | "listeners" | "lookalike"; item: { id?: string; name?: string; image?: string; url?: string; release_date?: string; type?: string; artists?: string; from?: string; to?: string | number; change?: number }; status: "new" | "mine" | "not_mine" | "reported"; created_at: string };
 export type DefRelease = { id: string; name: string; image: string | null; url: string; release_date: string; type: string; artists: string };
 
 export async function listWatches() {
-  const { data } = await supabase.from("defender_watch").select("id, owner_id, spotify_id, name, image, known, alerts_on, last_scan, created_at").eq("owner_id", me()).order("created_at");
+  const { data } = await supabase.from("defender_watch").select("id, owner_id, spotify_id, name, image, known, alerts_on, last_scan, created_at, snapshot").eq("owner_id", me()).order("created_at");
   return (data ?? []) as Watch[];
 }
 export async function listAlerts() {
@@ -144,6 +144,9 @@ export async function listAlerts() {
 }
 export const addWatch = (url: string) => fnCall<{ ok: boolean; watch: Watch; baseline: number; releases: DefRelease[] }>("defender", { action: "add", url });
 export const scanWatch = (id: string) => fnCall<{ ok: boolean; alerts: number }>("defender", { action: "scan", id });
+export type SpotifyProfile = { id: string; name: string; image: string | null; genres: string[]; url: string; listeners: number | null; fans: number | null; releases: number; appears_on: number; latest: DefRelease | null; lookalikes: { id: string; name: string; image: string | null; url: string }[] };
+export const spotifyProfile = (url: string) => fnCall<SpotifyProfile>("defender", { action: "profile", url });
+export const fmtNum = (n: number | null | undefined) => (n == null ? "—" : n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}K` : String(n));
 export const watchCatalog = (id: string) => fnCall<{ releases: DefRelease[] }>("defender", { action: "catalog", id });
 export async function setAlert(id: number, status: DefAlert["status"]) {
   const { error } = await supabase.from("defender_alerts").update({ status }).eq("id", id);

@@ -9,3 +9,4 @@
 -- nexus_27a_licenses: licenses (rows → Exclusive Artwork License PDFs, built in the browser by src/lib/pdf.ts), license_profiles (licensor details per user)
 -- nexus_27b_isrc_prefixes_profile_claims: isrc_prefixes (+ add/remove, major-label prefixes refused), generate_isrc(..., p_prefix), profile_claims (+ submit/cancel/set with Nexus Bot DMs)
 -- nexus_27c_isrc_config_guard: set_isrc_config refuses major-label prefixes
+-- defender_alerts.kind now also 'listeners' (monthly-listener spikes/drops) and 'lookalike' (impersonator profiles); functions/v1/defender: action "profile" (Spotify checkmark tool)

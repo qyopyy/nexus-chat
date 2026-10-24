@@ -71,6 +71,54 @@ async function catalog(id: string) {
   return out.filter((a) => a?.id && !seen.has(a.id) && seen.add(a.id));
 }
 
+/** monthly listeners from the public profile page (not in the Web API any more) */
+async function publicStats(id: string): Promise<{ listeners: number | null }> {
+  try {
+    const r = await fetch(`https://open.spotify.com/artist/${id}`, { headers: { "User-Agent": "facebookexternalhit/1.1", "Accept-Language": "en" } });
+    const html = await r.text();
+    const m = html.match(/og:description" content="[^"]*?([\d.,]+)\s*([KMB]?)\s+monthly listeners/i);
+    if (!m) return { listeners: null };
+    const n = parseFloat(m[1].replace(/,/g, ""));
+    const mult = { K: 1e3, M: 1e6, B: 1e9 }[m[2].toUpperCase() as "K" | "M" | "B"] ?? 1;
+    return { listeners: Math.round(n * mult) };
+  } catch {
+    return { listeners: null };
+  }
+}
+async function deezerFans(name: string): Promise<number | null> {
+  try {
+    const r = await fetch(`https://api.deezer.com/search/artist?limit=10&q=${encodeURIComponent(name)}`);
+    const j = await r.json();
+    const same = (j?.data ?? []).filter((a: any) => String(a.name).toLowerCase() === name.toLowerCase());
+    return Math.max(0, ...same.map((a: any) => Number(a.nb_fan) || 0)) || null;
+  } catch {
+    return null;
+  }
+}
+const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "").replace(/0/g, "o").replace(/1/g, "l").replace(/3/g, "e").replace(/4/g, "a").replace(/5/g, "s").replace(/\$/g, "s");
+function lev(a: string, b: string) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+/** other Spotify artists whose name looks like this one (possible impersonators / mis-deliveries) */
+async function lookalikes(name: string, id: string) {
+  const r = await sp(`/search?type=artist&limit=10&q=${encodeURIComponent(name)}`).catch(() => null);
+  const me = norm(name);
+  return ((r?.artists?.items ?? []) as any[])
+    .filter((a) => a && a.id !== id)
+    .filter((a) => {
+      const o = norm(a.name);
+      if (o === me || (me.length >= 4 && lev(o, me) <= (me.length >= 8 ? 2 : 1))) return true;
+      // "Name Official", "NameMusic", "TheName", "Name2"… — the usual impersonator patterns
+      const extra = o.includes(me) ? o.replace(me, "") : null;
+      return extra !== null && /^(official|offical|oficial|officiel|music|musik|real|the|tv|ofc|x|hq|fanpage|fans?|vevo|topic|\d{1,4})+$/.test(extra);
+    })
+    .slice(0, 8)
+    .map((a) => ({ id: a.id, name: a.name, image: img(a), url: a.external_urls?.spotify ?? `https://open.spotify.com/artist/${a.id}` }));
+}
+
 async function tell(user: string, text: string) {
   try {
     const { data: conv } = await admin.rpc("dm_between", { a: NEXUS_BOT, b: user });
@@ -95,9 +143,25 @@ async function scan(w: any) {
     const snap = w.snapshot ?? {};
     if (snap.name && snap.name !== a.name) alerts.push({ kind: "name", item: { from: snap.name, to: a.name } });
     if (snap.image && img(a) && snap.image !== img(a)) alerts.push({ kind: "image", item: { from: snap.image, to: img(a) } });
+    // monthly listeners: sudden spikes / drops can mean bot streams aimed at the artist
+    const { listeners } = await publicStats(w.spotify_id);
+    const hist: { t: string; n: number }[] = Array.isArray(snap.history) ? snap.history : [];
+    const prev = hist[hist.length - 1]?.n ?? null;
+    if (listeners != null && prev != null && prev >= 500) {
+      const ratio = listeners / prev;
+      if (ratio >= 1.6 || ratio <= 0.55) alerts.push({ kind: "listeners", item: { from: prev, to: listeners, change: Math.round((ratio - 1) * 100) } });
+    }
+    if (listeners != null) hist.push({ t: now, n: listeners });
+    // lookalike profiles that weren't there last time
+    const looks = await lookalikes(a.name, w.spotify_id);
+    const seenLooks = new Set<string>(Array.isArray(snap.lookalikes) ? snap.lookalikes : []);
+    for (const l of looks.filter((x) => !seenLooks.has(x.id))) alerts.push({ kind: "lookalike", item: l });
     await admin
       .from("defender_watch")
-      .update({ name: a.name, image: img(a), last_scan: now, known: [...new Set([...(w.known ?? []), ...items.map((x) => x.id)])].slice(-2000), snapshot: { name: a.name, image: img(a), genres: a.genres ?? [] } })
+      .update({
+        name: a.name, image: img(a), last_scan: now, known: [...new Set([...(w.known ?? []), ...items.map((x) => x.id)])].slice(-2000),
+        snapshot: { name: a.name, image: img(a), genres: a.genres ?? [], history: hist.slice(-120), lookalikes: [...new Set([...seenLooks, ...looks.map((x) => x.id)])].slice(-200) },
+      })
       .eq("id", w.id);
   }
   if (alerts.length) {
@@ -110,7 +174,11 @@ async function scan(w: any) {
             ? `• Profile name changed: “${x.item.from}” → “${x.item.to}”`
             : x.kind === "image"
               ? "• Profile photo changed"
-              : "• The profile is no longer available on Spotify",
+              : x.kind === "listeners"
+                ? `• Monthly listeners jumped ${Number(x.item.change) > 0 ? "+" : ""}${x.item.change}% (${x.item.from} → ${x.item.to}) — check for fake streams`
+                : x.kind === "lookalike"
+                  ? `• Look-alike profile: “${x.item.name}” — ${x.item.url}`
+                  : "• The profile is no longer available on Spotify",
       );
       await tell(w.owner_id, `🛡️ Profile Defender — ${w.name ?? "your artist"}:\n${lines.join("\n")}${alerts.length > 6 ? `\n…and ${alerts.length - 6} more` : ""}\nIs it yours? Open Studio → Profile Defender to confirm or send a takedown.`);
     }
@@ -155,14 +223,30 @@ Deno.serve(async (req: Request) => {
       if ((count ?? 0) >= Number(lim ?? 1)) return json({ error: `Your plan protects ${lim} profile${Number(lim) === 1 ? "" : "s"} — upgrade for more` }, 403);
       const a = await sp(`/artists/${id}`);
       if (!a) return json({ error: "Artist not found on Spotify" }, 404);
-      const items = await catalog(id);
+      const [items, stats, looks] = await Promise.all([catalog(id), publicStats(id), lookalikes(a.name, id)]);
+      const now = new Date().toISOString();
       const { data: w, error } = await admin
         .from("defender_watch")
-        .upsert({ owner_id: uid, spotify_id: id, name: a.name, image: img(a), known: items.map((x) => x.id), snapshot: { name: a.name, image: img(a), genres: a.genres ?? [] }, last_scan: new Date().toISOString() }, { onConflict: "owner_id,spotify_id" })
+        .upsert({ owner_id: uid, spotify_id: id, name: a.name, image: img(a), known: items.map((x) => x.id), snapshot: { name: a.name, image: img(a), genres: a.genres ?? [], history: stats.listeners != null ? [{ t: now, n: stats.listeners }] : [], lookalikes: looks.map((x) => x.id) }, last_scan: now }, { onConflict: "owner_id,spotify_id" })
         .select()
         .single();
       if (error) return json({ error: error.message }, 400);
-      return json({ ok: true, watch: w, baseline: items.length, releases: items.slice(0, 30).map(albumItem) });
+      return json({ ok: true, watch: w, baseline: items.length, releases: items.slice(0, 30).map(albumItem), lookalikes: looks, listeners: stats.listeners });
+    }
+
+    if (b.action === "profile") {
+      const id = parseArtist(b.url);
+      if (!id) return json({ error: "Paste a Spotify artist link (open.spotify.com/artist/…)" }, 400);
+      const a = await sp(`/artists/${id}`);
+      if (!a) return json({ error: "Artist not found on Spotify" }, 404);
+      const [items, stats, fans, looks] = await Promise.all([catalog(id), publicStats(id), deezerFans(a.name), lookalikes(a.name, id)]);
+      const own = items.filter((x) => x.album_group === "album" || x.album_group === "single");
+      const latest = [...own].sort((x, y) => String(y.release_date).localeCompare(String(x.release_date)))[0];
+      return json({
+        id, name: a.name, image: img(a), genres: a.genres ?? [], url: a.external_urls?.spotify ?? `https://open.spotify.com/artist/${id}`,
+        listeners: stats.listeners, fans, releases: own.length, appears_on: items.filter((x) => x.album_group === "appears_on").length,
+        latest: latest ? albumItem(latest) : null, lookalikes: looks,
+      });
     }
 
     if (b.action === "scan") {

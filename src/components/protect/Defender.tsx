@@ -6,7 +6,7 @@ import { toast, openModal } from "@/store/app";
 import { studioGo } from "@/store/studio";
 import { useMyTier, needPlan } from "@/lib/premium";
 import { prefillTakedown } from "@/lib/takedown";
-import { addWatch, listAlerts, listWatches, removeWatch, scanWatch, setAlert, updateWatch, type DefAlert, type Watch } from "@/lib/protect";
+import { addWatch, fmtNum, listAlerts, listWatches, removeWatch, scanWatch, setAlert, updateWatch, type DefAlert, type Watch } from "@/lib/protect";
 import { cn } from "@/lib/utils";
 
 const LIMIT = [1, 2, 5, 10, 50, 50];
@@ -43,6 +43,20 @@ export default function Defender() {
     });
     studioGo("takedowns");
     toast("Takedown form filled in — check it and send", "info");
+  };
+
+  const impersonation = (a: DefAlert) => {
+    void setAlert(a.id, "not_mine");
+    const w = byWatch(a.watch_id);
+    prefillTakedown({
+      platform: "spotify",
+      work_title: w?.name ?? "",
+      work_artist: w?.name ?? "",
+      links: a.item.url ? [a.item.url] : [],
+      description: `The Spotify artist profile “${a.item.name}” impersonates my artist profile “${w?.name ?? ""}” (https://open.spotify.com/artist/${w?.spotify_id ?? ""}). It uses my artist name to mislead listeners and divert streams. Please remove it or stop it from using my name.`,
+    });
+    studioGo("takedowns");
+    toast("Impersonation report filled in — check it and send", "info");
   };
 
   return (
@@ -105,9 +119,11 @@ export default function Defender() {
                   {w.name ?? w.spotify_id}
                 </a>
                 <div className="truncate text-xs text-sub">
+                  {w.snapshot?.history?.length ? `${fmtNum(w.snapshot.history[w.snapshot.history.length - 1].n)} monthly listeners · ` : ""}
                   {w.known.length} releases known · checked {w.last_scan ? new Date(w.last_scan).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "never"}
                 </div>
               </div>
+              <Spark points={(w.snapshot?.history ?? []).map((h) => h.n)} />
               <button
                 title="Check now"
                 disabled={busy === w.id}
@@ -152,53 +168,113 @@ export default function Defender() {
       ) : (
         <div className="space-y-2">
           {shown.map((a) => (
-            <div key={a.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-line/70 p-3">
-              {a.item.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={a.item.image} alt="" className="size-14 rounded-lg object-cover" />
-              ) : (
-                <div className="grid size-14 place-items-center rounded-lg bg-hover text-2xl">{a.kind === "name" ? "✏️" : a.kind === "image" ? "🖼️" : "⚠️"}</div>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold">
-                  {a.kind === "new_release" ? (
-                    <a href={a.item.url} target="_blank" rel="noreferrer" className="hover:underline">
-                      {a.item.name}
-                    </a>
-                  ) : a.kind === "name" ? (
-                    `Name changed: “${a.item.from}” → “${a.item.to}”`
-                  ) : a.kind === "image" ? (
-                    "Profile photo changed"
-                  ) : (
-                    "Profile is no longer on Spotify"
-                  )}
-                </div>
-                <div className="truncate text-xs text-sub">
-                  {byWatch(a.watch_id)?.name} · {a.kind === "new_release" ? `${a.item.type ?? "release"} · ${a.item.release_date ?? ""} · ${a.item.artists ?? ""}` : "profile change"} · found{" "}
-                  {new Date(a.created_at).toLocaleDateString([], { dateStyle: "medium" })}
-                </div>
-              </div>
-              {a.status === "new" ? (
-                <div className="flex gap-1.5 text-xs">
-                  <button onClick={async () => (await setAlert(a.id, "mine")) && load()} className="rounded-full bg-ok px-3 py-1.5 font-semibold text-white">
-                    ✓ Mine
-                  </button>
-                  {a.kind === "new_release" ? (
-                    <button onClick={() => void notMine(a)} className="rounded-full bg-dnd px-3 py-1.5 font-semibold text-white">
-                      Not mine → takedown
-                    </button>
-                  ) : (
-                    <button onClick={async () => (await setAlert(a.id, "not_mine")) && load()} className="rounded-full bg-hover px-3 py-1.5 font-semibold hover:bg-active">
-                      I didn&apos;t do this
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-sub">{a.status === "mine" ? "Yours" : a.status === "not_mine" ? "Reported" : a.status}</span>
-              )}
-            </div>
+            <AlertRow key={a.id} a={a} watch={byWatch(a.watch_id)} onDone={load} onNotMine={() => void notMine(a)} onImpersonation={() => impersonation(a)} />
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function Spark({ points }: { points: number[] }) {
+  if (points.length < 2) return null;
+  const p = points.slice(-30);
+  const min = Math.min(...p);
+  const max = Math.max(...p);
+  const d = p.map((v, i) => `${i ? "L" : "M"}${((i / (p.length - 1)) * 60).toFixed(1)},${(22 - ((v - min) / Math.max(1, max - min)) * 20).toFixed(1)}`).join(" ");
+  const up = p[p.length - 1] >= p[0];
+  return (
+    <svg width="60" height="24" viewBox="0 0 60 24" className="hidden shrink-0 sm:block" aria-label="Monthly listeners trend">
+      <path d={d} fill="none" stroke={up ? "#23a55a" : "#ed4245"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function AlertRow({ a, watch, onDone, onNotMine, onImpersonation }: { a: DefAlert; watch?: Watch; onDone: () => void; onNotMine: () => void; onImpersonation: () => void }) {
+  const icon = a.kind === "name" ? "✏️" : a.kind === "image" ? "🖼️" : a.kind === "listeners" ? (Number(a.item.change) > 0 ? "📈" : "📉") : a.kind === "lookalike" ? "🎭" : "⚠️";
+  const title =
+    a.kind === "new_release" ? (
+      <a href={a.item.url} target="_blank" rel="noreferrer" className="hover:underline">
+        {a.item.name}
+      </a>
+    ) : a.kind === "name" ? (
+      `Name changed: “${a.item.from}” → “${a.item.to}”`
+    ) : a.kind === "image" ? (
+      "Profile photo changed"
+    ) : a.kind === "listeners" ? (
+      `Monthly listeners ${Number(a.item.change) > 0 ? "+" : ""}${a.item.change}% (${fmtNum(Number(a.item.from))} → ${fmtNum(Number(a.item.to))})`
+    ) : a.kind === "lookalike" ? (
+      <>
+        Look-alike profile:{" "}
+        <a href={a.item.url} target="_blank" rel="noreferrer" className="hover:underline">
+          {a.item.name}
+        </a>
+      </>
+    ) : (
+      "Profile is no longer on Spotify"
+    );
+  const sub =
+    a.kind === "new_release"
+      ? `${a.item.type ?? "release"} · ${a.item.release_date ?? ""} · ${a.item.artists ?? ""}`
+      : a.kind === "listeners"
+        ? "Sudden jumps can come from bot streams aimed at you — Spotify can withhold royalties or remove tracks for artificial streams"
+        : a.kind === "lookalike"
+          ? "Another Spotify profile with a name like yours — could be an impersonator or just a different artist"
+          : "profile change";
+  const btn = "rounded-full px-3 py-1.5 font-semibold";
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line/70 p-3">
+      {a.item.image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={a.item.image} alt="" className={cn("size-14 object-cover", a.kind === "lookalike" ? "rounded-full" : "rounded-lg")} />
+      ) : (
+        <div className="grid size-14 place-items-center rounded-lg bg-hover text-2xl">{icon}</div>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-semibold">{title}</div>
+        <div className="line-clamp-2 text-xs text-sub">
+          {watch?.name} · {sub} · found {new Date(a.created_at).toLocaleDateString([], { dateStyle: "medium" })}
+        </div>
+      </div>
+      {a.status === "new" ? (
+        <div className="flex flex-wrap gap-1.5 text-xs">
+          {a.kind === "lookalike" ? (
+            <>
+              <button onClick={async () => (await setAlert(a.id, "mine")) && onDone()} className={cn(btn, "bg-hover hover:bg-active")}>
+                Different artist
+              </button>
+              <button onClick={onImpersonation} className={cn(btn, "bg-dnd text-white")}>
+                Report impersonation
+              </button>
+            </>
+          ) : a.kind === "listeners" ? (
+            <>
+              <button onClick={async () => (await setAlert(a.id, "mine")) && onDone()} className={cn(btn, "bg-ok text-white")}>
+                Expected (promo / viral)
+              </button>
+              <a href="https://support.spotify.com/artists/" target="_blank" rel="noreferrer" onClick={() => void setAlert(a.id, "not_mine").then(onDone)} className={cn(btn, "bg-dnd text-white")}>
+                Not me → tell Spotify
+              </a>
+            </>
+          ) : (
+            <>
+              <button onClick={async () => (await setAlert(a.id, "mine")) && onDone()} className={cn(btn, "bg-ok text-white")}>
+                ✓ Mine
+              </button>
+              {a.kind === "new_release" ? (
+                <button onClick={onNotMine} className={cn(btn, "bg-dnd text-white")}>
+                  Not mine → takedown
+                </button>
+              ) : (
+                <button onClick={async () => (await setAlert(a.id, "not_mine")) && onDone()} className={cn(btn, "bg-hover hover:bg-active")}>
+                  I didn&apos;t do this
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      ) : (
+        <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-sub">{a.status === "mine" ? (a.kind === "lookalike" ? "OK" : "Yours") : a.status === "not_mine" ? "Reported" : a.status}</span>
       )}
     </div>
   );
