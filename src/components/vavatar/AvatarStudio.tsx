@@ -5,7 +5,7 @@ import { Camera, CameraOff, Dices, RotateCcw, Save, Sparkles } from "lucide-reac
 import { useApp, toast } from "@/store/app";
 import { updateMyProfile } from "@/lib/data";
 import { setAvatarLook, useCall } from "@/lib/call";
-import { DEFAULT_AVATAR, OPTIONS, SWATCH, normalizeAvatar, randomAvatar, startAvatar, type AvatarEngine, type VAvatar } from "@/lib/vavatar";
+import { DEFAULT_AVATAR, OPTIONS, SWATCH, cleanShirtText, normalizeAvatar, randomAvatar, startAvatar, type AvatarEngine, type VAvatar } from "@/lib/vavatar";
 import { cn } from "@/lib/utils";
 
 /** your saved look (or the default one) */
@@ -60,14 +60,61 @@ const LABEL: Record<string, string> = {
   room: "Room",
   solid: "Color",
   green: "Green screen",
+  masc: "Male",
+  fem: "Female",
+  sidepart: "Side part",
+  slick: "Slicked back",
+  buzz: "Buzz cut",
+  undercut: "Undercut",
+  mohawk: "Mohawk",
+  curly: "Curly",
+  afro: "Afro",
+  dreads: "Dreads",
+  hime: "Hime cut",
+  bun: "Top bun",
+  braids: "Braids",
+  zipup: "Zip hoodie",
+  tank: "Tank top",
+  jersey: "Jersey",
+  polo: "Polo",
+  puffer: "Puffer",
+  varsity: "Varsity",
+  script: "Script",
+  gothic: "Old English",
+  graffiti: "Graffiti",
+  mono: "Typewriter",
+  shades: "Shades",
+  cap: "Cap",
+  beanie: "Beanie",
+  iced: "Iced out 💎",
+  gold: "Gold",
+  silver: "Silver",
+  rose: "Rose gold",
+  stud: "Diamond studs",
+  bigStud: "Big diamonds",
+  hoop: "Hoops",
+  dangle: "Drops",
+  pearl: "Pearls",
+  cubanIced: "Cuban — diamond",
+  cuban: "Cuban link",
+  rope: "Rope",
+  tennis: "Tennis",
+  figaro: "Figaro",
+  pearls: "Pearl strand",
+  layered: "Layered",
+  diamond: "Diamond",
+  heart: "Heart",
+  letter: "Initial",
+  cross: "Cross",
 };
 
-type Tab = "face" | "eyes" | "hair" | "outfit" | "extras" | "scene";
+type Tab = "face" | "eyes" | "hair" | "outfit" | "jewelry" | "extras" | "scene";
 const TABS: [Tab, string][] = [
-  ["face", "Face"],
+  ["face", "Body & face"],
   ["eyes", "Eyes"],
   ["hair", "Hair"],
   ["outfit", "Outfit"],
+  ["jewelry", "Jewelry"],
   ["extras", "Extras"],
   ["scene", "Scene"],
 ];
@@ -75,6 +122,7 @@ const TABS: [Tab, string][] = [
 /** the V-Avatar maker: live preview (optionally face-tracked) + every part editable */
 export default function AvatarStudio() {
   const saved = useMyAvatar();
+  const myName = useApp((s) => (s.userId ? s.profiles[s.userId]?.username : "") ?? "");
   const avatarOn = useCall((s) => s.avatarOn);
   const [cfg, setCfg] = useState<VAvatar>(saved);
   const [tab, setTab] = useState<Tab>("face");
@@ -153,7 +201,7 @@ export default function AvatarStudio() {
             {cam ? <CameraOff className="size-4" /> : <Camera className="size-4" />}
             {cam ? "Stop camera" : "Try with my face"}
           </button>
-          <button onClick={() => setCfg(randomAvatar())} className="flex items-center gap-1.5 rounded-full bg-hover px-3.5 py-2 text-sm font-semibold hover:bg-active">
+          <button onClick={() => setCfg((c) => ({ ...randomAvatar(), shirtText: c.shirtText }))} className="flex items-center gap-1.5 rounded-full bg-hover px-3.5 py-2 text-sm font-semibold hover:bg-active">
             <Dices className="size-4" /> Randomize
           </button>
           <button onClick={() => setCfg(saved)} disabled={!dirty} className="flex items-center gap-1.5 rounded-full bg-hover px-3.5 py-2 text-sm font-semibold hover:bg-active disabled:opacity-40">
@@ -180,6 +228,7 @@ export default function AvatarStudio() {
         <div className="space-y-4">
           {tab === "face" && (
             <>
+              {choice("body", "Body")}
               {color("skin", "Skin tone", SWATCH.skin)}
               {choice("face", "Face shape")}
               {choice("mouth", "Mouth")}
@@ -209,6 +258,39 @@ export default function AvatarStudio() {
               {choice("shirt", "Outfit")}
               {color("shirtColor", "Main color", SWATCH.cloth)}
               {color("accentColor", "Accent (collar, strings, tie…)", SWATCH.cloth)}
+              <Field title="Custom print">
+                <input
+                  value={cfg.shirtText}
+                  onChange={(e) => set("shirtText", cleanShirtText(e.target.value))}
+                  placeholder="Text on your hoodie / tee…"
+                  maxLength={14}
+                  className="w-full rounded-xl border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {[...new Set(["qyopy", "kicsiden", myName, "NEXUS", "MA BEATS"].filter(Boolean))].map((t) => (
+                    <button key={t} onClick={() => set("shirtText", cleanShirtText(t))} className={cn("rounded-full px-3 py-1.5 text-sm font-semibold", cfg.shirtText === t ? "bg-accent text-white" : "bg-hover hover:bg-active")}>
+                      {t}
+                    </button>
+                  ))}
+                  {cfg.shirtText && (
+                    <button onClick={() => set("shirtText", "")} className="rounded-full bg-hover px-3 py-1.5 text-sm text-sub hover:text-txt">
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <p className="mt-1.5 text-[11px] text-sub">Big print on T-shirts, hoodies, tanks, jerseys & turtlenecks · chest logo on zip hoodies, polos, puffers & jackets · varsity & “Initial” pendant use the first letter.</p>
+              </Field>
+              {choice("textStyle", "Print style")}
+              {color("textColor", "Print color", ["#ffffff", "#111318", ...SWATCH.cloth.slice(3)])}
+            </>
+          )}
+          {tab === "jewelry" && (
+            <>
+              {choice("metal", "Metal")}
+              {choice("chain", "Chain")}
+              {choice("pendant", "Pendant")}
+              {choice("earrings", "Earrings")}
+              {choice("grillz", "Grillz (shows when you talk)")}
             </>
           )}
           {tab === "extras" && (
