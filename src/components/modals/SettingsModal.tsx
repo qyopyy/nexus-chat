@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, Camera, Crown, LogOut, Mic, Palette, Shield, Upload, User, X } from "lucide-react";
+import { Bell, Camera, Crown, LogOut, Mic, Palette, Shield, Sparkles, Upload, User, X } from "lucide-react";
 import { useApp, closeModal, openModal, toast } from "@/store/app";
 import { detectPush, disablePush, enablePush, usePush } from "@/lib/push";
 import { isNativeApp } from "@/lib/useMobile";
-import { useCall, leaveCall, updateSettings, type ScreenQuality } from "@/lib/call";
+import { useCall, leaveCall, micConstraints, updateSettings, type NoiseMode, type ScreenQuality, type VoiceQuality } from "@/lib/call";
+import AvatarStudio from "@/components/vavatar/AvatarStudio";
 import { updateMyProfile, uploadAvatar } from "@/lib/data";
 import { DECORATIONS, roleRank } from "@/lib/theme";
 import AppearanceSection from "./AppearanceSection";
@@ -16,12 +17,12 @@ import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 
-type Section = "account" | "appearance" | "voice" | "notifications" | "admin";
+type Section = "account" | "appearance" | "voice" | "vavatar" | "notifications" | "admin";
 
 export default function SettingsModal({ initial }: { initial: string | null }) {
   const [section, setSection] = useState<Section>(() => {
     const base = (initial ?? "voice").split(":")[0];
-    return (["account", "appearance", "voice", "notifications", "admin"] as const).includes(base as Section) ? (base as Section) : "voice";
+    return (["account", "appearance", "voice", "vavatar", "notifications", "admin"] as const).includes(base as Section) ? (base as Section) : "voice";
   });
   const focusUser = initial?.startsWith("admin:") ? initial.slice(6) : null;
   const isStaff = useApp((s) => roleRank(s.userId ? s.profiles[s.userId]?.site_role : null) >= 2);
@@ -50,6 +51,7 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
           {nav("account", "My Account", <User className="size-4" />)}
           {nav("appearance", "Appearance", <Palette className="size-4" />)}
           {nav("voice", "Voice & Video", <Mic className="size-4" />)}
+          {nav("vavatar", "V-Avatar", <Sparkles className="size-4" />)}
           {nav("notifications", "Notifications", <Bell className="size-4" />)}
           <button onClick={() => openModal("premium")} className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left font-semibold text-[#f0b232] transition hover:bg-hover">
             <Crown className="size-4" />
@@ -79,17 +81,24 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
           <button onClick={closeModal} className="grid size-8 shrink-0 place-items-center rounded-full bg-hover text-sub" aria-label="Close settings">
             <X className="size-4" />
           </button>
-          {(["account", "appearance", "voice", "notifications", ...(isStaff ? ["admin"] : [])] as Section[]).map((s) => (
+          {(["account", "appearance", "voice", "vavatar", "notifications", ...(isStaff ? ["admin"] : [])] as Section[]).map((s) => (
             <button key={s} onClick={() => setSection(s)} className={cn("shrink-0 rounded-md px-3 py-1 text-sm capitalize", section === s ? "bg-active" : "text-sub")}>
-              {s}
+              {s === "vavatar" ? "V-Avatar" : s}
             </button>
           ))}
         </div>
-        <div className="max-w-[740px] px-4 py-6 pb-safe-2 sm:px-10 sm:py-14">
+        <div className={cn("px-4 py-6 pb-safe-2 sm:px-10 sm:py-14", section === "vavatar" ? "max-w-[1040px]" : "max-w-[740px]")}>
           {section === "account" && <AccountSection />}
           {section === "appearance" && <AppearanceSection />}
           {section === "admin" && isStaff && <AdminPanel focusUser={focusUser} />}
           {section === "voice" && <VoiceSection />}
+          {section === "vavatar" && (
+            <>
+              <H>V-Avatar</H>
+              <p className="-mt-3 mb-5 text-sm text-sub">Build your anime self. In a call, tap ✨ to show it instead of your camera — it copies your head, eyes and mouth live.</p>
+              <AvatarStudio />
+            </>
+          )}
           {section === "notifications" && <NotificationSection />}
         </div>
       </div>
@@ -329,6 +338,7 @@ function Slider({ value, max, onChange, format }: { value: number; max: number; 
 
 function VoiceSection() {
   const s = useCall((st) => st.settings);
+  const clearActive = useCall((st) => st.clearActive);
   const inCall = useCall((st) => st.status !== "idle");
   const callLevel = useCall((st) => st.inputLevel);
   const [devices, reloadDevices] = useDevices();
@@ -356,10 +366,8 @@ function VoiceSection() {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           audio: {
+            ...micConstraints(s),
             deviceId: s.inputDeviceId !== "default" ? { exact: s.inputDeviceId } : undefined,
-            noiseSuppression: s.noiseSuppression,
-            echoCancellation: s.echoCancellation,
-            autoGainControl: s.autoGainControl,
           },
         });
         reloadDevices();
@@ -389,7 +397,7 @@ function VoiceSection() {
       void ctx?.close();
       setTestLevel(0);
     };
-  }, [testing, inCall, s.inputDeviceId, s.inputVolume, s.noiseSuppression, s.echoCancellation, s.autoGainControl, reloadDevices]);
+  }, [testing, inCall, s.inputDeviceId, s.inputVolume, s.noiseMode, s.echoCancellation, s.autoGainControl, reloadDevices]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // keybind capture
   useEffect(() => {
@@ -486,8 +494,49 @@ function VoiceSection() {
       )}
 
       <div className="my-8 h-px bg-line" />
+      <Label>Noise cancellation</Label>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {(
+          [
+            ["ai", "Nexus Clear ✨", "AI removes keyboards, fans, dogs, traffic — only your voice gets through."],
+            ["standard", "Standard", "The browser's built-in filter. Lighter on old devices."],
+            ["off", "Off", "Raw mic — for studio mics and music."],
+          ] as [NoiseMode, string, string][]
+        ).map(([id, label, hint]) => (
+          <button key={id} onClick={() => void updateSettings({ noiseMode: id })} className={cn("rounded-xl p-3 text-left ring-2 transition", s.noiseMode === id ? "bg-accent/15 ring-accent" : "bg-side ring-transparent hover:bg-hover")}>
+            <span className="block font-semibold">{label}</span>
+            <span className="mt-0.5 block text-xs text-sub">{hint}</span>
+          </button>
+        ))}
+      </div>
+      {s.noiseMode === "ai" && clearActive === false && <p className="mt-2 text-xs text-[#f0b232]">Nexus Clear isn&apos;t supported on this device/browser — using standard filtering instead.</p>}
+
+      <div className="mt-6">
+        <Label>Voice quality</Label>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {(
+            [
+              [64, "Standard", "64 kbps · saves data"],
+              [128, "High", "128 kbps"],
+              [320, "Studio", "320 kbps stereo · 5× Discord"],
+            ] as [VoiceQuality, string, string][]
+          ).map(([q, label, hint]) => (
+            <button key={q} onClick={() => void updateSettings({ voiceQuality: q })} className={cn("rounded-xl p-3 text-left ring-2 transition", s.voiceQuality === q ? "bg-accent/15 ring-accent" : "bg-side ring-transparent hover:bg-hover")}>
+              <span className="block font-semibold">{label}</span>
+              <span className="mt-0.5 block text-xs text-sub">{hint}</span>
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-sub">Fullband 48 kHz Opus with packet-loss protection (FEC). Raising quality mid-call applies when the next person joins or you rejoin.</p>
+      </div>
+
+      <div className="mt-6">
+        <Label>Soundboard volume</Label>
+        <Slider value={s.soundboardVolume} max={1} onChange={(v) => void updateSettings({ soundboardVolume: v })} format={(v) => `${Math.round(v * 100)}%`} />
+      </div>
+
+      <div className="my-8 h-px bg-line" />
       <Label>Voice processing</Label>
-      <Toggle label="Noise suppression" hint="Filters background noise like keyboards and fans." checked={s.noiseSuppression} onChange={(v) => void updateSettings({ noiseSuppression: v })} />
       <Toggle label="Echo cancellation" hint="Stops others hearing themselves through your speakers." checked={s.echoCancellation} onChange={(v) => void updateSettings({ echoCancellation: v })} />
       <Toggle label="Automatic gain control" hint="Keeps your volume consistent." checked={s.autoGainControl} onChange={(v) => void updateSettings({ autoGainControl: v })} />
 

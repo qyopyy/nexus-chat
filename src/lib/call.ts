@@ -14,6 +14,8 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { loadJSON, saveJSON } from "./utils";
 import { sfx, startRing, stopRing } from "./sounds";
+import { builtinMeta, isSoundUrl, renderBuiltin, type Sound } from "./soundboard";
+import { startAvatar, type AvatarEngine, type VAvatar } from "./vavatar";
 
 // ------------------------------------------------------------------ types
 
@@ -27,7 +29,11 @@ export type RemoteParticipant = {
   camStream: MediaStream | null;
   screenStream: MediaStream | null;
   connection: RTCPeerConnectionState;
+  avatar: boolean;
 };
+
+export type NoiseMode = "off" | "standard" | "ai";
+export type VoiceQuality = 64 | 128 | 320;
 
 export type ScreenQuality = "720p30" | "1080p30" | "1080p60" | "source";
 
@@ -44,6 +50,13 @@ export type VoiceSettings = {
   pttKey: string; // KeyboardEvent.code
   vadThreshold: number; // RMS 0..0.2
   screenQuality: ScreenQuality;
+  /** off · browser noise suppression · Nexus Clear (RNNoise AI) */
+  noiseMode: NoiseMode;
+  /** Opus bitrate in kbps (Discord: 64 default, 96–384 boosted) */
+  voiceQuality: VoiceQuality;
+  /** settings schema bump: v2 moved everyone to 320 kbps */
+  qualityV?: number;
+  soundboardVolume: number; // 0..1
 };
 
 export type IncomingCall = { conversationId: string; callerId: string; at: number };
@@ -67,6 +80,12 @@ type CallState = {
   focused: string | null; // `${userId}:cam` | `${userId}:screen`
   incoming: IncomingCall | null;
   outgoingRing: string | null;
+  /** sending the V-Avatar instead of the real camera */
+  avatarOn: boolean;
+  /** Nexus Clear status: null = not used, true = running, false = unavailable on this device */
+  clearActive: boolean | null;
+  /** last soundboard sound played by anyone in the call (for the little toast) */
+  soundToast: { from: string; name: string; emoji: string; at: number } | null;
 };
 
 export const DEFAULT_SETTINGS: VoiceSettings = {
@@ -82,6 +101,10 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   pttKey: "Backquote",
   vadThreshold: 0.02,
   screenQuality: "1080p30",
+  noiseMode: "ai",
+  voiceQuality: 320,
+  qualityV: 2,
+  soundboardVolume: 0.7,
 };
 
 export const useCall = create<CallState>(() => ({
@@ -103,6 +126,9 @@ export const useCall = create<CallState>(() => ({
   focused: null,
   incoming: null,
   outgoingRing: null,
+  avatarOn: false,
+  clearActive: null,
+  soundToast: null,
 }));
 
 const get = useCall.getState;
@@ -144,6 +170,7 @@ type StatePayload = Envelope & {
   screen: boolean;
   camStreamId: string | null;
   screenStreamId: string | null;
+  avatar?: boolean;
 };
 
 function iceServers(): RTCIceServer[] {
@@ -189,7 +216,11 @@ function rms(an: AnalyserNode) {
 
 function ensureAudio(): AudioContext {
   if (!ctx) {
-    ctx = new AudioContext({ latencyHint: "interactive" });
+    try {
+      ctx = new AudioContext({ latencyHint: "interactive", sampleRate: 48000 }); // RNNoise + Opus both run at 48 kHz
+    } catch {
+      ctx = new AudioContext({ latencyHint: "interactive" });
+    }
     master = ctx.createGain();
     master.connect(ctx.destination);
   }
@@ -208,14 +239,23 @@ function applyOutput() {
   }
 }
 
-async function acquireMic(): Promise<MediaStream> {
-  const s = get().settings;
-  const base: MediaTrackConstraints = {
-    noiseSuppression: s.noiseSuppression,
+/** high-quality capture: 48 kHz, no browser resampling; browser NS only in "standard" mode (Nexus Clear replaces it) */
+export function micConstraints(s: VoiceSettings): MediaTrackConstraints {
+  const c: MediaTrackConstraints & { voiceIsolation?: boolean } = {
+    noiseSuppression: s.noiseMode === "standard",
     echoCancellation: s.echoCancellation,
     autoGainControl: s.autoGainControl,
     channelCount: 1,
+    sampleRate: 48000,
+    sampleSize: 16,
   };
+  if (s.noiseMode !== "off") c.voiceIsolation = true; // Chrome/Safari on supported hardware (Apple voice isolation etc.)
+  return c;
+}
+
+async function acquireMic(): Promise<MediaStream> {
+  const s = get().settings;
+  const base = micConstraints(s);
   if (s.inputDeviceId && s.inputDeviceId !== "default") {
     try {
       return await navigator.mediaDevices.getUserMedia({ audio: { ...base, deviceId: { exact: s.inputDeviceId } } });
@@ -246,10 +286,83 @@ async function buildMic() {
     micRaw?.getTracks().forEach((t) => t.stop());
     micRaw = stream;
     micSource = a.createMediaStreamSource(stream);
-    micSource.connect(inputGain);
+    await buildVoiceChain(a);
+    micSource.connect(voiceIn!);
   } catch {
     set({ error: "Microphone unavailable — you joined in listen-only mode." });
   }
+}
+
+// ------------------------------------------------------------------ voice DSP ("Nexus Clear")
+// mic → high-pass 75 Hz (rumble) → [RNNoise AI denoise] → de-ess shelf → leveler (compressor) → input gain
+let voiceIn: AudioNode | null = null;
+let clearNode: AudioWorkletNode | null = null;
+let clearVad = 1;
+let clearLoad: Promise<boolean> | null = null;
+let wasmBytes: ArrayBuffer | null = null;
+
+async function loadClear(a: AudioContext): Promise<boolean> {
+  if (a.sampleRate !== 48000 || !a.audioWorklet) return false;
+  clearLoad ??= (async () => {
+    try {
+      const [, bin] = await Promise.all([a.audioWorklet.addModule("/rnnoise/worklet.js"), fetch("/rnnoise/rnnoise.wasm").then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))]);
+      wasmBytes = bin;
+      return true;
+    } catch (e) {
+      console.warn("Nexus Clear unavailable", e);
+      return false;
+    }
+  })();
+  return clearLoad;
+}
+
+async function buildVoiceChain(a: AudioContext) {
+  const s = get().settings;
+  if (voiceIn) {
+    // rebuild: drop the old chain head (keeps inputGain → gate → micDest intact, so no renegotiation)
+    voiceIn.disconnect();
+    clearNode?.disconnect();
+    clearNode?.port.close();
+    clearNode = null;
+  }
+  const hp = a.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 75;
+  hp.Q.value = 0.7;
+  const air = a.createBiquadFilter(); // gentle presence lift, makes voices clearer on small speakers
+  air.type = "peaking";
+  air.frequency.value = 3200;
+  air.Q.value = 0.9;
+  air.gain.value = 1.5;
+  const ess = a.createBiquadFilter(); // tame harsh sibilance
+  ess.type = "highshelf";
+  ess.frequency.value = 9000;
+  ess.gain.value = -2;
+  const lev = a.createDynamicsCompressor(); // broadcast-style leveler
+  lev.threshold.value = -26;
+  lev.knee.value = 12;
+  lev.ratio.value = 3;
+  lev.attack.value = 0.004;
+  lev.release.value = 0.22;
+
+  let chainTail: AudioNode = hp;
+  clearVad = 1;
+  if (s.noiseMode === "ai" && (await loadClear(a)) && wasmBytes) {
+    try {
+      clearNode = new AudioWorkletNode(a, "nexus-clear", { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: { wasm: wasmBytes } });
+      clearNode.port.onmessage = (e) => {
+        const d = e.data as { vad?: number; ready?: boolean };
+        if (typeof d.vad === "number") clearVad = d.vad;
+        if (typeof d.ready === "boolean") set({ clearActive: d.ready });
+      };
+      hp.connect(clearNode);
+      chainTail = clearNode;
+    } catch {
+      set({ clearActive: false });
+    }
+  } else set({ clearActive: s.noiseMode === "ai" ? false : null });
+  chainTail.connect(air).connect(ess).connect(lev).connect(inputGain!);
+  voiceIn = hp;
 }
 
 function micTrack(): MediaStreamTrack | null {
@@ -271,11 +384,18 @@ function tick() {
   // local mic gate
   const lvl = localAnalyser ? rms(localAnalyser) : 0;
   const threshold = s.mode === "vad" ? s.vadThreshold : 0.012;
-  if (lvl >= threshold) vadHangUntil = now + 300;
+  // with Nexus Clear the AI's voice probability must agree too → keyboard clicks / dogs don't open the mic
+  const aiSaysVoice = !clearNode || clearVad > 0.35;
+  if (lvl >= threshold && aiSaysVoice) vadHangUntil = now + 320;
   const voiced = now < vadHangUntil;
   const silenced = st.muted || st.deafened;
   const open = !silenced && (s.mode === "ptt" ? st.pttActive : voiced);
-  if (gate && ctx) gate.gain.setTargetAtTime(open ? 1 : 0, ctx.currentTime, 0.012);
+  if (gate && ctx) {
+    if (silenced) {
+      gate.gain.cancelScheduledValues(ctx.currentTime);
+      gate.gain.setValueAtTime(0, ctx.currentTime); // hard zero when muted
+    } else gate.gain.setTargetAtTime(open ? 1 : 0, ctx.currentTime, open ? 0.006 : 0.03);
+  }
   const speaking = open && voiced;
 
   const patch: Partial<CallState> = {};
@@ -321,6 +441,7 @@ function broadcastState() {
     screen: !!st.localScreen,
     camStreamId: st.localCam?.id ?? null,
     screenStreamId: st.localScreen?.id ?? null,
+    avatar: st.avatarOn,
   });
 }
 
@@ -428,12 +549,16 @@ function ensurePeer(id: string, session?: string | null): Peer {
         camStream: null,
         screenStream: null,
         connection: "new",
+        avatar: false,
       },
     },
   });
 
   const mt = micTrack();
-  if (mt && micDest) p.senders.mic = pc.addTrack(mt, micDest.stream);
+  if (mt && micDest) {
+    p.senders.mic = pc.addTrack(mt, micDest.stream);
+    void tuneAudioSender(p.senders.mic);
+  }
   const { localCam, localScreen } = get();
   if (localCam) localCam.getVideoTracks().forEach((t) => (p.senders.cam = pc.addTrack(t, localCam)));
   if (localScreen) localScreen.getTracks().forEach((t) => p.senders.screen.push(pc.addTrack(t, localScreen)));
@@ -456,6 +581,7 @@ function ensurePeer(id: string, session?: string | null): Peer {
   pc.onconnectionstatechange = () => {
     updateParticipant(id, { connection: pc.connectionState });
     if (pc.connectionState === "failed") pc.restartIce();
+    if (pc.connectionState === "connected") pc.getSenders().forEach((sn) => sn.track?.kind === "audio" && void tuneAudioSender(sn));
   };
 
   applyPeerVolume(id);
@@ -472,7 +598,7 @@ async function handleSignal(p: Peer, msg: SignalPayload) {
     p.ignoreOffer = !p.polite && collision;
     if (p.ignoreOffer) return;
     p.settingRemoteAnswer = desc.type === "answer";
-    await pc.setRemoteDescription(desc);
+    await pc.setRemoteDescription(desc.sdp ? { type: desc.type, sdp: tuneOpus(desc.sdp, get().settings.voiceQuality) } : desc);
     p.settingRemoteAnswer = false;
     if (desc.type === "offer") {
       await pc.setLocalDescription();
@@ -484,6 +610,59 @@ async function handleSignal(p: Peer, msg: SignalPayload) {
     } catch (e) {
       if (!p.ignoreOffer) console.warn("ice candidate failed", e);
     }
+  }
+}
+
+/**
+ * HQ Opus: the remote's fmtp line tells OUR encoder what to send, so we raise it before applying:
+ * fullband 48 kHz, stereo, up to `kbps` (Discord's default is 64), in-band FEC for packet loss, no DTX (no pumping).
+ */
+export function tuneOpus(sdp: string, kbps: number) {
+  const pts = [...sdp.matchAll(/a=rtpmap:(\d+) opus\/48000(?:\/2)?/gi)].map((m) => m[1]);
+  let out = sdp;
+  for (const pt of pts) {
+    const want: Record<string, string> = {
+      minptime: "10",
+      useinbandfec: "1",
+      usedtx: "0",
+      stereo: "1",
+      "sprop-stereo": "1",
+      maxaveragebitrate: String(kbps * 1000),
+      maxplaybackrate: "48000",
+      "sprop-maxcapturerate": "48000",
+      cbr: "0",
+    };
+    const re = new RegExp(`a=fmtp:${pt} ([^\r\n]*)`);
+    const m = out.match(re);
+    if (m) {
+      const cur = Object.fromEntries(
+        m[1]
+          .split(";")
+          .map((kv) => kv.trim().split("="))
+          .filter((kv) => kv[0]),
+      ) as Record<string, string>;
+      const merged = { ...cur, ...want };
+      out = out.replace(re, `a=fmtp:${pt} ${Object.entries(merged).map(([k, v]) => `${k}=${v}`).join(";")}`);
+    } else {
+      out = out.replace(new RegExp(`(a=rtpmap:${pt} opus\/48000(?:\/2)?\r?\n)`, "i"), `$1a=fmtp:${pt} ${Object.entries(want).map(([k, v]) => `${k}=${v}`).join(";")}\r\n`);
+    }
+  }
+  return out;
+}
+
+async function tuneAudioSender(sender: RTCRtpSender) {
+  try {
+    const params = sender.getParameters();
+    if (!params.encodings?.length) params.encodings = [{}];
+    const kbps = get().settings.voiceQuality;
+    for (const e of params.encodings) {
+      e.maxBitrate = kbps * 1000;
+      e.priority = "high";
+      (e as RTCRtpEncodingParameters & { networkPriority?: string }).networkPriority = "high";
+    }
+    await sender.setParameters(params);
+  } catch {
+    /* not negotiated yet — retried once connected */
   }
 }
 
@@ -503,7 +682,7 @@ function onState(msg: StatePayload) {
   if (!me || msg.from === me || isStale(msg)) return;
   const p = ensurePeer(msg.from, msg.session);
   p.meta = { camStreamId: msg.camStreamId, screenStreamId: msg.screenStreamId };
-  updateParticipant(msg.from, { muted: msg.muted, deafened: msg.deafened, video: msg.video, screen: msg.screen });
+  updateParticipant(msg.from, { muted: msg.muted, deafened: msg.deafened, video: msg.video, screen: msg.screen, avatar: !!msg.avatar });
   syncPeerStreams(p);
 }
 
@@ -530,18 +709,139 @@ function removePeer(id: string, silent = false, markDead = false) {
   // someone joined → stop outgoing ring
 }
 
+// ------------------------------------------------------------------ soundboard
+// The clicker broadcasts which sound; every client plays it locally at full quality (like Discord),
+// routed through that person's volume slider / local mute, so it also works for listen-only members.
+type SoundMsg = Envelope & { builtin?: string; url?: string; name?: string; emoji?: string; volume?: number };
+const soundCache = new Map<string, Promise<AudioBuffer | null>>();
+const activeSounds: { src: AudioBufferSourceNode; from: string }[] = [];
+let lastSoundSent = 0;
+const lastSoundFrom = new Map<string, number>();
+
+function soundBuffer(m: { builtin?: string; url?: string }): Promise<AudioBuffer | null> {
+  const key = m.builtin ? `b:${m.builtin}` : m.url!;
+  let hit = soundCache.get(key);
+  if (!hit) {
+    hit = (async () => {
+      try {
+        if (m.builtin) return await renderBuiltin(m.builtin);
+        const res = await fetch(m.url!);
+        if (!res.ok) return null;
+        const a = ensureAudio();
+        return await a.decodeAudioData(await res.arrayBuffer());
+      } catch {
+        return null;
+      }
+    })();
+    soundCache.set(key, hit);
+    void hit.then((b) => !b && soundCache.delete(key));
+  }
+  return hit;
+}
+
+function playBuffer(buf: AudioBuffer, dest: AudioNode, vol: number, from: string) {
+  const a = ensureAudio();
+  const src = a.createBufferSource();
+  src.buffer = buf;
+  const g = a.createGain();
+  g.gain.value = Math.max(0, Math.min(1, vol));
+  src.connect(g).connect(dest);
+  const stopAt = a.currentTime + Math.min(buf.duration, 30.5);
+  src.start();
+  src.stop(stopAt);
+  const item = { src, from };
+  activeSounds.push(item);
+  // max 4 overlapping sounds per person
+  const theirs = activeSounds.filter((x) => x.from === from);
+  if (theirs.length > 4) {
+    try {
+      theirs[0].src.stop();
+    } catch {
+      /* done */
+    }
+  }
+  src.onended = () => {
+    const i = activeSounds.indexOf(item);
+    if (i >= 0) activeSounds.splice(i, 1);
+    g.disconnect();
+  };
+}
+
+/** play a soundboard sound — everyone in the call hears it (or just a preview when you're not in a call) */
+export async function playSound(s: Sound) {
+  const now = Date.now();
+  if (now - lastSoundSent < 450) return; // spam guard
+  lastSoundSent = now;
+  const inCall = get().status !== "idle" && !!channel;
+  const msg = s.builtin ? { builtin: s.builtin } : s.url && isSoundUrl(s.url) ? { url: s.url } : null;
+  if (!msg) return;
+  if (inCall) send("sound", { ...msg, name: s.name.slice(0, 32), emoji: s.emoji.slice(0, 16), volume: s.volume });
+  const buf = await soundBuffer(msg);
+  if (!buf) return;
+  playBuffer(buf, ensureAudio() && master!, s.volume * get().settings.soundboardVolume, me ?? "me");
+  if (inCall && me) set({ soundToast: { from: me, name: s.name, emoji: s.emoji, at: now } });
+}
+
+/** stop every sound you started (for everyone) */
+export function stopSounds() {
+  const mine = me ?? "me";
+  activeSounds.filter((x) => x.from === mine).forEach((x) => {
+    try {
+      x.src.stop();
+    } catch {
+      /* done */
+    }
+  });
+  if (get().status !== "idle") send("soundstop", {});
+}
+
+function onSound(msg: SoundMsg) {
+  if (!me || msg.from === me || isStale(msg)) return;
+  const p = peers.get(msg.from);
+  if (!p) return;
+  const now = Date.now();
+  if (now - (lastSoundFrom.get(msg.from) ?? 0) < 350) return;
+  lastSoundFrom.set(msg.from, now);
+  const valid = msg.builtin ? !!builtinMeta(msg.builtin) : isSoundUrl(msg.url);
+  if (!valid) return;
+  const vol = (typeof msg.volume === "number" ? msg.volume : 1) * get().settings.soundboardVolume;
+  void soundBuffer(msg.builtin ? { builtin: msg.builtin } : { url: msg.url }).then((buf) => buf && peers.get(msg.from) === p && playBuffer(buf, p.gain, vol, msg.from));
+  set({ soundToast: { from: msg.from, name: String(msg.name ?? "Sound").slice(0, 32), emoji: String(msg.emoji ?? "🔊").slice(0, 16), at: now } });
+}
+
+function onSoundStop(msg: Envelope) {
+  if (!me || msg.from === me || isStale(msg)) return;
+  activeSounds.filter((x) => x.from === msg.from).forEach((x) => {
+    try {
+      x.src.stop();
+    } catch {
+      /* done */
+    }
+  });
+}
+
 function stopStream(s: MediaStream | null) {
   s?.getTracks().forEach((t) => t.stop());
 }
 
 // ------------------------------------------------------------------ public API
 
+function migrateSettings(saved: Partial<VoiceSettings>): VoiceSettings {
+  const s = { ...DEFAULT_SETTINGS, ...saved };
+  if (!saved.noiseMode) s.noiseMode = saved.noiseSuppression === false ? "off" : "ai";
+  if (saved.qualityV !== 2 || ![64, 128, 320].includes(s.voiceQuality)) {
+    s.voiceQuality = 320;
+    s.qualityV = 2;
+  }
+  return s;
+}
+
 export function initCallEngine(userId: string) {
   me = userId;
   if (initialized || typeof window === "undefined") return;
   initialized = true;
   set({
-    settings: loadJSON("nexus.voice", DEFAULT_SETTINGS),
+    settings: migrateSettings(loadJSON<Partial<VoiceSettings>>("nexus.voice", DEFAULT_SETTINGS)),
     userVolumes: loadJSON<Record<string, number>>("nexus.volumes", {}),
     localMutes: loadJSON<Record<string, boolean>>("nexus.localMutes", {}),
     muted: loadJSON("nexus.selfmute", { muted: false }).muted,
@@ -595,6 +895,8 @@ export async function joinCall(conversationId: string, opts: { video?: boolean }
   });
   ch.on("broadcast", { event: "signal" }, ({ payload }) => onSignal(payload as SignalPayload))
     .on("broadcast", { event: "state" }, ({ payload }) => onState(payload as StatePayload))
+    .on("broadcast", { event: "sound" }, ({ payload }) => onSound(payload as SoundMsg))
+    .on("broadcast", { event: "soundstop" }, ({ payload }) => onSoundStop(payload as Envelope))
     .on("broadcast", { event: "bye" }, ({ payload }) => {
       const msg = payload as Envelope;
       const p = peers.get(msg.from);
@@ -658,6 +960,10 @@ export async function leaveCall() {
   leaveTimers.forEach((t) => clearTimeout(t));
   leaveTimers.clear();
   for (const id of [...peers.keys()]) removePeer(id, true);
+  if (avatarEngine) {
+    avatarEngine.stop();
+    avatarEngine = null;
+  }
   stopStream(get().localCam);
   stopStream(get().localScreen);
   micSource?.disconnect();
@@ -682,6 +988,8 @@ export async function leaveCall() {
     participants: {},
     localCam: null,
     localScreen: null,
+    avatarOn: false,
+    soundToast: null,
     startedAt: null,
     focused: null,
     outgoingRing: null,
@@ -762,8 +1070,75 @@ export function toggleDeafen() {
   else sfx.unmute();
 }
 
+function removeCamSenders() {
+  for (const p of peers.values()) {
+    if (p.senders.cam) {
+      try {
+        p.pc.removeTrack(p.senders.cam);
+      } catch {
+        /* already closed */
+      }
+      p.senders.cam = undefined;
+    }
+  }
+}
+
+// ------------------------------------------------------------------ V-Avatar in calls
+let avatarEngine: AvatarEngine | null = null;
+
+function stopAvatar() {
+  if (!avatarEngine) return;
+  removeCamSenders();
+  avatarEngine.stop();
+  avatarEngine = null;
+  set({ avatarOn: false, localCam: null, focused: get().focused === `${me}:cam` ? null : get().focused });
+}
+
+/** send your animated V-Avatar instead of the camera (face-tracked when a camera is available) */
+export async function toggleAvatar(look: VAvatar) {
+  if (get().status === "idle") return;
+  if (get().avatarOn) {
+    stopAvatar();
+    broadcastState();
+    return;
+  }
+  if (get().localCam) await toggleVideo(); // real camera off first
+  const engine = startAvatar({
+    cfg: look,
+    width: 1280,
+    height: 720,
+    camera: true,
+    cameraId: get().settings.cameraDeviceId,
+    level: () => (localAnalyser && get().speaking ? rms(localAnalyser) : 0),
+  });
+  avatarEngine = engine;
+  const stream = engine.stream();
+  const track = stream.getVideoTracks()[0];
+  if (!track) {
+    engine.stop();
+    avatarEngine = null;
+    set({ error: "Your browser can't stream the V-Avatar." });
+    return;
+  }
+  track.contentHint = "motion";
+  for (const p of peers.values()) p.senders.cam = p.pc.addTrack(track, stream);
+  set({ localCam: stream, avatarOn: true });
+  broadcastState();
+}
+
+/** live-update the look while you're on a call */
+export function setAvatarLook(look: VAvatar) {
+  avatarEngine?.setLook(look);
+}
+
 export async function toggleVideo() {
   if (get().status === "idle") return;
+  if (get().avatarOn) {
+    // the camera button turns the avatar off too
+    stopAvatar();
+    broadcastState();
+    return;
+  }
   const cur = get().localCam;
   if (cur) {
     for (const p of peers.values()) {
@@ -881,11 +1256,15 @@ export async function updateSettings(patch: Partial<VoiceSettings>) {
     (patch.inputDeviceId !== undefined && patch.inputDeviceId !== prev.inputDeviceId) ||
     (patch.noiseSuppression !== undefined && patch.noiseSuppression !== prev.noiseSuppression) ||
     (patch.echoCancellation !== undefined && patch.echoCancellation !== prev.echoCancellation) ||
-    (patch.autoGainControl !== undefined && patch.autoGainControl !== prev.autoGainControl);
+    (patch.autoGainControl !== undefined && patch.autoGainControl !== prev.autoGainControl) ||
+    (patch.noiseMode !== undefined && patch.noiseMode !== prev.noiseMode);
   if (inCall && micChanged) await buildMic(); // outgoing track stays the same → no renegotiation
+  if (inCall && patch.voiceQuality && patch.voiceQuality !== prev.voiceQuality) {
+    for (const p of peers.values()) p.pc.getSenders().forEach((sn) => sn.track?.kind === "audio" && void tuneAudioSender(sn));
+  }
 
   const cam = get().localCam;
-  if (inCall && cam && patch.cameraDeviceId && patch.cameraDeviceId !== prev.cameraDeviceId) {
+  if (inCall && cam && !get().avatarOn && patch.cameraDeviceId && patch.cameraDeviceId !== prev.cameraDeviceId) {
     try {
       const video: MediaTrackConstraints = { width: { ideal: 1280 }, height: { ideal: 720 } };
       if (patch.cameraDeviceId !== "default") video.deviceId = { exact: patch.cameraDeviceId };
