@@ -1,3 +1,4 @@
+import { fmtClock, fmtDateShort } from "./prefs";
 import clsx, { type ClassValue } from "clsx";
 
 export const cn = (...v: ClassValue[]) => clsx(v);
@@ -15,7 +16,7 @@ export function sameDay(a: Date, b: Date) {
 }
 
 export function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return fmtClock(new Date(iso));
 }
 
 /** Telegram-style list timestamp: time today, weekday this week, date otherwise */
@@ -26,7 +27,7 @@ export function formatListTime(iso: string | null) {
   if (sameDay(d, now)) return formatTime(iso);
   const diff = (now.getTime() - d.getTime()) / 86400000;
   if (diff < 7) return d.toLocaleDateString([], { weekday: "short" });
-  return d.toLocaleDateString([], { day: "2-digit", month: "2-digit", year: "2-digit" });
+  return fmtDateShort(d);
 }
 
 export function formatDay(iso: string) {

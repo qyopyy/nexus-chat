@@ -2,15 +2,15 @@
 
 import { create } from "zustand";
 import { spotifyConfig } from "./music";
-import { updateMyProfile } from "./data";
-import { useApp } from "@/store/app";
+import { supabase } from "./supabase";
+import { useApp, toast } from "@/store/app";
 
-// Per-user Spotify login (Authorization Code + PKCE — no secret in the browser).
-// Tokens stay in this browser's localStorage; nothing is sent to our database except the optional "now playing".
+// Per-user Spotify login (Authorization Code + PKCE, no secret in the browser).
+// The login is kept on our server (nowplaying function) so "Listening to" on your profile keeps
+// updating every minute even when Nexus is closed. The browser only ever holds short-lived access tokens.
 
-const KEY = "nexus:spotify";
+const LEGACY = "nexus:spotify"; // old browser-only login, moved to the server on first run
 const VERIFIER = "nexus:spotify-verifier";
-const SHARE = "nexus:spotify-share";
 const SCOPES = [
   "user-read-currently-playing",
   "user-read-playback-state",
@@ -21,30 +21,44 @@ const SCOPES = [
   "user-follow-read",
 ].join(" ");
 
-type Tok = { access: string; refresh: string | null; exp: number; client: string };
+export type SpotifyLink = { name: string | null; avatar: string | null; product: string | null; share: boolean; since: string };
 
-export const useSpotifyUser = create<{ connected: boolean; share: boolean; me: { name: string; image: string | null; product: string | null } | null }>(() => ({
-  connected: false,
-  share: false,
-  me: null,
-}));
+export const useSpotifyUser = create<{
+  connected: boolean;
+  share: boolean;
+  me: { name: string; image: string | null; product: string | null } | null;
+  link: SpotifyLink | null;
+  loaded: boolean;
+}>(() => ({ connected: false, share: false, me: null, link: null, loaded: false }));
 
-function read(): Tok | null {
-  try {
-    const v = localStorage.getItem(KEY);
-    return v ? (JSON.parse(v) as Tok) : null;
-  } catch {
-    return null;
-  }
+function applyLink(l: SpotifyLink | null) {
+  useSpotifyUser.setState({
+    link: l,
+    connected: !!l,
+    share: !!l?.share,
+    me: l ? { name: l.name ?? "Spotify", image: l.avatar, product: l.product } : null,
+    loaded: true,
+  });
 }
-function write(t: Tok | null) {
-  try {
-    if (t) localStorage.setItem(KEY, JSON.stringify(t));
-    else localStorage.removeItem(KEY);
-  } catch {
-    /* storage unavailable */
+
+export async function refreshLink() {
+  const { data } = await supabase.rpc("my_music_link");
+  applyLink((data as SpotifyLink | null) ?? null);
+}
+
+async function fn<T = Record<string, unknown>>(action: string, args: Record<string, unknown> = {}): Promise<T> {
+  const { data, error } = await supabase.functions.invoke("nowplaying", { body: { action, ...args } });
+  if (error) {
+    let msg = error.message;
+    try {
+      const j = await (error as { context?: Response }).context?.json();
+      if (j?.error) msg = j.error;
+    } catch {
+      /* not json */
+    }
+    throw new Error(msg);
   }
-  useSpotifyUser.setState({ connected: !!t });
+  return data as T;
 }
 
 export const redirectUri = () => `${window.location.origin}/spotify-callback`;
@@ -76,119 +90,107 @@ export async function connectSpotify() {
   window.location.href = `https://accounts.spotify.com/authorize?${q}`;
 }
 
-/** Called by /spotify-callback */
+/** Called by /spotify-callback: the server swaps the code for tokens and keeps them */
 export async function finishSpotifyLogin(code: string) {
   const saved = JSON.parse(localStorage.getItem(VERIFIER) ?? "null") as { verifier: string; client: string } | null;
   if (!saved) throw new Error("Login expired — start again from Settings");
-  const res = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: redirectUri(),
-      client_id: saved.client,
-      code_verifier: saved.verifier,
-    }),
-  });
-  const j = await res.json();
-  if (!res.ok) throw new Error(j.error_description || j.error || "Spotify login failed");
+  await fn("link", { code, verifier: saved.verifier, redirect_uri: redirectUri() });
   localStorage.removeItem(VERIFIER);
-  write({ access: j.access_token, refresh: j.refresh_token ?? null, exp: Date.now() + j.expires_in * 1000, client: saved.client });
 }
 
+let tok: { value: string; exp: number } | null = null;
 async function token(): Promise<string | null> {
-  const t = read();
-  if (!t) return null;
-  if (t.exp > Date.now() + 60_000) return t.access;
-  if (!t.refresh) {
-    write(null);
+  if (tok && tok.exp > Date.now() + 60_000) return tok.value;
+  try {
+    const r = await fn<{ linked: boolean; access_token?: string; expires_at?: string }>("token");
+    if (!r.linked || !r.access_token) {
+      tok = null;
+      if (useSpotifyUser.getState().connected) applyLink(null);
+      return null;
+    }
+    tok = { value: r.access_token, exp: r.expires_at ? new Date(r.expires_at).getTime() : Date.now() + 30 * 60_000 };
+    return tok.value;
+  } catch {
     return null;
   }
-  const res = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: t.refresh, client_id: t.client }),
-  });
-  if (!res.ok) {
-    write(null);
-    return null;
-  }
-  const j = await res.json();
-  write({ access: j.access_token, refresh: j.refresh_token ?? t.refresh, exp: Date.now() + j.expires_in * 1000, client: t.client });
-  return j.access_token;
 }
 
 /** GET against the Spotify Web API as the signed-in user */
 export async function me<T = any>(path: string): Promise<T | null> {
+  if (!useSpotifyUser.getState().connected) return null;
   const tk = await token();
   if (!tk) return null;
   const res = await fetch(`https://api.spotify.com/v1${path}`, { headers: { Authorization: `Bearer ${tk}` } });
   if (res.status === 204) return null;
   if (res.status === 401) {
-    write(null);
+    tok = null;
     return null;
   }
   if (!res.ok) throw new Error(`Spotify ${res.status}`);
   return (await res.json()) as T;
 }
 
-export function disconnectSpotify() {
-  write(null);
-  setShare(false);
-  useSpotifyUser.setState({ me: null });
-}
-
-export function setShare(on: boolean) {
+export async function disconnectSpotify() {
+  tok = null;
   try {
-    localStorage.setItem(SHARE, on ? "1" : "0");
-  } catch {
-    /* storage unavailable */
+    await fn("unlink");
+  } catch (e) {
+    toast((e as Error).message, "error");
   }
-  useSpotifyUser.setState({ share: on });
-  if (!on && useApp.getState().userId) void updateMyProfile({ now_playing: null }, true);
-  else if (on) void pushNowPlaying();
+  applyLink(null);
 }
 
-let lastKey = "";
-async function pushNowPlaying() {
-  if (!useSpotifyUser.getState().share || !useApp.getState().userId) return;
+export async function setShare(on: boolean) {
+  useSpotifyUser.setState({ share: on });
+  const { error } = await supabase.rpc("set_music_share", { p_share: on });
+  if (error) {
+    useSpotifyUser.setState({ share: !on });
+    return toast(error.message, "error");
+  }
+  if (on) void syncNow(true);
+}
+
+/** ask the server to look at Spotify right now (used on open/focus so it feels instant) */
+export async function syncNow(force = false) {
+  if (!useSpotifyUser.getState().connected || !useApp.getState().userId) return;
   try {
-    const cur = await me<any>("/me/player/currently-playing");
-    const item = cur?.is_playing ? cur.item : null;
-    const key = item?.id ?? "";
-    if (key === lastKey) return;
-    lastKey = key;
-    await updateMyProfile(
-      {
-        now_playing: item
-          ? {
-              title: item.name,
-              artist: (item.artists ?? (item.show ? [item.show] : [])).map((a: { name: string }) => a.name).join(", ") || "",
-              url: item.external_urls?.spotify ?? null,
-              image: item.album?.images?.[0]?.url ?? item.images?.[0]?.url ?? null,
-              at: new Date().toISOString(),
-            }
-          : null,
-      },
-      true,
-    );
+    await fn("now", { force });
   } catch {
     /* offline / rate limited */
   }
 }
 
 let started = false;
-/** Boot: restore login state and keep "now playing" fresh while sharing is on */
+/** Boot: load link state, move any old browser-only login to the server, nudge a sync on focus */
 export function startSpotifySync() {
   if (started || typeof window === "undefined") return;
   started = true;
-  useSpotifyUser.setState({ connected: !!read(), share: localStorage.getItem(SHARE) === "1" });
-  if (read()) {
-    void me<{ display_name: string; images?: { url: string }[]; product?: string }>("/me")
-      .then((u) => u && useSpotifyUser.setState({ me: { name: u.display_name, image: u.images?.[0]?.url ?? null, product: u.product ?? null } }))
-      .catch(() => {});
-  }
-  setInterval(() => void pushNowPlaying(), 30_000);
-  void pushNowPlaying();
+  void (async () => {
+    await refreshLink();
+    // migrate an old local login
+    try {
+      const old = JSON.parse(localStorage.getItem(LEGACY) ?? "null") as { refresh?: string | null } | null;
+      if (old) {
+        localStorage.removeItem(LEGACY);
+        localStorage.removeItem("nexus:spotify-share");
+        if (old.refresh && !useSpotifyUser.getState().connected) {
+          await fn("adopt", { refresh_token: old.refresh }).catch(() => {});
+          await refreshLink();
+        }
+      }
+    } catch {
+      /* storage unavailable */
+    }
+    void syncNow();
+  })();
+  let last = 0;
+  const nudge = () => {
+    if (document.visibilityState !== "visible" || Date.now() - last < 20_000) return;
+    last = Date.now();
+    void syncNow();
+  };
+  document.addEventListener("visibilitychange", nudge);
+  window.addEventListener("focus", nudge);
+  // while the app is open, check a bit faster than the server's 1-minute cycle
+  setInterval(nudge, 25_000);
 }

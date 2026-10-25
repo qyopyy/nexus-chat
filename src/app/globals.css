@@ -334,3 +334,37 @@ input[type="range"].vol::-moz-range-thumb {
 @media (prefers-reduced-motion: reduce) {
   .verified-glow { animation: none; }
 }
+
+/* ── user preferences (lib/prefs.ts) ── */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+html.hc {
+  --color-txt: #ffffff;
+  --color-sub: #c9ced6;
+  --color-faint: #a3a8b3;
+  --color-line: #8a8f99;
+  --color-hover: #474a52;
+  --color-active: #5a5e68;
+}
+html.hc :focus-visible {
+  outline: 3px solid #ffd60a !important;
+  outline-offset: 2px;
+}
+html.ul-links a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+html.big-targets button,
+html.big-targets [role="button"] {
+  min-height: 36px;
+  min-width: 36px;
+}
+html.desat body {
+  filter: saturate(var(--sat, 1));
+}

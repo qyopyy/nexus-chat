@@ -1,5 +1,6 @@
 "use client";
 
+import { prefs } from "./prefs";
 import { create } from "zustand";
 
 export type EffectKind = "confetti" | "hearts" | "fireworks" | "lasers" | "snow" | "balloons";
@@ -17,6 +18,7 @@ export const useEffectsStore = create<{ playing: { kind: EffectKind; id: number 
 
 let seq = 0;
 export function playEffect(kind: EffectKind) {
+  if (!prefs().chatEffects) return;
   useEffectsStore.setState({ playing: { kind, id: ++seq } });
 }
 

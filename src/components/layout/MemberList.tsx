@@ -1,5 +1,6 @@
 "use client";
 
+import { ActivityText, NowPlayingCard, liveNow } from "@/components/profile/NowPlaying";
 import { useEffect, useMemo } from "react";
 import { Crown, LogOut, MessageCircle, Phone, Video } from "lucide-react";
 import { useApp, findChannel, openProfileCard } from "@/store/app";
@@ -83,7 +84,7 @@ function Section({ title, ids, roles, dim }: { title: string; ids: string[]; rol
                 {roles[id] === "owner" && <Crown className="size-3.5 shrink-0 text-idle" aria-label="Space owner" />}
               </div>
               <div className="truncate text-xs text-sub">
-                {pr?.voice ? "🔊 In voice" : p?.custom_status || (dim ? "" : statusLabel(pr?.status))}
+                {pr?.voice ? "🔊 In voice" : <ActivityText userId={id} fallback={p?.custom_status || (dim ? "" : statusLabel(pr?.status))} />}
               </div>
             </div>
           </button>
@@ -111,6 +112,7 @@ function ProfilePanel({ userId, conversationId }: { userId: string; conversation
         <div className="mt-1 text-sm text-sub">{statusLabel(status)}</div>
       </div>
       {p.custom_status && <div className="mx-4 mt-3 rounded-lg bg-panel p-3 text-sm">{p.custom_status}</div>}
+      {liveNow(p.now_playing) && <NowPlayingCard np={liveNow(p.now_playing)!} className="mx-4 mt-3" />}
       {p.bio && (
         <div className="mx-4 mt-3 rounded-lg bg-panel p-3 text-sm">
           <div className="text-xs font-bold tracking-wide text-sub uppercase">About me</div>

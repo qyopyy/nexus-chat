@@ -1,5 +1,6 @@
 "use client";
 
+import { ActivityText } from "@/components/profile/NowPlaying";
 import { useMemo, useState } from "react";
 import { Check, MessageCircle, Phone, UserMinus, UserPlus, Users, X } from "lucide-react";
 import { useApp } from "@/store/app";
@@ -115,7 +116,7 @@ export default function FriendsView() {
                         <NameTag userId={id} className="font-semibold" />
                         <span className="hidden truncate text-sm text-sub group-hover:inline">@{p?.username}</span>
                       </div>
-                      <div className="truncate text-xs text-sub">{pr?.voice ? "In a voice call" : p?.custom_status || statusLabel(pr?.status)}</div>
+                      <div className="truncate text-xs text-sub">{pr?.voice ? "In a voice call" : <ActivityText userId={id} fallback={p?.custom_status || statusLabel(pr?.status)} />}</div>
                     </button>
                     <RoundBtn label="Message" onClick={() => void openDM(id)}>
                       <MessageCircle className="size-[18px]" />

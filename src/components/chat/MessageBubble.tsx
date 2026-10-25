@@ -1,5 +1,6 @@
 "use client";
 
+import { usePrefs } from "@/lib/prefs";
 import { memo, useEffect, useRef, useState } from "react";
 import { Check, Clock, Copy, Download, FileText, Lock, Pencil, Reply, SmilePlus, Sparkles, Trash2 } from "lucide-react";
 import { useApp, openProfileCard, toast } from "@/store/app";
@@ -32,7 +33,38 @@ export function isVoice(m: Pick<Message, "attachment_type" | "attachment_name">)
   return !!m.attachment_type?.startsWith("audio/") && !!m.attachment_name?.startsWith("voice-");
 }
 
+function Spoiler({ children }: { children: React.ReactNode }) {
+  const auto = usePrefs((s) => s.spoilersAutoReveal);
+  const [shown, setShown] = useState(false);
+  const open = auto || shown;
+  return (
+    <span
+      role={open ? undefined : "button"}
+      tabIndex={open ? undefined : 0}
+      onClick={(e) => (e.stopPropagation(), setShown(true))}
+      onKeyDown={(e) => e.key === "Enter" && setShown(true)}
+      className={cn("rounded px-0.5 transition", open ? "bg-white/10" : "cursor-pointer bg-black text-transparent select-none hover:bg-black/80 [&_*]:invisible")}
+      title={open ? undefined : "Spoiler — click to reveal"}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** text with ||spoilers|| and clickable links */
 function Linkified({ text }: { text: string }) {
+  if (text.includes("||")) {
+    const chunks = text.split(/\|\|([^|]+?)\|\|/);
+    if (chunks.length > 1)
+      return (
+        <>
+          {chunks.map((c, i) => (i % 2 === 1 ? <Spoiler key={i}><Links text={c} /></Spoiler> : <Links key={i} text={c} />))}
+        </>
+      );
+  }
+  return <Links text={text} />;
+}
+function Links({ text }: { text: string }) {
   const parts = text.split(URL_RE);
   return (
     <>
@@ -135,7 +167,8 @@ function MessageBubbleImpl({
   const deleted = !!m.deleted_at;
   const interactive = !deleted && !m.pending && !editing;
   const voice = isVoice(m);
-  const bigEmoji = !deleted && !m.attachment_url && m.content.length <= 12 && EMOJI_ONLY.test(m.content) && m.content.trim().length > 0;
+  const jumbo = usePrefs((s) => s.jumboEmoji);
+  const bigEmoji = jumbo && !deleted && !m.attachment_url && m.content.length <= 12 && EMOJI_ONLY.test(m.content) && m.content.trim().length > 0;
   const showAvatar = showNames && !mine;
   const onlyMedia = !!m.attachment_url && !m.content && (m.attachment_type?.startsWith("image/") || m.attachment_type?.startsWith("video/"));
   const effect = isEffect(m.effect) ? EFFECTS.find((e) => e.id === m.effect) : undefined;

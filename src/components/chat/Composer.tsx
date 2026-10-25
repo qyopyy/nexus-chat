@@ -1,5 +1,6 @@
 "use client";
 
+import { usePrefs } from "@/lib/prefs";
 import { useEffect, useRef, useState } from "react";
 import { FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Timer, Trash2, X } from "lucide-react";
 import { useApp, conversationTitle, toast } from "@/store/app";
@@ -327,7 +328,8 @@ export default function Composer({
                 }}
                 onKeyDown={(e) => {
                   const touchDevice = window.matchMedia("(hover: none)").matches;
-                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !touchDevice) {
+                  const enterSends = usePrefs.getState().enterToSend;
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !touchDevice && (enterSends || e.ctrlKey || e.metaKey)) {
                     e.preventDefault();
                     submit();
                   } else if (e.key === "ArrowUp" && !text) {

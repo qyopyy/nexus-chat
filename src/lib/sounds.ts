@@ -1,4 +1,5 @@
 // Tiny synthesized UI sounds — no audio assets needed.
+import { prefs } from "./prefs";
 
 let ctx: AudioContext | null = null;
 function audio() {
@@ -8,7 +9,11 @@ function audio() {
   return ctx;
 }
 
-function tone(freqs: number[], dur = 0.09, gap = 0.02, vol = 0.12, type: OscillatorType = "sine") {
+function tone(freqs: number[], dur = 0.09, gap = 0.02, vol = 0.12, type: OscillatorType = "sine", ring = false) {
+  const p = prefs();
+  if (ring ? !p.ringtone : !p.uiSounds) return;
+  vol *= p.uiVolume;
+  if (vol <= 0) return;
   const a = audio();
   if (!a) return;
   let t = a.currentTime;
@@ -40,7 +45,7 @@ export const sfx = {
 let ringTimer: ReturnType<typeof setInterval> | null = null;
 export function startRing(outgoing = false) {
   stopRing();
-  const play = () => (outgoing ? tone([440, 440], 0.35, 0.25, 0.06) : tone([659, 784, 659, 784], 0.12, 0.04, 0.1, "triangle"));
+  const play = () => (outgoing ? tone([440, 440], 0.35, 0.25, 0.06, "sine", true) : tone([659, 784, 659, 784], 0.12, 0.04, 0.1, "triangle", true));
   play();
   ringTimer = setInterval(play, outgoing ? 3000 : 1800);
 }
