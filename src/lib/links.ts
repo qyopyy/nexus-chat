@@ -86,3 +86,17 @@ export function spotifyKind(url: string | null | undefined) {
   const m = url?.match(/(track|album|playlist|artist|episode|show)[/:]/);
   return m?.[1] ?? null;
 }
+
+/** "12.4k", "1,200", "3.1M" → number */
+export function parseCount(s: string): number | null {
+  const m = s.trim().toLowerCase().replace(/[\s,]/g, "").match(/^(\d+(?:\.\d+)?)([kmb])?$/);
+  if (!m) return null;
+  const n = parseFloat(m[1]) * (m[2] === "k" ? 1e3 : m[2] === "m" ? 1e6 : m[2] === "b" ? 1e9 : 1);
+  return Math.round(n);
+}
+export const fmtCount = (n: number) =>
+  n >= 1e9 ? `${+(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `${+(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e4 ? `${Math.round(n / 1e3)}K` : n >= 1e3 ? `${+(n / 1e3).toFixed(1)}K` : String(n);
+/** what the platform calls its audience */
+export const audienceWord = (type: string) => (type === "youtube" ? "subscribers" : type === "twitch" || type === "spotify" ? "followers" : type === "discord" || type === "telegram" ? "members" : "followers");
+/** Spotify artist id from a link */
+export const spotifyArtistId = (url: string) => url.match(/open\.spotify\.com\/(?:intl-[a-z]+\/)?artist\/([A-Za-z0-9]{22})/)?.[1] ?? null;

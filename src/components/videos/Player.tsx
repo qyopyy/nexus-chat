@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, Gauge, Link2, PictureInPicture2, Repeat } from "lucide-react";
+import { Camera, Gauge, Link2, PictureInPicture2, Repeat, VolumeX } from "lucide-react";
+import { preparePlayback } from "@/lib/mediaAudio";
 import { toast } from "@/store/app";
 import { playbackUrl, qualityLabel, recordView, videoLink } from "@/lib/videos";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,7 @@ export default function Player({ v, start, className, tools }: { v: Video; start
   const [cors, setCors] = useState(true); // allows frame snapshots; dropped if the file host refuses
   const [speed, setSpeed] = useState(1);
   const [loop, setLoop] = useState(false);
+  const [silent, setSilent] = useState(false); // autoplay was only allowed muted → show "tap for sound"
   const counted = useRef(false);
   const watched = useRef(0);
 
@@ -25,6 +27,7 @@ export default function Player({ v, start, className, tools }: { v: Video; start
     setSrc(null);
     setFailed(false);
     setCors(true);
+    setSilent(false);
     void playbackUrl(v).then((u) => alive && (u ? setSrc(u) : setFailed(true)));
     return () => {
       alive = false;
@@ -64,6 +67,34 @@ export default function Player({ v, start, className, tools }: { v: Video; start
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, []);
+
+  // autoplay with sound when the browser allows it; otherwise start muted and offer a big unmute button
+  const autoplay = async (el: HTMLVideoElement) => {
+    el.muted = false;
+    try {
+      preparePlayback();
+      await el.play();
+      setSilent(false);
+    } catch (e) {
+      if ((e as DOMException)?.name !== "NotAllowedError") return;
+      el.muted = true;
+      try {
+        await el.play();
+        setSilent(true);
+      } catch {
+        setSilent(false); // stays paused with the play button visible
+      }
+    }
+  };
+  const unmute = () => {
+    const el = ref.current;
+    if (!el) return;
+    preparePlayback();
+    el.muted = false;
+    if (el.volume === 0) el.volume = 1;
+    void el.play().catch(() => {});
+    setSilent(false);
+  };
 
   const q = qualityLabel(v.height, v.width);
   useEffect(() => {
@@ -121,12 +152,14 @@ export default function Player({ v, start, className, tools }: { v: Video; start
           poster={v.thumb_url ?? undefined}
           controls
           playsInline
-          autoPlay
           preload="metadata"
           className="size-full bg-black object-contain"
           onLoadedMetadata={(e) => {
             if (start) e.currentTarget.currentTime = start;
+            void autoplay(e.currentTarget);
           }}
+          onPlay={(e) => !e.currentTarget.muted && preparePlayback()}
+          onVolumeChange={(e) => !e.currentTarget.muted && setSilent(false)}
           onTimeUpdate={(e) => {
             const el = e.currentTarget;
             watched.current = Math.max(watched.current, el.currentTime);
@@ -147,6 +180,11 @@ export default function Player({ v, start, className, tools }: { v: Video; start
         <div className="grid size-full place-items-center">
           <div className="size-10 animate-spin rounded-full border-4 border-white/70 border-t-transparent" />
         </div>
+      )}
+      {silent && src && (
+        <button onClick={unmute} className="absolute top-3 left-3 z-10 flex animate-pop items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-black shadow-xl">
+          <VolumeX className="size-4" /> Tap for sound
+        </button>
       )}
       {q && src && <span className="pointer-events-none absolute top-2 right-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[11px] font-bold text-white backdrop-blur">{q}</span>}
     </div>

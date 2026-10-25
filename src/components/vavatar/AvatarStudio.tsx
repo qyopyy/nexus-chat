@@ -5,7 +5,7 @@ import { Camera, CameraOff, Dices, RotateCcw, Save, Sparkles } from "lucide-reac
 import { useApp, toast } from "@/store/app";
 import { updateMyProfile } from "@/lib/data";
 import { setAvatarLook, useCall } from "@/lib/call";
-import { DEFAULT_AVATAR, OPTIONS, SWATCH, cleanShirtText, normalizeAvatar, randomAvatar, startAvatar, type AvatarEngine, type VAvatar } from "@/lib/vavatar";
+import { DEFAULT_AVATAR, OPTIONS, SWATCH, cleanShirtText, normalizeAvatar, randomAvatar, startAvatar, isMobileDevice, type AvatarEngine, type VAvatar } from "@/lib/vavatar";
 import { cn } from "@/lib/utils";
 
 /** your saved look (or the default one) */
@@ -205,7 +205,8 @@ export default function AvatarStudio() {
 
   // (re)start the preview engine when the camera toggle changes
   useEffect(() => {
-    const e = startAvatar({ cfg, width: 720, height: 540, camera: cam, onMode: setMode });
+    const small = isMobileDevice();
+    const e = startAvatar({ cfg, width: small ? 480 : 720, height: small ? 360 : 540, camera: cam, onMode: setMode });
     engine.current = e;
     e.canvas.className = "h-full w-full object-cover";
     holder.current?.replaceChildren(e.canvas);

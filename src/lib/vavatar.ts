@@ -3319,8 +3319,24 @@ type FaceResult = { faceLandmarks: Landmark[][]; faceBlendshapes?: { categories:
 type Landmarker = { detectForVideo: (v: HTMLVideoElement, t: number) => FaceResult; close: () => void };
 let landmarkerP: Promise<Landmarker | null> | null = null;
 
+/** phones & tablets (iPadOS reports itself as a Mac with touch) */
+export const isMobileDevice = () =>
+  typeof navigator !== "undefined" && (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1));
+const isAppleWebKit = () =>
+  typeof navigator !== "undefined" && (/iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1));
+
+const withTimeout = <T,>(p: Promise<T>, ms: number) =>
+  Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+
 function loadLandmarker(): Promise<Landmarker | null> {
-  landmarkerP ??= (async () => {
+  landmarkerP ??= withTimeout(loadLandmarkerInner(), 45_000).catch(() => {
+    landmarkerP = null;
+    return null;
+  });
+  return landmarkerP;
+}
+function loadLandmarkerInner(): Promise<Landmarker | null> {
+  return (async () => {
     try {
       // runtime import from the CDN (kept out of the app bundle; ~10 MB wasm+model, cached by the browser)
       const vision = await (new Function("u", "return import(u)") as (u: string) => Promise<Record<string, unknown>>)(`${MP}/vision_bundle.mjs`);
@@ -3328,18 +3344,19 @@ function loadLandmarker(): Promise<Landmarker | null> {
       const FaceLandmarker = vision.FaceLandmarker as { createFromOptions: (f: unknown, o: unknown) => Promise<Landmarker> };
       const files = await FilesetResolver.forVisionTasks(`${MP}/wasm`);
       const opts = (delegate: "GPU" | "CPU") => ({ baseOptions: { modelAssetPath: MODEL, delegate }, runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: true });
+      // iPhone/iPad: the WebGL (GPU) path can lock up WebKit — the CPU (wasm SIMD) path is fast enough
+      // at the small camera size we use on phones. Everywhere else try the GPU first.
+      if (isAppleWebKit()) return await FaceLandmarker.createFromOptions(files, opts("CPU"));
       try {
-        return await FaceLandmarker.createFromOptions(files, opts("GPU"));
+        return await withTimeout(FaceLandmarker.createFromOptions(files, opts("GPU")), 20_000);
       } catch {
         return await FaceLandmarker.createFromOptions(files, opts("CPU"));
       }
     } catch (e) {
       console.warn("face tracking unavailable", e);
-      landmarkerP = null;
       return null;
     }
   })();
-  return landmarkerP;
 }
 
 function poseFrom(res: FaceResult): Pose | null {
@@ -3386,6 +3403,7 @@ export type AvatarEngine = {
  * no face is visible) it lip-syncs to `level()` (mic loudness) with idle blinking & sway.
  */
 export function startAvatar(opts: { cfg: VAvatar; width: number; height: number; camera: boolean; cameraId?: string; level?: () => number; onMode?: (m: "loading" | "face" | "voice") => void }): AvatarEngine {
+  const mobile = isMobileDevice();
   const canvas = document.createElement("canvas");
   canvas.width = opts.width;
   canvas.height = opts.height;
@@ -3412,8 +3430,14 @@ export function startAvatar(opts: { cfg: VAvatar; width: number; height: number;
   if (opts.camera) {
     void (async () => {
       try {
-        const video_: MediaTrackConstraints = { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } };
-        if (opts.cameraId && opts.cameraId !== "default") video_.deviceId = { exact: opts.cameraId };
+        // phones: front ("selfie") camera at a small size — plenty for landmarks, far cheaper to analyse
+        const video_: MediaTrackConstraints = mobile
+          ? { facingMode: "user", width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 24, max: 30 } }
+          : { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } };
+        if (opts.cameraId && opts.cameraId !== "default") {
+          delete video_.facingMode;
+          video_.deviceId = { exact: opts.cameraId };
+        }
         const [s, l] = await Promise.all([navigator.mediaDevices.getUserMedia({ video: video_ }), loadLandmarker()]);
         if (stopped) return s.getTracks().forEach((t) => t.stop());
         cam = s;
@@ -3422,8 +3446,13 @@ export function startAvatar(opts: { cfg: VAvatar; width: number; height: number;
         video = document.createElement("video");
         video.muted = true;
         video.playsInline = true;
+        video.setAttribute("playsinline", "");
+        video.setAttribute("muted", "");
+        // iOS only decodes camera frames for videos that are in the page
+        video.style.cssText = "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;z-index:-1";
+        document.body.appendChild(video);
         video.srcObject = s;
-        await video.play();
+        await withTimeout(video.play(), 8000).catch(() => {});
       } catch {
         setMode("voice");
       }
@@ -3432,15 +3461,21 @@ export function startAvatar(opts: { cfg: VAvatar; width: number; height: number;
 
   const t0 = performance.now();
   let lastVideoTime = -1;
+  let nextDetect = 0;
+  const minGap = mobile ? 66 : 33; // face analysis ≤15 fps on phones, ≤30 on computers
   const frame = () => {
     if (stopped) return;
     const now = performance.now();
     const t = (now - t0) / 1000;
-    // face tracking
-    if (lmk && video && video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+    // face tracking — adaptive: if analysis is slow on this device, run it less often instead of freezing
+    if (lmk && video && video.readyState >= 2 && video.currentTime !== lastVideoTime && now >= nextDetect) {
       lastVideoTime = video.currentTime;
       try {
-        const p = poseFrom(lmk.detectForVideo(video, now));
+        const d0 = performance.now();
+        const res = lmk.detectForVideo(video, now);
+        const cost = performance.now() - d0;
+        nextDetect = performance.now() + Math.max(minGap, cost * 1.6);
+        const p = poseFrom(res);
         if (p) {
           target = p;
           lastFace = now;
@@ -3450,7 +3485,7 @@ export function startAvatar(opts: { cfg: VAvatar; width: number; height: number;
         /* skip frame */
       }
     }
-    const tracking = now - lastFace < 700;
+    const tracking = now - lastFace < 900;
     if (!tracking) {
       if (mode === "face") setMode("voice");
       // voice + idle animation
@@ -3478,22 +3513,38 @@ export function startAvatar(opts: { cfg: VAvatar; width: number; height: number;
     for (const key of Object.keys(k) as (keyof Pose)[]) cur[key] += (target[key] - cur[key]) * k[key];
     drawAvatar(g, cfg, cur, canvas.width, canvas.height, t);
   };
-  frame();
-  const timer = setInterval(frame, 1000 / 30); // interval (not rAF) keeps the stream alive in background tabs
+  // self-scheduling timer (not rAF, so calls keep streaming in background tabs). Unlike setInterval it
+  // never queues up frames on a slow phone — the next frame waits until this one is finished.
+  const frameMs = 1000 / (mobile ? 24 : 30);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const loop = () => {
+    if (stopped) return;
+    const a = performance.now();
+    try {
+      frame();
+    } catch {
+      /* keep animating */
+    }
+    timer = setTimeout(loop, Math.max(8, frameMs - (performance.now() - a)));
+  };
+  loop();
 
   return {
     canvas,
-    stream: () => (stream ??= canvas.captureStream(30)),
+    stream: () => (stream ??= canvas.captureStream(mobile ? 24 : 30)),
     setLook: (c) => {
       cfg = c;
     },
     mode: () => mode,
     stop: () => {
       stopped = true;
-      clearInterval(timer);
+      clearTimeout(timer);
       cam?.getTracks().forEach((t) => t.stop());
       stream?.getTracks().forEach((t) => t.stop());
-      if (video) video.srcObject = null;
+      if (video) {
+        video.srcObject = null;
+        video.remove();
+      }
     },
   };
 }

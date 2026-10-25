@@ -9,7 +9,8 @@ import { openDM } from "@/lib/data";
 import { startCall } from "@/lib/call";
 import { supabase } from "@/lib/supabase";
 import { isBanned, isMuted, myRank } from "@/lib/admin";
-import { linkLabel, platformById, spotifyEmbed } from "@/lib/links";
+import { audienceWord, fmtCount, linkLabel, platformById, spotifyArtistId, spotifyEmbed } from "@/lib/links";
+import { sp, type SpArtist } from "@/lib/music";
 import type { ProfileLink } from "@/lib/types";
 import { BadgeToggles, ModerationControls } from "@/components/admin/ModTools";
 import { ROLE_INFO, roleRank, type SiteRole } from "@/lib/theme";
@@ -19,6 +20,10 @@ import Sheet from "./Sheet";
 import { useIsMobile } from "@/lib/useMobile";
 import { cn } from "@/lib/utils";
 import { BorderRing, EffectCanvas, themeBg } from "@/components/profile/ProfileFx";
+import { NowPlayingCard, liveNow } from "@/components/profile/NowPlaying";
+import { usePrefs } from "@/lib/prefs";
+import { loadAliases, useAliases } from "@/lib/usernames";
+const NO_ALIASES: string[] = [];
 
 const EMPTY: string[] = [];
 
@@ -73,6 +78,10 @@ export function CardBody({ userId }: { userId: string }) {
   const [modOpen, setModOpen] = useState(false);
   const [badgeOpen, setBadgeOpen] = useState(false);
   const [liked, setLiked] = useState(false);
+  const [statsHidden, setStatsHidden] = useState(false);
+  const aliases = useAliases((s) => s.byUser[userId] ?? NO_ALIASES);
+  const othersFx = usePrefs((s) => s.othersProfileFx);
+  const devMode = usePrefs((s) => s.devMode);
   const badges = useMemo(() => ids.map((id) => catalog[id]).filter(Boolean).sort((a, b) => b.priority - a.priority), [ids, catalog]);
   // all-time profile views (one per visitor per day) + likes
   useEffect(() => {
@@ -88,6 +97,13 @@ export function CardBody({ userId }: { userId: string }) {
       .eq("user_id", me)
       .maybeSingle()
       .then(({ data }) => setLiked(!!data?.active));
+    void supabase
+      .from("user_privacy")
+      .select("show_stats")
+      .eq("user_id", userId)
+      .maybeSingle()
+      .then(({ data }) => setStatsHidden(data?.show_stats === false));
+    void loadAliases(userId);
   }, [userId, me]);
   if (!p) return null;
 
@@ -99,7 +115,8 @@ export function CardBody({ userId }: { userId: string }) {
   const close = () => useApp.setState({ profileCard: null });
   const embed = spotifyEmbed(p.profile_song);
   const links = (p.links ?? []).filter((l) => l && l.url);
-  const np = p.now_playing && Date.now() - new Date(p.now_playing.at).getTime() < 6 * 3600_000 ? p.now_playing : null;
+  const np = liveNow(p.now_playing);
+  const showStats = userId === me || !statsHidden;
 
   async function call() {
     const { data } = await supabase.rpc("get_or_create_dm", { p_user: userId });
@@ -124,7 +141,7 @@ export function CardBody({ userId }: { userId: string }) {
     <div className={cn("relative rounded-2xl shadow-2xl", bordered && "p-[2px]")}>
       <BorderRing border={p.profile_border} />
       <div className={cn("relative overflow-hidden rounded-2xl ring-1 ring-white/5", !theme && "bg-menu")} style={theme ? { background: theme } : undefined}>
-        <EffectCanvas effect={p.profile_effect} accent={p.avatar_color} seed={userId} />
+        {(othersFx || userId === me) && <EffectCanvas effect={p.profile_effect} accent={p.avatar_color} seed={userId} />}
     <div className="relative z-10 max-h-[min(86dvh,720px)] overflow-y-auto overscroll-contain md:max-h-[calc(100dvh-24px)]">
       <div
         className="relative h-28 bg-cover bg-center"
@@ -154,41 +171,42 @@ export function CardBody({ userId }: { userId: string }) {
         <NameTag userId={userId} className="max-w-full text-xl font-bold" badgeSize="md" />
         <div className="flex flex-wrap items-center gap-x-1.5 text-sm text-sub">
           <span>@{p.username}</span>
+          {aliases.length > 0 && <span className="text-xs" title="Also goes by">· also {aliases.map((x) => `@${x}`).join(" ")}</span>}
           {p.member_no != null && <span className="font-mono text-xs opacity-80">· UID {p.member_no}</span>}
           {p.forum_name && <span className="text-xs">· forum: {p.forum_name}</span>}
+          {devMode && (
+            <button
+              onClick={() => {
+                void navigator.clipboard?.writeText(userId);
+                toast("User ID copied", "success");
+              }}
+              className="rounded bg-black/30 px-1.5 font-mono text-[10px] hover:bg-black/50"
+              title={userId}
+            >
+              Copy ID
+            </button>
+          )}
         </div>
         {p.custom_status && <div className="mt-1 text-sm">{p.custom_status}</div>}
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-          <span className="flex items-center gap-1 rounded-full bg-black/25 px-2.5 py-1" title="All-time profile views">
-            <Eye className="size-4 text-sub" /> <b className="tabular-nums">{(p.view_count ?? 0).toLocaleString()}</b> <span className="text-sub">views</span>
-          </span>
+          {showStats && (
+            <span className="flex items-center gap-1 rounded-full bg-black/25 px-2.5 py-1" title={statsHidden ? "Hidden from others (Settings → Privacy)" : "All-time profile views"}>
+              <Eye className="size-4 text-sub" /> <b className="tabular-nums">{(p.view_count ?? 0).toLocaleString()}</b> <span className="text-sub">views</span>
+            </span>
+          )}
           <button
             disabled={userId === me}
             onClick={() => void like()}
             className={cn("flex items-center gap-1 rounded-full px-2.5 py-1 transition active:scale-95", liked ? "bg-dnd/20 text-dnd" : "bg-black/25 hover:bg-black/40", userId === me && "cursor-default")}
             title={userId === me ? "Likes on your profile" : liked ? "Unlike" : "Like this profile"}
           >
-            <Heart className={cn("size-4", liked && "fill-current")} /> <b className="tabular-nums">{(p.like_count ?? 0).toLocaleString()}</b>
+            <Heart className={cn("size-4", liked && "fill-current")} /> {showStats ? <b className="tabular-nums">{(p.like_count ?? 0).toLocaleString()}</b> : <span>Like</span>}
           </button>
         </div>
         {isBanned(p) && <div className="mt-2 rounded-md bg-dnd/20 px-2 py-1 text-xs text-dnd">Suspended{p.ban_reason ? `: ${p.ban_reason}` : ""}</div>}
         {isMuted(p) && rank >= 2 && <div className="mt-2 rounded-md bg-idle/15 px-2 py-1 text-xs text-idle">Messaging blocked{p.mute_reason ? `: ${p.mute_reason}` : ""}</div>}
 
-        {np && (
-          <a href={np.url ?? undefined} target="_blank" rel="noreferrer" className="mt-3 flex items-center gap-2.5 rounded-lg bg-[#1DB954]/12 p-2 ring-1 ring-[#1DB954]/25">
-            {np.image ? <img src={np.image} alt="" className="size-10 rounded-md object-cover" /> : <span className="grid size-10 place-items-center rounded-md bg-[#1DB954] text-lg">♫</span>}
-            <span className="min-w-0 flex-1">
-              <span className="block text-[11px] font-bold tracking-wide text-[#1DB954] uppercase">Listening on Spotify</span>
-              <span className="block truncate text-sm font-semibold">{np.title}</span>
-              <span className="block truncate text-xs text-sub">{np.artist}</span>
-            </span>
-            <span className="eq-on flex h-4 shrink-0 items-end gap-0.5 text-[#1DB954]">
-              <span className="eq" />
-              <span className="eq" />
-              <span className="eq" />
-            </span>
-          </a>
-        )}
+        {np && <NowPlayingCard np={np} className="mt-3" />}
 
         <div className="my-3 h-px bg-line" />
         {p.bio && (
@@ -307,8 +325,33 @@ export function CardBody({ userId }: { userId: string }) {
   );
 }
 
+const liveFans = new Map<string, Promise<number | null>>();
+/** real follower count for Spotify artist links (others use the number the owner entered) */
+function useLiveFollowers(link: ProfileLink) {
+  const id = link.type === "spotify" ? spotifyArtistId(link.url) : null;
+  const [n, setN] = useState<number | null>(null);
+  useEffect(() => {
+    if (!id) return;
+    if (!liveFans.has(id))
+      liveFans.set(
+        id,
+        sp<{ artists: SpArtist[] }>("artists", { ids: [id] })
+          .then((r) => r.artists?.[0]?.followers ?? null)
+          .catch(() => null),
+      );
+    let alive = true;
+    void liveFans.get(id)!.then((v) => alive && setN(v));
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+  return n;
+}
+
 export function LinkRow({ link }: { link: ProfileLink }) {
   const plat = platformById(link.type);
+  const live = useLiveFollowers(link);
+  const count = live ?? link.followers ?? null;
   return (
     <a href={link.url} target="_blank" rel="noreferrer noopener" className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 hover:bg-white/5 active:bg-white/10">
       <span className="grid size-7 shrink-0 place-items-center rounded-lg text-[13px] font-bold text-white" style={{ background: plat.color }}>
@@ -318,6 +361,15 @@ export function LinkRow({ link }: { link: ProfileLink }) {
         <span className="block truncate text-sm font-medium">{linkLabel(link)}</span>
         <span className="block text-[11px] text-sub">{plat.label}</span>
       </span>
+      {count != null && count > 0 && (
+        <span
+          className="flex shrink-0 items-baseline gap-1 rounded-full bg-gradient-to-r from-[#ffd400] via-[#ff8a00] to-[#ff2bd6] px-2.5 py-1 text-black shadow-[0_0_14px_rgba(255,138,0,.45)]"
+          title={live != null ? `${count.toLocaleString()} ${audienceWord(link.type)} (live from Spotify)` : `${count.toLocaleString()} ${audienceWord(link.type)}`}
+        >
+          <b className="text-sm leading-none font-black tabular-nums">{fmtCount(count)}</b>
+          <span className="text-[10px] leading-none font-bold">{audienceWord(link.type)}</span>
+        </span>
+      )}
       <ExternalLink className="size-3.5 shrink-0 text-sub" />
     </a>
   );

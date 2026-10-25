@@ -25,6 +25,8 @@ import MobileShell from "./mobile/MobileShell";
 import EffectsLayer from "./effects/EffectsLayer";
 import { useIsMobile } from "@/lib/useMobile";
 import { startSpotifySync } from "@/lib/spotifyUser";
+import { startMediaAudio } from "@/lib/mediaAudio";
+import "@/lib/prefs";
 import { startPush } from "@/lib/push";
 import { joinGame } from "@/store/games";
 import GamesHub from "@/components/games/GamesHub";
@@ -87,6 +89,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
   useEffect(() => {
     if (!bootstrapped) return;
     startSpotifySync();
+    startMediaAudio();
     void startPush();
     const q = new URLSearchParams(window.location.search);
     const play = q.get("play");

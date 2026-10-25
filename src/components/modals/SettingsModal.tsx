@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, Camera, Crown, Keyboard, LogOut, Mic, Palette, Shield, Sparkles, Upload, User, X } from "lucide-react";
+import { Accessibility, Bell, Camera, Crown, Database, Keyboard, Link2, ShieldCheck, LogOut, Mic, Palette, Shield, Sparkles, Upload, User, X } from "lucide-react";
 import { LIVE_STYLES, TYPING_STYLES, setChatFx, useChatFx } from "@/lib/chatFx";
 import { LiveText, TypingAnim } from "@/components/chat/TypingBubbles";
 import { useApp, closeModal, openModal, toast } from "@/store/app";
@@ -18,13 +18,17 @@ import NameTag from "@/components/ui/NameTag";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
+import { H, Label, Select, Slider, Toggle } from "./settingsUi";
+import { AccessibilitySection, AdvancedSection, ChatPrefsBlock, ConnectionsSection, PrivacySection, UsernamesField } from "./MoreSettings";
 
-type Section = "account" | "appearance" | "chat" | "voice" | "vavatar" | "notifications" | "admin";
+type Section = "account" | "connections" | "privacy" | "appearance" | "accessibility" | "chat" | "voice" | "vavatar" | "notifications" | "advanced" | "admin";
+const ALL: Section[] = ["account", "connections", "privacy", "appearance", "accessibility", "chat", "voice", "vavatar", "notifications", "advanced", "admin"];
+const MOBILE_LABEL: Partial<Record<Section, string>> = { vavatar: "V-Avatar", chat: "Chat", privacy: "Privacy", advanced: "Data" };
 
 export default function SettingsModal({ initial }: { initial: string | null }) {
   const [section, setSection] = useState<Section>(() => {
     const base = (initial ?? "voice").split(":")[0];
-    return (["account", "appearance", "chat", "voice", "vavatar", "notifications", "admin"] as const).includes(base as Section) ? (base as Section) : "voice";
+    return ALL.includes(base as Section) ? (base as Section) : "voice";
   });
   const focusUser = initial?.startsWith("admin:") ? initial.slice(6) : null;
   const isStaff = useApp((s) => roleRank(s.userId ? s.profiles[s.userId]?.site_role : null) >= 2);
@@ -51,11 +55,16 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
         <div className="w-[200px] space-y-0.5 text-[15px]">
           <p className="px-2.5 pb-1 text-xs font-bold tracking-wide text-sub uppercase">User Settings</p>
           {nav("account", "My Account", <User className="size-4" />)}
+          {nav("connections", "Connections", <Link2 className="size-4" />)}
+          {nav("privacy", "Privacy & Safety", <ShieldCheck className="size-4" />)}
+          <p className="px-2.5 pt-4 pb-1 text-xs font-bold tracking-wide text-sub uppercase">App Settings</p>
           {nav("appearance", "Appearance", <Palette className="size-4" />)}
+          {nav("accessibility", "Accessibility", <Accessibility className="size-4" />)}
           {nav("chat", "Chat & Typing", <Keyboard className="size-4" />)}
           {nav("voice", "Voice & Video", <Mic className="size-4" />)}
           {nav("vavatar", "V-Avatar", <Sparkles className="size-4" />)}
           {nav("notifications", "Notifications", <Bell className="size-4" />)}
+          {nav("advanced", "Data & Advanced", <Database className="size-4" />)}
           <button onClick={() => openModal("premium")} className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left font-semibold text-[#f0b232] transition hover:bg-hover">
             <Crown className="size-4" />
             Nexus Premium
@@ -84,9 +93,9 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
           <button onClick={closeModal} className="grid size-8 shrink-0 place-items-center rounded-full bg-hover text-sub" aria-label="Close settings">
             <X className="size-4" />
           </button>
-          {(["account", "appearance", "chat", "voice", "vavatar", "notifications", ...(isStaff ? ["admin"] : [])] as Section[]).map((s) => (
+          {ALL.filter((x) => x !== "admin" || isStaff).map((s) => (
             <button key={s} onClick={() => setSection(s)} className={cn("shrink-0 rounded-md px-3 py-1 text-sm capitalize", section === s ? "bg-active" : "text-sub")}>
-              {s === "vavatar" ? "V-Avatar" : s}
+              {MOBILE_LABEL[s] ?? s}
             </button>
           ))}
         </div>
@@ -104,6 +113,10 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
             </>
           )}
           {section === "notifications" && <NotificationSection />}
+          {section === "connections" && <ConnectionsSection />}
+          {section === "privacy" && <PrivacySection />}
+          {section === "accessibility" && <AccessibilitySection />}
+          {section === "advanced" && <AdvancedSection />}
         </div>
       </div>
       <div className="absolute top-14 right-10 hidden flex-col items-center gap-1 sm:flex">
@@ -115,9 +128,6 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
     </div>
   );
 }
-
-const H = ({ children }: { children: React.ReactNode }) => <h2 className="mb-5 text-xl font-bold">{children}</h2>;
-const Label = ({ children }: { children: React.ReactNode }) => <div className="mb-2 text-xs font-bold tracking-wide text-sub uppercase">{children}</div>;
 
 const COLORS = ["#5865F2", "#2AABEE", "#3BA55D", "#FAA61A", "#ED4245", "#EB459E", "#9B59B6", "#1ABC9C", "#E67E22", "#607D8B"];
 
@@ -189,6 +199,7 @@ function AccountSection() {
             Animated avatars supported — upload a <b className="text-txt">GIF</b> or animated <b className="text-txt">WebP</b> (up to 10 MB).
             {animated && <span className="ml-1 rounded bg-accent/20 px-1.5 py-0.5 font-semibold text-accent">Animated ✓</span>}
           </p>
+          <UsernamesField />
           <div>
             <Label>Display name</Label>
             <input value={name} maxLength={32} onChange={(e) => setName(e.target.value)} className="w-full rounded-md bg-rail px-3 py-2 outline-none focus:ring-2 focus:ring-accent/60" />
@@ -288,56 +299,6 @@ function useDevices() {
     return () => navigator.mediaDevices?.removeEventListener("devicechange", reload);
   }, [reload]);
   return [devices, reload] as const;
-}
-
-function Select({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full cursor-pointer rounded-md bg-rail px-3 py-2.5 outline-none focus:ring-2 focus:ring-accent/60">
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function Toggle({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label className="flex cursor-pointer items-center justify-between gap-4 border-b border-line/60 py-3">
-      <span>
-        <span className="block font-medium">{label}</span>
-        {hint && <span className="block text-sm text-sub">{hint}</span>}
-      </span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={cn("relative h-6 w-10 shrink-0 rounded-full transition", checked ? "bg-ok" : "bg-faint")}
-      >
-        <span className={cn("absolute top-0.5 size-5 rounded-full bg-white transition-all", checked ? "left-[18px]" : "left-0.5")} />
-      </button>
-    </label>
-  );
-}
-
-function Slider({ value, max, onChange, format }: { value: number; max: number; onChange: (v: number) => void; format: (v: number) => string }) {
-  return (
-    <div className="flex items-center gap-3">
-      <input
-        type="range"
-        min={0}
-        max={max}
-        step={max / 200}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="vol flex-1"
-        style={{ ["--fill" as string]: `${(value / max) * 100}%` }}
-      />
-      <span className="w-12 text-right text-sm text-sub tabular-nums">{format(value)}</span>
-    </div>
-  );
 }
 
 function VoiceSection() {
@@ -752,6 +713,7 @@ function ChatSection() {
           </button>
         ))}
       </div>
+      <ChatPrefsBlock />
     </>
   );
 }

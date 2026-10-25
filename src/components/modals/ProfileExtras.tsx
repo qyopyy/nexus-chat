@@ -5,7 +5,7 @@ import { ImagePlus, Plus, Trash2 } from "lucide-react";
 import { useApp, toast, openModal } from "@/store/app";
 import { NEED, gate, useMyTier } from "@/lib/premium";
 import { updateMyProfile, uploadBanner } from "@/lib/data";
-import { PLATFORMS, linkLabel, normalizeLink, platformById, spotifyEmbed } from "@/lib/links";
+import { PLATFORMS, audienceWord, fmtCount, linkLabel, normalizeLink, parseCount, platformById, spotifyArtistId, spotifyEmbed } from "@/lib/links";
 import type { ProfileLink } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import SpotifyConnect from "@/components/music/SpotifyConnect";
@@ -89,7 +89,7 @@ export default function ProfileExtras() {
         <Label>Links ({links.length}/10)</Label>
         <div className="space-y-1.5">
           {links.map((l, i) => (
-            <LinkEditRow key={`${l.url}${i}`} link={l} onRemove={() => removeLink(i)} onUp={i > 0 ? () => move(i, -1) : undefined} onDown={i < links.length - 1 ? () => move(i, 1) : undefined} />
+            <LinkEditRow key={`${l.url}${i}`} link={l} onFollowers={(n) => void updateMyProfile({ links: links.map((x, j) => (j === i ? { ...x, followers: n } : x)) }, true)} onRemove={() => removeLink(i)} onUp={i > 0 ? () => move(i, -1) : undefined} onDown={i < links.length - 1 ? () => move(i, 1) : undefined} />
           ))}
         </div>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
@@ -173,8 +173,16 @@ export default function ProfileExtras() {
   );
 }
 
-function LinkEditRow({ link, onRemove, onUp, onDown }: { link: ProfileLink; onRemove: () => void; onUp?: () => void; onDown?: () => void }) {
+function LinkEditRow({ link, onRemove, onUp, onDown, onFollowers }: { link: ProfileLink; onRemove: () => void; onUp?: () => void; onDown?: () => void; onFollowers: (n: number | null) => void }) {
   const p = platformById(link.type);
+  const [fans, setFans] = useState(link.followers ? fmtCount(link.followers) : "");
+  const autoSpotify = link.type === "spotify" && !!spotifyArtistId(link.url);
+  const commit = () => {
+    const n = fans.trim() ? parseCount(fans) : null;
+    if (fans.trim() && n == null) return toast("Type a number like 12500, 12.5k or 1.2M", "error");
+    if ((n ?? null) !== (link.followers ?? null)) onFollowers(n);
+    if (n) setFans(fmtCount(n));
+  };
   return (
     <div className="flex items-center gap-2.5 rounded-lg bg-rail px-2 py-1.5">
       <span className="grid size-7 shrink-0 place-items-center rounded-lg text-[13px] font-bold text-white" style={{ background: p.color }}>
@@ -184,6 +192,25 @@ function LinkEditRow({ link, onRemove, onUp, onDown }: { link: ProfileLink; onRe
         <span className="block truncate text-sm font-medium">{linkLabel(link)}</span>
         <span className="block truncate text-[11px] text-sub">{link.url}</span>
       </a>
+      {autoSpotify ? (
+        <span className="shrink-0 rounded-full bg-[#1DB954]/15 px-2 py-1 text-[10px] font-bold text-[#1DB954]" title="Follower count comes live from Spotify">
+          LIVE COUNT
+        </span>
+      ) : (
+        <label className="flex shrink-0 items-center gap-1 rounded-md bg-black/25 px-2 py-1" title={`Your ${audienceWord(link.type)} — shown highlighted on your profile`}>
+          <input
+            value={fans}
+            onChange={(e) => setFans(e.target.value.slice(0, 9))}
+            onBlur={commit}
+            onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
+            placeholder="0"
+            inputMode="decimal"
+            className="w-14 bg-transparent text-right text-sm font-bold tabular-nums outline-none placeholder:text-faint"
+            aria-label={`${p.label} ${audienceWord(link.type)}`}
+          />
+          <span className="text-[10px] text-sub">{audienceWord(link.type)}</span>
+        </label>
+      )}
       <div className="flex shrink-0 items-center">
         <button onClick={onUp} disabled={!onUp} className={cn("px-1.5 text-sub", onUp ? "hover:text-txt" : "opacity-30")} aria-label="Move up">
           ↑

@@ -38,8 +38,24 @@ export type Profile = {
   channel_description?: string | null;
 };
 
-export type ProfileLink = { type: string; url: string; label?: string };
-export type NowPlaying = { title: string; artist: string; url?: string | null; image?: string | null; at: string };
+export type ProfileLink = { type: string; url: string; label?: string; /** follower / subscriber count shown highlighted on the profile */ followers?: number | null };
+export type NowPlaying = {
+  title: string;
+  artist: string;
+  url?: string | null;
+  image?: string | null;
+  at: string;
+  source?: "spotify";
+  id?: string;
+  artists?: { name: string; url: string | null }[];
+  album?: string | null;
+  album_url?: string | null;
+  album_type?: string | null;
+  release?: string | null;
+  explicit?: boolean;
+  progress_ms?: number;
+  duration_ms?: number;
+};
 
 export type ArtistPage = {
   id: string;

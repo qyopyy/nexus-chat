@@ -16,9 +16,11 @@ import BeatBird from "./BeatBird";
 import WebSwing from "./WebSwing";
 import GeoGuess from "./GeoGuess";
 import FourInRow from "./FourInRow";
+import SunsetBay from "./bay/SunsetBay";
 
 const GAMES: { id: GameId; name: string; tag: string; desc: string; bg: string; emoji: string; C: typeof Blocks | null; isNew?: boolean }[] = [
   { id: "streets", name: "Neon Streets", tag: "Open-city driving", desc: "Open-world island city. Jobs, cash, cops — and play live with friends using an invite code.", bg: "linear-gradient(135deg,#ff2bd6,#2b0b5c)", emoji: "🚗", C: null },
+  { id: "bay", name: "Sunset Bay", tag: "3D open world · 80s neon", desc: "Drive a neon coastal city in 3D — drifts, stunt jumps, hidden tapes and a ranked checkpoint rush.", bg: "linear-gradient(180deg,#2b1055,#ff4f9a 70%,#ffb347)", emoji: "🌴", C: null, isNew: true },
   { id: "geo", name: "GeoGuess", tag: "Real places · multiplayer", desc: "Real photos from around the world — pin where you think you are.", bg: "linear-gradient(135deg,#00c96b,#0b2a5c)", emoji: "🌍", C: null, isNew: true },
   { id: "swing", name: "Web Swing", tag: "Action · swing the city", desc: "Hold to web the rooftops, release to fly. Flip for combos, dodge drones, never touch the street.", bg: "linear-gradient(135deg,#8b5cff,#ff2bd6)", emoji: "🕸️", C: WebSwing, isNew: true },
   { id: "four", name: "Four in a Row", tag: "Vs friends or bot", desc: "Connect four discs before your opponent does.", bg: "linear-gradient(135deg,#ff4d6d,#2b5cff)", emoji: "🔴", C: null, isNew: true },
@@ -51,6 +53,7 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
   }, [joinCode, joinFor]);
   if (frame) return <WebFrame game={frame} onBack={() => setFrame(null)} mobile={mobile} />;
   if (open === "streets") return <StreetsLauncher onBack={() => setOpen(null)} mobile={mobile} />;
+  if (open === "bay") return <SunsetBay onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "geo") return <GeoGuess onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "four") return <FourInRow onBack={() => setOpen(null)} mobile={mobile} />;
   if (open) return <GameScreen id={open} onBack={() => setOpen(null)} mobile={mobile} />;
@@ -67,6 +70,20 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto max-w-5xl space-y-6 p-3 sm:p-5">
+          {/* new: Sunset Bay */}
+          <button onClick={() => setOpen("bay")} className="group relative block w-full overflow-hidden rounded-3xl text-left" style={{ background: "linear-gradient(180deg,#2b1055 0%,#ff4f9a 55%,#ffb347 72%,#1a0b2e 73%)" }}>
+            <div className="pointer-events-none absolute right-[8%] bottom-[27%] size-40 rounded-full sm:size-56" style={{ background: "linear-gradient(#ffe45e,#ff2bd6)", maskImage: "repeating-linear-gradient(180deg,#000 0 12px,transparent 12px 17px)" }} />
+            <div className="relative z-10 p-5 sm:p-8">
+              <div className="text-xs font-bold tracking-widest text-white/85 uppercase">New · 3D open world · synthwave radio</div>
+              <div className="mt-1 text-3xl font-black text-white italic sm:text-5xl">SUNSET BAY</div>
+              <p className="mt-2 max-w-md text-sm text-white/90">An 80s neon coastal city: downtown towers, Ocean Drive, causeways and a lighthouse isle. Drift, jump, hunt tapes, race the clock.</p>
+              <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 font-bold text-black transition group-hover:scale-105">
+                <Play className="size-4 fill-current" /> Drive now
+              </span>
+            </div>
+            <div className="absolute -right-4 -bottom-6 text-[120px] sm:text-[170px]">🌴</div>
+          </button>
+
           {/* new: GeoGuess */}
           <button onClick={() => setOpen("geo")} className="group relative block w-full overflow-hidden rounded-3xl text-left" style={{ background: "radial-gradient(120% 140% at 0% 0%, #00c96b 0%, #0b2a5c 65%, #06140e 100%)" }}>
             <div className="relative z-10 p-5 sm:p-8">

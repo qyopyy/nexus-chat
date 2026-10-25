@@ -15,7 +15,7 @@ import { supabase } from "./supabase";
 import { loadJSON, saveJSON } from "./utils";
 import { sfx, startRing, stopRing } from "./sounds";
 import { builtinMeta, isSoundUrl, renderBuiltin, type Sound } from "./soundboard";
-import { startAvatar, type AvatarEngine, type VAvatar } from "./vavatar";
+import { isMobileDevice, startAvatar, type AvatarEngine, type VAvatar } from "./vavatar";
 
 // ------------------------------------------------------------------ types
 
@@ -1143,10 +1143,11 @@ export async function toggleAvatar(look: VAvatar) {
     return;
   }
   if (get().localCam) await toggleVideo(); // real camera off first
+  const phone = isMobileDevice();
   const engine = startAvatar({
     cfg: look,
-    width: 1280,
-    height: 720,
+    width: phone ? 854 : 1280,
+    height: phone ? 480 : 720,
     camera: true,
     cameraId: get().settings.cameraDeviceId,
     level: () => (localAnalyser && get().speaking ? rms(localAnalyser) : 0),
