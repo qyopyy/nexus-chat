@@ -586,7 +586,7 @@ create policy "app topics write" on realtime.messages for insert to authenticate
 -- ---------------------------------------------------------------------
 
 insert into storage.buckets (id, name, public, file_size_limit)
-values ('attachments', 'attachments', true, 562144000), ('avatars', 'avatars', true, 5242880)
+values ('attachments', 'attachments', true, 5621440000), ('avatars', 'avatars', true, 5242880)
 on conflict (id) do nothing;
 
 drop policy if exists "attachments upload" on storage.objects;
