@@ -16,7 +16,7 @@ import Toasts from "@/components/ui/Toasts";
 import EffectsLayer from "@/components/effects/EffectsLayer";
 import { ExternalLink, LogOut } from "lucide-react";
 
-/** Slim authenticated shell for the standalone Bump IPA (`/bump/app`). */
+/** Slim authenticated shell for the standalone Wump IPA (`/bump/app` or `/wump/app`). */
 export default function BumpAppRoot() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [recovering, setRecovering] = useState(false);
@@ -87,7 +87,7 @@ export default function BumpAppRoot() {
     <div className="flex h-full min-h-0 flex-col bg-chat text-txt">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-[#0b3d24] px-3 pt-safe-3 pb-2">
         <div className="min-w-0">
-          <div className="text-[11px] font-bold tracking-[0.14em] text-[#86efac] uppercase">Nexus · Bump</div>
+          <div className="text-[11px] font-bold tracking-[0.14em] text-[#86efac] uppercase">Nexus · Wump</div>
           <div className="truncate text-sm font-semibold text-white/80">Standalone app · same account</div>
         </div>
         <div className="flex shrink-0 items-center gap-1">

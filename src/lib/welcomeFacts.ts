@@ -9,7 +9,7 @@ export const WELCOME_FACTS: string[] = [
   "Tip: Drag files into chat, or paste a screenshot straight from your clipboard.",
   "Fun fact: Themes live in Settings → Appearance — including Juice WRLD 999 and Ksubi packs.",
   "Pro tip: Customize the left rail — folders, reorder icons, and share a layout template.",
-  "Did you know? Bump shares a rounded location so friends and family can find you nearby.",
+  "Did you know? Wump (formerly Bump) shares a rounded location so friends and family can find you nearby.",
   "Tip: Turn Button FX off in Sounds if you want silent taps.",
   "Fun fact: NexusGram stories expire in 24h or 48h — post a vibe, then let it fade.",
   "Pro tip: Favorite servers float to the top of your rail until you set a custom order.",

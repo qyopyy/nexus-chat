@@ -58,9 +58,9 @@ export type BumpInboxRow = {
 };
 
 /**
- * Opens Bump as its own live hub (desktop rail + phone Apps tab).
+ * Opens Wump as its own live hub (desktop rail + phone Apps tab).
  * Capacitor loads https://nexusproject.cc — web deploys update without a new IPA/APK.
- * Standalone Bump IPA already lives on /bump/app.
+ * Standalone Wump IPA already lives on /bump/app.
  */
 export function openBump() {
   if (typeof window !== "undefined" && /BumpApp/i.test(navigator.userAgent)) {
@@ -79,12 +79,12 @@ export function openBump() {
 
 /** Latest standalone Bump IPA releases (Sideloadly / AltStore). */
 export function bumpIpaReleasesUrl() {
-  return "https://github.com/qyopyy/nexus-chat/releases?q=Bump+iOS&expanded=true";
+  return "https://github.com/qyopyy/nexus-chat/releases?q=Wump+iOS&expanded=true";
 }
 
 /** Friendly wave DM (no extra tables). */
 export async function bumpWave(to: string) {
-  return bumpSendMessage(to, "👋 Wave — spotted you on Bump");
+  return bumpSendMessage(to, "👋 Wave — spotted you on Wump");
 }
 
 export type BumpPresenceRow = {
@@ -176,7 +176,7 @@ export async function bumpPublish(visible: BumpVisible = "friends", label?: stri
       toast(errorText(error) || "Couldn't share location", "error");
       return null;
     }
-    toast(loc.source === "capacitor" ? "Bump live — finding people nearby" : "Bump live", "success");
+    toast(loc.source === "capacitor" ? "Wump live — finding people nearby" : "Wump live", "success");
     return data as { user_id: string; lat: number; lng: number; updated_at: string };
   } catch (e) {
     toast(e instanceof Error ? e.message : "Location failed", "error");
@@ -392,9 +392,9 @@ export async function bumpShareLocationWithFriend(friendId: string, note?: strin
       toast(errorText(dmErr) || "Couldn't open chat with that friend", "error");
       return null;
     }
-    const maps = `https://maps.apple.com/?ll=${loc.lat},${loc.lng}&q=Bump`;
+    const maps = `https://maps.apple.com/?ll=${loc.lat},${loc.lng}&q=Wump`;
     const body = [
-      "📍 Shared my Bump location with you",
+      "📍 Shared my Wump location with you",
       note?.trim() ? note.trim() : null,
       maps,
       `[bump-pin:${loc.lat.toFixed(5)},${loc.lng.toFixed(5)}]`,
@@ -405,7 +405,7 @@ export async function bumpShareLocationWithFriend(friendId: string, note?: strin
     await sendMessage(conv as string, body);
     const { openConversation } = await import("./data");
     openConversation(conv as string, null);
-    toast("Bump location sent in chat", "success");
+    toast("Wump location sent in chat", "success");
     return conv as string;
   } catch (e) {
     toast(e instanceof Error ? e.message : "Couldn't share location", "error");

@@ -2,7 +2,7 @@
   "name": "bump-mobile",
   "version": "1.0.0",
   "private": true,
-  "description": "Standalone Bump iOS/Android shell (Capacitor). Loads the live Bump web app — same Nexus backend, separate home-screen icon.",
+  "description": "Standalone Wump iOS/Android shell (Capacitor). Loads the live Wump web app — same Nexus backend, separate home-screen icon.",
   "scripts": {
     "sync": "npx cap sync",
     "open:ios": "npx cap open ios",

@@ -52,7 +52,7 @@ export function ComposerPlus({ conversationId }: { conversationId: string }) {
             {item("🥁", "Start a Jam", "A beat everyone in this chat edits live", () => void startJam(conversationId))}
             {item("📊", "Poll", "Ask the chat a question", () => setSheet("poll"))}
             {item("⏳", "Time capsule", "A message that stays sealed until a date", () => setSheet("capsule"))}
-            {item("📍", "Share Bump location", "Send your live pin to a friend in Nexus", () => setSheet("bump"))}
+            {item("📍", "Share Wump location", "Send your live pin to a friend in Nexus", () => setSheet("bump"))}
             {item("✋", "High five", "Ask for a high five — they tap back, you both celebrate", () => {
               if (me && sendFive(me)) toast("✋ High five sent — waiting for them to slap back", "info");
             })}
@@ -92,14 +92,14 @@ function BumpSharePicker({
       <div className="w-full max-w-md rounded-t-3xl bg-chat p-5 pb-safe-4 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center gap-2">
           <MapPin className="size-5 text-accent" />
-          <span className="flex-1 text-lg font-bold">Share Bump with a friend</span>
+          <span className="flex-1 text-lg font-bold">Share Wump with a friend</span>
           <button onClick={onClose} className="grid size-8 place-items-center rounded-full hover:bg-hover" aria-label="Close">
             <X className="size-5" />
           </button>
         </div>
-        <p className="mb-3 text-sm text-sub">Sends your live location pin into a Nexus DM and lights you up on Bump for friends.</p>
+        <p className="mb-3 text-sm text-sub">Sends your live location pin into a Nexus DM and lights you up on Wump for friends.</p>
         {!friends.length ? (
-          <p className="py-8 text-center text-sm text-sub">Add a friend first, then share your Bump pin with them.</p>
+          <p className="py-8 text-center text-sm text-sub">Add a friend first, then share your Wump pin with them.</p>
         ) : (
           <ul className="max-h-[50vh] space-y-1 overflow-y-auto">
             {friends.map((id) => (
@@ -128,7 +128,7 @@ export function BumpPinCard({ text, mine }: { text: string; mine: boolean }) {
   if (!m) return null;
   const lat = Number(m[1]);
   const lng = Number(m[2]);
-  const maps = `https://maps.apple.com/?ll=${lat},${lng}&q=Bump`;
+  const maps = `https://maps.apple.com/?ll=${lat},${lng}&q=Wump`;
   const note = text
     .split("\n")
     .filter((l) => l && !l.startsWith("http") && !l.includes("[bump-pin:") && !l.startsWith("📍"))
@@ -145,7 +145,7 @@ export function BumpPinCard({ text, mine }: { text: string; mine: boolean }) {
       )}
     >
       <div
-        className="relative h-28 bg-[radial-gradient(circle_at_50%_40%,#22c55e55,transparent_55%),linear-gradient(160deg,#0f172a,#14532d)]"
+        className="relative h-28 bg-[radial-gradient(circle_at_50%_40%,#fb718555,transparent_55%),linear-gradient(160deg,#0f172a,#7c3aed)]"
       >
         <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[70%] text-3xl drop-shadow">📍</span>
         <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 text-[11px] font-semibold text-white/90">
@@ -153,7 +153,7 @@ export function BumpPinCard({ text, mine }: { text: string; mine: boolean }) {
         </span>
       </div>
       <div className="px-3 py-2">
-        <div className="text-sm font-bold">Bump location</div>
+        <div className="text-sm font-bold">Wump location</div>
         <div className="text-[11px] text-sub">{note || "Tap to open in Maps"}</div>
       </div>
     </a>

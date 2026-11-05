@@ -1,15 +1,15 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
-// Standalone Bump shell — same Supabase backend as Nexus, dedicated bundle id + icon.
+// Standalone Wump shell (formerly Bump) — same Supabase backend as Nexus, dedicated bundle id + icon.
 // Web deploys to /bump/app update this app without rebuilding (except native permission changes).
 const url = process.env.BUMP_URL || process.env.NEXUS_URL || "https://nexusproject.cc/bump/app";
 
 const config: CapacitorConfig = {
   appId: "hu.qyopy.bump",
-  appName: "Bump",
+  appName: "Wump",
   webDir: "www",
   backgroundColor: "#0b3d24",
-  // BumpApp UA → web app stays in the slim Bump shell + enables background location UX
+  // BumpApp UA kept for existing IPAs; shell brand is Wump + enables background location UX
   appendUserAgent: "BumpApp NexusApp",
   server: {
     url,

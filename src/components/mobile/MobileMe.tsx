@@ -104,7 +104,7 @@ export default function MobileMe() {
         </div>
       </div>
 
-      {/* Bump — first-class entry (web OTA, no new IPA/APK) */}
+      {/* Wump — first-class entry (web OTA, no new IPA/APK) */}
       <button
         type="button"
         onClick={() => {
@@ -123,7 +123,7 @@ export default function MobileMe() {
                 <span className="text-[11px] font-bold tracking-[0.12em] text-[#86efac] uppercase">Live</span>
                 <span className="size-1.5 rounded-full bg-[#86efac]" />
               </div>
-              <div className="text-[20px] font-extrabold text-white">Bump</div>
+              <div className="text-[20px] font-extrabold text-white">Wump</div>
               <div className="truncate text-[13px] text-white/70">Nearby · friends · realtime DMs</div>
             </div>
             <MapPin className="size-5 shrink-0 text-[#86efac]" />
@@ -157,9 +157,9 @@ export default function MobileMe() {
         {row(<Headphones className="size-[18px]" />, "#c4a574", "Cutroom — WIP music projects", () => openUntitled())}
         {row(<Gamepad2 className="size-[18px]" />, "#ff2bd6", "Games", () => useApp.setState({ mobileTab: "games" }))}
         {row(<AppWindow className="size-[18px]" />, "#00a8fc", "Apps — image studio & docs", () => useApp.setState({ mobileTab: "apps", hub: "apps", appsTool: null }))}
-        {row(<MapPin className="size-[18px]" />, "#22c55a", "Bump — nearby, friends & messages", () => openBump())}
+        {row(<MapPin className="size-[18px]" />, "#7c3aed", "Wump — map, places, music & friends", () => openBump())}
         {!isBumpApp() &&
-          row(<Download className="size-[18px]" />, "#166534", "Download Bump iOS app (IPA)", () => {
+          row(<Download className="size-[18px]" />, "#7c3aed", "Download Wump iOS app (IPA)", () => {
             window.open(bumpIpaReleasesUrl(), "_blank", "noopener,noreferrer");
           })}
         {row(<Vault className="size-[18px]" />, "#5865f2", "My Vault — private files & share links", () => {

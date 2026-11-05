@@ -112,7 +112,7 @@ const HUB_COLOR: Partial<Record<RailHubId, string>> = {
   radio: "#ff2bd6",
   games: "#ff2bd6",
   apps: "#00a8fc",
-  bump: "#22c55a",
+  bump: "#7c3aed",
   staff: "#eb459e",
 };
 
