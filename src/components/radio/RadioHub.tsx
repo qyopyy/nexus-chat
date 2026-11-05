@@ -82,11 +82,13 @@ export default function RadioHub({ mobile }: { mobile?: boolean }) {
   const playing = !!player?.is_playing && !!current;
 
   const onFiles = async (files: FileList | File[]) => {
-    const list = [...files].filter((f) => f.type.startsWith("audio/") || /\.(mp3|wav|flac|m4a|aac|ogg|webm)$/i.test(f.name));
-    if (!list.length) return toast("Drop audio files", "error");
+    const list = [...files].filter((f) => f.type.startsWith("audio/") || /\.(mp3|wav|flac|m4a|aac|ogg|opus|webm)$/i.test(f.name));
+    if (!list.length) return toast("Drop audio files (mp3, m4a, wav…)", "error");
     setUploading(true);
     try {
       for (const f of list) await radioUpload(f);
+    } catch (e) {
+      toast(String((e as Error)?.message ?? e), "error");
     } finally {
       setUploading(false);
     }

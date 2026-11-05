@@ -103,13 +103,19 @@ async function sync() {
     currentSrcKey = track.id;
     useRadio.setState({ loading: true });
     const url = await signedUrl(track.url);
-    if (!url || currentSrcKey !== track.id) return;
+    if (currentSrcKey !== track.id) return; // superseded by a newer track switch
+    if (!url) {
+      useRadio.setState({ loading: false });
+      toast("Couldn't load this radio track", "error");
+      return;
+    }
     a.src = url;
     await new Promise<void>((r) => {
       const done = () => (a.removeEventListener("loadedmetadata", done), r());
       a.addEventListener("loadedmetadata", done);
       setTimeout(done, 4000);
     });
+    if (currentSrcKey !== track.id) return;
     useRadio.setState({ loading: false, duration: a.duration || track.duration || 0 });
   }
   const want = radioExpectedPosition(player);
@@ -130,9 +136,8 @@ function emptyPattern(): Pattern {
 export async function openRadio() {
   useApp.setState({ hub: "radio", mobileTab: "music" });
   useRadio.setState({ open: true });
-  if (started && channel) return;
-  started = true;
 
+  // Always refresh queue/player; only skip re-subscribing if the channel is already live
   const [{ data: tracks }, { data: player }, { data: jam }] = await Promise.all([
     supabase.from("radio_tracks").select("*").is("removed_at", null).order("created_at"),
     supabase.from("radio_player").select("*").eq("id", "main").maybeSingle(),
@@ -155,43 +160,53 @@ export async function openRadio() {
   const me = useApp.getState().userId;
   const meProfile = me ? useApp.getState().profiles[me] : null;
 
-  channel = supabase.channel("nexus-radio", { config: { presence: { key: me ?? crypto.randomUUID() } } });
-  channel
-    .on("postgres_changes", { event: "*", schema: "public", table: "radio_tracks" }, ({ new: row, eventType }) => {
-      const t = row as RadioTrack;
-      useRadio.setState((s) => {
-        const rest = s.tracks.filter((x) => x.id !== t.id);
-        if (eventType === "DELETE" || t.removed_at) return { tracks: rest };
-        return { tracks: [...rest, t].sort((a, b) => a.created_at.localeCompare(b.created_at)) };
-      });
-    })
-    .on("postgres_changes", { event: "*", schema: "public", table: "radio_player" }, ({ new: row }) => {
-      useRadio.setState({ player: row as RadioPlayer });
-      void sync();
-    })
-    .on("postgres_changes", { event: "*", schema: "public", table: "radio_jam" }, ({ new: row }) => {
-      useRadio.setState({ jam: row as RadioJam });
-    })
-    .on("presence", { event: "sync" }, () => {
-      const state = channel?.presenceState() ?? {};
-      const listeners: Listener[] = [];
-      for (const key of Object.keys(state)) {
-        const metas = state[key] as { id?: string; username?: string; display_name?: string }[];
-        const m = metas?.[0];
-        if (m?.id) listeners.push({ id: m.id, username: m.username ?? "user", display_name: m.display_name ?? "Listener" });
-      }
-      useRadio.setState({ listeners });
-    })
-    .subscribe(async (status) => {
-      if (status === "SUBSCRIBED" && me) {
-        await channel?.track({
-          id: me,
-          username: meProfile?.username ?? "user",
-          display_name: meProfile?.display_name ?? "Listener",
-          at: Date.now(),
+  if (!(started && channel)) {
+    started = true;
+    channel = supabase.channel("nexus-radio", { config: { presence: { key: me ?? crypto.randomUUID() } } });
+    channel
+      .on("postgres_changes", { event: "*", schema: "public", table: "radio_tracks" }, ({ new: row, eventType }) => {
+        const t = row as RadioTrack;
+        useRadio.setState((s) => {
+          const rest = s.tracks.filter((x) => x.id !== t.id);
+          if (eventType === "DELETE" || t.removed_at) return { tracks: rest };
+          return { tracks: [...rest, t].sort((a, b) => a.created_at.localeCompare(b.created_at)) };
         });
-      }
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "radio_player" }, ({ new: row }) => {
+        useRadio.setState({ player: row as RadioPlayer });
+        void sync();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "radio_jam" }, ({ new: row }) => {
+        useRadio.setState({ jam: row as RadioJam });
+      })
+      .on("presence", { event: "sync" }, () => {
+        const state = channel?.presenceState() ?? {};
+        const listeners: Listener[] = [];
+        for (const key of Object.keys(state)) {
+          const metas = state[key] as { id?: string; username?: string; display_name?: string }[];
+          const m = metas?.[0];
+          if (m?.id) listeners.push({ id: m.id, username: m.username ?? "user", display_name: m.display_name ?? "Listener" });
+        }
+        useRadio.setState({ listeners });
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED" && me) {
+          await channel?.track({
+            id: me,
+            username: meProfile?.username ?? "user",
+            display_name: meProfile?.display_name ?? "Listener",
+            at: Date.now(),
+          });
+        }
+      });
+  } else if (me) {
+    void channel.track({
+      id: me,
+      username: meProfile?.username ?? "user",
+      display_name: meProfile?.display_name ?? "Listener",
+      at: Date.now(),
     });
+  }
 
   if (!tick) tick = setInterval(() => void sync(), 4000);
   void sync();
@@ -293,48 +308,125 @@ async function audioDuration(file: File): Promise<number | null> {
   }
 }
 
-export async function radioUpload(file: File) {
-  const { shieldGate } = await import("./shield");
-  if (await shieldGate(file, "space")) return;
-  if (!file.type.startsWith("audio/") && !/\.(mp3|wav|flac|m4a|aac|ogg|webm)$/i.test(file.name)) {
-    return toast("Pick an audio file (mp3, m4a, wav…)", "error");
-  }
-  if (file.size > MAX) return toast("Tracks can be up to 100 MB", "error");
-  const me = useApp.getState().userId!;
-  const path = `${me}/${crypto.randomUUID()}-${file.name.replace(/[^\w.\-]+/g, "_").slice(-80)}`;
-  const duration = await audioDuration(file);
-  const { error } = await supabase.storage.from("nexus-radio").upload(path, file, { contentType: file.type || "audio/mpeg" });
-  if (error) return toast(`Upload failed: ${errorText(error)}`, "error");
-  const base = file.name.replace(/\.[^.]+$/, "");
-  const [artist, title] = base.includes(" - ") ? base.split(" - ", 2) : [null, base];
-  const { error: e2 } = await supabase.from("radio_tracks").insert({
-    title: (title || base).slice(0, 200),
-    artist: artist?.slice(0, 200) ?? null,
-    url: storageRef("nexus-radio", path),
-    kind: "upload",
-    duration,
-    added_by: me,
+/** Map extension / odd browser types onto MIME values the nexus-radio bucket accepts. */
+function radioContentType(file: File): string {
+  const t = (file.type || "").toLowerCase().trim();
+  const map: Record<string, string> = {
+    "audio/mpeg": "audio/mpeg",
+    "audio/mp3": "audio/mpeg",
+    "audio/mp4": "audio/mp4",
+    "audio/x-m4a": "audio/mp4",
+    "audio/m4a": "audio/mp4",
+    "audio/aac": "audio/aac",
+    "audio/wav": "audio/wav",
+    "audio/x-wav": "audio/wav",
+    "audio/wave": "audio/wav",
+    "audio/flac": "audio/flac",
+    "audio/x-flac": "audio/flac",
+    "audio/ogg": "audio/ogg",
+    "audio/opus": "audio/ogg",
+    "audio/webm": "audio/webm",
+  };
+  if (t && map[t]) return map[t];
+  if (t.startsWith("audio/")) return t;
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const byExt: Record<string, string> = {
+    mp3: "audio/mpeg",
+    m4a: "audio/mp4",
+    aac: "audio/aac",
+    wav: "audio/wav",
+    flac: "audio/flac",
+    ogg: "audio/ogg",
+    opus: "audio/ogg",
+    webm: "audio/webm",
+  };
+  return byExt[ext] || "audio/mpeg";
+}
+
+function pushTrackLocal(row: RadioTrack) {
+  useRadio.setState((s) => {
+    if (s.tracks.some((t) => t.id === row.id)) return s;
+    return { tracks: [...s.tracks, row].sort((a, b) => a.created_at.localeCompare(b.created_at)) };
   });
-  if (e2) toast(errorText(e2), "error");
-  else toast("Added to Nexus Radio", "success");
+}
+
+export async function radioUpload(file: File) {
+  try {
+    const me = useApp.getState().userId;
+    if (!me) return toast("Sign in to upload", "error");
+    const { shieldGate } = await import("./shield");
+    if (await shieldGate(file, "space")) return;
+    if (!file.type.startsWith("audio/") && !/\.(mp3|wav|flac|m4a|aac|ogg|opus|webm)$/i.test(file.name)) {
+      return toast("Pick an audio file (mp3, m4a, wav…)", "error");
+    }
+    if (file.size <= 0) return toast("That file is empty", "error");
+    if (file.size > MAX) return toast("Tracks can be up to 100 MB", "error");
+    const safeName = file.name.replace(/[^\w.\-]+/g, "_").slice(-80) || "track.mp3";
+    const path = `${me}/${crypto.randomUUID()}-${safeName}`;
+    const contentType = radioContentType(file);
+    const duration = await audioDuration(file);
+    const { error } = await supabase.storage.from("nexus-radio").upload(path, file, {
+      contentType,
+      upsert: false,
+      cacheControl: "3600",
+    });
+    if (error) {
+      const msg = errorText(error);
+      if (/mime|not supported|invalid/i.test(msg)) {
+        return toast(`Upload failed: this audio type isn't allowed (${contentType || file.type || "unknown"}). Try MP3 or M4A.`, "error");
+      }
+      if (/row-level security|policy|authorized|permission/i.test(msg)) {
+        return toast("Upload failed: storage permission denied. Re-sign in and try again.", "error");
+      }
+      return toast(`Upload failed: ${msg}`, "error");
+    }
+    const base = file.name.replace(/\.[^.]+$/, "") || "Untitled";
+    const [artist, title] = base.includes(" - ") ? base.split(" - ", 2) : [null, base];
+    const { data, error: e2 } = await supabase
+      .from("radio_tracks")
+      .insert({
+        title: (title || base).slice(0, 200),
+        artist: artist?.slice(0, 200) ?? null,
+        url: storageRef("nexus-radio", path),
+        kind: "upload",
+        duration,
+        added_by: me,
+      })
+      .select("*")
+      .single();
+    if (e2) {
+      // best-effort cleanup so a failed insert doesn't leave an orphan object
+      void supabase.storage.from("nexus-radio").remove([path]);
+      return toast(errorText(e2), "error");
+    }
+    if (data) pushTrackLocal(data as RadioTrack);
+    toast("Added to Nexus Radio", "success");
+  } catch (e) {
+    toast(`Upload failed: ${errorText(e)}`, "error");
+  }
 }
 
 export async function radioAddUrl(rawUrl: string, title?: string, artist?: string) {
   const url = rawUrl.trim();
   if (!/^https?:\/\//i.test(url)) return toast("Paste a direct audio URL (https://…)", "error");
-  if (!/\.(mp3|m4a|wav|ogg|flac|aac|webm)(\?|$)/i.test(url) && !/audio/i.test(url)) {
-    // still allow — some CDNs omit extensions
-  }
-  const me = useApp.getState().userId!;
-  const { error } = await supabase.from("radio_tracks").insert({
-    title: (title || "Untitled track").slice(0, 200),
-    artist: artist?.slice(0, 200) || null,
-    url: url.slice(0, 800),
-    kind: "url",
-    added_by: me,
-  });
+  const me = useApp.getState().userId;
+  if (!me) return toast("Sign in to add a link", "error");
+  const { data, error } = await supabase
+    .from("radio_tracks")
+    .insert({
+      title: (title || "Untitled track").slice(0, 200),
+      artist: artist?.slice(0, 200) || null,
+      url: url.slice(0, 800),
+      kind: "url",
+      added_by: me,
+    })
+    .select("*")
+    .single();
   if (error) toast(errorText(error), "error");
-  else toast("Link added to the queue", "success");
+  else {
+    if (data) pushTrackLocal(data as RadioTrack);
+    toast("Link added to the queue", "success");
+  }
 }
 
 export async function radioRemove(id: string) {
