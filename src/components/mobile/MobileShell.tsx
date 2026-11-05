@@ -17,10 +17,12 @@ import AppsHub from "@/components/apps/AppsHub";
 import MusicHub from "@/components/music/MusicHub";
 import VideosHub from "@/components/videos/VideosHub";
 import NexusGram from "@/components/gram/NexusGram";
+import UntitledHub from "@/components/untitled/UntitledHub";
 
 /** Phone layout: bottom tabs + push-style chat screen with swipe-from-edge to go back */
 export default function MobileShell() {
   const tab = useApp((s) => s.mobileTab);
+  const hub = useApp((s) => s.hub);
   const conversationId = useApp((s) => s.conversationId);
   const mobileSidebar = useApp((s) => s.mobileSidebar);
   const callConv = useCall((s) => (s.status !== "idle" ? s.conversationId : null));
@@ -47,7 +49,7 @@ export default function MobileShell() {
           )}
           {tab === "gram" && <NexusGram mobile />}
           {tab === "videos" && <VideosHub mobile />}
-          {tab === "music" && <MusicHub mobile />}
+          {tab === "music" && (hub === "untitled" ? <UntitledHub mobile /> : <MusicHub mobile />)}
           {tab === "games" && <GamesHub mobile />}
           {tab === "apps" && <AppsHub mobile />}
           {tab === "me" && <MobileMe />}

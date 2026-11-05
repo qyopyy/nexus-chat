@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Gamepad2, ArrowLeft, Barcode, BellRing, Library as LibraryIcon, Search, Sparkles, X } from "lucide-react";
 import { useApp, openModal } from "@/store/app";
 import { activePlan } from "@/lib/premium";
+import { openUntitled } from "@/lib/untitled";
 import { useMusic, musicBack, musicGo, musicHome } from "@/store/music";
 import { listArtistPages, loadPosts, loadWatchlist, sp, spotifyConfig, fmtNum, type SpAlbum, type SpArtist, type Watch } from "@/lib/music";
 import { myRank } from "@/lib/admin";
@@ -151,6 +152,19 @@ function Home() {
               {isAdmin ? "Add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET as Supabase Edge Function secrets to unlock artist search, releases and the showcase." : "Ask an admin to connect it."} Code lookup (ISRC/UPC) already works.
             </div>
           )}
+
+          <button
+            onClick={() => openUntitled()}
+            className="flex w-full items-center gap-3 rounded-2xl p-4 text-left text-[#f3efe6]"
+            style={{ background: "linear-gradient(135deg,#2a241c 0%,#1a1714 50%,#3a2f24 100%)" }}
+          >
+            <span className="grid size-12 place-items-center rounded-xl bg-[#c4a574]/20 text-2xl">♩</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[10px] font-semibold tracking-[0.2em] text-[#c4a574]/80 uppercase">New</span>
+              <span className="block text-lg font-black">Untitled</span>
+              <span className="block text-sm text-[#cfc8ba]/80">WIP projects, share links with permissions, profiles & follows</span>
+            </span>
+          </button>
 
           <button
             onClick={() => useApp.setState(window.innerWidth < 768 ? { mobileTab: "games" } : { hub: "games" })}
