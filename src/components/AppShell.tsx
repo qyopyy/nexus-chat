@@ -36,6 +36,7 @@ import { startPush } from "@/lib/push";
 import { joinGame } from "@/store/games";
 import GamesHub from "@/components/games/GamesHub";
 import AppsHub from "@/components/apps/AppsHub";
+import BumpHub from "@/components/bump/BumpHub";
 import MusicHub from "./music/MusicHub";
 import VideosHub from "./videos/VideosHub";
 import Studio from "./studio/Studio";
@@ -267,7 +268,9 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
             <NexusGram />
           ) : hub === "games" ? (
             <GamesHub />
-          ) : hub === "apps" || hub === "bump" ? (
+          ) : hub === "bump" ? (
+            <BumpHub />
+          ) : hub === "apps" ? (
             <AppsHub />
           ) : hub === "cutroom" || hub === "untitled" ? (
             <UntitledHub />

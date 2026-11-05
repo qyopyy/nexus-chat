@@ -103,6 +103,33 @@ export default function MobileMe() {
         </div>
       </div>
 
+      {/* Bump — first-class entry (web OTA, no new IPA/APK) */}
+      <button
+        type="button"
+        onClick={() => {
+          haptic.select();
+          openBump();
+        }}
+        className="mx-4 mt-4 block w-[calc(100%-2rem)] overflow-hidden rounded-3xl text-left active:scale-[0.99]"
+        style={{ background: "linear-gradient(135deg,#166534,#0b3d24 55%,#14532d)" }}
+      >
+        <div className="relative p-4">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_90%_10%,rgba(134,239,172,.28),transparent_45%)]" />
+          <div className="relative flex items-center gap-3">
+            <span className="grid size-12 place-items-center rounded-2xl bg-black/25 text-2xl ring-1 ring-white/10">📍</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold tracking-[0.12em] text-[#86efac] uppercase">Live</span>
+                <span className="size-1.5 rounded-full bg-[#86efac]" />
+              </div>
+              <div className="text-[20px] font-extrabold text-white">Bump</div>
+              <div className="truncate text-[13px] text-white/70">Nearby · friends · realtime DMs</div>
+            </div>
+            <MapPin className="size-5 shrink-0 text-[#86efac]" />
+          </div>
+        </div>
+      </button>
+
       {/* status segmented control */}
       <div className="mx-4 mt-4 grid grid-cols-4 gap-1 rounded-2xl bg-side p-1">
         {STATUSES.map((s) => (
@@ -128,8 +155,8 @@ export default function MobileMe() {
         {row(<Radio className="size-[18px]" />, "#ff2bd6", "Nexus Radio — listen & jam together", () => void openRadio())}
         {row(<Headphones className="size-[18px]" />, "#c4a574", "Cutroom — WIP music projects", () => openUntitled())}
         {row(<Gamepad2 className="size-[18px]" />, "#ff2bd6", "Games", () => useApp.setState({ mobileTab: "games" }))}
-        {row(<AppWindow className="size-[18px]" />, "#00a8fc", "Apps — Bump, image studio & docs", () => useApp.setState({ mobileTab: "apps", hub: "apps", appsTool: null }))}
-        {row(<MapPin className="size-[18px]" />, "#22c55a", "Bump — in Apps · nearby & profiles", () => openBump())}
+        {row(<AppWindow className="size-[18px]" />, "#00a8fc", "Apps — image studio & docs", () => useApp.setState({ mobileTab: "apps", hub: "apps", appsTool: null }))}
+        {row(<MapPin className="size-[18px]" />, "#22c55a", "Bump — nearby, friends & messages", () => openBump())}
         {row(<Vault className="size-[18px]" />, "#5865f2", "My Vault — private files & share links", () => {
           useStudio.setState({ section: "vault", releaseId: null });
           useApp.setState({ hub: "studio" });

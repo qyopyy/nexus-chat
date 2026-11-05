@@ -37,6 +37,7 @@ import TokenGen from "./TokenGen";
 import Base64Lab from "./Base64Lab";
 import SpotifyTakedown from "@/components/music/SpotifyTakedown";
 import BumpHub from "@/components/bump/BumpHub";
+import { openBump } from "@/lib/bump";
 
 type ToolId =
   | "bump"
@@ -197,26 +198,21 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
   const [tool, setTool] = useState<ToolId | null>((appsTool as ToolId) || null);
 
   useEffect(() => {
-    // Legacy hub:"bump" → stay inside Apps with the Bump tool open
-    if (hub === "bump" && appsTool !== "bump") useApp.setState({ hub: "apps", appsTool: "bump" });
-  }, [hub, appsTool]);
-
-  useEffect(() => {
+    // Prefer the dedicated Bump hub (realtime live shell) over the nested Apps tool
+    if (hub === "bump") return;
     if (appsTool && TOOLS.some((t) => t.id === appsTool)) setTool(appsTool as ToolId);
-  }, [appsTool]);
+  }, [hub, appsTool]);
 
   function backToGrid() {
     setTool(null);
-    useApp.setState({ appsTool: null });
+    useApp.setState({ appsTool: null, hub: "apps" });
   }
 
   if (tool === "bump") {
+    // Nested open from the Apps grid — still fine; openBump() uses hub:"bump"
     return (
       <div className="flex h-full min-h-0 flex-col bg-chat">
-        <BumpHub
-          mobile={mobile}
-          onBack={backToGrid}
-        />
+        <BumpHub mobile={mobile} onBack={backToGrid} />
       </div>
     );
   }
@@ -267,22 +263,44 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl space-y-6 p-3 sm:p-5">
-          <p className="text-sm text-sub">
-            Creator utilities in this tab — including <b className="text-txt">Bump</b>. File tools stay on-device; Music ID and Spotify takedown use your Shield / Spotify server keys when connected.
-          </p>
+          <button
+            type="button"
+            onClick={() => openBump()}
+            className="group relative w-full overflow-hidden rounded-3xl text-left ring-1 ring-[#22c55a]/40 transition hover:-translate-y-0.5"
+            style={{ background: "linear-gradient(135deg,#166534 0%,#0b3d24 45%,#14532d 100%)" }}
+          >
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_0%,rgba(34,197,94,.35),transparent_55%)]" />
+            <div className="relative flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:p-6">
+              <div className="grid size-16 shrink-0 place-items-center rounded-2xl bg-black/25 text-3xl ring-1 ring-white/10 sm:size-20 sm:text-4xl">
+                📍
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <MapPin className="size-4 text-[#86efac]" />
+                  <span className="text-[11px] font-bold tracking-[0.14em] text-[#86efac] uppercase">Live · realtime</span>
+                </div>
+                <div className="mt-1 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Bump</div>
+                <p className="mt-1 max-w-xl text-sm text-white/75">
+                  Find people nearby, friends, profiles, and DMs — updates live on this phone without a new IPA or APK.
+                </p>
+              </div>
+              <span className="inline-flex shrink-0 items-center justify-center rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#14532d] shadow-sm group-hover:bg-[#dcfce7]">
+                Open Bump
+              </span>
+            </div>
+          </button>
+
+          <p className="text-sm text-sub">Creator utilities. File tools stay on-device; Music ID and Spotify takedown use server keys when connected.</p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {TOOLS.map((item) => (
+            {TOOLS.filter((item) => item.id !== "bump").map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => {
                   setTool(item.id);
-                  useApp.setState({ appsTool: item.id });
+                  useApp.setState({ appsTool: item.id, hub: "apps" });
                 }}
-                className={cn(
-                  "group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5",
-                  item.id === "bump" && "ring-1 ring-[#22c55a]/35 sm:col-span-2 lg:col-span-1",
-                )}
+                className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5"
               >
                 <div className="relative grid h-36 place-items-center text-6xl" style={{ background: item.bg }}>
                   <span className="transition group-hover:scale-110">{item.emoji}</span>
