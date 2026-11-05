@@ -33,7 +33,12 @@ const config: CapacitorConfig = {
   plugins: {
     Haptics: {},
     PushNotifications: { presentationOptions: ["badge", "sound", "alert"] },
-    LocalNotifications: { iconColor: "#5865F2" },
+    LocalNotifications: { iconColor: "#5865F2", sound: "default" },
+    Badge: {
+      // Keep the home-screen unread count across launches
+      persist: true,
+      autoClear: false,
+    },
   },
 };
 

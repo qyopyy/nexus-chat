@@ -40,10 +40,10 @@ export default function HomeSidebar() {
 
   const counts = useMemo(
     () => ({
-      all: chatList.reduce((n, c) => n + ((unread[c.id] ?? 0) > 0 ? 1 : 0), 0),
-      dm: chatList.filter((c) => c.kind === "dm" && (unread[c.id] ?? 0) > 0).length,
-      group: chatList.filter((c) => c.kind === "group" && (unread[c.id] ?? 0) > 0).length,
-      unread: 0,
+      all: chatList.reduce((n, c) => n + (unread[c.id] ?? 0), 0),
+      dm: chatList.filter((c) => c.kind === "dm").reduce((n, c) => n + (unread[c.id] ?? 0), 0),
+      group: chatList.filter((c) => c.kind === "group").reduce((n, c) => n + (unread[c.id] ?? 0), 0),
+      unread: chatList.reduce((n, c) => n + (unread[c.id] ?? 0), 0),
     }),
     [chatList, unread],
   );

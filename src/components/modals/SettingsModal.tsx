@@ -587,7 +587,11 @@ function NotificationSection() {
         {on ? (
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm font-semibold text-ok">On ✓</span>
-            {state === "native-local" && <span className="text-xs text-sub">Shows while the app runs in the background.</span>}
+            {state === "native-local" && (
+              <span className="text-xs text-sub">
+                Banners show on this phone while Nexus is open or backgrounded. The app icon badge counts unread messages like Telegram.
+              </span>
+            )}
             {state === "on" && (
               <button onClick={() => void disablePush()} className="rounded-md bg-white/10 px-3 py-1.5 text-sm font-semibold hover:bg-white/15">
                 Turn off

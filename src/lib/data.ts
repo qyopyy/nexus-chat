@@ -150,6 +150,7 @@ export async function refreshUnread() {
   const unread: Record<string, number> = {};
   for (const row of (data ?? []) as { conversation_id: string; unread: number }[]) unread[row.conversation_id] = row.unread;
   set({ unread });
+  void import("./badge").then(({ syncAppBadge }) => syncAppBadge());
 }
 
 export async function loadConvMembers(convId: string) {
@@ -361,6 +362,14 @@ async function loadReactions(messageIds: string[]) {
 export async function markRead(convId: string) {
   set((s) => ({ unread: { ...s.unread, [convId]: 0 } }));
   await supabase.rpc("mark_read", { p_conv: convId });
+  try {
+    const { useMessageBanner } = await import("./messageBanner");
+    const b = useMessageBanner.getState().banner;
+    if (b?.conversationId === convId) useMessageBanner.getState().dismiss();
+  } catch {
+    /* ignore */
+  }
+  void import("./badge").then(({ syncAppBadge }) => syncAppBadge());
 }
 
 export async function sendMessage(convId: string, content: string, file?: File | null, chosenEffect?: EffectKind | null) {

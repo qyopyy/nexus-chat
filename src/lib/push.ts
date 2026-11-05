@@ -19,6 +19,7 @@ type Cap = {
     Plugins?: {
       PushNotifications?: any;
       LocalNotifications?: any;
+      Badge?: any;
     };
   };
 };
@@ -33,6 +34,7 @@ const standalone = () =>
   typeof window !== "undefined" && (window.matchMedia?.("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone === true);
 const webPushSupported = () => typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 const fcmBuild = () => typeof navigator !== "undefined" && /NexusFCM/.test(navigator.userAgent);
+const isIosNative = () => isNativeApp() && platform() === "ios";
 
 function b64ToBytes(b64: string) {
   const pad = "=".repeat((4 - (b64.length % 4)) % 4);
@@ -78,6 +80,16 @@ async function webSubscribe() {
 }
 
 let nativeListeners = false;
+async function wireLocalListeners(LN: any) {
+  if (nativeListeners) return;
+  nativeListeners = true;
+  await LN.addListener("localNotificationActionPerformed", (a: { notification?: { extra?: { conversation_id?: string; kind?: string } } }) => {
+    if (a.notification?.extra?.kind === "badge-sync") return;
+    const c = a.notification?.extra?.conversation_id;
+    if (c) openChat(c);
+  });
+}
+
 async function nativeRegister() {
   const plugins = cap()?.Plugins!;
   if (plugins.PushNotifications && fcmBuild()) {
@@ -94,17 +106,22 @@ async function nativeRegister() {
     await P.createChannel?.({ id: "messages", name: "Messages", importance: 5, visibility: 1, vibration: true }).catch(() => {});
     await P.createChannel?.({ id: "calls", name: "Calls", importance: 5, visibility: 1, vibration: true }).catch(() => {});
     await P.register();
+    // also wire local notifications so iOS can show banners while the WebView is alive
+    if (plugins.LocalNotifications) {
+      await wireLocalListeners(plugins.LocalNotifications);
+      await plugins.LocalNotifications.createChannel?.({ id: "messages", name: "Messages", importance: 5, vibration: true, sound: "default" }).catch(() => {});
+    }
     return "native-push" as const;
   }
   if (plugins.LocalNotifications) {
-    if (!nativeListeners) {
-      nativeListeners = true;
-      await plugins.LocalNotifications.addListener("localNotificationActionPerformed", (a: { notification?: { extra?: { conversation_id?: string } } }) => {
-        const c = a.notification?.extra?.conversation_id;
-        if (c) openChat(c);
-      });
+    await wireLocalListeners(plugins.LocalNotifications);
+    await plugins.LocalNotifications.createChannel?.({ id: "messages", name: "Messages", importance: 5, vibration: true, sound: "default" }).catch(() => {});
+    // iOS IPA: request Badge permission so the home-screen count can update
+    try {
+      await plugins.Badge?.requestPermissions?.();
+    } catch {
+      /* optional plugin */
     }
-    await plugins.LocalNotifications.createChannel?.({ id: "messages", name: "Messages", importance: 5, vibration: true }).catch(() => {});
     return "native-local" as const;
   }
   return "unsupported" as const;
@@ -187,29 +204,46 @@ export async function startPush() {
   usePush.setState({ state });
   try {
     if (state === "on") await webSubscribe(); // keeps keys + last_seen fresh
-    else if (state === "native-push" || state === "native-local") await nativeRegister();
+    else if (state === "native-push" || state === "native-local") {
+      await nativeRegister();
+      const { syncAppBadge } = await import("./badge");
+      void syncAppBadge();
+    }
   } catch {
     /* offline */
   }
 }
 
-/** native apps: banner for messages that arrive while the app is in the background */
-export async function nativeLocalNotify(title: string, body: string, conversationId: string) {
+/** native apps: OS banner for messages that arrive while the app is backgrounded (critical for iPhone IPA). */
+export async function nativeLocalNotify(title: string, body: string, conversationId: string, badgeCount?: number) {
   if (!isNativeApp()) return false;
   const st = usePush.getState().state;
-  if (st === "native-push") return true; // FCM delivers it
+  // FCM/APNs handles closed-app delivery on Android FCM builds; still show a local banner
+  // on iOS IPA (and non-FCM Android) while the WebView is alive in the background.
+  if (st === "native-push" && !isIosNative()) return true;
+  if (st !== "native-local" && st !== "native-push" && st !== "default") return false;
   const LN = cap()?.Plugins?.LocalNotifications;
-  if (!LN || st !== "native-local") return false;
+  if (!LN) return false;
   try {
+    const { totalUnread } = await import("./badge");
+    const badge = typeof badgeCount === "number" ? badgeCount : totalUnread();
+    // Stable id per conversation so new messages replace the previous banner for that chat
+    let id = 0;
+    for (let i = 0; i < conversationId.length; i++) id = (id * 31 + conversationId.charCodeAt(i)) >>> 0;
+    id = (id % 1_000_000_000) + 1;
+    await LN.cancel?.({ notifications: [{ id }] }).catch(() => {});
     await LN.schedule({
       notifications: [
         {
-          id: Math.floor(Math.random() * 2_000_000_000),
+          id,
           title,
-          body,
+          body: body.slice(0, 180),
           channelId: "messages",
+          sound: "default",
+          badge,
           threadIdentifier: conversationId,
-          group: conversationId,
+          summaryArgument: title,
+          group: "nexus-messages",
           extra: { conversation_id: conversationId },
         },
       ],

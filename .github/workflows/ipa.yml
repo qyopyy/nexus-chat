@@ -57,6 +57,8 @@ jobs:
           pb "Add :UIBackgroundModes array"
           pb "Add :UIBackgroundModes:0 string audio"
           pb "Add :UIBackgroundModes:1 string voip"
+          pb "Add :UIBackgroundModes:2 string remote-notification"
+          pb "Add :UIBackgroundModes:3 string fetch"
           pb "Set :CFBundleDisplayName Nexus"
           pb "Add :CFBundleDisplayName string Nexus"
           pb "Add :ITSAppUsesNonExemptEncryption bool false"

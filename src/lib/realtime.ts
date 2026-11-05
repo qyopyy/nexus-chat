@@ -16,6 +16,7 @@ import {
   refreshChatList,
   refreshFriends,
   refreshSpaces,
+  refreshUnread,
   removeReactionLocal,
   isTimerNotice,
   loadTtl,
@@ -28,6 +29,8 @@ import { isMuted } from "@/store/prefs";
 import { haptic } from "./haptics";
 import { refreshBadges } from "./admin";
 import { nativeLocalNotify, usePush } from "./push";
+import { syncAppBadge, totalUnread } from "./badge";
+import { useMessageBanner } from "./messageBanner";
 import { isNativeApp } from "./useMobile";
 import type { Message, PresenceState, Profile, Reaction } from "./types";
 
@@ -39,15 +42,25 @@ function notify(m: Message) {
   sfx.message();
   haptic.light();
   const author = s.profiles[m.author_id]?.display_name ?? "New message";
+  const body = m.content || m.attachment_name || "Sent an attachment";
+  const chatOpen = useChat.getState().conversationId === m.conversation_id;
+
+  // Telegram-style in-app banner when the app is visible but this chat isn't focused
+  if (!document.hidden && !chatOpen) {
+    useMessageBanner.getState().show({ conversationId: m.conversation_id, title: author, body });
+  }
+
   if (isNativeApp()) {
-    if (document.hidden) void nativeLocalNotify(author, m.content || m.attachment_name || "Sent an attachment", m.conversation_id);
+    // System banner while backgrounded; in-app MessageBanner covers the foreground case
+    if (document.hidden) void nativeLocalNotify(author, body, m.conversation_id, totalUnread());
+    void syncAppBadge();
     return;
   }
   // with Web Push on, the service worker shows background notifications (no duplicates)
   if (usePush.getState().state === "on") return;
   if (typeof Notification === "undefined" || Notification.permission !== "granted" || !document.hidden) return;
   try {
-    const n = new Notification(author, { body: m.content || m.attachment_name || "Sent an attachment", tag: m.conversation_id });
+    const n = new Notification(author, { body, tag: m.conversation_id });
     n.onclick = () => window.focus();
   } catch {
     /* notifications blocked */
@@ -78,6 +91,7 @@ async function onMessageInsert(m: Message) {
     } else {
       useApp.setState((s) => ({ unread: { ...s.unread, [m.conversation_id]: (s.unread[m.conversation_id] ?? 0) + 1 } }));
       notify(m);
+      void syncAppBadge();
     }
   }
 
@@ -237,20 +251,23 @@ export function useRealtime(userId: string | null) {
       if (a.myStatus !== p.myStatus) trackSoon();
     });
 
-    // Re-sync when the tab comes back (laptop sleep, flaky wifi…)
+    // Re-sync when the tab / iPhone app comes back (sleep, backgrounded WebView…)
     const onVisible = () => {
       if (document.hidden) return;
       const conv = useChat.getState().conversationId;
       if (conv) void markRead(conv);
       void refreshChatList();
+      void refreshUnread().then(() => syncAppBadge());
     };
     document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
 
     return () => {
       cancelled = true;
       unsubCall();
       unsubApp();
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
       void supabase.removeChannel(db);
       void supabase.removeChannel(online);
       onlineChannel = null;
