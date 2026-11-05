@@ -2,7 +2,7 @@
 
 import { Phone, PhoneOff, Video } from "lucide-react";
 import { useApp, conversationTitle } from "@/store/app";
-import { useCall, dismissIncoming, joinCall } from "@/lib/call";
+import { useCall, dismissIncoming, joinCall, unlockCallAudio } from "@/lib/call";
 import { openConversation } from "@/lib/data";
 import Avatar from "@/components/ui/Avatar";
 
@@ -14,6 +14,8 @@ export default function IncomingCall() {
   if (!incoming) return null;
 
   const accept = async (video: boolean) => {
+    // must unlock AudioContext under the same click that accepts, before awaits
+    unlockCallAudio();
     const conv = incoming.conversationId;
     openConversation(conv, null);
     await joinCall(conv, { video });

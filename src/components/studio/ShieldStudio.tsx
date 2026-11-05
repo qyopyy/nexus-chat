@@ -18,6 +18,7 @@ import {
   removeWork,
   shieldCheck,
   syncAcr,
+  syncAllAcr,
   updateWork,
   uploadDoc,
   vaultUrl,
@@ -49,6 +50,7 @@ export default function ShieldStudio() {
   const [events, setEvents] = useState<ShieldEvent[]>([]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [busy, setBusy] = useState(false);
+  const [acrBusy, setAcrBusy] = useState(false);
   const [test, setTest] = useState<string | null>(null);
   const [acr, setAcr] = useState<{ configured: boolean; shieldBucket?: boolean } | null>(null);
   useEffect(() => void checkStatus().then(setAcr), []);
@@ -182,7 +184,31 @@ export default function ShieldStudio() {
             )}
           </Card>
 
-          <Card title={`Protected songs${works ? ` (${works.length})` : ""}`}>
+          <Card
+            title={`Protected songs${works ? ` (${works.length})` : ""}`}
+            right={
+              works && works.some((w) => w.owner_id === me && w.file_path && w.acr_status !== "ready" && w.acr_status !== "pending") ? (
+                <button
+                  disabled={acrBusy}
+                  onClick={async () => {
+                    if (!gate(NEED.acr, "ACRCloud sync")) return;
+                    setAcrBusy(true);
+                    const mine = works.filter((w) => w.owner_id === me);
+                    const r = await syncAllAcr(mine);
+                    setAcrBusy(false);
+                    if (r.ok) toast(`Synced ${r.ok} song${r.ok === 1 ? "" : "s"} to ACRCloud`, "success");
+                    else if (r.fail) toast(`ACRCloud sync failed for ${r.fail} song${r.fail === 1 ? "" : "s"}`, "error");
+                    else toast("Nothing left to sync — keep originals in the vault when protecting", "info");
+                    void load();
+                  }}
+                  className="flex items-center gap-1.5 rounded-full bg-hover px-3 py-1 text-xs font-semibold hover:bg-active disabled:opacity-50"
+                >
+                  <CloudUpload className={cn("size-3.5", acrBusy && "animate-pulse")} />
+                  {acrBusy ? "Syncing…" : "Sync all to ACRCloud"}
+                </button>
+              ) : undefined
+            }
+          >
             {works === null ? (
               <p className="text-sm text-sub">Loading…</p>
             ) : works.length === 0 ? (
@@ -254,8 +280,8 @@ export default function ShieldStudio() {
           </Card>
 
           <p className="text-xs text-faint">
-            Shield 360 is Nexus&apos;s own fingerprint system and protects uploads inside Nexus. It isn&apos;t connected to Audible Magic or YouTube Content ID — for blocking on other platforms, register
-            the released songs with your distributor&apos;s Content ID service.
+            Shield 360 fingerprints protect uploads inside Nexus. With ACRCloud connected, vault originals also register in your custom bucket for external recognition. Use Content ID for claim/block
+            policy on Nexus uploads, and your distributor&apos;s Content ID for YouTube and other platforms.
           </p>
         </div>
       </div>

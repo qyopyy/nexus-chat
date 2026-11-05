@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, ChevronDown, Gauge, Hash, LayoutDashboard, Trophy, HeadphoneOff, LogOut, MicOff, MonitorUp, Plus, Trash2, UserPlus, Video, Volume2 } from "lucide-react";
 import { useApp, openModal } from "@/store/app";
-import { useCall, joinCall } from "@/lib/call";
+import { useCall, joinCall, unlockCallAudio } from "@/lib/call";
 import { deleteSpace, leaveSpace, openConversation } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
@@ -144,7 +144,10 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
               <button
                 onClick={() => {
                   openConversation(c.id, spaceId);
-                  if (!connected) void joinCall(c.id);
+                  if (!connected) {
+                    unlockCallAudio();
+                    void joinCall(c.id);
+                  }
                 }}
                 className={cn(
                   "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition",
