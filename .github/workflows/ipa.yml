@@ -13,6 +13,10 @@ on:
     paths:
       - "mobile/**"
       - ".github/workflows/ipa.yml"
+  pull_request:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/ipa.yml"
 
 permissions:
   contents: write
@@ -113,6 +117,7 @@ jobs:
           path: mobile/Nexus.ipa
 
       - name: Publish release
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
