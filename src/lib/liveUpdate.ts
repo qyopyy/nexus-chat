@@ -33,11 +33,40 @@ function reloadNow() {
   }
 }
 
+/** One-shot recovery when a deploy invalidates an in-memory chunk (Arc/Chrome show a blank "couldn't load" page). */
+function armChunkReload() {
+  const FLAG = "nexus.chunkReload";
+  const onErr = (ev: ErrorEvent) => {
+    const msg = String(ev.message || ev.error || "");
+    const isChunk =
+      /Loading chunk|ChunkLoadError|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(
+        msg,
+      );
+    if (!isChunk) return;
+    const last = Number(sessionStorage.getItem(FLAG) || 0);
+    if (Date.now() - last < 20_000) return; // avoid reload loops
+    sessionStorage.setItem(FLAG, String(Date.now()));
+    reloadNow();
+  };
+  const onRej = (ev: PromiseRejectionEvent) => {
+    const reason = ev.reason;
+    const msg = typeof reason === "string" ? reason : String(reason?.message ?? reason ?? "");
+    onErr(new ErrorEvent("error", { message: msg }));
+  };
+  window.addEventListener("error", onErr);
+  window.addEventListener("unhandledrejection", onRej);
+  return () => {
+    window.removeEventListener("error", onErr);
+    window.removeEventListener("unhandledrejection", onRej);
+  };
+}
+
 export function startLiveUpdates() {
   if (typeof window === "undefined") return () => {};
 
   let stopped = false;
   let timer: ReturnType<typeof setInterval> | null = null;
+  const disarmChunk = armChunkReload();
 
   const check = async () => {
     if (stopped) return;
@@ -79,5 +108,6 @@ export function startLiveUpdates() {
     document.removeEventListener("visibilitychange", onVis);
     window.removeEventListener("focus", onVis);
     document.removeEventListener("resume", onResume);
+    disarmChunk();
   };
 }

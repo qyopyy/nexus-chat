@@ -1,11 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, ChevronDown, Gauge, Hash, LayoutDashboard, Lock, Trophy, HeadphoneOff, LogOut, MicOff, MonitorUp, Plus, Trash2, UserPlus, Video, Volume2 } from "lucide-react";
-import { useApp, openModal } from "@/store/app";
+import { BellOff, CalendarDays, CheckCheck, ChevronDown, Gauge, Hash, LayoutDashboard, Lock, Star, Trophy, HeadphoneOff, LogOut, MicOff, MonitorUp, Plus, Trash2, UserPlus, Video, Volume2 } from "lucide-react";
+import { useApp, openModal, toast } from "@/store/app";
 import { useCall, joinCall, unlockCallAudio } from "@/lib/call";
-import { deleteSpace, leaveSpace, openConversation } from "@/lib/data";
+import { deleteSpace, leaveSpace, markSpaceRead, openConversation } from "@/lib/data";
 import { cn } from "@/lib/utils";
+import {
+  isCategoryCollapsed,
+  isFavoriteSpace,
+  isSpaceMuted,
+  toggleCollapsedCategory,
+  toggleFavoriteSpace,
+  toggleMuteSpace,
+  useSpacePrefs,
+} from "@/lib/spacePrefs";
 import Avatar from "@/components/ui/Avatar";
 import SpaceMusic from "@/components/music/SpaceMusic";
 import ServerHub, { WelcomeGate } from "@/components/space/ServerHub";
@@ -30,6 +39,13 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
   const members = useApp((s) => s.spaceMembers[spaceId] ?? []);
   const isOwner = space?.owner_id === me;
   const isStaff = isOwner || members.find((m) => m.user_id === me)?.role === "admin";
+  const favorites = useSpacePrefs((s) => s.favorites);
+  const mutedSpaces = useSpacePrefs((s) => s.muted);
+  const collapsedMap = useSpacePrefs((s) => s.collapsed);
+  const fav = favorites.includes(spaceId) || isFavoriteSpace(spaceId);
+  const quiet = mutedSpaces.includes(spaceId) || isSpaceMuted(spaceId);
+  const textCollapsed = (collapsedMap[spaceId] ?? []).includes("Text Channels") || isCategoryCollapsed(spaceId, "Text Channels");
+  const voiceCollapsed = (collapsedMap[spaceId] ?? []).includes("Voice Channels") || isCategoryCollapsed(spaceId, "Voice Channels");
 
   useEffect(() => {
     if (!menu) return;
@@ -40,6 +56,7 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
 
   const text = channels.filter((c) => c.kind === "text");
   const voice = channels.filter((c) => c.kind === "voice");
+  const unreadTotal = channels.reduce((n, c) => n + (unread[c.id] ?? 0), 0);
 
   const voiceUsers = useMemo(() => {
     const map: Record<string, string[]> = {};
@@ -87,10 +104,32 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
               <MenuItem icon={<Plus className="size-4" />} label="Create Channel" onClick={() => (setMenu(false), openModal("createChannel", spaceId))} />
             )}
             <div className="my-1 h-px bg-line" />
+            <MenuItem
+              icon={<Star className={cn("size-4", fav && "fill-amber-400 text-amber-400")} />}
+              label={fav ? "Unfavorite server" : "Favorite server"}
+              onClick={() => (setMenu(false), toggleFavoriteSpace(spaceId))}
+            />
+            <MenuItem
+              icon={<BellOff className="size-4" />}
+              label={quiet ? "Unmute server" : "Mute server"}
+              onClick={() => {
+                setMenu(false);
+                toggleMuteSpace(spaceId);
+                toast(quiet ? "Server unmuted" : "Server muted", "info");
+              }}
+            />
+            {unreadTotal > 0 && (
+              <MenuItem
+                icon={<CheckCheck className="size-4" />}
+                label="Mark all as read"
+                onClick={() => (setMenu(false), void markSpaceRead(spaceId))}
+              />
+            )}
+            <div className="my-1 h-px bg-line" />
             {isOwner ? (
               <MenuItem
                 icon={<Trash2 className="size-4" />}
-                label="Delete Space"
+                label="Delete Server"
                 danger
                 onClick={() => {
                   setMenu(false);
@@ -100,7 +139,7 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
             ) : (
               <MenuItem
                 icon={<LogOut className="size-4" />}
-                label="Leave Space"
+                label="Leave Server"
                 danger
                 onClick={() => {
                   setMenu(false);
@@ -127,8 +166,13 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
             </button>
           ))}
         </div>
-        <Category label="Text Channels" onAdd={isStaff ? () => openModal("createChannel", spaceId) : undefined} />
-        {text.map((c) => {
+        <Category
+          label="Text Channels"
+          collapsed={textCollapsed}
+          onToggle={() => toggleCollapsedCategory(spaceId, "Text Channels")}
+          onAdd={isStaff ? () => openModal("createChannel", spaceId) : undefined}
+        />
+        {!textCollapsed && text.map((c) => {
           const n = unread[c.id] ?? 0;
           const active = conversationId === c.id;
           const locked = !!c.password_hash || !!c.is_private;
@@ -146,16 +190,22 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
               <span className={cn("truncate", n > 0 && "font-semibold")}>{c.name}</span>
               {c.nsfw && <span className="rounded bg-dnd/80 px-1 text-[9px] font-black text-white">18+</span>}
               {!!c.slowmode && <Gauge className="size-3.5 shrink-0 opacity-60" aria-label="Slow mode" />}
-              {n > 0 && !active && (
+              {n > 0 && !active && !quiet && (
                 <span className="ml-auto rounded-full bg-dnd px-1.5 text-[11px] font-bold text-white">{n}</span>
               )}
+              {n > 0 && !active && quiet && <span className="ml-auto size-2 rounded-full bg-sub" />}
             </button>
           );
         })}
 
         <div className="h-4" />
-        <Category label="Voice Channels" onAdd={isStaff ? () => openModal("createChannel", spaceId) : undefined} />
-        {voice.map((c) => {
+        <Category
+          label="Voice Channels"
+          collapsed={voiceCollapsed}
+          onToggle={() => toggleCollapsedCategory(spaceId, "Voice Channels")}
+          onAdd={isStaff ? () => openModal("createChannel", spaceId) : undefined}
+        />
+        {!voiceCollapsed && voice.map((c) => {
           const users = voiceUsers[c.id] ?? [];
           const active = conversationId === c.id;
           const connected = callConv === c.id;
@@ -209,13 +259,13 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
   );
 }
 
-function Category({ label, onAdd }: { label: string; onAdd?: () => void }) {
+function Category({ label, onAdd, collapsed, onToggle }: { label: string; onAdd?: () => void; collapsed?: boolean; onToggle?: () => void }) {
   return (
     <div className="group mb-1 flex items-center justify-between px-1 text-xs font-bold tracking-wide text-sub uppercase">
-      <span className="flex items-center gap-0.5">
-        <ChevronDown className="size-3" />
+      <button type="button" onClick={onToggle} className="flex items-center gap-0.5 hover:text-txt">
+        <ChevronDown className={cn("size-3 transition", collapsed && "-rotate-90")} />
         {label}
-      </span>
+      </button>
       {onAdd && (
         <button onClick={onAdd} className="opacity-0 transition group-hover:opacity-100 hover:text-txt" title="Create channel">
           <Plus className="size-4" />

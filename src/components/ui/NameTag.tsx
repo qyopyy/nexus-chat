@@ -18,8 +18,8 @@ export function Badges({ userId, size = "sm", max = 6, className }: { userId: st
   const list = useMemo(() => {
     const out: (Pick<Badge, "name" | "icon" | "color" | "description"> & { key: string })[] = [];
     if (role !== "member") {
-      const r = ROLE_INFO[role];
-      out.push({ key: `role-${role}`, name: r.label, icon: r.icon, color: r.color, description: `Site ${r.label}` });
+      const r = ROLE_INFO[role] ?? ROLE_INFO.member;
+      if (r.label) out.push({ key: `role-${role}`, name: r.label, icon: r.icon, color: r.color, description: `Site ${r.label}` });
     }
     ids
       .map((id) => catalog[id])
@@ -84,7 +84,7 @@ export default function NameTag({
 }) {
   const p = useApp((s) => s.profiles[userId]);
   const role = (p?.site_role ?? "member") as SiteRole;
-  const info = ROLE_INFO[role];
+  const info = ROLE_INFO[role] ?? ROLE_INFO.member;
   return (
     <span className={cn("inline-flex min-w-0 items-center gap-1", className)}>
       <span className={cn("truncate", info.nameClass)} style={!info.nameClass && fallbackColor ? { color: fallbackColor } : undefined}>

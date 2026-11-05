@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Aperture, AppWindow, Clapperboard, Crown, Gamepad2, Headphones, LayoutDashboard, Megaphone, MessageCircle, Plus, Radio, Tv } from "lucide-react";
+import { Aperture, AppWindow, BellOff, Clapperboard, Crown, Gamepad2, Headphones, LayoutDashboard, Megaphone, MessageCircle, Plus, Radio, Star, Tv } from "lucide-react";
 import { useApp, openModal } from "@/store/app";
 import { selectHome, selectSpace } from "@/lib/data";
 import { openUntitled } from "@/lib/untitled";
@@ -10,6 +10,7 @@ import { openLiveHub } from "@/lib/live";
 import { openPulse } from "@/lib/pulse";
 import { can, openStaffDesk } from "@/lib/privileges";
 import { cn, initials } from "@/lib/utils";
+import { sortSpaces, useSpacePrefs } from "@/lib/spacePrefs";
 
 function RailItem({
   active,
@@ -67,6 +68,9 @@ export default function ServerRail() {
   const friendships = useApp((s) => s.friendships);
   const me = useApp((s) => s.userId);
   const hub = useApp((s) => s.hub);
+  const favorites = useSpacePrefs((s) => s.favorites);
+  const muted = useSpacePrefs((s) => s.muted);
+  const ordered = useMemo(() => sortSpaces(spaces), [spaces, favorites]);
 
   const homeBadge = useMemo(() => {
     const dms = chatList.reduce((n, c) => n + (unread[c.id] ?? 0), 0);
@@ -75,7 +79,7 @@ export default function ServerRail() {
   }, [chatList, unread, friendships, me]);
 
   return (
-    <nav className="flex h-full w-[72px] shrink-0 flex-col items-center gap-2 overflow-y-auto bg-rail py-3">
+    <nav className="flex h-full w-[72px] shrink-0 flex-col items-center gap-2 overflow-y-auto bg-rail py-3" aria-label="Servers">
       <RailItem active={spaceId === null && !hub} label="Direct Messages" onClick={() => (useApp.setState({ hub: null }), selectHome())} badge={homeBadge}>
         <MessageCircle className="size-6" />
       </RailItem>
@@ -115,27 +119,31 @@ export default function ServerRail() {
         </RailItem>
       )}
       <div className="mx-auto h-0.5 w-8 rounded bg-line" />
-      {spaces.map((sp) => {
-        const spaceUnread = (channels[sp.id] ?? []).some((c) => (unread[c.id] ?? 0) > 0);
+      {ordered.map((sp) => {
+        const quiet = muted.includes(sp.id);
+        const spaceUnread = !quiet && (channels[sp.id] ?? []).some((c) => (unread[c.id] ?? 0) > 0);
+        const fav = favorites.includes(sp.id);
         return (
           <RailItem
             key={sp.id}
             active={spaceId === sp.id && !hub}
             unread={spaceUnread}
-            label={sp.name}
+            label={quiet ? `${sp.name} (muted)` : sp.name}
             onClick={() => (useApp.setState({ hub: null }), void selectSpace(sp.id))}
             color={sp.icon_url ? undefined : sp.icon_color}
           >
             {sp.icon_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={sp.icon_url} alt="" className="size-12 rounded-[inherit] object-cover" />
+              <img src={sp.icon_url} alt="" className={cn("size-12 rounded-[inherit] object-cover", quiet && "opacity-55")} />
             ) : (
-              <span className="text-base font-semibold">{initials(sp.name)}</span>
+              <span className={cn("text-base font-semibold", quiet && "opacity-55")}>{initials(sp.name)}</span>
             )}
+            {fav && <Star className="absolute -top-0.5 -right-0.5 size-3 fill-amber-400 text-amber-400 drop-shadow" />}
+            {quiet && <BellOff className="absolute -right-0.5 -bottom-0.5 size-3 text-sub drop-shadow" />}
           </RailItem>
         );
       })}
-      <RailItem active={false} label="Add a Space" onClick={() => openModal("createSpace")}>
+      <RailItem active={false} label="Add a Server" onClick={() => openModal("createSpace")}>
         <Plus className="size-6 text-ok group-hover:text-white" />
       </RailItem>
     </nav>

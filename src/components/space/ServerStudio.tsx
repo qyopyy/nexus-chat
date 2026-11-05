@@ -29,15 +29,17 @@ const COLORS = ["#5865F2", "#3BA55D", "#FAA61A", "#ED4245", "#EB459E", "#2AABEE"
 
 /** Look & feel — icon, banner, background, name, color */
 export function LookPanel({ spaceId, staff }: { spaceId: string; staff: boolean }) {
-  const space = useApp((s) => s.spaces.find((x) => x.id === spaceId))!;
-  const [name, setName] = useState(space.name);
-  const [desc, setDesc] = useState(space.description ?? "");
-  const [color, setColor] = useState(space.icon_color);
+  const space = useApp((s) => s.spaces.find((x) => x.id === spaceId));
+  const [name, setName] = useState(space?.name ?? "");
+  const [desc, setDesc] = useState(space?.description ?? "");
+  const [color, setColor] = useState(space?.icon_color ?? "#5865F2");
   useEffect(() => {
+    if (!space) return;
     setName(space.name);
     setDesc(space.description ?? "");
     setColor(space.icon_color);
-  }, [space.id, space.name, space.description, space.icon_color]);
+  }, [space?.id, space?.name, space?.description, space?.icon_color]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!space) return <p className="text-sm text-sub">Server not found — go back and open it again.</p>;
 
   const pick = (kind: "icon" | "banner" | "background") => {
     const input = document.createElement("input");
@@ -137,9 +139,9 @@ export function LookPanel({ spaceId, staff }: { spaceId: string; staff: boolean 
 
 /** Custom invite codes + vanity URL */
 export function InvitesPanel({ spaceId, staff, owner }: { spaceId: string; staff: boolean; owner: boolean }) {
-  const space = useApp((s) => s.spaces.find((x) => x.id === spaceId))!;
+  const space = useApp((s) => s.spaces.find((x) => x.id === spaceId));
   const [list, setList] = useState<SpaceInvite[] | null>(null);
-  const [vanity, setVanityLocal] = useState(space.vanity_code ?? "");
+  const [vanity, setVanityLocal] = useState(space?.vanity_code ?? "");
   const [label, setLabel] = useState("");
   const [code, setCode] = useState("");
   const [maxUses, setMaxUses] = useState("");
@@ -147,8 +149,9 @@ export function InvitesPanel({ spaceId, staff, owner }: { spaceId: string; staff
   const reload = () => void listInvites(spaceId).then(setList);
   useEffect(() => {
     reload();
-    setVanityLocal(space.vanity_code ?? "");
-  }, [spaceId, space.vanity_code]); // eslint-disable-line react-hooks/exhaustive-deps
+    setVanityLocal(space?.vanity_code ?? "");
+  }, [spaceId, space?.vanity_code]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!space) return <p className="text-sm text-sub">Server not found — go back and open it again.</p>;
 
   const copy = (c: string) => {
     void navigator.clipboard.writeText(inviteLink(c));

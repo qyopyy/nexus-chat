@@ -89,10 +89,18 @@ export default function ServerHub({ spaceId, onClose, initial = "home" }: { spac
 }
 
 function Home({ spaceId, staff }: { spaceId: string; staff: boolean }) {
-  const space = useApp((s) => s.spaces.find((x) => x.id === spaceId))!;
+  const space = useApp((s) => s.spaces.find((x) => x.id === spaceId));
+  const members = useApp((s) => s.spaceMembers[spaceId] ?? []);
+  const channels = useApp((s) => s.channels[spaceId] ?? []);
   const [edit, setEdit] = useState(false);
-  const [w, setW] = useState(space.welcome ?? "");
-  const [r, setR] = useState(space.rules ?? "");
+  const [w, setW] = useState(space?.welcome ?? "");
+  const [r, setR] = useState(space?.rules ?? "");
+  useEffect(() => {
+    if (!space) return;
+    setW(space.welcome ?? "");
+    setR(space.rules ?? "");
+  }, [space?.id, space?.welcome, space?.rules]);
+  if (!space) return <p className="text-sm text-sub">Server not found.</p>;
   if (edit)
     return (
       <div className="space-y-3">
@@ -115,8 +123,35 @@ function Home({ spaceId, staff }: { spaceId: string; staff: boolean }) {
       </div>
     );
   const rules = (space.rules ?? "").split("\n").map((x) => x.trim()).filter(Boolean);
+  const copyInvite = async () => {
+    const code = space.vanity_code || space.invite_code;
+    const url = `${typeof location !== "undefined" ? location.origin : "https://nexusproject.cc"}/i/${code}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast("Invite link copied", "success");
+    } catch {
+      toast(url, "info");
+    }
+  };
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="rounded-2xl bg-side px-2 py-3">
+          <div className="text-lg font-black">{members.length || "—"}</div>
+          <div className="text-[10px] font-bold tracking-wide text-sub uppercase">Members</div>
+        </div>
+        <div className="rounded-2xl bg-side px-2 py-3">
+          <div className="text-lg font-black">{channels.filter((c) => c.kind === "text").length}</div>
+          <div className="text-[10px] font-bold tracking-wide text-sub uppercase">Text</div>
+        </div>
+        <div className="rounded-2xl bg-side px-2 py-3">
+          <div className="text-lg font-black">{channels.filter((c) => c.kind === "voice").length}</div>
+          <div className="text-[10px] font-bold tracking-wide text-sub uppercase">Voice</div>
+        </div>
+      </div>
+      <button onClick={() => void copyInvite()} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent/15 py-2.5 text-sm font-bold text-accent hover:bg-accent/25">
+        <Link2 className="size-4" /> Copy invite link
+      </button>
       <div className="rounded-2xl bg-side p-4">
         <div className="text-3xl">👋</div>
         <p className="mt-2 whitespace-pre-wrap">{space.welcome || "No welcome message yet."}</p>
