@@ -29,17 +29,17 @@ import Runner from "./Runner";
 import Mines from "./Mines";
 import OrbitStrike from "./OrbitStrike";
 import DriftRush from "./DriftRush";
-import ClassicStrike from "./ClassicStrike";
+import ClassicStrikeLauncher from "./classicstrike/ClassicStrikeLauncher";
 
 const GAMES: { id: GameId; name: string; tag: string; desc: string; bg: string; emoji: string; C: typeof Blocks | null; isNew?: boolean }[] = [
   {
     id: "classicstrike",
     name: "Classic Strike",
-    tag: "CS 1.6-style · bomb defuse",
-    desc: "Browser FPS homage — buy menu, economy, bombsites, bots, AWP & AK. Dust-style map. Fan recreation (not Valve).",
+    tag: "CS 1.6-style · multiplayer",
+    desc: "Browser FPS homage — buy menu, economy, bombsites, bots or live peers, AWP & AK. Dust-style map. Fan recreation (not Valve).",
     bg: "linear-gradient(135deg,#4d7c0f,#1c1917 55%,#b45309)",
     emoji: "🔫",
-    C: ClassicStrike,
+    C: null,
     isNew: true,
   },
   { id: "streets", name: "Neon Streets", tag: "Open-city driving", desc: "Open-world island city. Jobs, cash, cops — and play live with friends using an invite code.", bg: "linear-gradient(135deg,#ff2bd6,#2b0b5c)", emoji: "🚗", C: null },
@@ -91,6 +91,7 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
   }, [joinCode, joinFor]);
   if (frame) return <WebFrame game={frame} onBack={() => setFrame(null)} mobile={mobile} />;
   if (open === "streets") return <StreetsLauncher onBack={() => setOpen(null)} mobile={mobile} />;
+  if (open === "classicstrike") return <ClassicStrikeLauncher onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "bay") return <SunsetBay onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "geo") return <GeoGuess onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "four") return <FourInRow onBack={() => setOpen(null)} mobile={mobile} />;
@@ -116,10 +117,10 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
               <div className="text-xs font-bold tracking-widest text-lime-300/90 uppercase">New · CS 1.6-style browser FPS</div>
               <div className="mt-1 font-mono text-3xl font-black tracking-tight text-white sm:text-5xl">CLASSIC STRIKE</div>
               <p className="mt-2 max-w-lg text-sm text-white/85">
-                Bomb defuse rounds, buy menu, AK / M4 / AWP, bots on a dust-style map. Click to lock mouse — WASD, B to buy, G to plant, E to defuse.
+                Bomb defuse rounds, buy menu, AK / M4 / AWP — solo vs bots or online with friends. Click to lock mouse — WASD, B buy, G plant, E defuse.
               </p>
               <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#fbbf24] px-5 py-2.5 font-bold text-black transition group-hover:scale-105">
-                <Play className="size-4 fill-current" /> Enter server
+                <Play className="size-4 fill-current" /> Play · multiplayer
               </span>
               <p className="mt-3 text-[10px] text-white/50">Fan homage — not affiliated with Valve or Counter-Strike.</p>
             </div>
