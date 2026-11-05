@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Headphones, HeadphoneOff, LogOut, Mic, MicOff, MonitorOff, MonitorUp, PhoneOff, Settings, Signal, UserPen, Video, VideoOff } from "lucide-react";
+import { Headphones, HeadphoneOff, Link2, LogOut, Mic, MicOff, MonitorOff, MonitorUp, PhoneOff, Settings, Signal, UserPen, Video, VideoOff } from "lucide-react";
 import { useApp, openModal, conversationTitle, findChannel } from "@/store/app";
 import { useCall, canScreenShare, leaveCall, toggleDeafen, toggleMute, toggleScreen, toggleVideo } from "@/lib/call";
 import { openConversation } from "@/lib/data";
@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import Avatar, { statusLabel } from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
+import { NexusCredit, copyNexusAppLink } from "@/components/ui/NexusCredit";
 import type { UserStatus } from "@/lib/types";
 
 export default function UserPanel() {
@@ -138,6 +139,15 @@ function MeRow() {
               <UserPen className="size-4" /> Edit Profile
             </button>
             <button
+              onClick={() => {
+                setMenu(false);
+                void copyNexusAppLink();
+              }}
+              className="flex w-full items-center gap-3 rounded px-2 py-1.5 hover:bg-accent hover:text-white"
+            >
+              <Link2 className="size-4" /> Share Nexus app link
+            </button>
+            <button
               onClick={async () => {
                 await leaveCall();
                 await supabase.auth.signOut();
@@ -146,6 +156,7 @@ function MeRow() {
             >
               <LogOut className="size-4" /> Log Out
             </button>
+            <NexusCredit compact className="px-2 py-2 text-[11px]" />
           </div>
         </div>
       )}
