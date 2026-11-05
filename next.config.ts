@@ -40,6 +40,8 @@ const nextConfig: NextConfig = {
           { key: "Cache-Control", value: noStore },
           { key: "CDN-Cache-Control", value: noStore },
           { key: "Vercel-CDN-Cache-Control", value: noStore },
+          // Allow geolocation for Nexus Bump (iPhone Safari / Capacitor WebView)
+          { key: "Permissions-Policy", value: "geolocation=(self), microphone=(self), camera=(self)" },
         ],
       },
     ];

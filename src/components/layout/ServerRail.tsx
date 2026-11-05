@@ -11,6 +11,7 @@ import {
   Gamepad2,
   Headphones,
   LayoutDashboard,
+  MapPin,
   Megaphone,
   MessageCircle,
   ChevronDown,
@@ -27,6 +28,7 @@ import { openUntitled } from "@/lib/untitled";
 import { openRadio } from "@/lib/radio";
 import { openLiveHub } from "@/lib/live";
 import { openPulse } from "@/lib/pulse";
+import { openBump } from "@/lib/bump";
 import { can, openStaffDesk } from "@/lib/privileges";
 import { cn, initials } from "@/lib/utils";
 import { haptic } from "@/lib/haptics";
@@ -96,6 +98,7 @@ const HUB_ICON: Record<RailHubId, React.ReactNode> = {
   games: <Gamepad2 className="size-6" />,
   apps: <AppWindow className="size-6" />,
   studio: <LayoutDashboard className="size-6" />,
+  bump: <MapPin className="size-5" />,
   staff: <Crown className="size-5" />,
 };
 
@@ -109,6 +112,7 @@ const HUB_COLOR: Partial<Record<RailHubId, string>> = {
   radio: "#ff2bd6",
   games: "#ff2bd6",
   apps: "#00a8fc",
+  bump: "#22c55a",
   staff: "#eb459e",
 };
 
@@ -147,6 +151,9 @@ function activateHub(id: RailHubId) {
       break;
     case "studio":
       useApp.setState({ hub: "studio" });
+      break;
+    case "bump":
+      openBump();
       break;
     case "staff":
       openStaffDesk();

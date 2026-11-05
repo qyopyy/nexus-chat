@@ -24,6 +24,11 @@ const config: CapacitorConfig = {
       "fonts.googleapis.com",
       "fonts.gstatic.com",
       "accounts.spotify.com",
+      "accounts.google.com",
+      "*.google.com",
+      "*.youtube.com",
+      "www.youtube.com",
+      "youtube.com",
     ],
   },
   ios: {
@@ -41,6 +46,7 @@ const config: CapacitorConfig = {
   },
   plugins: {
     Haptics: {},
+    Geolocation: {},
     PushNotifications: { presentationOptions: ["badge", "sound", "alert"] },
     LocalNotifications: { iconColor: "#5865F2", sound: "default" },
     Badge: {

@@ -44,6 +44,7 @@ import RadioHub from "./radio/RadioHub";
 import LiveHub from "./live/LiveHub";
 import PulseHub from "./pulse/PulseHub";
 import StaffDesk from "./staff/StaffDesk";
+import BumpHub from "./bump/BumpHub";
 import SiteNoticeBanner from "./staff/SiteNoticeBanner";
 import { useStudio, videosGo } from "@/store/studio";
 import { releaseByCode } from "@/lib/protect";
@@ -142,7 +143,17 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
     const join = q.get("join");
     const gift = q.get("gift");
     const addbot = q.get("addbot");
-    if (play && /^[A-Za-z2-9]{6}$/.test(play)) {
+    const bump = q.get("bump");
+    const yt = q.get("yt");
+    if (yt === "linked") {
+      window.history.replaceState(null, "", "/");
+      toast("YouTube account linked — open Shorts → YouTube", "success");
+      useApp.setState({ hub: "gram" });
+      void import("@/lib/gram").then(({ gramHome }) => gramHome({ view: "shorts" }));
+    } else if (bump) {
+      window.history.replaceState(null, "", `/?bump=${encodeURIComponent(bump)}`);
+      void import("@/lib/bump").then(({ openBump }) => openBump());
+    } else if (play && /^[A-Za-z2-9]{6}$/.test(play)) {
       joinGame(play, g === "geo" || g === "four" || g === "flappy" ? g : "streets");
       window.history.replaceState(null, "", "/");
     } else if (gift) {
@@ -259,6 +270,8 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
             <GamesHub />
           ) : hub === "apps" ? (
             <AppsHub />
+          ) : hub === "bump" ? (
+            <BumpHub />
           ) : hub === "cutroom" || hub === "untitled" ? (
             <UntitledHub />
           ) : hub === "radio" ? (

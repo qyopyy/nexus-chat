@@ -22,6 +22,7 @@ import RadioHub from "@/components/radio/RadioHub";
 import LiveHub from "@/components/live/LiveHub";
 import PulseHub from "@/components/pulse/PulseHub";
 import StaffDesk from "@/components/staff/StaffDesk";
+import BumpHub from "@/components/bump/BumpHub";
 import SiteNoticeBanner from "@/components/staff/SiteNoticeBanner";
 import ChannelLockGate from "@/components/space/ChannelLockGate";
 
@@ -59,7 +60,7 @@ export default function MobileShell() {
           {tab === "videos" && (hub === "live" ? <LiveHub mobile /> : <VideosHub mobile />)}
           {tab === "music" && (hub === "cutroom" || hub === "untitled" ? <UntitledHub mobile /> : hub === "radio" ? <RadioHub mobile /> : <MusicHub mobile />)}
           {tab === "games" && <GamesHub mobile />}
-          {tab === "apps" && <AppsHub mobile />}
+          {tab === "apps" && (hub === "bump" ? <BumpHub mobile /> : <AppsHub mobile />)}
           {tab === "me" && (hub === "staff" ? <StaffDesk mobile /> : <MobileMe />)}
           {inChat && <div className="absolute inset-0 bg-black/40" style={{ opacity: dx ? 1 - dx / window.innerWidth : 1 }} />}
         </div>

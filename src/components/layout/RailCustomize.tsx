@@ -45,6 +45,7 @@ export const HUB_META: Record<RailHubId, { label: string; hint: string }> = {
   games: { label: "Games", hint: "Play together" },
   apps: { label: "Apps", hint: "Tools & utilities" },
   studio: { label: "Studio", hint: "Upload & distribute" },
+  bump: { label: "Bump", hint: "Find people nearby" },
   staff: { label: "Staff Desk", hint: "VIP & staff perks" },
 };
 
