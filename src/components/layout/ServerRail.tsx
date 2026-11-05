@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import { Aperture, AppWindow, Clapperboard, Gamepad2, Headphones, LayoutDashboard, MessageCircle, Plus, Radio } from "lucide-react";
+import { Aperture, AppWindow, Clapperboard, Gamepad2, Headphones, LayoutDashboard, Megaphone, MessageCircle, Plus, Radio, Tv } from "lucide-react";
 import { useApp, openModal } from "@/store/app";
 import { selectHome, selectSpace } from "@/lib/data";
 import { openUntitled } from "@/lib/untitled";
 import { openRadio } from "@/lib/radio";
+import { openLiveHub } from "@/lib/live";
+import { openPulse } from "@/lib/pulse";
 import { cn, initials } from "@/lib/utils";
 
 function RailItem({
@@ -81,6 +83,12 @@ export default function ServerRail() {
       </RailItem>
       <RailItem active={hub === "videos"} label="Videos" onClick={() => useApp.setState({ hub: "videos" })} color={hub === "videos" ? "#eb459e" : undefined}>
         <Clapperboard className="size-6" />
+      </RailItem>
+      <RailItem active={hub === "live"} label="Nexus Live — HD & 4K streams + screen share" onClick={() => openLiveHub()} color={hub === "live" ? "#9146ff" : undefined}>
+        <Tv className="size-5" />
+      </RailItem>
+      <RailItem active={hub === "pulse"} label="Pulse — Twitter-style posts" onClick={() => openPulse()} color={hub === "pulse" ? "#1d9bf0" : undefined}>
+        <Megaphone className="size-5" />
       </RailItem>
       <RailItem active={hub === "music"} label="Music" onClick={() => useApp.setState({ hub: "music" })} color={hub === "music" ? "#1DB954" : undefined}>
         <Headphones className="size-6" />

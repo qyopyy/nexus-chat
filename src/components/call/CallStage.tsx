@@ -186,6 +186,8 @@ const QUALITIES: { id: ScreenQuality; label: string }[] = [
   { id: "720p30", label: "720p · 30fps" },
   { id: "1080p30", label: "1080p · 30fps" },
   { id: "1080p60", label: "1080p · 60fps" },
+  { id: "1440p30", label: "1440p · 30fps" },
+  { id: "2160p30", label: "4K · 30fps" },
   { id: "source", label: "Source" },
 ];
 

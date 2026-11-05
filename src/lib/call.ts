@@ -36,7 +36,7 @@ export type RemoteParticipant = {
 export type NoiseMode = "off" | "standard" | "ai";
 export type VoiceQuality = 64 | 128 | 320;
 
-export type ScreenQuality = "720p30" | "1080p30" | "1080p60" | "source";
+export type ScreenQuality = "720p30" | "1080p30" | "1080p60" | "1440p30" | "2160p30" | "source";
 
 export type VoiceSettings = {
   inputDeviceId: string;
@@ -1342,6 +1342,8 @@ const SCREEN_PRESETS: Record<ScreenQuality, MediaTrackConstraints> = {
   "720p30": { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
   "1080p30": { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
   "1080p60": { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } },
+  "1440p30": { width: { ideal: 2560 }, height: { ideal: 1440 }, frameRate: { ideal: 30 } },
+  "2160p30": { width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 30 } },
   source: { frameRate: { ideal: 30 } },
 };
 
