@@ -147,7 +147,7 @@ function activateHub(id: RailHubId) {
       useApp.setState({ hub: "games" });
       break;
     case "apps":
-      useApp.setState({ hub: "apps" });
+      useApp.setState({ hub: "apps", appsTool: null });
       break;
     case "studio":
       useApp.setState({ hub: "studio" });
@@ -169,6 +169,10 @@ function hubActive(id: RailHubId, spaceId: string | null, hub: string | null) {
       return hub === "cutroom" || hub === "untitled";
     case "studio":
       return hub === "studio";
+    case "bump":
+      return hub === "bump";
+    case "apps":
+      return hub === "apps";
     default:
       return hub === id;
   }

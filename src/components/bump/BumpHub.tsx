@@ -24,9 +24,11 @@ import {
   bumpCreateInvite,
   bumpFollowList,
   bumpGetProfile,
+  bumpHeartbeat,
   bumpInbox,
   bumpInviteLink,
   bumpListFamily,
+  bumpMyPresence,
   bumpNearby,
   bumpPublish,
   bumpRedeemInvite,
@@ -37,6 +39,7 @@ import {
   bumpSpotifyTrackEmbed,
   bumpSpotifyTrackOk,
   bumpThread,
+  subscribeBumpLive,
   type BumpInboxRow,
   type BumpMessage,
   type BumpNearby,
@@ -83,18 +86,56 @@ export default function BumpHub({ mobile, onBack }: { mobile?: boolean; onBack?:
 
   const refresh = useCallback(async () => {
     if (!me) return;
-    const [n, f] = await Promise.all([bumpNearby(radius).catch(() => [] as BumpNearby[]), bumpListFamily()]);
+    const [n, f, mine] = await Promise.all([
+      bumpNearby(radius).catch(() => [] as BumpNearby[]),
+      bumpListFamily(),
+      bumpMyPresence().catch(() => null),
+    ]);
     setNearby(n);
     setFamily(f);
+    if (mine) {
+      setLive(true);
+      if (mine.visible) setVisible(mine.visible);
+    } else {
+      setLive(false);
+    }
   }, [me, radius]);
 
+  // Restore Live + initial nearby, then keep a slow safety poll while live
   useEffect(() => {
     void refresh();
     const t = setInterval(() => {
       if (live) void refresh();
-    }, 12_000);
+    }, 45_000);
     return () => clearInterval(t);
   }, [refresh, live]);
+
+  // Realtime presence / family — Cap shells pick this up over the live website
+  useEffect(() => {
+    if (!me) return;
+    return subscribeBumpLive({
+      onPresence: () => {
+        void refresh();
+      },
+      onFamily: () => {
+        void bumpListFamily().then(setFamily);
+      },
+      onFollow: () => {
+        /* friends list uses friendships store; presence refresh is enough for nearby badges */
+      },
+    });
+  }, [me, refresh]);
+
+  // Heartbeat while live so the pin stays fresh without a native rebuild
+  useEffect(() => {
+    if (!live || !me) return;
+    const beat = () => {
+      void bumpHeartbeat(visible);
+    };
+    beat();
+    const t = setInterval(beat, 50_000);
+    return () => clearInterval(t);
+  }, [live, me, visible]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -201,11 +242,12 @@ export default function BumpHub({ mobile, onBack }: { mobile?: boolean; onBack?:
                   live ? "bg-ok/20 text-ok" : "bg-white/10 text-sub",
                 )}
               >
-                <span className={cn("size-1.5 rounded-full", live ? "bg-ok" : "bg-faint")} />
+                <span className={cn("size-1.5 animate-pulse rounded-full", live ? "bg-ok" : "bg-faint")} />
                 {live ? "Live" : "Off"}
               </span>
+              <span className="hidden text-[10px] font-semibold text-sub sm:inline">Realtime</span>
             </div>
-            <p className="truncate text-[11px] text-sub">Find people nearby · friends · messages</p>
+            <p className="truncate text-[11px] text-sub">Nearby · friends · live DMs · updates without app store</p>
           </div>
           <MapPin className={cn("size-5 shrink-0", live ? "text-ok" : "text-sub")} />
         </div>
@@ -784,6 +826,21 @@ function BumpMessagesPane({
     });
   }, [focusUser]);
 
+  // Live DMs — insert arrives over supabase realtime (no IPA/APK)
+  useEffect(() => {
+    return subscribeBumpLive({
+      onMessage: (row) => {
+        void refreshInbox();
+        if (!focusUser) return;
+        if (row.sender_id !== focusUser && row.recipient_id !== focusUser) return;
+        setMsgs((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+        requestAnimationFrame(() => {
+          if (scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
+        });
+      },
+    });
+  }, [focusUser, refreshInbox]);
+
   async function send() {
     if (!focusUser || !draft.trim()) return;
     setSending(true);
@@ -791,7 +848,7 @@ function BumpMessagesPane({
     setSending(false);
     if (row) {
       setDraft("");
-      setMsgs((m) => [...m, row]);
+      setMsgs((m) => (m.some((x) => x.id === row.id) ? m : [...m, row]));
       void refreshInbox();
       requestAnimationFrame(() => {
         if (scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;

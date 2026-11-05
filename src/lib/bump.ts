@@ -57,14 +57,69 @@ export type BumpInboxRow = {
   unread: number;
 };
 
-/** Opens Bump inside Apps (desktop hub + phone Apps tab). */
+/**
+ * Opens Bump as its own live hub (desktop rail + phone Apps tab).
+ * Capacitor loads https://nexusproject.cc — web deploys update without a new IPA/APK.
+ */
 export function openBump() {
   const mobile = typeof window !== "undefined" && window.innerWidth < 768;
   useApp.setState(
     mobile
-      ? { mobileTab: "apps", hub: "apps", appsTool: "bump" }
-      : { hub: "apps", appsTool: "bump" },
+      ? { mobileTab: "apps", hub: "bump", appsTool: null, mobileSidebar: true }
+      : { hub: "bump", appsTool: null },
   );
+}
+
+export type BumpPresenceRow = {
+  user_id: string;
+  lat: number;
+  lng: number;
+  accuracy_m: number | null;
+  visible: BumpVisible;
+  label: string | null;
+  updated_at: string;
+};
+
+/** Restore Live state after refresh (own pin still on the server). */
+export async function bumpMyPresence() {
+  const { data, error } = await supabase.rpc("bump_my_presence");
+  if (error || !data) return null;
+  return data as BumpPresenceRow;
+}
+
+/**
+ * Realtime: nearby pins, DMs, follows — no native rebuild required.
+ * Call from BumpHub while mounted; returns an unsubscribe.
+ */
+export function subscribeBumpLive(handlers: {
+  onPresence?: () => void;
+  onMessage?: (row: BumpMessage) => void;
+  onFollow?: () => void;
+  onFamily?: () => void;
+}) {
+  const me = useApp.getState().userId;
+  const key = `bump-live:${me ?? "anon"}:${Math.random().toString(36).slice(2, 7)}`;
+  const ch = supabase
+    .channel(key)
+    .on("postgres_changes", { event: "*", schema: "public", table: "bump_presence" }, () => {
+      handlers.onPresence?.();
+    })
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "bump_messages" }, (payload) => {
+      const row = payload.new as BumpMessage;
+      if (!me || (row.sender_id !== me && row.recipient_id !== me)) return;
+      void loadProfiles([row.sender_id, row.recipient_id]);
+      handlers.onMessage?.(row);
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "bump_follows" }, () => {
+      handlers.onFollow?.();
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "bump_family" }, () => {
+      handlers.onFamily?.();
+    });
+  void ch.subscribe();
+  return () => {
+    void supabase.removeChannel(ch);
+  };
 }
 
 export function bumpInviteLink(code: string) {
@@ -290,4 +345,21 @@ export async function bumpInbox() {
   const rows = (data ?? []) as BumpInboxRow[];
   if (rows.length) await loadProfiles(rows.map((r) => r.other_id));
   return rows;
+}
+
+/** Quiet republish for live heartbeat (no toast). */
+export async function bumpHeartbeat(visible: BumpVisible = "friends") {
+  try {
+    const loc = await getDeviceLocation({ highAccuracy: false });
+    const { error } = await supabase.rpc("bump_publish", {
+      p_lat: loc.lat,
+      p_lng: loc.lng,
+      p_accuracy: loc.accuracy,
+      p_visible: visible,
+      p_label: null,
+    });
+    return !error;
+  } catch {
+    return false;
+  }
 }
