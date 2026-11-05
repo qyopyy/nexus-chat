@@ -79,6 +79,8 @@ export default function AppearanceSection() {
   async function uploadBg(f: File) {
     if (!me) return;
     if (f.size > 10 * 1024 * 1024) return toast("Max 10 MB", "error");
+    const { malwareGate } = await import("@/lib/malwareGuard");
+    if (await malwareGate(f, { fileName: f.name, context: "image" })) return;
     setUploading(true);
     const path = `${me}/background-${Date.now()}.${f.name.split(".").pop() || "jpg"}`;
     const { error } = await supabase.storage.from("avatars").upload(path, f, { contentType: f.type, upsert: true });

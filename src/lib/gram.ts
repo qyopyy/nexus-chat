@@ -307,6 +307,9 @@ async function put(blob: Blob, ext: string, type: string, onProgress?: (p: numbe
   return path;
 }
 export async function uploadMedia(file: File, onStep?: (s: string) => void): Promise<Media> {
+  const { scanUpload } = await import("./malwareGuard");
+  const scan = await scanUpload(file, { fileName: file.name, context: "media" });
+  if (!scan.ok) throw new Error(scan.reason);
   const kind = mediaKind(file);
   if (kind === "video") {
     if (file.size > 100 * 1024 * 1024) throw new Error("Videos can be up to 100 MB");

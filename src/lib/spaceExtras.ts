@@ -13,6 +13,8 @@ const ok = (error: { message: string } | null) => {
 export async function uploadSpaceImage(spaceId: string, file: File, kind: "icon" | "banner" | "background") {
   const me = useApp.getState().userId;
   if (!me) return null;
+  const { malwareGate } = await import("./malwareGuard");
+  if (await malwareGate(file, { fileName: file.name, context: "image" })) return null;
   const max = kind === "icon" ? 4 : 8;
   if (file.size > max * 1024 * 1024) {
     toast(`${kind} must be under ${max} MB`, "error");

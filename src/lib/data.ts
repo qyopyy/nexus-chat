@@ -414,6 +414,10 @@ export async function sendMessage(convId: string, content: string, file?: File |
   if (!me) return;
   const text = content.trim();
   if (!text && !file) return;
+  if (file) {
+    const { malwareGate } = await import("./malwareGuard");
+    if (await malwareGate(file, { fileName: file.name, context: "chat" })) return;
+  }
   // Nexus Shield: protected songs can't be sent (audio / video attachments, voice notes)
   if (file && /^(audio|video)\//.test(file.type)) {
     const { shieldGate } = await import("./shield");
