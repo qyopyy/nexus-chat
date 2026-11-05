@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Eye, Heart, Plus, Trash2, Volume2, VolumeX, X } from "lucide-react";
-import { useApp } from "@/store/app";
+import { Eye, Heart, Link2, MessageCircle, Plus, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { useApp, toast } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
-import { ago, gramGo, likeStory, mediaUrl, myStoryState, removeStory, storiesOf, storyTray, storyViewers, useGram, viewStory, type Story, type TrayItem } from "@/lib/gram";
+import { ago, gramGo, likeStory, mediaUrl, myStoryState, publicContentUrl, removeStory, storiesOf, storyTray, storyViewers, useGram, viewStory, type Story, type TrayItem } from "@/lib/gram";
+import { openConversation, sendMessage } from "@/lib/data";
+import { supabase } from "@/lib/supabase";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 
@@ -72,6 +74,8 @@ export function StoryViewer() {
   const [liked, setLiked] = useState<Set<string>>(new Set());
   const [viewers, setViewers] = useState<string[] | null>(null);
   const [vidState, setVidState] = useState<"loading" | "playing" | "error">("loading");
+  const [reply, setReply] = useState(false);
+  const [replyText, setReplyText] = useState("");
   const vid = useRef<HTMLVideoElement>(null);
   const author = st ? st.authors[st.index] : null;
 
@@ -104,11 +108,13 @@ export function StoryViewer() {
     setT(0);
     setViewers(null);
     setVidState(s?.media.type === "video" ? "loading" : "playing");
+    setReply(false);
+    setReplyText("");
   }, [s?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // photos: 6s; videos: follow playback. Don't auto-advance while a video is still loading or errored.
   useEffect(() => {
-    if (!s || hold || viewers) return;
+    if (!s || hold || viewers || reply) return;
     if (s.media.type === "video" && vidState === "error") return;
     if (s.media.type === "video" && vidState === "loading") return;
     const fallback = s.media.type === "video" ? Math.max(6, Math.min(30, s.media.dur && s.media.dur > 0 ? s.media.dur : 15)) : 6;
@@ -122,7 +128,7 @@ export function StoryViewer() {
     }
     const id = setInterval(() => setT((x) => x + 0.05 / fallback), 50);
     return () => clearInterval(id);
-  }, [s, hold, viewers, vidState]);
+  }, [s, hold, viewers, vidState, reply]);
   useEffect(() => {
     if (t >= 1 && stories) {
       if (i + 1 < stories.length) setI(i + 1);
@@ -305,6 +311,16 @@ export function StoryViewer() {
                   <Eye className="size-4" /> {s.view_count} · <Heart className="size-4" /> {s.like_count}
                 </button>
                 <button
+                  onClick={() => {
+                    void navigator.clipboard.writeText(publicContentUrl(s.id));
+                    toast("Story link copied (/n/…)", "success");
+                  }}
+                  className="grid size-10 place-items-center rounded-full bg-white/15"
+                  aria-label="Copy share link"
+                >
+                  <Link2 className="size-5" />
+                </button>
+                <button
                   onClick={async () => {
                     if (!confirm("Delete this story?")) return;
                     if (await removeStory(s.id)) {
@@ -324,7 +340,22 @@ export function StoryViewer() {
               </>
             ) : (
               <>
-                <span className="flex-1 text-xs text-white/70">Expires {new Date(s.expires_at).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                <button
+                  onClick={() => setReply(true)}
+                  className="flex flex-1 items-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-left text-sm text-white/70"
+                >
+                  <MessageCircle className="size-4" /> Reply…
+                </button>
+                <button
+                  onClick={() => {
+                    void navigator.clipboard.writeText(publicContentUrl(s.id));
+                    toast("Story link copied", "success");
+                  }}
+                  className="grid size-11 place-items-center rounded-full active:scale-90"
+                  aria-label="Share"
+                >
+                  <Link2 className="size-5" />
+                </button>
                 <button
                   onClick={() => {
                     const on = !liked.has(s.id);
@@ -344,6 +375,41 @@ export function StoryViewer() {
                 </button>
               </>
             )}
+          </div>
+        )}
+
+        {reply && s && author && (
+          <div className="absolute inset-x-0 bottom-0 z-30 bg-black/90 px-3 pt-3 pb-safe-4">
+            <form
+              className="flex items-center gap-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const text = replyText.trim();
+                if (!text) return;
+                const { data } = await supabase.rpc("get_or_create_dm", { p_user: author });
+                if (!data) return toast("Couldn't open chat", "error");
+                openConversation(data as string, null);
+                await sendMessage(data as string, `↩️ Story reply: ${text}\n${publicContentUrl(s.id)}`);
+                setReply(false);
+                setReplyText("");
+                toast("Reply sent", "success");
+                close();
+              }}
+            >
+              <input
+                autoFocus
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder="Reply to story…"
+                className="min-w-0 flex-1 rounded-full bg-white/10 px-4 py-2.5 text-sm outline-none placeholder:text-white/40"
+              />
+              <button type="button" onClick={() => setReply(false)} className="rounded-full px-3 py-2 text-sm text-white/60">
+                Cancel
+              </button>
+              <button type="submit" disabled={!replyText.trim()} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-40">
+                Send
+              </button>
+            </form>
           </div>
         )}
 

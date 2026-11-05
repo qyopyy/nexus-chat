@@ -5,7 +5,7 @@ import { Bookmark, ChevronLeft, ChevronRight, Flag, Heart, Link2, MessageCircle,
 import { useApp, toast } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
-import { addComment, ago, comments, fmt, gramGo, isSaved, mediaUrl, publicPostUrl, publicProfileUrl, removeComment, removePost, reportPost, setLike, setSave, type Comment, type Post } from "@/lib/gram";
+import { addComment, ago, comments, fmt, gramGo, isSaved, mediaUrl, publicContentUrl, publicProfileUrl, removeComment, removePost, reportPost, setLike, setSave, type Comment, type Post } from "@/lib/gram";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 
@@ -38,13 +38,13 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
   const meId = useApp((s) => s.userId);
   const author = useApp((s) => s.profiles[post.author_id]);
   const [liked, setLiked] = useState(!!post.liked);
-  const [saved, setSaved] = useState(false);
   const [likes, setLikes] = useState(post.like_count);
   const [i, setI] = useState(0);
   const [burst, setBurst] = useState(0);
   const [showComments, setShowComments] = useState(false);
   const [menu, setMenu] = useState(false);
   const [more, setMore] = useState(false);
+  const [saved, setSaved] = useState(!!post.saved);
   const lastTap = useRef(0);
   const m = post.media[i];
 
@@ -83,13 +83,13 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
             <div className="absolute top-9 right-0 z-20 w-52 rounded-xl bg-menu p-1 shadow-2xl" onMouseLeave={() => setMenu(false)}>
               <button
                 onClick={() => {
-                  void navigator.clipboard.writeText(publicPostUrl(post.id));
-                  toast("Post link copied", "success");
+                  void navigator.clipboard.writeText(publicContentUrl(post.id));
+                  toast("Share link copied (/n/…)", "success");
                   setMenu(false);
                 }}
                 className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-hover"
               >
-                <Link2 className="size-4" /> Copy post link
+                <Link2 className="size-4" /> Copy /n/ link
               </button>
               {author && (
                 <button
@@ -170,8 +170,8 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
           </button>
           <button
             onClick={() => {
-              void navigator.clipboard.writeText(publicPostUrl(post.id));
-              toast("Post link copied", "success");
+              void navigator.clipboard.writeText(publicContentUrl(post.id));
+              toast("Share link copied", "success");
             }}
             className="grid size-10 place-items-center rounded-full active:scale-90"
             aria-label="Share"

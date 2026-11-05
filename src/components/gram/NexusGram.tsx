@@ -5,7 +5,7 @@ import { ArrowLeft, Bookmark, Clapperboard, Compass, Heart, House, Megaphone, Pl
 import { useApp } from "@/store/app";
 import { myRank } from "@/lib/admin";
 import { cn } from "@/lib/utils";
-import { feed, fmt, getPost, gramBack, gramGo, gramHome, mediaUrl, savedFeed, useGram, type Post } from "@/lib/gram";
+import { feed, fmt, getPost, gramBack, gramGo, gramHome, mediaUrl, savedFeed, scheduleStoryRepair, useGram, type Post } from "@/lib/gram";
 import { openPulse } from "@/lib/pulse";
 import Avatar from "@/components/ui/Avatar";
 import PostCard from "./PostCard";
@@ -30,6 +30,10 @@ export default function NexusGram({ mobile }: { mobile?: boolean }) {
     const top = () => scroller.current?.scrollTo({ top: 0, behavior: "smooth" });
     window.addEventListener("nexus:scrolltop", top);
     return () => window.removeEventListener("nexus:scrolltop", top);
+  }, []);
+  // Instantly recompress live stories that were uploaded before the HQ pipeline
+  useEffect(() => {
+    scheduleStoryRepair();
   }, []);
 
   const nav: { id: string; label: string; icon: React.ReactNode; on: boolean; go: () => void }[] = [
@@ -227,6 +231,7 @@ function Empty({ following }: { following: boolean }) {
   );
 }
 
+/** a Short inside the home feed: tap to open the Shorts player */
 function ShortTeaser({ p }: { p: Post }) {
   const author = useApp((s) => s.profiles[p.author_id]);
   const m = p.media[0];

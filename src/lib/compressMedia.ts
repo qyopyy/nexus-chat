@@ -2,16 +2,19 @@
 
 /**
  * Client-side media compression for uploads.
- * Videos are re-encoded to a browser-friendly H.264/MP4 (or WebM) stream so
- * iPhone HEVC/.mov clips play everywhere. Frame rate is preserved (capped at 30).
+ * Re-encodes to browser-friendly H.264/MP4 (or WebM) so iPhone HEVC/.mov
+ * plays everywhere. Preserves source FPS up to 60 with a high-quality bitrate.
  */
 
 export type CompressProgress = (label: string, ratio?: number) => void;
 
 const VIDEO_MIMES = [
+  "video/mp4;codecs=avc1.640028,mp4a.40.2", // H.264 High + AAC
+  "video/mp4;codecs=avc1.4D401F,mp4a.40.2", // H.264 Main
   "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
   "video/mp4;codecs=avc1.42E01E",
   "video/mp4",
+  "video/webm;codecs=vp9,opus",
   "video/webm;codecs=vp8,opus",
   "video/webm;codecs=vp8",
   "video/webm",
@@ -26,12 +29,16 @@ function extFor(mime: string) {
   return mime.includes("mp4") ? "mp4" : "webm";
 }
 
-/** Bitrate scaled to resolution — keeps clarity without huge files */
-function videoBitrate(w: number, h: number) {
+/** High-quality bitrate by resolution (cleaner encodes, still smaller than phone HEVC) */
+function videoBitrate(w: number, h: number, fps: number) {
   const px = w * h;
-  if (px >= 1_800_000) return 5_500_000; // ~1080p+
-  if (px >= 900_000) return 3_500_000; // ~720p
-  return 2_000_000;
+  const fpsBoost = fps > 45 ? 1.35 : fps > 30 ? 1.15 : 1;
+  let base = 2_800_000;
+  if (px >= 2_500_000) base = 10_000_000; // ~1440p
+  else if (px >= 1_800_000) base = 8_000_000; // ~1080p
+  else if (px >= 900_000) base = 5_000_000; // ~720p
+  else base = 3_200_000;
+  return Math.round(base * fpsBoost);
 }
 
 function loadVideo(file: Blob): Promise<HTMLVideoElement> {
@@ -81,22 +88,32 @@ export type CompressedVideo = {
   skipped: boolean;
 };
 
+export type CompressVideoOpts = {
+  maxEdge?: number;
+  /** hard cap — default 60 */
+  maxFps?: number;
+  /** force re-encode even for small mp4/webm (used when repairing stories) */
+  force?: boolean;
+  onProgress?: CompressProgress;
+};
+
 /**
  * Re-encode video via canvas + MediaRecorder.
- * Keeps source FPS (capped 30), caps long edge, uses a quality bitrate.
- * Skips when the file is already small + already a web-friendly container.
+ * Keeps source FPS (capped at 60 by default), high-quality bitrate, even dimensions.
  */
-export async function compressVideo(file: File, opts: { maxEdge?: number; onProgress?: CompressProgress } = {}): Promise<CompressedVideo> {
-  const maxEdge = opts.maxEdge ?? 1080;
+export async function compressVideo(file: File | Blob, opts: CompressVideoOpts = {}): Promise<CompressedVideo> {
+  const maxEdge = opts.maxEdge ?? 1440;
+  const maxFps = opts.maxFps ?? 60;
   const onProgress = opts.onProgress;
   const mime = pickMime();
-  const lower = (file.name || "").toLowerCase();
+  const name = file instanceof File ? file.name : "clip.mp4";
+  const lower = name.toLowerCase();
   const type = (file.type || "").toLowerCase();
   const alreadyFriendly = /mp4|webm/.test(type) || /\.(mp4|webm)$/.test(lower);
-  const needsTranscode = /quicktime|hevc|hvc1|dolby|\.mov$|\.m4v$|\.mkv$|\.avi$/i.test(`${type} ${lower}`) || !alreadyFriendly;
+  const needsTranscode = opts.force || /quicktime|hevc|hvc1|dolby|\.mov$|\.m4v$|\.mkv$|\.avi$/i.test(`${type} ${lower}`) || !alreadyFriendly;
 
-  // Tiny already-web files: skip re-encode to save battery
-  if (!needsTranscode && file.size < 6 * 1024 * 1024 && alreadyFriendly) {
+  // Tiny already-web files: skip re-encode unless forced
+  if (!needsTranscode && !opts.force && file.size < 4 * 1024 * 1024 && alreadyFriendly) {
     onProgress?.("Video looks good — skipping compress…");
     const info = await probe(file);
     return { blob: file, ...info, mime: type || "video/mp4", ext: lower.endsWith("webm") ? "webm" : "mp4", skipped: true };
@@ -128,18 +145,26 @@ export async function compressVideo(file: File, opts: { maxEdge?: number; onProg
         const probeStream = anyV.captureStream();
         const settings = probeStream.getVideoTracks()[0]?.getSettings();
         probeStream.getTracks().forEach((t) => t.stop());
-        if (settings?.frameRate && settings.frameRate > 1) fps = Math.min(30, Math.round(settings.frameRate));
+        if (settings?.frameRate && settings.frameRate > 1) fps = Math.min(maxFps, Math.round(settings.frameRate));
       }
     } catch {
       /* keep 30 */
     }
+    // Prefer 60 when source is clearly high-frame (common on phones) even if getSettings lies
+    if (fps < 50 && maxFps >= 60) {
+      // Many phone clips are 60fps but browsers report 30 — bump when resolution is story/reel sized
+      if (Math.max(sw, sh) >= 1080 && file.size / Math.max(dur, 1) > 1.2e6) fps = Math.min(maxFps, 60);
+    }
+    fps = Math.max(24, Math.min(maxFps, fps));
 
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext("2d", { alpha: false })!;
+    const ctx = canvas.getContext("2d", { alpha: false, desynchronized: true })!;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     ctx.drawImage(v, 0, 0, w, h);
-    const poster = await new Promise<Blob | null>((res) => canvas.toBlob((b) => res(b), "image/jpeg", 0.84));
+    const poster = await new Promise<Blob | null>((res) => canvas.toBlob((b) => res(b), "image/jpeg", 0.92));
 
     const tracks: MediaStreamTrack[] = [...canvas.captureStream(fps).getVideoTracks()];
     try {
@@ -153,7 +178,6 @@ export async function compressVideo(file: File, opts: { maxEdge?: number; onProg
       silent.connect(ac.destination);
       for (const t of dest.stream.getAudioTracks()) tracks.push(t);
     } catch {
-      // Video-only if audio graph isn't allowed (some iOS / codec cases)
       if (ac) {
         void ac.close().catch(() => {});
         ac = null;
@@ -161,8 +185,8 @@ export async function compressVideo(file: File, opts: { maxEdge?: number; onProg
     }
     const stream = new MediaStream(tracks);
 
-    const bitrate = videoBitrate(w, h);
-    const mr = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bitrate, audioBitsPerSecond: 128_000 });
+    const bitrate = videoBitrate(w, h, fps);
+    const mr = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bitrate, audioBitsPerSecond: 192_000 });
     const chunks: Blob[] = [];
     mr.ondataavailable = (e) => {
       if (e.data.size) chunks.push(e.data);
@@ -183,7 +207,7 @@ export async function compressVideo(file: File, opts: { maxEdge?: number; onProg
       };
     });
 
-    mr.start(250);
+    mr.start(100); // smaller timeslice → smoother high-fps encodes
     try {
       await v.play();
     } catch {
@@ -205,12 +229,11 @@ export async function compressVideo(file: File, opts: { maxEdge?: number; onProg
         ctx.drawImage(v, 0, 0, w, h);
         if (dur > 0) {
           const r = Math.min(1, v.currentTime / dur);
-          if (r - last > 0.02) {
+          if (r - last > 0.015) {
             last = r;
             onProgress?.("Compressing video…", r);
           }
         }
-        // If play() was blocked, nudge time so encoding still progresses
         if (v.paused && dur > 0) {
           try {
             v.currentTime = Math.min(dur, v.currentTime + 1 / fps);
@@ -221,7 +244,7 @@ export async function compressVideo(file: File, opts: { maxEdge?: number; onProg
         requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
-      setTimeout(finish, Math.max(15_000, (dur || 30) * 1000 + 5_000));
+      setTimeout(finish, Math.max(20_000, (dur || 30) * 1000 + 8_000));
     });
 
     const blob = await recorded;
@@ -229,8 +252,8 @@ export async function compressVideo(file: File, opts: { maxEdge?: number; onProg
     ac = null;
     if (!blob.size) throw new Error("Compression produced an empty file");
 
-    // If compression made it larger, keep the smaller original when it's already web-friendly
-    if (alreadyFriendly && blob.size > file.size * 0.98) {
+    // Only keep original when it was already web-friendly AND smaller (and not a forced repair)
+    if (!opts.force && alreadyFriendly && blob.size > file.size * 1.05) {
       onProgress?.("Keeping original (already efficient)…");
       const info = await probe(file);
       return { blob: file, ...info, mime: type || "video/mp4", ext: lower.endsWith("webm") ? "webm" : "mp4", skipped: true };
@@ -276,12 +299,15 @@ async function probe(file: Blob): Promise<{ w: number; h: number; dur: number; f
       }
       let poster: Blob | null = null;
       if (v.videoWidth > 0) {
-        const k = Math.min(1, 720 / Math.max(w, h));
+        const k = Math.min(1, 900 / Math.max(w, h));
         const c = document.createElement("canvas");
         c.width = Math.max(1, Math.round(w * k));
         c.height = Math.max(1, Math.round(h * k));
-        c.getContext("2d")!.drawImage(v, 0, 0, c.width, c.height);
-        poster = await new Promise((res) => c.toBlob((b) => res(b), "image/jpeg", 0.82));
+        const g = c.getContext("2d")!;
+        g.imageSmoothingEnabled = true;
+        g.imageSmoothingQuality = "high";
+        g.drawImage(v, 0, 0, c.width, c.height);
+        poster = await new Promise((res) => c.toBlob((b) => res(b), "image/jpeg", 0.9));
       }
       return { w, h, dur: Math.round(dur * 10) / 10, fps: 30, poster };
     } finally {
@@ -293,14 +319,14 @@ async function probe(file: Blob): Promise<{ w: number; h: number; dur: number; f
   }
 }
 
-/** Downscale + JPEG compress photos (keeps PNG only when it stays smaller). */
-export async function compressImage(file: File, maxEdge = 1440, quality = 0.85): Promise<{ blob: Blob; w: number; h: number }> {
+/** Downscale + high-quality JPEG (keeps PNG only when it stays smaller). */
+export async function compressImage(file: File, maxEdge = 1600, quality = 0.9): Promise<{ blob: Blob; w: number; h: number }> {
   const bmp = await createImageBitmap(file).catch(() => null);
   if (!bmp) return { blob: file, w: 0, h: 0 };
   const k = Math.min(1, maxEdge / Math.max(bmp.width, bmp.height));
   const w = Math.round(bmp.width * k);
   const h = Math.round(bmp.height * k);
-  const smallEnough = k === 1 && file.size < 1.2e6 && /jpe?g|webp/i.test(file.type);
+  const smallEnough = k === 1 && file.size < 900_000 && /jpe?g|webp/i.test(file.type);
   if (smallEnough) {
     bmp.close();
     return { blob: file, w, h };
@@ -308,7 +334,10 @@ export async function compressImage(file: File, maxEdge = 1440, quality = 0.85):
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;
-  c.getContext("2d")!.drawImage(bmp, 0, 0, w, h);
+  const g = c.getContext("2d")!;
+  g.imageSmoothingEnabled = true;
+  g.imageSmoothingQuality = "high";
+  g.drawImage(bmp, 0, 0, w, h);
   bmp.close();
   const jpeg = await new Promise<Blob>((res) => c.toBlob((b) => res(b ?? file), "image/jpeg", quality));
   if (/png/i.test(file.type) && file.size < jpeg.size) return { blob: file, w, h };

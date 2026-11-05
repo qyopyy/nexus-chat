@@ -41,10 +41,10 @@ import PulseHub from "./pulse/PulseHub";
 import { useStudio, videosGo } from "@/store/studio";
 import { releaseByCode } from "@/lib/protect";
 import NexusGram from "./gram/NexusGram";
-import { openGram } from "@/lib/gram";
+import { getPost, openGram, useGram } from "@/lib/gram";
 import { openUntitled } from "@/lib/untitled";
 
-export default function AppShell({ userId, initialVideo, initialRelease, initialGram, initialGramPost, initialUntitled }: { userId: string; initialVideo?: string; initialRelease?: string; initialGram?: string; initialGramPost?: string; initialUntitled?: string }) {
+export default function AppShell({ userId, initialVideo, initialRelease, initialGram, initialGramPost, initialGramContent, initialUntitled }: { userId: string; initialVideo?: string; initialRelease?: string; initialGram?: string; initialGramPost?: string; initialGramContent?: string; initialUntitled?: string }) {
   const spaceId = useApp((s) => s.spaceId);
   const conversationId = useApp((s) => s.conversationId);
   const showMembers = useApp((s) => s.showMembers);
@@ -88,6 +88,25 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
     window.history.replaceState(null, "", "/");
     openGram({ view: "post", id: initialGramPost });
   }, [bootstrapped, initialGramPost]);
+  // /n/<id> or /gram/c/<id> opens a post or story
+  useEffect(() => {
+    if (!bootstrapped || !initialGramContent) return;
+    window.history.replaceState(null, "", "/");
+    void (async () => {
+      const post = await getPost(initialGramContent);
+      if (post) {
+        openGram(post.kind === "short" ? { view: "shorts", start: post.id } : { view: "post", id: post.id });
+        return;
+      }
+      const { data } = await supabase.from("gram_stories").select("id, author_id").eq("id", initialGramContent).gt("expires_at", new Date().toISOString()).maybeSingle();
+      if (data) {
+        openGram({ view: "home" });
+        useGram.setState({ story: { authors: [data.author_id as string], index: 0 } });
+        return;
+      }
+      toast("That NexusGram link wasn't found", "error");
+    })();
+  }, [bootstrapped, initialGramContent]);
   // /release/<code> opens that release in Studio (owner + reviewers)
   useEffect(() => {
     if (!bootstrapped || !initialRelease) return;

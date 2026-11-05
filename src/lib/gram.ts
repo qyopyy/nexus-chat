@@ -8,8 +8,18 @@ import { useApp, toast } from "@/store/app";
 import { loadProfiles } from "./data";
 import { compressImage, compressVideo } from "./compressMedia";
 
-export type Media = { path: string; type: "image" | "video"; w?: number; h?: number; dur?: number; poster?: string | null };
-export type Post = { id: string; author_id: string; kind: "post" | "short"; media: Media[]; caption: string; like_count: number; comment_count: number; view_count: number; created_at: string; liked?: boolean; following?: boolean };
+export type Media = {
+  path: string;
+  type: "image" | "video";
+  w?: number;
+  h?: number;
+  dur?: number;
+  poster?: string | null;
+  /** client compression generation — 2 = hq 60fps pipeline */
+  v?: number;
+  fps?: number;
+};
+export type Post = { id: string; author_id: string; kind: "post" | "short"; media: Media[]; caption: string; like_count: number; comment_count: number; view_count: number; created_at: string; liked?: boolean; following?: boolean; saved?: boolean };
 export type Story = { id: string; author_id: string; media: Media; caption: string; duration_h: 24 | 48; expires_at: string; like_count: number; view_count: number; created_at: string };
 export type TrayItem = { author_id: string; latest: string; count: number; unseen: number };
 export type GramProfile = {
@@ -61,8 +71,12 @@ export function openGram(r?: GramRoute) {
 
 export const mediaUrl = (path?: string | null) => (path ? (/^https?:/.test(path) ? path : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/gram/${path.split("/").map(encodeURIComponent).join("/")}`) : "");
 export const publicProfileUrl = (username: string) => `${typeof window !== "undefined" ? window.location.origin : "https://nexusproject.cc"}/u/${username}`;
-export const publicPostUrl = (id: string) => `${typeof window !== "undefined" ? window.location.origin : "https://nexusproject.cc"}/g/${id}`;
-export const appPostUrl = (id: string) => `${typeof window !== "undefined" ? window.location.origin : "https://nexusproject.cc"}/gram/p/${id}`;
+/** Public shareable content link — /n/<id> works for posts and stories */
+export const publicContentUrl = (id: string) => `${typeof window !== "undefined" ? window.location.origin : "https://nexusproject.cc"}/n/${id}`;
+export const appContentUrl = (id: string) => `${typeof window !== "undefined" ? window.location.origin : "https://nexusproject.cc"}/n/${id}`;
+/** Legacy aliases — /g and /gram/p still work */
+export const publicPostUrl = (id: string) => publicContentUrl(id);
+export const appPostUrl = (id: string) => `${typeof window !== "undefined" ? window.location.origin : "https://nexusproject.cc"}/gram/c/${id}`;
 export const fmt = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}K` : String(n));
 export const ago = (d: string) => {
   const s = (Date.now() - new Date(d).getTime()) / 1000;
@@ -146,7 +160,7 @@ export async function uploadMedia(file: File, onStep?: (s: string) => void): Pro
     };
     let compressed;
     try {
-      compressed = await compressVideo(file, { maxEdge: 1080, onProgress: progress });
+      compressed = await compressVideo(file, { maxEdge: 1440, maxFps: 60, onProgress: progress });
     } catch {
       onStep?.("Compression failed — uploading original…");
       const ext = (file.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
@@ -169,22 +183,26 @@ export async function uploadMedia(file: File, onStep?: (s: string) => void): Pro
       onStep?.("Uploading cover…");
       poster = await put(compressed.poster, "jpg", "image/jpeg").catch(() => null);
     }
-    return { path, type: "video", w: compressed.w, h: compressed.h, dur: Math.round(compressed.dur * 10) / 10, poster };
+    return {
+      path,
+      type: "video",
+      w: compressed.w,
+      h: compressed.h,
+      dur: Math.round(compressed.dur * 10) / 10,
+      poster,
+      v: compressed.skipped ? 1 : 2,
+      fps: compressed.fps,
+    };
   }
   if (kind !== "image") throw new Error("Pick a photo or a video");
-  if (/heic|heif/i.test(file.type) || /\.heic$/i.test(file.name) || /\.heif$/i.test(file.name)) {
-    // most browsers can't display HEIC in <img>; convert via canvas when possible
-    onStep?.("Compressing photo…");
-  } else {
-    onStep?.("Compressing photo…");
-  }
-  const { blob, w, h } = await compressImage(file);
+  onStep?.("Compressing photo…");
+  const { blob, w, h } = await compressImage(file, 1600, 0.9);
   if ((blob === file || blob.size === 0) && /heic|heif/i.test(file.type || file.name)) {
     throw new Error("This HEIC photo can't be used here — export it as JPEG first");
   }
   onStep?.("Uploading photo…");
   const path = await put(blob, blob.type === "image/png" ? "png" : "jpg", blob.type || "image/jpeg", (p) => onStep?.(`Uploading photo… ${Math.round(p * 100)}%`));
-  return { path, type: "image", w, h };
+  return { path, type: "image", w, h, v: 2 };
 }
 
 // ------------------------------------------------------------------ posts
@@ -344,7 +362,7 @@ export async function savedFeed(before?: string | null) {
     .map((r) => {
       const p = (r as { gram_posts: Post | Post[] | null }).gram_posts;
       const post = Array.isArray(p) ? p[0] : p;
-      return post ? ({ ...post, liked: false, saved: true } as Post & { saved?: boolean }) : null;
+      return post ? ({ ...post, liked: false, saved: true } as Post) : null;
     })
     .filter(Boolean) as Post[];
   void loadProfiles([...new Set(rows.map((r) => r.author_id))]);
@@ -405,4 +423,78 @@ export async function recentGramPosts(limit = 40) {
   const rows = (data ?? []) as Post[];
   void loadProfiles([...new Set(rows.map((r) => r.author_id))]);
   return rows;
+}
+
+/** Recompress every live video story for the current user (hq / 60fps pipeline). */
+export async function repairMyLiveStories(onStep?: (s: string) => void): Promise<{ fixed: number; skipped: number; failed: number }> {
+  const uid = me();
+  const { data, error } = await supabase.from("gram_stories").select("*").eq("author_id", uid).gt("expires_at", new Date().toISOString()).order("created_at");
+  if (error) {
+    toast(errorText(error), "error");
+    return { fixed: 0, skipped: 0, failed: 0 };
+  }
+  const stories = (data ?? []) as Story[];
+  let fixed = 0,
+    skipped = 0,
+    failed = 0;
+  for (const [idx, s] of stories.entries()) {
+    if (s.media.type !== "video") {
+      skipped++;
+      continue;
+    }
+    if ((s.media.v ?? 0) >= 2) {
+      skipped++;
+      continue;
+    }
+    onStep?.(`Upgrading story ${idx + 1}/${stories.length}…`);
+    try {
+      const url = mediaUrl(s.media.path);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Download failed (${res.status})`);
+      const raw = await res.blob();
+      const file = new File([raw], s.media.path.split("/").pop() || "story.mp4", { type: raw.type || "video/mp4" });
+      const compressed = await compressVideo(file, {
+        maxEdge: 1440,
+        maxFps: 60,
+        force: true,
+        onProgress: (label, ratio) => {
+          if (ratio == null) onStep?.(label);
+          else onStep?.(`${label} ${Math.round(ratio * 100)}%`);
+        },
+      });
+      const path = await put(compressed.blob, compressed.ext, compressed.mime || "video/mp4");
+      let poster = s.media.poster ?? null;
+      if (compressed.poster) poster = await put(compressed.poster, "jpg", "image/jpeg").catch(() => poster);
+      const media: Media = {
+        path,
+        type: "video",
+        w: compressed.w,
+        h: compressed.h,
+        dur: Math.round(compressed.dur * 10) / 10,
+        poster,
+        v: 2,
+        fps: compressed.fps,
+      };
+      const { error: upErr } = await supabase.from("gram_stories").update({ media }).eq("id", s.id).eq("author_id", uid);
+      if (upErr) throw new Error(errorText(upErr));
+      fixed++;
+    } catch (e) {
+      console.warn("story repair failed", s.id, e);
+      failed++;
+    }
+  }
+  if (fixed) {
+    bumpStoryTray();
+    toast(`Upgraded ${fixed} stor${fixed === 1 ? "y" : "ies"} to HD`, "success");
+  }
+  return { fixed, skipped, failed };
+}
+
+const REPAIR_KEY = "nexus:gram-story-repair-v2";
+/** Run once per browser session when opening NexusGram */
+export function scheduleStoryRepair() {
+  if (typeof window === "undefined") return;
+  if (sessionStorage.getItem(REPAIR_KEY)) return;
+  sessionStorage.setItem(REPAIR_KEY, "1");
+  void repairMyLiveStories().catch(() => {});
 }
