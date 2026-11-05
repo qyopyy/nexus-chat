@@ -22,16 +22,26 @@ import Pinball from "./Pinball";
 import BrickBash from "./BrickBash";
 import PongDuel from "./PongDuel";
 import MemoryFlip from "./MemoryFlip";
+import TicTacToe from "./TicTacToe";
+import Reaction from "./Reaction";
+import Whack from "./Whack";
+import Runner from "./Runner";
+import Mines from "./Mines";
 
 const GAMES: { id: GameId; name: string; tag: string; desc: string; bg: string; emoji: string; C: typeof Blocks | null; isNew?: boolean }[] = [
   { id: "streets", name: "Neon Streets", tag: "Open-city driving", desc: "Open-world island city. Jobs, cash, cops — and play live with friends using an invite code.", bg: "linear-gradient(135deg,#ff2bd6,#2b0b5c)", emoji: "🚗", C: null },
-  { id: "bay", name: "Sunset Bay", tag: "3D open world · 80s neon", desc: "Drive a neon coastal city in 3D — drifts, stunt jumps, hidden tapes and a ranked checkpoint rush.", bg: "linear-gradient(180deg,#2b1055,#ff4f9a 70%,#ffb347)", emoji: "🌴", C: null, isNew: true },
-  { id: "geo", name: "GeoGuess", tag: "Real places · multiplayer", desc: "Real photos from around the world — pin where you think you are.", bg: "linear-gradient(135deg,#00c96b,#0b2a5c)", emoji: "🌍", C: null, isNew: true },
-  { id: "flappy", name: "Flappy Happy", tag: "Arcade · multiplayer race", desc: "Worlds, birds, daily gifts, chests — and live pipe races with friends.", bg: "linear-gradient(135deg,#38bdf8,#4ade80)", emoji: "🐤", C: null, isNew: true },
-  { id: "pinball", name: "Sky Pinball", tag: "Arcade · flippers", desc: "Launch the ball, slap the bumpers, keep it alive with the flippers.", bg: "linear-gradient(135deg,#7c3aed,#0b1a5c)", emoji: "🌀", C: Pinball, isNew: true },
-  { id: "bricks", name: "Brick Bash", tag: "Arcade · breakout", desc: "Bounce the ball, clear the rainbow wall, grow your paddle.", bg: "linear-gradient(135deg,#ef4444,#7c2d12)", emoji: "🧱", C: BrickBash, isNew: true },
-  { id: "pong", name: "Pong Duel", tag: "Vs bot · first to 7", desc: "Classic paddle battle against a tracking bot.", bg: "linear-gradient(135deg,#38bdf8,#f472b6)", emoji: "🏓", C: PongDuel, isNew: true },
-  { id: "memory", name: "Memory Flip", tag: "Puzzle · match pairs", desc: "Flip cards, find pairs, finish in fewer moves for a higher score.", bg: "linear-gradient(135deg,#a855f7,#1e293b)", emoji: "🃏", C: MemoryFlip, isNew: true },
+  { id: "bay", name: "Sunset Bay", tag: "3D open world · 80s neon", desc: "Drive a neon coastal city in 3D — drifts, stunt jumps, hidden tapes and a ranked checkpoint rush.", bg: "linear-gradient(180deg,#2b1055,#ff4f9a 70%,#ffb347)", emoji: "🌴", C: null },
+  { id: "geo", name: "GeoGuess", tag: "Real places · multiplayer", desc: "Real photos from around the world — pin where you think you are.", bg: "linear-gradient(135deg,#00c96b,#0b2a5c)", emoji: "🌍", C: null },
+  { id: "flappy", name: "Flappy Happy", tag: "Arcade · multiplayer race", desc: "Worlds, birds, daily gifts, chests — and live pipe races with friends.", bg: "linear-gradient(135deg,#38bdf8,#4ade80)", emoji: "🐤", C: null },
+  { id: "runner", name: "Neon Runner", tag: "Endless · jump", desc: "Sprint the neon strip — tap to jump the blocks before they hit you.", bg: "linear-gradient(135deg,#ff2bd6,#0b0b2a)", emoji: "🏃", C: Runner, isNew: true },
+  { id: "whack", name: "Whack Dash", tag: "Arcade · 30s", desc: "Tap the moles before the clock runs out.", bg: "linear-gradient(135deg,#facc15,#5c0b3a)", emoji: "🐹", C: Whack, isNew: true },
+  { id: "reaction", name: "Reaction Rush", tag: "Reflex · 5 rounds", desc: "Wait for green, tap as fast as you can. Don't jump the gun.", bg: "linear-gradient(135deg,#22c55e,#0b2a1a)", emoji: "⚡", C: Reaction, isNew: true },
+  { id: "tictactoe", name: "Tic Tac Toe", tag: "Vs bot", desc: "Classic Xs and Os against a blocking bot. Streak your wins.", bg: "linear-gradient(135deg,#60a5fa,#1e3a5f)", emoji: "⭕", C: TicTacToe, isNew: true },
+  { id: "mines", name: "Mini Mines", tag: "Puzzle · 8×8", desc: "Clear the board without hitting a mine. Right-click to flag.", bg: "linear-gradient(135deg,#64748b,#0f172a)", emoji: "💣", C: Mines, isNew: true },
+  { id: "pinball", name: "Sky Pinball", tag: "Arcade · flippers", desc: "Launch the ball, slap the bumpers, keep it alive with the flippers.", bg: "linear-gradient(135deg,#7c3aed,#0b1a5c)", emoji: "🌀", C: Pinball },
+  { id: "bricks", name: "Brick Bash", tag: "Arcade · breakout", desc: "Bounce the ball, clear the rainbow wall, grow your paddle.", bg: "linear-gradient(135deg,#ef4444,#7c2d12)", emoji: "🧱", C: BrickBash },
+  { id: "pong", name: "Pong Duel", tag: "Vs bot · first to 7", desc: "Classic paddle battle against a tracking bot.", bg: "linear-gradient(135deg,#38bdf8,#f472b6)", emoji: "🏓", C: PongDuel },
+  { id: "memory", name: "Memory Flip", tag: "Puzzle · match pairs", desc: "Flip cards, find pairs, finish in fewer moves for a higher score.", bg: "linear-gradient(135deg,#a855f7,#1e293b)", emoji: "🃏", C: MemoryFlip },
   { id: "swing", name: "Web Swing", tag: "Action · swing the city", desc: "Hold to web the rooftops, release to fly. Flip for combos, dodge drones, never touch the street.", bg: "linear-gradient(135deg,#8b5cff,#ff2bd6)", emoji: "🕸️", C: WebSwing },
   { id: "four", name: "Four in a Row", tag: "Vs friends or bot", desc: "Connect four discs before your opponent does.", bg: "linear-gradient(135deg,#ff4d6d,#2b5cff)", emoji: "🔴", C: null },
   { id: "blocks", name: "Neon Blocks", tag: "Puzzle", desc: "Stack falling blocks and clear lines. It speeds up every 10 lines.", bg: "linear-gradient(135deg,#00e5ff,#0b1a5c)", emoji: "🧱", C: Blocks },
@@ -51,6 +61,9 @@ const WEB_GAMES: { name: string; url: string; tag: string; color: string }[] = [
   { name: "Slither.io", url: "https://slither.io", tag: "Multiplayer snake", color: "#00ff9c" },
   { name: "GeoFS", url: "https://www.geo-fs.com", tag: "Free flight simulator on real maps", color: "#00b0ff" },
   { name: "Lichess", url: "https://lichess.org", tag: "Free open-source chess", color: "#b5bac1" },
+  { name: "Wordle", url: "https://www.nytimes.com/games/wordle", tag: "Daily five-letter word puzzle", color: "#6aaa64" },
+  { name: "2048 Official", url: "https://play2048.co", tag: "The classic 2048 in the browser", color: "#edc22e" },
+  { name: "Cookie Clicker", url: "https://orteil.dashnet.org/cookieclicker/", tag: "Bake cookies forever", color: "#c4a484" },
 ];
 
 export default function GamesHub({ mobile }: { mobile?: boolean }) {

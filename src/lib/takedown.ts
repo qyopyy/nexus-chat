@@ -1,13 +1,13 @@
 "use client";
 
-// Copyright takedown notices for Spotify and Apple Music.
+// Copyright takedown notices for streaming DSPs (Spotify, Apple Music, Deezer, YouTube Claim, …).
 // Notices are sent by the rights holder themselves (their own email app, or the platform's official form),
-// so replies from Spotify / Apple go straight back to them. Nexus keeps a record of every notice.
+// so replies from the DSP go straight back to them. Nexus keeps a record of every notice.
 
 import { supabase, errorText } from "./supabase";
 import { useApp, toast } from "@/store/app";
 
-export type Platform = "spotify" | "apple";
+export type Platform = "spotify" | "apple" | "deezer" | "youtube" | "youtube_music" | "soundcloud" | "tidal" | "amazon" | "tiktok";
 export type TakedownStatus = "draft" | "sent" | "resolved" | "rejected";
 export type Contact = { name: string; company: string; role: "owner" | "agent"; email: string; phone: string; address: string; country: string };
 export type Takedown = {
@@ -33,26 +33,133 @@ export type Takedown = {
 };
 export type Draft = Omit<Takedown, "id" | "owner_id" | "status" | "note" | "sent_at" | "sent_via" | "created_at" | "updated_at">;
 
-export const PLATFORM = {
+export type PlatformInfo = {
+  name: string;
+  color: string;
+  /** short chip label */
+  short: string;
+  email: string;
+  form: string;
+  policy: string;
+  link: RegExp;
+  linkHint: string;
+  blurb: string;
+  /** primary CTA: email notice, official web form, or both */
+  prefer: "email" | "form";
+};
+
+export const PLATFORMS: Platform[] = ["spotify", "apple", "deezer", "youtube", "youtube_music", "soundcloud", "tidal", "amazon", "tiktok"];
+
+export const PLATFORM: Record<Platform, PlatformInfo> = {
   spotify: {
     name: "Spotify",
+    short: "Spotify",
     color: "#1DB954",
     email: "infringement-claim@spotify.com",
     form: "https://support.spotify.com/report-content/",
     policy: "https://www.spotify.com/legal/intellectual-property-policy/",
     link: /^https?:\/\/(open\.spotify\.com|spotify\.link)\//i,
     linkHint: "https://open.spotify.com/track/…",
+    blurb: "Email Spotify's copyright team or use their report form",
+    prefer: "email",
   },
   apple: {
     name: "Apple Music",
+    short: "Apple",
     color: "#FA243C",
     email: "copyrightnotices@apple.com",
     form: "https://www.apple.com/legal/intellectual-property/dispute-forms/music/music-dispute.html",
     policy: "https://www.apple.com/legal/contact/copyright-infringement.html",
     link: /^https?:\/\/(music\.apple\.com|itunes\.apple\.com|geo\.music\.apple\.com)\//i,
     linkHint: "https://music.apple.com/…/album/…",
+    blurb: "Apple Music dispute form or Apple's copyright agent",
+    prefer: "form",
   },
-} as const;
+  deezer: {
+    name: "Deezer",
+    short: "Deezer",
+    color: "#A238FF",
+    email: "copyright@deezer.com",
+    form: "https://www.deezer.com/legal/copyright",
+    policy: "https://www.deezer.com/legal/copyright",
+    link: /^https?:\/\/(www\.)?deezer\.com\//i,
+    linkHint: "https://www.deezer.com/track/…",
+    blurb: "Email Deezer copyright or open their copyright page",
+    prefer: "email",
+  },
+  youtube: {
+    name: "YouTube Claim / Content ID",
+    short: "YT Claim",
+    color: "#FF0000",
+    email: "copyright@youtube.com",
+    form: "https://www.youtube.com/copyright_complaint_form",
+    policy: "https://www.youtube.com/howyoutubeworks/policies/copyright/",
+    link: /^https?:\/\/((www|m)\.)?(youtube\.com|youtu\.be)\//i,
+    linkHint: "https://www.youtube.com/watch?v=…",
+    blurb: "YouTube copyright complaint form (Content ID / web claim)",
+    prefer: "form",
+  },
+  youtube_music: {
+    name: "YouTube Music",
+    short: "YT Music",
+    color: "#FF0033",
+    email: "copyright@youtube.com",
+    form: "https://www.youtube.com/copyright_complaint_form",
+    policy: "https://www.youtube.com/howyoutubeworks/policies/copyright/",
+    link: /^https?:\/\/(music\.youtube\.com|((www|m)\.)?youtube\.com\/)\S*/i,
+    linkHint: "https://music.youtube.com/watch?v=…",
+    blurb: "YouTube Music / Content ID via YouTube's copyright form",
+    prefer: "form",
+  },
+  soundcloud: {
+    name: "SoundCloud",
+    short: "SoundCloud",
+    color: "#FF5500",
+    email: "copyright@soundcloud.com",
+    form: "https://soundcloud.com/pages/copyright",
+    policy: "https://soundcloud.com/terms-of-use",
+    link: /^https?:\/\/(www\.)?soundcloud\.com\//i,
+    linkHint: "https://soundcloud.com/artist/track-…",
+    blurb: "Email SoundCloud copyright or use their copyright page",
+    prefer: "email",
+  },
+  tidal: {
+    name: "TIDAL",
+    short: "TIDAL",
+    color: "#000000",
+    email: "copyright@tidal.com",
+    form: "https://tidal.com/terms",
+    policy: "https://tidal.com/terms",
+    link: /^https?:\/\/(listen\.)?tidal\.com\//i,
+    linkHint: "https://tidal.com/browse/track/…",
+    blurb: "Email TIDAL's copyright agent with a DMCA-style notice",
+    prefer: "email",
+  },
+  amazon: {
+    name: "Amazon Music",
+    short: "Amazon",
+    color: "#FF9900",
+    email: "copyright@amazon.com",
+    form: "https://www.amazon.com/report/infringement",
+    policy: "https://www.amazon.com/gp/help/customer/display.html?nodeId=201270808",
+    link: /^https?:\/\/(music\.amazon\.[a-z.]+|www\.amazon\.[a-z.]+\/.*music)\//i,
+    linkHint: "https://music.amazon.com/albums/…",
+    blurb: "Amazon Music / Amazon infringement report form",
+    prefer: "form",
+  },
+  tiktok: {
+    name: "TikTok",
+    short: "TikTok",
+    color: "#111111",
+    email: "copyright@tiktok.com",
+    form: "https://www.tiktok.com/legal/report/Copyright",
+    policy: "https://www.tiktok.com/legal/page/us/copyright-policy/en",
+    link: /^https?:\/\/(www\.)?(tiktok\.com|vm\.tiktok\.com)\//i,
+    linkHint: "https://www.tiktok.com/@user/video/…",
+    blurb: "TikTok copyright report form (music & video)",
+    prefer: "form",
+  },
+};
 
 export const STATUS: Record<TakedownStatus, { label: string; color: string }> = {
   draft: { label: "Draft", color: "#80848e" },
@@ -86,10 +193,14 @@ export function splitLinks(text: string) {
 
 export function problems(d: Draft) {
   const p: string[] = [];
+  const info = PLATFORM[d.platform];
+  if (!info) p.push("Platform");
   if (!d.work_title.trim()) p.push("Song title");
   if (!d.infringing.length) p.push("At least one infringing link");
-  const bad = d.infringing.filter((u) => !PLATFORM[d.platform].link.test(u));
-  if (bad.length) p.push(`${bad.length} link(s) aren't ${PLATFORM[d.platform].name} links`);
+  if (info) {
+    const bad = d.infringing.filter((u) => !info.link.test(u));
+    if (bad.length) p.push(`${bad.length} link(s) aren't ${info.name} links`);
+  }
   if (d.description.trim().length < 10) p.push("Description of the infringement");
   if (!d.contact.name.trim()) p.push("Your full name");
   if (!/^\S+@\S+\.\S+$/.test(d.contact.email.trim())) p.push("Your email");
@@ -109,9 +220,14 @@ export function subject(d: Draft) {
 
 export function noticeText(d: Draft, date = new Date()) {
   const c = d.contact;
+  const P = PLATFORM[d.platform];
   const owner = c.role === "agent" ? `${c.company.trim()} (I am an authorized agent acting on its behalf)` : c.company.trim() || c.name.trim();
+  const shareLine =
+    d.platform === "spotify"
+      ? "   I acknowledge that my contact information and this notice may be provided to the person(s) who provided the allegedly infringing content, and may be retained for legal purposes."
+      : "   I understand that under 17 U.S.C. § 512(f) I may be liable for damages if I knowingly materially misrepresent that material or activity is infringing.";
   const lines: (string | null)[] = [
-    `To: ${PLATFORM[d.platform].name} — Copyright Agent`,
+    `To: ${P.name} — Copyright Agent`,
     `Date: ${date.toISOString().slice(0, 10)}`,
     "",
     "NOTICE OF COPYRIGHT INFRINGEMENT",
@@ -125,7 +241,7 @@ export function noticeText(d: Draft, date = new Date()) {
     d.original_url ? `   Authorized release: ${d.original_url.trim()}` : null,
     `   Rights owner: ${owner}`,
     "",
-    `2. INFRINGING MATERIAL ON ${PLATFORM[d.platform].name.toUpperCase()}`,
+    `2. INFRINGING MATERIAL ON ${P.name.toUpperCase()}`,
     ...d.infringing.map((u, i) => `   ${i + 1}. ${u}`),
     "",
     "3. DESCRIPTION",
@@ -141,9 +257,7 @@ export function noticeText(d: Draft, date = new Date()) {
     "5. STATEMENTS",
     "   I have a good faith belief that use of the material in the manner complained of is not authorized by the copyright owner, its agent, or the law.",
     "   The information in this notice is accurate, and under penalty of perjury, I am the owner, or an agent authorized to act on behalf of the owner, of an exclusive right that is allegedly infringed.",
-    d.platform === "spotify"
-      ? "   I acknowledge that my contact information and this notice may be provided to the person(s) who provided the allegedly infringing content, and may be retained for legal purposes."
-      : "   I understand that under 17 U.S.C. § 512(f) I may be liable for damages if I knowingly materially misrepresent that material or activity is infringing.",
+    shareLine,
     "",
     "Please remove or disable access to the infringing material listed above.",
     "",

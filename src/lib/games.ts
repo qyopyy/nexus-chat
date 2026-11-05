@@ -18,7 +18,12 @@ export type GameId =
   | "pinball"
   | "bricks"
   | "pong"
-  | "memory";
+  | "memory"
+  | "tictactoe"
+  | "reaction"
+  | "whack"
+  | "runner"
+  | "mines";
 export type Row = { user_id: string; best: number; at: string };
 
 export async function submitScore(game: GameId, score: number) {

@@ -8,6 +8,7 @@ import { NEED, gate } from "@/lib/premium";
 import { cn } from "@/lib/utils";
 import {
   PLATFORM,
+  PLATFORMS,
   STATUS,
   emptyContact,
   listTakedowns,
@@ -64,7 +65,7 @@ const blank = (platform: Platform): Draft => ({
   shield_work: null,
 });
 
-/** Copyright takedown notices for Spotify & Apple Music */
+/** Copyright takedown notices for Spotify, Apple Music, Deezer, YouTube Claim, and more DSPs */
 export default function TakedownTool({ initial }: { initial?: Platform }) {
   const [d, setD] = useState<Draft>(() => blank(initial ?? "spotify"));
   const [links, setLinks] = useState("");
@@ -198,18 +199,18 @@ export default function TakedownTool({ initial }: { initial?: Platform }) {
   return (
     <div className="space-y-4">
       {/* platform */}
-      <div className="grid grid-cols-2 gap-2">
-        {(["spotify", "apple"] as const).map((p) => (
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {PLATFORMS.map((p) => (
           <button
             key={p}
             onClick={() => set({ platform: p })}
             className={cn("rounded-2xl p-3 text-left ring-2 transition", d.platform === p ? "bg-side" : "bg-side/50 opacity-70 ring-transparent")}
             style={d.platform === p ? { boxShadow: `0 0 0 2px ${PLATFORM[p].color}` } : undefined}
           >
-            <div className="font-bold" style={{ color: PLATFORM[p].color }}>
-              {p === "spotify" ? "● Spotify" : " Apple Music"}
+            <div className="font-bold" style={{ color: PLATFORM[p].color === "#000000" || PLATFORM[p].color === "#111111" ? undefined : PLATFORM[p].color }}>
+              {PLATFORM[p].short}
             </div>
-            <div className="text-xs text-sub">{p === "spotify" ? "Email to Spotify's copyright team or their report form" : "Apple Music dispute form or Apple's copyright agent"}</div>
+            <div className="mt-0.5 line-clamp-2 text-[11px] text-sub">{PLATFORM[p].blurb}</div>
           </button>
         ))}
       </div>
@@ -333,22 +334,22 @@ export default function TakedownTool({ initial }: { initial?: Platform }) {
       <section className="space-y-3 rounded-2xl p-4 ring-2" style={{ boxShadow: `inset 0 0 0 2px ${P.color}55` }}>
         {issues.length > 0 && <p className="text-xs text-idle">Still needed: {issues.join(" · ")}</p>}
         <div className="flex flex-wrap gap-2">
-          {d.platform === "spotify" ? (
+          {P.prefer === "form" ? (
             <>
-              <button disabled={busy} onClick={() => void sendNexus()} className="flex items-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-black text-black disabled:opacity-50" style={{ background: P.color }}>
-                <Mail className="size-4" /> {busy ? "Working…" : "Send to Spotify"}
+              <button disabled={busy} onClick={() => void openForm()} className="flex items-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-black text-white disabled:opacity-50" style={{ background: P.color === "#000000" || P.color === "#111111" ? "#5865f2" : P.color }}>
+                <ExternalLink className="size-4" /> Open {P.short} form
               </button>
-              <button disabled={busy} onClick={() => void openForm()} className="flex items-center gap-1.5 rounded-full bg-hover px-4 py-2.5 text-sm font-semibold hover:bg-active">
-                <ExternalLink className="size-4" /> Use Spotify's form instead
+              <button disabled={busy} onClick={() => void sendNexus()} className="flex items-center gap-1.5 rounded-full bg-hover px-4 py-2.5 text-sm font-semibold hover:bg-active">
+                <Mail className="size-4" /> Email {P.short} agent
               </button>
             </>
           ) : (
             <>
-              <button disabled={busy} onClick={() => void openForm()} className="flex items-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-black text-white disabled:opacity-50" style={{ background: P.color }}>
-                <ExternalLink className="size-4" /> Open Apple Music dispute form
+              <button disabled={busy} onClick={() => void sendNexus()} className="flex items-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-black disabled:opacity-50" style={{ background: P.color, color: P.color === "#facc15" || P.color === "#FF9900" || P.color === "#1DB954" ? "#000" : "#fff" }}>
+                <Mail className="size-4" /> {busy ? "Working…" : `Send to ${P.short}`}
               </button>
-              <button disabled={busy} onClick={() => void sendNexus()} className="flex items-center gap-1.5 rounded-full bg-hover px-4 py-2.5 text-sm font-semibold hover:bg-active">
-                <Mail className="size-4" /> Send to Apple&apos;s copyright agent
+              <button disabled={busy} onClick={() => void openForm()} className="flex items-center gap-1.5 rounded-full bg-hover px-4 py-2.5 text-sm font-semibold hover:bg-active">
+                <ExternalLink className="size-4" /> Use {P.short}&apos;s form
               </button>
             </>
           )}
@@ -387,10 +388,10 @@ export default function TakedownTool({ initial }: { initial?: Platform }) {
         )}
         <p className="text-xs text-sub">
           {srv.configured
-            ? `Nexus sends the notice to ${P.email} for you${srv.test ? " (TEST MODE — goes to the test inbox)" : ""}. ${verified ? `Replies go to ${myEmail} ✓` : "First we email you a code to confirm the address replies should go to."} You get a copy, and Nexus Bot confirms in chat.`
-            : d.platform === "spotify"
-              ? `“Send to Spotify” opens your email app with the full notice addressed to ${P.email} — press Send there so Spotify replies to you.`
-              : "Apple handles Apple Music claims through its dispute form. Open it, then copy each field from the boxes below."}{" "}
+            ? `Nexus can email ${P.email} for you${srv.test ? " (TEST MODE — goes to the test inbox)" : ""}. ${verified ? `Replies go to ${myEmail} ✓` : "First we email you a code to confirm the address replies should go to."} Form-first DSPs (YouTube Claim, Apple, Amazon, TikTok) still recommend their official form.`
+            : P.prefer === "form"
+              ? `${P.name} prefers its official web form. Open it, then copy each field from the boxes below.`
+              : `“Send to ${P.short}” opens your email app with the full notice addressed to ${P.email} — press Send there so they reply to you.`}{" "}
           {srv.configured && (
             <button onClick={() => void sendEmail()} className="text-accent underline">
               Use my own email app instead
@@ -398,7 +399,7 @@ export default function TakedownTool({ initial }: { initial?: Platform }) {
           )}
         </p>
 
-        {(d.platform === "apple" || preview) && (
+        {(P.prefer === "form" || preview) && (
           <div className="grid gap-2 sm:grid-cols-2">
             {(d.platform === "apple"
               ? [
@@ -413,6 +414,8 @@ export default function TakedownTool({ initial }: { initial?: Platform }) {
               : [
                   ["Subject", subject(full)],
                   ["Notice", noticeText(full)],
+                  ["Infringing links", full.infringing.join("\n")],
+                  ["Your email", d.contact.email],
                 ]
             ).map(([k, v]) => (
               <button key={k} onClick={() => copy(v, `${k} copied`)} className={cn("rounded-xl bg-black/25 p-2.5 text-left hover:bg-black/40", (k === "Description" || k === "Notice") && "sm:col-span-2")}>
@@ -434,8 +437,8 @@ export default function TakedownTool({ initial }: { initial?: Platform }) {
             {history.map((t) => (
               <div key={t.id} className={cn("rounded-xl border border-line/70 p-3", editing === t.id && "ring-2 ring-accent")}>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-bold" style={{ color: PLATFORM[t.platform].color }}>
-                    {PLATFORM[t.platform].name}
+                  <span className="text-xs font-bold" style={{ color: PLATFORM[t.platform]?.color ?? "#80848e" }}>
+                    {PLATFORM[t.platform]?.name ?? t.platform}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold">
                     {t.work_title}
@@ -495,13 +498,14 @@ export default function TakedownTool({ initial }: { initial?: Platform }) {
       )}
       <p className="pb-4 text-center text-xs text-sub">
         Only file notices for music you own or are authorized to represent — false claims can carry legal liability. Policies:{" "}
-        <a href={PLATFORM.spotify.policy} target="_blank" rel="noreferrer" className="text-accent hover:underline">
-          Spotify
-        </a>{" "}
-        ·{" "}
-        <a href={PLATFORM.apple.policy} target="_blank" rel="noreferrer" className="text-accent hover:underline">
-          Apple
-        </a>
+        {PLATFORMS.map((p, i) => (
+          <span key={p}>
+            {i > 0 && " · "}
+            <a href={PLATFORM[p].policy} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+              {PLATFORM[p].short}
+            </a>
+          </span>
+        ))}
       </p>
     </div>
   );
