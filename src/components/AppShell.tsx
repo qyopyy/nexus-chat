@@ -20,6 +20,7 @@ import FriendsView from "./chat/FriendsView";
 import IncomingCall from "./call/IncomingCall";
 import InvitePopup from "./games/InvitePopup";
 import Toasts from "./ui/Toasts";
+import MessageBanner from "./ui/MessageBanner";
 import Modals from "./modals/Modals";
 import MobileShell from "./mobile/MobileShell";
 import EffectsLayer from "./effects/EffectsLayer";
@@ -243,6 +244,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
         <InvitePopup />
       <ProfileCard />
       <Modals />
+      <MessageBanner />
       <Toasts />
       <EffectsLayer />
     </div>

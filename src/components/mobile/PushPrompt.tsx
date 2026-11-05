@@ -35,9 +35,12 @@ export default function PushPrompt() {
         {state === "ios-install" ? (
           <div className="mt-0.5 text-[13px] text-sub">In Safari tap Share → Add to Home Screen, then open Nexus from the icon to turn on notifications.</div>
         ) : (
-          <button disabled={busy} onClick={() => void enablePush()} className="mt-1.5 rounded-full bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-white disabled:opacity-60">
-            {busy ? "Turning on…" : "Turn on notifications"}
-          </button>
+          <>
+            <div className="mt-0.5 text-[13px] text-sub">Get banners for new chats and a unread count on the app icon.</div>
+            <button disabled={busy} onClick={() => void enablePush()} className="mt-1.5 rounded-full bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-white disabled:opacity-60">
+              {busy ? "Turning on…" : "Turn on notifications"}
+            </button>
+          </>
         )}
       </div>
       <button onClick={dismiss} className="rounded-full p-1 text-sub active:bg-white/10" aria-label="Dismiss">

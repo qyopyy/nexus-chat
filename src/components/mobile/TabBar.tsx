@@ -22,13 +22,17 @@ export default function TabBar() {
   const channels = useApp((s) => s.channels);
   const friendships = useApp((s) => s.friendships);
 
-  const chatBadge = useMemo(() => chatList.reduce((n, c) => n + ((unread[c.id] ?? 0) > 0 ? 1 : 0), 0), [chatList, unread]);
-  const spaceDot = useMemo(() => Object.values(channels).some((list) => list.some((c) => (unread[c.id] ?? 0) > 0)), [channels, unread]);
+  // Telegram-style: show the total number of unread messages, not just how many chats
+  const chatBadge = useMemo(() => chatList.reduce((n, c) => n + (unread[c.id] ?? 0), 0), [chatList, unread]);
+  const spaceBadge = useMemo(
+    () => Object.values(channels).reduce((n, list) => n + list.reduce((m, c) => m + (unread[c.id] ?? 0), 0), 0),
+    [channels, unread],
+  );
   const pending = friendships.filter((f) => f.status === "pending" && f.addressee_id === me).length;
 
-  const items: { id: Tab; label: string; icon: React.ReactNode; badge?: number; dot?: boolean }[] = [
+  const items: { id: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: "chats", label: "Chats", icon: <MessageCircle className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} />, badge: chatBadge },
-    { id: "spaces", label: "Spaces", icon: <LayoutGrid className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} />, dot: spaceDot },
+    { id: "spaces", label: "Spaces", icon: <LayoutGrid className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} />, badge: spaceBadge },
     { id: "gram", label: "Gram", icon: <Aperture className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} /> },
     { id: "videos", label: "Videos", icon: <Clapperboard className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} /> },
     { id: "music", label: "Music", icon: <Headphones className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} /> },
@@ -70,7 +74,6 @@ export default function TabBar() {
                     {it.badge > 99 ? "99+" : it.badge}
                   </span>
                 )}
-                {it.dot && !it.badge && <span className="absolute -top-0.5 -right-1 size-2.5 rounded-full bg-dnd ring-2 ring-side" />}
               </span>
               <span className="max-w-full truncate text-[10px] font-semibold tracking-wide max-[360px]:text-[9px]">{it.label}</span>
             </button>
