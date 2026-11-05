@@ -1,7 +1,18 @@
 -- Nexus Radio — global shared queue, synced playback, live jam room
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('nexus-radio', 'nexus-radio', false, 104857600, array['audio/mpeg','audio/mp4','audio/wav','audio/x-wav','audio/flac','audio/aac','audio/ogg','audio/webm'])
+values (
+  'nexus-radio',
+  'nexus-radio',
+  false,
+  104857600,
+  array[
+    'audio/mpeg','audio/mp3','audio/mp4','audio/x-m4a','audio/m4a',
+    'audio/wav','audio/x-wav','audio/wave','audio/flac','audio/x-flac',
+    'audio/aac','audio/ogg','audio/opus','audio/webm','audio/basic',
+    'application/octet-stream'
+  ]
+)
 on conflict (id) do nothing;
 
 create table if not exists public.radio_tracks (
@@ -55,9 +66,18 @@ drop policy if exists radio_jam_all on public.radio_jam;
 create policy radio_jam_all on public.radio_jam for all to authenticated using (true) with check (true);
 
 drop policy if exists radio_storage_auth on storage.objects;
-create policy radio_storage_auth on storage.objects for all to authenticated
-  using (bucket_id = 'nexus-radio')
+drop policy if exists radio_storage_read on storage.objects;
+drop policy if exists radio_storage_insert on storage.objects;
+drop policy if exists radio_storage_update on storage.objects;
+drop policy if exists radio_storage_delete on storage.objects;
+create policy radio_storage_read on storage.objects for select to authenticated using (bucket_id = 'nexus-radio');
+create policy radio_storage_insert on storage.objects for insert to authenticated
   with check (bucket_id = 'nexus-radio' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy radio_storage_update on storage.objects for update to authenticated
+  using (bucket_id = 'nexus-radio' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'nexus-radio' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy radio_storage_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'nexus-radio' and (storage.foldername(name))[1] = auth.uid()::text);
 
 do $$
 begin

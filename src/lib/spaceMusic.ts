@@ -69,13 +69,19 @@ async function sync() {
     currentSrcKey = track.id;
     useSpaceMusic.setState({ loading: true });
     const url = await signedUrl(track.url);
-    if (!url || currentSrcKey !== track.id) return;
+    if (currentSrcKey !== track.id) return;
+    if (!url) {
+      useSpaceMusic.setState({ loading: false });
+      toast("Couldn't load this track", "error");
+      return;
+    }
     a.src = url;
     await new Promise<void>((r) => {
       const done = () => (a.removeEventListener("loadedmetadata", done), r());
       a.addEventListener("loadedmetadata", done);
       setTimeout(done, 4000);
     });
+    if (currentSrcKey !== track.id) return;
     useSpaceMusic.setState({ loading: false });
   }
   const want = expectedPosition(player);
