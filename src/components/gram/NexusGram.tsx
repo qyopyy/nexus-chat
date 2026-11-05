@@ -55,15 +55,15 @@ export default function NexusGram({ mobile }: { mobile?: boolean }) {
   }, []);
 
   const nav: { id: string; label: string; icon: React.ReactNode; on: boolean; go: () => void }[] = [
-    { id: "home", label: "Home", icon: <House className="size-5" />, on: r.view === "home", go: () => gramHome() },
-    { id: "shorts", label: "Shorts", icon: <Clapperboard className="size-5" />, on: r.view === "shorts", go: () => gramHome({ view: "shorts" }) },
-    { id: "explore", label: "Explore", icon: <Compass className="size-5" />, on: r.view === "explore", go: () => gramHome({ view: "explore" }) },
-    { id: "saved", label: "Saved", icon: <Bookmark className="size-5" />, on: r.view === "saved", go: () => gramHome({ view: "saved" }) },
-    { id: "insights", label: "Pulse", icon: <Sparkles className="size-5" />, on: r.view === "insights" || r.view === "memories", go: () => gramHome({ view: "insights" }) },
+    { id: "home", label: "Home", icon: <House className="size-[1.15rem]" />, on: r.view === "home", go: () => gramHome() },
+    { id: "shorts", label: "Shorts", icon: <Clapperboard className="size-[1.15rem]" />, on: r.view === "shorts", go: () => gramHome({ view: "shorts" }) },
+    { id: "explore", label: "Explore", icon: <Compass className="size-[1.15rem]" />, on: r.view === "explore", go: () => gramHome({ view: "explore" }) },
+    { id: "saved", label: "Saved", icon: <Bookmark className="size-[1.15rem]" />, on: r.view === "saved", go: () => gramHome({ view: "saved" }) },
+    { id: "insights", label: "Stats", icon: <Sparkles className="size-[1.15rem]" />, on: r.view === "insights" || r.view === "memories", go: () => gramHome({ view: "insights" }) },
     {
       id: "me",
-      label: "Profile",
-      icon: meId ? <Avatar userId={meId} size={22} plain /> : <UserRound className="size-5" />,
+      label: "You",
+      icon: meId ? <Avatar userId={meId} size={20} plain /> : <UserRound className="size-[1.15rem]" />,
       on: r.view === "profile" && r.username === me?.username,
       go: () => me && gramHome({ view: "profile", username: me.username }),
     },
@@ -71,44 +71,69 @@ export default function NexusGram({ mobile }: { mobile?: boolean }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#0b0b0f] text-[#f5f5f7]">
-      <header className={cn("z-20 flex shrink-0 items-center gap-2 border-b border-white/8 bg-[#0b0b0f]/92 px-3 backdrop-blur-xl", mobile ? "pt-safe h-auto min-h-14 py-2" : "h-14")}>
-        {stack.length > 1 ? (
-          <button onClick={gramBack} className="grid size-9 place-items-center rounded-full hover:bg-white/5" aria-label="Back">
-            <ArrowLeft className="size-5" />
+      <header className={cn("z-20 shrink-0 border-b border-white/8 bg-[#0b0b0f]/95 backdrop-blur-xl", mobile ? "pt-safe" : "")}>
+        <div className={cn("flex items-center gap-1.5", mobile ? "min-h-12 px-2.5 py-1.5" : "h-14 px-3")}>
+          {stack.length > 1 ? (
+            <button onClick={gramBack} className="tap-target grid place-items-center rounded-full hover:bg-white/5" aria-label="Back">
+              <ArrowLeft className="size-5" />
+            </button>
+          ) : null}
+          <button onClick={() => gramHome()} className="flex min-w-0 items-center gap-2">
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white text-sm font-black text-black">N</span>
+            <span className={cn("truncate text-[16px] font-semibold tracking-tight", mobile && "max-[380px]:hidden")}>NexusGram</span>
           </button>
-        ) : null}
-        <button onClick={() => gramHome()} className="flex items-center gap-2">
-          <span className="grid size-8 place-items-center rounded-lg bg-white text-sm font-black text-black">N</span>
-          <span className="text-[17px] font-semibold tracking-tight">NexusGram</span>
-        </button>
-        <nav className={cn("ml-auto flex items-center gap-0.5", mobile && "gap-0")}>
-          {nav.map((n) => (
-            <button key={n.id} onClick={n.go} className={cn("flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium", n.on ? "bg-white/10 text-white" : "text-white/45 hover:bg-white/5 hover:text-white")} aria-label={n.label} title={n.label}>
-              {n.icon}
-              {!mobile && <span className="hidden lg:inline">{n.label}</span>}
-            </button>
-          ))}
-          {staff && (
-            <button onClick={() => gramHome({ view: "admin" })} className={cn("ml-0.5 grid size-9 place-items-center rounded-lg", r.view === "admin" ? "bg-white/10 text-white" : "text-white/45 hover:bg-white/5")} aria-label="Admin" title="Admin">
-              <Shield className="size-5" />
-            </button>
+          {!mobile && (
+            <nav className="ml-2 flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
+              {nav.map((n) => (
+                <button key={n.id} onClick={n.go} className={cn("flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium", n.on ? "bg-white/10 text-white" : "text-white/45 hover:bg-white/5 hover:text-white")} aria-label={n.label} title={n.label}>
+                  {n.icon}
+                  <span className="hidden lg:inline">{n.label}</span>
+                </button>
+              ))}
+            </nav>
           )}
-          <button onClick={() => openPulse()} className="ml-0.5 grid size-9 place-items-center rounded-lg text-white/45 hover:bg-white/5 hover:text-white" aria-label="Pulse" title="Pulse">
-            <Megaphone className="size-5" />
-          </button>
-          <button onClick={() => useGram.setState({ create: r.view === "shorts" ? "short" : "post", remixOf: null })} className="ml-1 grid size-9 place-items-center rounded-lg bg-white text-black" aria-label="Create" title="Create">
-            <SquarePlus className="size-5" />
-          </button>
-        </nav>
+          <div className={cn("flex shrink-0 items-center gap-0.5", mobile ? "ml-auto" : "ml-auto")}>
+            {staff && (
+              <button onClick={() => gramHome({ view: "admin" })} className={cn("tap-target grid place-items-center rounded-lg", r.view === "admin" ? "bg-white/10 text-white" : "text-white/45 hover:bg-white/5")} aria-label="Admin" title="Admin">
+                <Shield className="size-5" />
+              </button>
+            )}
+            <button onClick={() => openPulse()} className="tap-target grid place-items-center rounded-lg text-white/45 hover:bg-white/5 hover:text-white" aria-label="Pulse feed" title="Pulse">
+              <Megaphone className="size-5" />
+            </button>
+            <button onClick={() => useGram.setState({ create: r.view === "shorts" ? "short" : "post", remixOf: null })} className="tap-target ml-0.5 grid place-items-center rounded-xl bg-white text-black" aria-label="Create" title="Create">
+              <SquarePlus className="size-5" />
+            </button>
+          </div>
+        </div>
+        {mobile && (
+          <nav className="no-scrollbar flex items-stretch gap-0.5 overflow-x-auto px-1.5 pb-1.5">
+            {nav.map((n) => (
+              <button
+                key={n.id}
+                onClick={n.go}
+                className={cn(
+                  "flex min-h-11 min-w-[3.1rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 text-[10px] font-semibold leading-none tracking-wide",
+                  n.on ? "bg-white/10 text-white" : "text-white/45 active:bg-white/5",
+                )}
+                aria-label={n.label}
+                title={n.label}
+              >
+                {n.icon}
+                <span>{n.label}</span>
+              </button>
+            ))}
+          </nav>
+        )}
       </header>
 
       {r.view === "shorts" ? (
         <div className="min-h-0 flex-1">
-          <Shorts key={r.start ?? "all"} start={r.start} />
+          <Shorts key={r.start ?? "all"} start={r.start} mobile={mobile} />
         </div>
       ) : (
         <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <div className="mx-auto w-full max-w-[640px]">
+          <div className="mx-auto w-full max-w-[640px] pb-6">
             {r.view === "home" && <Home />}
             {r.view === "explore" && <Explore tag={r.tag} mood={r.mood} />}
             {r.view === "saved" && <Saved />}
@@ -319,9 +344,9 @@ function Explore({ tag, mood }: { tag?: string; mood?: GramMood }) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search #hashtags"
-            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+            className="min-h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
           />
-          <button type="submit" className="rounded-xl bg-white px-4 text-sm font-semibold text-black">
+          <button type="submit" className="min-h-11 shrink-0 rounded-xl bg-white px-4 text-sm font-semibold text-black">
             Go
           </button>
         </form>

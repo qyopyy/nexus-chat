@@ -27,16 +27,16 @@ export default function TabBar() {
   const pending = friendships.filter((f) => f.status === "pending" && f.addressee_id === me).length;
 
   const items: { id: Tab; label: string; icon: React.ReactNode; badge?: number; dot?: boolean }[] = [
-    { id: "chats", label: "Chats", icon: <MessageCircle className="size-[25px]" strokeWidth={1.9} />, badge: chatBadge },
-    { id: "spaces", label: "Spaces", icon: <LayoutGrid className="size-[25px]" strokeWidth={1.9} />, dot: spaceDot },
-    { id: "gram", label: "Gram", icon: <Aperture className="size-[25px]" strokeWidth={1.9} /> },
-    { id: "videos", label: "Videos", icon: <Clapperboard className="size-[25px]" strokeWidth={1.9} /> },
-    { id: "music", label: "Music", icon: <Headphones className="size-[25px]" strokeWidth={1.9} /> },
+    { id: "chats", label: "Chats", icon: <MessageCircle className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} />, badge: chatBadge },
+    { id: "spaces", label: "Spaces", icon: <LayoutGrid className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} />, dot: spaceDot },
+    { id: "gram", label: "Gram", icon: <Aperture className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} /> },
+    { id: "videos", label: "Videos", icon: <Clapperboard className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} /> },
+    { id: "music", label: "Music", icon: <Headphones className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} /> },
     {
       id: "me",
       label: "You",
       badge: pending,
-      icon: me ? <Avatar userId={me} size={28} plain className={cn("rounded-full", tab === "me" && "ring-2 ring-accent")} /> : <UserRound className="size-[25px]" />,
+      icon: me ? <Avatar userId={me} size={26} plain className={cn("rounded-full", tab === "me" && "ring-2 ring-accent")} /> : <UserRound className="size-[22px]" />,
     },
   ];
 
@@ -60,10 +60,10 @@ export default function TabBar() {
                 } else haptic.select();
                 useApp.setState({ mobileTab: it.id, mobileSidebar: true });
               }}
-              className={cn("relative flex flex-1 flex-col items-center gap-0.5 pt-2 pb-1.5 transition active:scale-90", active ? "text-accent" : "text-sub")}
+              className={cn("relative flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-0.5 pt-1.5 pb-1 transition active:scale-90", active ? "text-accent" : "text-sub")}
               aria-label={it.label}
             >
-              <span className="relative">
+              <span className="relative grid size-7 place-items-center">
                 {it.icon}
                 {!!it.badge && (
                   <span className="absolute -top-1.5 -right-2.5 min-w-[18px] rounded-full bg-dnd px-1 text-center text-[11px] leading-[18px] font-bold text-white ring-2 ring-side">
@@ -72,7 +72,7 @@ export default function TabBar() {
                 )}
                 {it.dot && !it.badge && <span className="absolute -top-0.5 -right-1 size-2.5 rounded-full bg-dnd ring-2 ring-side" />}
               </span>
-              <span className="text-[10.5px] font-semibold tracking-wide">{it.label}</span>
+              <span className="max-w-full truncate text-[10px] font-semibold tracking-wide max-[360px]:text-[9px]">{it.label}</span>
             </button>
           );
         })}

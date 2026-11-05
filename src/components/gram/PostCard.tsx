@@ -76,7 +76,7 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
           <Author userId={post.author_id} sub={ago(post.created_at)} />
         </div>
         <div className="relative">
-          <button onClick={() => setMenu(!menu)} className="grid size-8 place-items-center rounded-full hover:bg-hover" aria-label="More">
+          <button onClick={() => setMenu(!menu)} className="tap-target grid place-items-center rounded-full hover:bg-hover" aria-label="More">
             <Ellipsis className="size-5" />
           </button>
           {menu && (
@@ -187,10 +187,10 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
 
       <div className="px-3 pt-2 pb-3">
         <div className="flex items-center gap-1">
-          <button onClick={() => toggle()} className="grid size-10 place-items-center rounded-full active:scale-90" aria-label={liked ? "Unlike" : "Like"}>
+          <button onClick={() => toggle()} className="tap-target grid place-items-center rounded-full active:scale-90" aria-label={liked ? "Unlike" : "Like"}>
             <Heart className={cn("size-7 transition", liked ? "fill-[#ff3040] text-[#ff3040]" : "")} />
           </button>
-          <button onClick={() => setShowComments(true)} className="grid size-10 place-items-center rounded-full active:scale-90" aria-label="Comments">
+          <button onClick={() => setShowComments(true)} className="tap-target grid place-items-center rounded-full active:scale-90" aria-label="Comments">
             <MessageCircle className="size-7 -scale-x-100" />
           </button>
           <button
@@ -198,7 +198,7 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
               void navigator.clipboard.writeText(publicContentUrl(post.id));
               toast("Share link copied", "success");
             }}
-            className="grid size-10 place-items-center rounded-full active:scale-90"
+            className="tap-target grid place-items-center rounded-full active:scale-90"
             aria-label="Share"
           >
             <Share2 className="size-6" />
@@ -211,7 +211,7 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
                 haptic.light();
               }
             }}
-            className="ml-auto grid size-10 place-items-center rounded-full active:scale-90"
+            className="tap-target ml-auto grid place-items-center rounded-full active:scale-90"
             aria-label={saved ? "Unsave" : "Save"}
           >
             <Bookmark className={cn("size-6", saved && "fill-current")} />

@@ -71,7 +71,7 @@ export default function Profile({ username }: { username: string }) {
         <div className="mt-4 flex flex-wrap gap-2">
           {mine ? (
             <>
-              <button onClick={() => setEdit(true)} className="flex-1 rounded-xl bg-hover py-2 text-sm font-bold hover:bg-active">
+              <button onClick={() => setEdit(true)} className="min-h-11 min-w-[42%] flex-1 rounded-xl bg-hover px-3 py-2.5 text-sm font-bold hover:bg-active">
                 Edit profile
               </button>
               <button
@@ -79,11 +79,11 @@ export default function Profile({ username }: { username: string }) {
                   void navigator.clipboard.writeText(publicProfileUrl(live?.username ?? p.username));
                   toast("Public page link copied", "success");
                 }}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-hover py-2 text-sm font-bold hover:bg-active"
+                className="flex min-h-11 min-w-[42%] flex-1 items-center justify-center gap-1.5 rounded-xl bg-hover px-3 py-2.5 text-sm font-bold hover:bg-active"
               >
-                <Copy className="size-4" /> Share profile
+                <Copy className="size-4 shrink-0" /> Share
               </button>
-              <button onClick={() => useGram.setState({ create: "story" })} className="rounded-xl bg-hover px-3 py-2 text-sm font-bold hover:bg-active">
+              <button onClick={() => useGram.setState({ create: "story", remixOf: null })} className="min-h-11 rounded-xl bg-hover px-3 py-2.5 text-sm font-bold hover:bg-active">
                 + Story
               </button>
             </>
@@ -94,12 +94,12 @@ export default function Profile({ username }: { username: string }) {
                   const on = !p.is_following;
                   if (await setFollow(p.id, on)) setP({ ...p, is_following: on, followers: p.followers + (on ? 1 : -1) });
                 }}
-                className={cn("flex-1 rounded-xl py-2 text-sm font-bold", p.is_following ? "bg-hover hover:bg-active" : "bg-accent text-white")}
+                className={cn("min-h-11 min-w-[42%] flex-1 rounded-xl px-3 py-2.5 text-sm font-bold", p.is_following ? "bg-hover hover:bg-active" : "bg-accent text-white")}
               >
                 {p.is_following ? "Following" : p.follows_you ? "Follow back" : "Follow"}
               </button>
-              <button onClick={() => void openDM(p.id).then(() => useApp.setState({ hub: null, mobileTab: "chats" }))} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-hover py-2 text-sm font-bold hover:bg-active">
-                <MessageCircle className="size-4" /> Message
+              <button onClick={() => void openDM(p.id).then(() => useApp.setState({ hub: null, mobileTab: "chats" }))} className="flex min-h-11 min-w-[42%] flex-1 items-center justify-center gap-1.5 rounded-xl bg-hover px-3 py-2.5 text-sm font-bold hover:bg-active">
+                <MessageCircle className="size-4 shrink-0" /> Message
               </button>
               {fr?.status !== "accepted" && (
                 <button
@@ -108,10 +108,10 @@ export default function Profile({ username }: { username: string }) {
                     const err = await sendFriendRequest(p.username);
                     if (err) toast(err, "error");
                   }}
-                  className="flex items-center gap-1.5 rounded-xl bg-hover px-3 py-2 text-sm font-bold hover:bg-active disabled:opacity-50"
+                  className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-hover px-3 py-2.5 text-sm font-bold hover:bg-active disabled:opacity-50 sm:w-auto"
                   title="Add friend"
                 >
-                  <UserPlus className="size-4" /> {fr?.status === "pending" ? "Requested" : "Add friend"}
+                  <UserPlus className="size-4 shrink-0" /> {fr?.status === "pending" ? "Requested" : "Add friend"}
                 </button>
               )}
             </>

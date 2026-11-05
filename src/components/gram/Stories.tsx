@@ -42,7 +42,7 @@ export function StoryTray() {
   return (
     <div className="flex gap-3 overflow-x-auto px-3 py-3 [scrollbar-width:none]">
       <div className="flex w-[74px] shrink-0 flex-col items-center gap-1">
-        <Ring userId={meId} size={62} unseen={!!mine?.unseen} add={!mine} onClick={() => (mine ? useGram.setState({ story: { authors, index: 0 } }) : useGram.setState({ create: "story" }))} />
+        <Ring userId={meId} size={62} unseen={!!mine?.unseen} add={!mine} onClick={() => (mine ? useGram.setState({ story: { authors, index: 0 } }) : useGram.setState({ create: "story", remixOf: null }))} />
         <span className="w-full truncate text-center text-xs">{mine ? "Your story" : "Add story"}</span>
       </div>
       {others.map((t) => (
@@ -262,7 +262,7 @@ export function StoryViewer() {
         )}
 
         {/* top bar */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 to-transparent px-3 pt-safe-3 pb-10">
+        <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 to-transparent px-2.5 pt-safe-3 pb-10 sm:px-3">
           <div className="flex gap-1">
             {(stories ?? []).map((x, k) => (
               <div key={x.id} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/35">
@@ -270,43 +270,43 @@ export function StoryViewer() {
               </div>
             ))}
           </div>
-          <div className="pointer-events-auto mt-3 flex items-center gap-2 text-white">
+          <div className="pointer-events-auto mt-2.5 flex items-center gap-1.5 text-white sm:mt-3 sm:gap-2">
             <button
               onClick={() => {
                 close();
                 if (p) gramGo({ view: "profile", username: p.username });
               }}
-              className="flex items-center gap-2"
+              className="flex min-w-0 items-center gap-2"
             >
-              <Avatar userId={author} size={34} plain />
-              <span className="text-sm font-bold">{p?.username}</span>
+              <Avatar userId={author} size={34} plain className="shrink-0" />
+              <span className="truncate text-sm font-bold">{p?.username}</span>
             </button>
-            {s && <span className="text-xs text-white/70">{ago(s.created_at)} · {s.duration_h}h</span>}
+            {s && <span className="hidden shrink-0 text-xs text-white/70 min-[380px]:inline">{ago(s.created_at)} · {s.duration_h}h</span>}
             {s?.media.type === "video" && (
               <button
                 onClick={() => setMuted((m) => !m)}
-                className="ml-auto grid size-9 place-items-center rounded-full hover:bg-white/10"
+                className="tap-target ml-auto grid place-items-center rounded-full hover:bg-white/10"
                 aria-label={muted ? "Unmute" : "Mute"}
               >
                 {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
               </button>
             )}
-            <button onClick={close} className={cn("grid size-9 place-items-center rounded-full hover:bg-white/10", s?.media.type !== "video" && "ml-auto")} aria-label="Close">
+            <button onClick={close} className={cn("tap-target grid place-items-center rounded-full hover:bg-white/10", s?.media.type !== "video" && "ml-auto")} aria-label="Close">
               <X className="size-6" />
             </button>
           </div>
         </div>
 
-        {s?.caption && <div className="pointer-events-none absolute inset-x-0 bottom-24 px-6 text-center text-lg font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.8)]">{s.caption}</div>}
+        {s?.caption && <div className="pointer-events-none absolute inset-x-0 bottom-28 px-4 text-center text-base font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.8)] sm:bottom-24 sm:px-6 sm:text-lg">{s.caption}</div>}
 
         {/* bottom actions */}
         {s && (
-          <div className="absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/70 to-transparent px-4 pt-10 pb-safe-4 text-white">
+          <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-black/70 to-transparent px-3 pt-10 pb-safe-4 text-white sm:gap-3 sm:px-4">
             {mine ? (
               <>
                 <button
                   onClick={async () => setViewers(await storyViewers(s.id))}
-                  className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-sm font-semibold"
+                  className="flex min-h-11 items-center gap-1.5 rounded-full bg-white/15 px-3 py-2 text-sm font-semibold"
                 >
                   <Eye className="size-4" /> {s.view_count} · <Heart className="size-4" /> {s.like_count}
                 </button>
@@ -315,7 +315,7 @@ export function StoryViewer() {
                     void navigator.clipboard.writeText(publicContentUrl(s.id));
                     toast("Story link copied (/n/…)", "success");
                   }}
-                  className="grid size-10 place-items-center rounded-full bg-white/15"
+                  className="tap-target grid place-items-center rounded-full bg-white/15"
                   aria-label="Copy share link"
                 >
                   <Link2 className="size-5" />
@@ -332,7 +332,7 @@ export function StoryViewer() {
                       }
                     }
                   }}
-                  className="ml-auto grid size-10 place-items-center rounded-full bg-white/15"
+                  className="tap-target ml-auto grid place-items-center rounded-full bg-white/15"
                   aria-label="Delete story"
                 >
                   <Trash2 className="size-5" />
@@ -342,16 +342,16 @@ export function StoryViewer() {
               <>
                 <button
                   onClick={() => setReply(true)}
-                  className="flex flex-1 items-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-left text-sm text-white/70"
+                  className="flex min-h-11 flex-1 items-center gap-2 rounded-full bg-white/10 px-3 py-2.5 text-left text-sm text-white/70 sm:px-4"
                 >
-                  <MessageCircle className="size-4" /> Reply…
+                  <MessageCircle className="size-4 shrink-0" /> Reply…
                 </button>
                 <button
                   onClick={() => {
                     void navigator.clipboard.writeText(publicContentUrl(s.id));
                     toast("Story link copied", "success");
                   }}
-                  className="grid size-11 place-items-center rounded-full active:scale-90"
+                  className="tap-target grid place-items-center rounded-full active:scale-90"
                   aria-label="Share"
                 >
                   <Link2 className="size-5" />
@@ -368,10 +368,10 @@ export function StoryViewer() {
                     });
                     void likeStory(s.id, on);
                   }}
-                  className="grid size-11 place-items-center rounded-full active:scale-90"
+                  className="tap-target grid place-items-center rounded-full active:scale-90"
                   aria-label="Like story"
                 >
-                  <Heart className={cn("size-8", liked.has(s.id) && "fill-[#ff3040] text-[#ff3040]")} />
+                  <Heart className={cn("size-7 sm:size-8", liked.has(s.id) && "fill-[#ff3040] text-[#ff3040]")} />
                 </button>
               </>
             )}
@@ -401,12 +401,12 @@ export function StoryViewer() {
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
                 placeholder="Reply to story…"
-                className="min-w-0 flex-1 rounded-full bg-white/10 px-4 py-2.5 text-sm outline-none placeholder:text-white/40"
+                className="min-h-11 min-w-0 flex-1 rounded-full bg-white/10 px-4 py-2.5 text-sm outline-none placeholder:text-white/40"
               />
-              <button type="button" onClick={() => setReply(false)} className="rounded-full px-3 py-2 text-sm text-white/60">
+              <button type="button" onClick={() => setReply(false)} className="min-h-11 shrink-0 rounded-full px-3 py-2 text-sm text-white/60">
                 Cancel
               </button>
-              <button type="submit" disabled={!replyText.trim()} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-40">
+              <button type="submit" disabled={!replyText.trim()} className="min-h-11 shrink-0 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-40">
                 Send
               </button>
             </form>

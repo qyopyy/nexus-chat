@@ -5,12 +5,12 @@ import { Heart, MessageCircle, Plus, Share2, Volume2, VolumeX } from "lucide-rea
 import { useApp, toast } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
-import { countView, feed, fmt, getPost, gramGo, mediaUrl, publicProfileUrl, setFollow, setLike, useGram, type Post } from "@/lib/gram";
+import { countView, feed, fmt, getPost, gramGo, mediaUrl, publicContentUrl, setFollow, setLike, useGram, type Post } from "@/lib/gram";
 import Avatar from "@/components/ui/Avatar";
 import { CommentsSheet } from "./PostCard";
 
 /** vertical, full-height, swipe-up Shorts feed (autoplay the one on screen) */
-export default function Shorts({ start }: { start?: string }) {
+export default function Shorts({ start, mobile }: { start?: string; mobile?: boolean }) {
   const [rows, setRows] = useState<Post[] | null>(null);
   const [muted, setMuted] = useState(true);
   const [done, setDone] = useState(false);
@@ -57,13 +57,13 @@ export default function Shorts({ start }: { start?: string }) {
       }}
     >
       {rows.map((p) => (
-        <Short key={p.id} p={p} muted={muted} setMuted={setMuted} />
+        <Short key={p.id} p={p} muted={muted} setMuted={setMuted} mobile={mobile} />
       ))}
     </div>
   );
 }
 
-function Short({ p, muted, setMuted }: { p: Post; muted: boolean; setMuted: (m: boolean) => void }) {
+function Short({ p, muted, setMuted, mobile }: { p: Post; muted: boolean; setMuted: (m: boolean) => void; mobile?: boolean }) {
   const meId = useApp((s) => s.userId);
   const author = useApp((s) => s.profiles[p.author_id]);
   const ref = useRef<HTMLDivElement>(null);
@@ -158,24 +158,24 @@ function Short({ p, muted, setMuted }: { p: Post; muted: boolean; setMuted: (m: 
       )}
 
       {/* bottom info */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent px-4 pt-20 pb-5 text-white sm:mx-auto sm:max-w-[480px]">
-        <div className="pointer-events-auto flex items-center gap-2">
-          <button onClick={() => author && gramGo({ view: "profile", username: author.username })} className="flex items-center gap-2">
-            <Avatar userId={p.author_id} size={36} plain className="rounded-full ring-2 ring-white" />
-            <span className="font-bold">@{author?.username}</span>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent px-3 pt-20 pb-safe-4 text-white sm:mx-auto sm:max-w-[480px] sm:px-4 sm:pb-5">
+        <div className="pointer-events-auto flex max-w-[calc(100%-4.5rem)] items-center gap-2">
+          <button onClick={() => author && gramGo({ view: "profile", username: author.username })} className="flex min-w-0 items-center gap-2">
+            <Avatar userId={p.author_id} size={36} plain className="shrink-0 rounded-full ring-2 ring-white" />
+            <span className="truncate font-bold">@{author?.username}</span>
           </button>
           {p.author_id !== meId && !following && (
             <button
               onClick={async () => {
                 if (await setFollow(p.author_id, true)) setFollowing(true);
               }}
-              className="rounded-lg border border-white/80 px-3 py-0.5 text-sm font-bold"
+              className="shrink-0 rounded-lg border border-white/80 px-3 py-1.5 text-sm font-bold"
             >
               Follow
             </button>
           )}
         </div>
-        {p.caption && <p className="mt-2 line-clamp-3 text-sm">{p.caption}</p>}
+        {p.caption && <p className="mt-2 line-clamp-3 max-w-[calc(100%-4.5rem)] text-sm">{p.caption}</p>}
       </div>
       {m.type === "video" && (
         <div className="absolute inset-x-0 bottom-0 h-0.5 bg-white/20 sm:mx-auto sm:max-w-[480px]">
@@ -184,30 +184,30 @@ function Short({ p, muted, setMuted }: { p: Post; muted: boolean; setMuted: (m: 
       )}
 
       {/* right rail */}
-      <div className="absolute right-3 bottom-24 flex flex-col items-center gap-5 text-white sm:right-[calc(50%-290px)]">
+      <div className={cn("absolute right-2 bottom-28 flex flex-col items-center gap-3.5 text-white sm:right-[calc(50%-290px)] sm:bottom-24 sm:gap-5", mobile && "bottom-24")}>
         <ActionBtn label={fmt(likes)} onClick={() => like()}>
-          <Heart className={cn("size-8 drop-shadow", liked && "fill-[#ff3040] text-[#ff3040]")} />
+          <Heart className={cn("size-7 drop-shadow sm:size-8", liked && "fill-[#ff3040] text-[#ff3040]")} />
         </ActionBtn>
         <ActionBtn label={fmt(p.comment_count)} onClick={() => setComments(true)}>
-          <MessageCircle className="size-8 -scale-x-100 drop-shadow" />
+          <MessageCircle className="size-7 -scale-x-100 drop-shadow sm:size-8" />
         </ActionBtn>
         <ActionBtn
           label="Share"
           onClick={() => {
             if (!author) return;
-            void navigator.clipboard.writeText(publicProfileUrl(author.username));
-            toast("Link copied", "success");
+            void navigator.clipboard.writeText(publicContentUrl(p.id));
+            toast("Share link copied", "success");
           }}
         >
-          <Share2 className="size-7 drop-shadow" />
+          <Share2 className="size-6 drop-shadow sm:size-7" />
         </ActionBtn>
         {m.type === "video" && (
           <ActionBtn label={muted ? "Sound" : "Mute"} onClick={() => setMuted(!muted)}>
-            {muted ? <VolumeX className="size-7 drop-shadow" /> : <Volume2 className="size-7 drop-shadow" />}
+            {muted ? <VolumeX className="size-6 drop-shadow sm:size-7" /> : <Volume2 className="size-6 drop-shadow sm:size-7" />}
           </ActionBtn>
         )}
-        <ActionBtn label="Create" onClick={() => useGram.setState({ create: "short" })}>
-          <Plus className="size-7 rounded-lg bg-white/20 p-0.5" />
+        <ActionBtn label="Create" onClick={() => useGram.setState({ create: "short", remixOf: null })}>
+          <Plus className="size-6 rounded-lg bg-white/20 p-0.5 sm:size-7" />
         </ActionBtn>
       </div>
       {comments && <CommentsSheet post={p} onClose={() => setComments(false)} />}
@@ -217,9 +217,9 @@ function Short({ p, muted, setMuted }: { p: Post; muted: boolean; setMuted: (m: 
 
 function ActionBtn({ children, label, onClick }: { children: React.ReactNode; label: string; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="flex flex-col items-center gap-0.5 active:scale-90">
+    <button onClick={onClick} className="tap-target flex flex-col items-center justify-center gap-0.5 active:scale-90">
       {children}
-      <span className="text-xs font-semibold drop-shadow">{label}</span>
+      <span className="max-w-[3.5rem] truncate text-[11px] font-semibold drop-shadow sm:text-xs">{label}</span>
     </button>
   );
 }

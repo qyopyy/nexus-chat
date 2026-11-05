@@ -95,9 +95,9 @@ export default function Create() {
           </button>
         </div>
         {!remixOf && (
-          <div className="flex gap-1 p-3">
+          <div className="flex gap-1 p-2.5 sm:p-3">
             {TABS.map(([k, l]) => (
-              <button key={k} onClick={() => (setKind(k), setFiles([]))} className={cn("flex-1 rounded-full py-2 text-sm font-bold", kind === k ? "bg-white text-black" : "bg-hover")}>
+              <button key={k} onClick={() => (setKind(k), setFiles([]))} className={cn("min-h-11 flex-1 rounded-full px-2 py-2 text-sm font-bold", kind === k ? "bg-white text-black" : "bg-hover")}>
                 {l}
               </button>
             ))}
@@ -190,7 +190,7 @@ export default function Create() {
           )}
         </div>
         <div className="p-4 pb-safe-4">
-          <button disabled={!!busy || !files.length} onClick={() => void share()} className="w-full rounded-full bg-gradient-to-r from-[#ff2bd6] via-[#8b5cff] to-[#00c2ff] py-3 font-black text-white disabled:opacity-50">
+          <button disabled={!!busy || !files.length} onClick={() => void share()} className="min-h-12 w-full rounded-full bg-gradient-to-r from-[#ff2bd6] via-[#8b5cff] to-[#00c2ff] py-3 font-black text-white disabled:opacity-50">
             {busy ?? (kind === "story" ? `Share story · ${hours}h` : kind === "short" ? "Post Short" : remixOf ? "Share remix" : "Share")}
           </button>
         </div>
