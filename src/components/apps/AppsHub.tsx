@@ -241,8 +241,8 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
               </div>
               <div className="p-4">
                 <div className="text-lg font-bold">Bump</div>
-                <div className="text-xs font-semibold text-sub">Nearby · family · invite link</div>
-                <p className="mt-1 text-sm text-sub">Share approximate location on iPhone to find friends and family, then send a circle invite link.</p>
+                <div className="text-xs font-semibold text-sub">Nearby · profiles · follows · messages</div>
+                <p className="mt-1 text-sm text-sub">Find people nearby, follow bump profiles with bio + Spotify track, pin an Apple Maps place, and message.</p>
               </div>
             </button>
             {TOOLS.map((item) => (
