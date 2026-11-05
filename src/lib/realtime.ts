@@ -45,12 +45,14 @@ function spaceIdForConv(convId: string): string | null {
   return null;
 }
 
-function notify(m: Message) {
+function notify(m: Message, opts?: { skipSound?: boolean }) {
   const s = useApp.getState();
   const sid = spaceIdForConv(m.conversation_id);
   if (s.myStatus === "dnd" || isMuted(m.conversation_id) || (sid && isSpaceMuted(sid))) return;
-  sfx.message();
-  haptic.light();
+  if (!opts?.skipSound) {
+    sfx.message();
+    haptic.light();
+  }
   const author = s.profiles[m.author_id]?.display_name ?? "New message";
   const body = m.content || m.attachment_name || "Sent an attachment";
   const chatOpen = useChat.getState().conversationId === m.conversation_id;
@@ -96,11 +98,21 @@ async function onMessageInsert(m: Message) {
   }
 
   if (m.author_id !== me) {
+    // Always play the incoming SFX (respects mute / DND / sound prefs inside notify & sfx)
+    const sid = spaceIdForConv(m.conversation_id);
+    const silenced =
+      useApp.getState().myStatus === "dnd" ||
+      isMuted(m.conversation_id) ||
+      (!!sid && isSpaceMuted(sid));
+    if (!silenced) {
+      sfx.message();
+      haptic.light();
+    }
     if (isOpen && !document.hidden) {
       void markRead(m.conversation_id);
     } else {
       useApp.setState((s) => ({ unread: { ...s.unread, [m.conversation_id]: (s.unread[m.conversation_id] ?? 0) + 1 } }));
-      notify(m);
+      notify(m, { skipSound: true }); // sound already played above
       void syncAppBadge();
     }
   }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useApp, toast } from "@/store/app";
 import { supabase } from "@/lib/supabase";
-import { setPref, usePrefs, PREF_DEFAULTS, fmtClock, fmtDateShort } from "@/lib/prefs";
+import { setPref, usePrefs, PREF_DEFAULTS, fmtClock, fmtDateShort, type MessageSoundId } from "@/lib/prefs";
 import { connectSpotify, disconnectSpotify, setShare, startSpotifySync, syncNow, refreshLink, useSpotifyUser } from "@/lib/spotifyUser";
 import { NowPlayingCard, SpotifyMark, liveNow } from "@/components/profile/NowPlaying";
 import { download } from "@/lib/dsp";
@@ -14,6 +14,7 @@ import { H, Label, Select, Slider, Toggle } from "./settingsUi";
 import { claimUsername, loadAliases, makePrimary, releaseUsername, useAliases } from "@/lib/usernames";
 import { NexusCredit, copyNexusAppLink } from "@/components/ui/NexusCredit";
 import { shareAppUrl } from "@/lib/seo";
+import { MESSAGE_SOUNDS, sfx } from "@/lib/sounds";
 
 const Hr = () => <div className="my-8 h-px bg-line" />;
 
@@ -329,11 +330,76 @@ export function ChatPrefsBlock() {
         onChange={(v) => setPref("welcomeSplash", v)}
       />
       <Toggle label="Call ringtone" checked={p.ringtone} onChange={(v) => setPref("ringtone", v)} />
+      <Toggle
+        label="Incoming message sound"
+        hint="Plays when someone messages you (respects Do Not Disturb and mute)."
+        checked={p.messageSounds !== false}
+        onChange={(v) => setPref("messageSounds", v)}
+      />
+      <Toggle
+        label="Send sound"
+        hint="Short click when you send a message."
+        checked={p.sendSounds !== false}
+        onChange={(v) => setPref("sendSounds", v)}
+      />
+      <div className={cn("space-y-4 py-2", !p.uiSounds && "pointer-events-none opacity-50")}>
+        <SoundPicker
+          label="Incoming sound"
+          value={p.messageSound ?? "ping"}
+          onChange={(v) => {
+            setPref("messageSound", v);
+            sfx.previewMessage(v, "recv");
+          }}
+          onPreview={() => sfx.previewMessage(p.messageSound ?? "ping", "recv")}
+        />
+        <SoundPicker
+          label="Send sound"
+          value={p.sendSound ?? "pop"}
+          onChange={(v) => {
+            setPref("sendSound", v);
+            sfx.previewMessage(v, "send");
+          }}
+          onPreview={() => sfx.previewMessage(p.sendSound ?? "pop", "send")}
+        />
+      </div>
       <div className={cn("py-3", !p.uiSounds && p.buttonFx === false && p.welcomeSplash === false && "pointer-events-none opacity-50")}>
         <div className="mb-1 font-medium">Sound volume</div>
         <Slider value={p.uiVolume} max={1} onChange={(v) => setPref("uiVolume", v)} format={(v) => `${Math.round(v * 100)}%`} />
       </div>
     </>
+  );
+}
+
+function SoundPicker({
+  label,
+  value,
+  onChange,
+  onPreview,
+}: {
+  label: string;
+  value: MessageSoundId;
+  onChange: (v: MessageSoundId) => void;
+  onPreview: () => void;
+}) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="text-sm text-sub">{label}</div>
+        <button
+          type="button"
+          onClick={onPreview}
+          className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-semibold hover:bg-white/10"
+        >
+          Preview
+        </button>
+      </div>
+      <Select
+        value={value}
+        onChange={(v) => onChange(v as MessageSoundId)}
+        options={MESSAGE_SOUNDS.map((s) => ({ value: s.id, label: s.label }))}
+      />
+      <p className="mt-1 text-[11px] text-faint">{MESSAGE_SOUNDS.find((s) => s.id === value)?.hint}</p>
+    </div>
   );
 }
 
