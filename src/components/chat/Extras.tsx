@@ -7,17 +7,21 @@ import { useChat } from "@/store/chat";
 import { supabase } from "@/lib/supabase";
 import { loadProfiles } from "@/lib/data";
 import { answerFive, sendFive } from "@/lib/realtime";
-import { capsuleInfo, createCapsule, loadJam, saveJam, startJam, type CapsuleInfo, type Jam } from "@/lib/chatExtras";
+import { BUMP_PIN_RE, capsuleInfo, createCapsule, loadJam, saveJam, startJam, type CapsuleInfo, type Jam } from "@/lib/chatExtras";
 import { INSTS, NOTES, hit, pctx, type Pattern } from "@/components/music/Tools2";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import { PollCreator } from "./Poll";
+import { bumpShareLocationWithFriend } from "@/lib/bump";
+import { MapPin } from "lucide-react";
 
 // ------------------------------------------------------------------ composer "+" menu
 export function ComposerPlus({ conversationId }: { conversationId: string }) {
   const me = useApp((s) => s.userId);
+  const friendships = useApp((s) => s.friendships);
+  const profiles = useApp((s) => s.profiles);
   const [open, setOpen] = useState(false);
-  const [sheet, setSheet] = useState<null | "poll" | "capsule">(null);
+  const [sheet, setSheet] = useState<null | "poll" | "capsule" | "bump">(null);
   const item = (emoji: string, label: string, sub: string, fn: () => void) => (
     <button
       onClick={() => {
@@ -33,6 +37,9 @@ export function ComposerPlus({ conversationId }: { conversationId: string }) {
       </span>
     </button>
   );
+  const friends = friendships
+    .filter((f) => f.status === "accepted" && me && (f.requester_id === me || f.addressee_id === me))
+    .map((f) => (f.requester_id === me ? f.addressee_id : f.requester_id));
   return (
     <div className="relative">
       <button onClick={() => setOpen(!open)} className={cn("-ml-2 grid size-11 shrink-0 place-items-center rounded-full transition active:scale-90", open ? "rotate-45 text-accent" : "text-sub hover:text-txt")} title="More">
@@ -45,6 +52,7 @@ export function ComposerPlus({ conversationId }: { conversationId: string }) {
             {item("🥁", "Start a Jam", "A beat everyone in this chat edits live", () => void startJam(conversationId))}
             {item("📊", "Poll", "Ask the chat a question", () => setSheet("poll"))}
             {item("⏳", "Time capsule", "A message that stays sealed until a date", () => setSheet("capsule"))}
+            {item("📍", "Share Bump location", "Send your live pin to a friend in Nexus", () => setSheet("bump"))}
             {item("✋", "High five", "Ask for a high five — they tap back, you both celebrate", () => {
               if (me && sendFive(me)) toast("✋ High five sent — waiting for them to slap back", "info");
             })}
@@ -53,7 +61,102 @@ export function ComposerPlus({ conversationId }: { conversationId: string }) {
       )}
       {sheet === "poll" && <PollCreator conversationId={conversationId} onClose={() => setSheet(null)} />}
       {sheet === "capsule" && <CapsuleCreator conversationId={conversationId} onClose={() => setSheet(null)} />}
+      {sheet === "bump" && (
+        <BumpSharePicker
+          friends={friends}
+          profiles={profiles}
+          onClose={() => setSheet(null)}
+          onPick={(id) => {
+            setSheet(null);
+            void bumpShareLocationWithFriend(id);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function BumpSharePicker({
+  friends,
+  profiles,
+  onClose,
+  onPick,
+}: {
+  friends: string[];
+  profiles: Record<string, { display_name?: string; username?: string } | undefined>;
+  onClose: () => void;
+  onPick: (id: string) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/60 sm:items-center" onClick={onClose}>
+      <div className="w-full max-w-md rounded-t-3xl bg-chat p-5 pb-safe-4 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center gap-2">
+          <MapPin className="size-5 text-accent" />
+          <span className="flex-1 text-lg font-bold">Share Bump with a friend</span>
+          <button onClick={onClose} className="grid size-8 place-items-center rounded-full hover:bg-hover" aria-label="Close">
+            <X className="size-5" />
+          </button>
+        </div>
+        <p className="mb-3 text-sm text-sub">Sends your live location pin into a Nexus DM and lights you up on Bump for friends.</p>
+        {!friends.length ? (
+          <p className="py-8 text-center text-sm text-sub">Add a friend first, then share your Bump pin with them.</p>
+        ) : (
+          <ul className="max-h-[50vh] space-y-1 overflow-y-auto">
+            {friends.map((id) => (
+              <li key={id}>
+                <button
+                  type="button"
+                  onClick={() => onPick(id)}
+                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-hover"
+                >
+                  <Avatar userId={id} size={36} />
+                  <span className="min-w-0 flex-1 truncate font-semibold">{profiles[id]?.display_name || profiles[id]?.username || "Friend"}</span>
+                  <MapPin className="size-4 text-accent" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Rich card for a Bump location pin shared in chat */
+export function BumpPinCard({ text, mine }: { text: string; mine: boolean }) {
+  const m = text.match(BUMP_PIN_RE);
+  if (!m) return null;
+  const lat = Number(m[1]);
+  const lng = Number(m[2]);
+  const maps = `https://maps.apple.com/?ll=${lat},${lng}&q=Bump`;
+  const note = text
+    .split("\n")
+    .filter((l) => l && !l.startsWith("http") && !l.includes("[bump-pin:") && !l.startsWith("📍"))
+    .join(" ")
+    .trim();
+  return (
+    <a
+      href={maps}
+      target="_blank"
+      rel="noreferrer noopener"
+      className={cn(
+        "mt-1 block w-[min(280px,78vw)] overflow-hidden rounded-2xl ring-1 transition hover:brightness-110",
+        mine ? "bg-white/10 ring-white/15" : "bg-side ring-line",
+      )}
+    >
+      <div
+        className="relative h-28 bg-[radial-gradient(circle_at_50%_40%,#22c55e55,transparent_55%),linear-gradient(160deg,#0f172a,#14532d)]"
+      >
+        <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[70%] text-3xl drop-shadow">📍</span>
+        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 text-[11px] font-semibold text-white/90">
+          {lat.toFixed(4)}, {lng.toFixed(4)}
+        </span>
+      </div>
+      <div className="px-3 py-2">
+        <div className="text-sm font-bold">Bump location</div>
+        <div className="text-[11px] text-sub">{note || "Tap to open in Maps"}</div>
+      </div>
+    </a>
   );
 }
 

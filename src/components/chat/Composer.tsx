@@ -1,8 +1,8 @@
 "use client";
 
 import { usePrefs } from "@/lib/prefs";
-import { useEffect, useRef, useState } from "react";
-import { FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Timer, Trash2, Wand2, X } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Bold, FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Strikethrough, Timer, Trash2, Type, Underline, Wand2, X } from "lucide-react";
 import { useApp, conversationTitle, toast } from "@/store/app";
 import { useChat } from "@/store/chat";
 import { TTL_OPTIONS, runBotCommand, sendMessage, setTtl } from "@/lib/data";
@@ -16,6 +16,7 @@ import Sheet from "@/components/ui/Sheet";
 import { isVoice } from "./MessageBubble";
 import { ComposerPlus } from "./Extras";
 import AttachEditor, { shouldOpenAttachEditor } from "./AttachEditor";
+import { FORMAT_COLORS, VANISH_PICKS, wrapSelection } from "@/lib/chatFormat";
 
 const MAX_FREE = 25 * 1024 * 1024;
 const MAX_PREMIUM = 100 * 1024 * 1024;
@@ -65,6 +66,9 @@ export default function Composer({
   const [recSecs, setRecSecs] = useState(0);
   const [levels, setLevels] = useState<number[]>(() => Array(28).fill(0.1));
   const [editOpen, setEditOpen] = useState(false);
+  const [fmtOpen, setFmtOpen] = useState(false);
+  const [colorOpen, setColorOpen] = useState(false);
+  const [vanishOpen, setVanishOpen] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const rec = useRef<Rec | null>(null);
@@ -136,6 +140,20 @@ export default function Composer({
     setFile(null);
     setEditOpen(false);
     setEffect(null);
+  }
+
+  /** Wrap the current textarea selection (or insert empty markers) with Discord-style markup */
+  function applyWrap(open: string, close: string) {
+    const el = area.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    const next = wrapSelection(text, start, end, open, close);
+    setText(next.text);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(next.cursor, next.cursor);
+    });
+    haptic.select();
   }
 
   // ---------------------------------------------------------------- voice messages
@@ -331,61 +349,94 @@ export default function Composer({
             </button>
             <ComposerPlus conversationId={conversationId} />
 
-            <div className="flex min-h-11 min-w-0 flex-1 items-end rounded-[22px] border border-white/[.06] bg-side pr-1">
-              <textarea
-                ref={area}
-                rows={1}
-                value={text}
-                placeholder={placeholder}
-                enterKeyHint="send"
-                onChange={(e) => {
-                  setText(e.target.value);
-                  if (me && e.target.value) sendTyping(me);
-                  if (me) sendLive(me, e.target.value);
-                }}
-                onPaste={(e) => {
-                  const f = e.clipboardData.files?.[0];
-                  if (f) {
-                    e.preventDefault();
-                    setFile(f);
-                  }
-                }}
-                onKeyDown={(e) => {
-                  const touchDevice = window.matchMedia("(hover: none)").matches;
-                  const enterSends = usePrefs.getState().enterToSend;
-                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !touchDevice && (enterSends || e.ctrlKey || e.metaKey)) {
-                    e.preventDefault();
-                    submit();
-                  } else if (e.key === "ArrowUp" && !text) {
-                    const mine = [...useChat.getState().messages].reverse().find((m) => m.author_id === me && !m.deleted_at && !m.attachment_url && !m.pending);
-                    if (mine) {
+            <div className="flex min-h-11 min-w-0 flex-1 flex-col rounded-[22px] border border-white/[.06] bg-side">
+              {fmtOpen && (
+                <div className="flex flex-wrap items-center gap-0.5 border-b border-white/[.06] px-1.5 pt-1.5 pb-1">
+                  <FmtBtn title="Bold ** **" onClick={() => applyWrap("**", "**")}><Bold className="size-3.5" /></FmtBtn>
+                  <FmtBtn title="Underline __ __" onClick={() => applyWrap("__", "__")}><Underline className="size-3.5" /></FmtBtn>
+                  <FmtBtn title="Strike ~~ ~~" onClick={() => applyWrap("~~", "~~")}><Strikethrough className="size-3.5" /></FmtBtn>
+                  <FmtBtn title="Spoiler || ||" onClick={() => applyWrap("||", "||")}><span className="text-[11px] font-black">||</span></FmtBtn>
+                  <FmtBtn title="Color" onClick={() => setColorOpen(true)}><span className="size-3.5 rounded-full bg-[linear-gradient(135deg,#ef4444,#3b82f6,#22c55e)]" /></FmtBtn>
+                  <FmtBtn title="Rainbow" onClick={() => applyWrap("{rainbow}", "{/rainbow}")}><span className="text-[11px] font-black">🌈</span></FmtBtn>
+                  <FmtBtn title="Vanish selection" onClick={() => setVanishOpen(true)}><Timer className="size-3.5" /></FmtBtn>
+                  <FmtBtn title="Ghost" onClick={() => applyWrap("{ghost}", "{/ghost}")}><span className="text-[11px] opacity-50">Aa</span></FmtBtn>
+                </div>
+              )}
+              <div className="flex min-h-11 min-w-0 flex-1 items-end pr-1">
+                <textarea
+                  ref={area}
+                  rows={1}
+                  value={text}
+                  placeholder={placeholder}
+                  enterKeyHint="send"
+                  onChange={(e) => {
+                    setText(e.target.value);
+                    if (me && e.target.value) sendTyping(me);
+                    if (me) sendLive(me, e.target.value);
+                  }}
+                  onPaste={(e) => {
+                    const f = e.clipboardData.files?.[0];
+                    if (f) {
                       e.preventDefault();
-                      useChat.setState({ editingId: mine.id });
+                      setFile(f);
                     }
-                  } else if (e.key === "Escape") {
-                    useChat.setState({ replyTo: null });
-                  }
-                }}
-                className="max-h-[180px] min-h-11 min-w-0 flex-1 resize-none bg-transparent py-[11px] pl-4 text-[16px] leading-[22px] outline-none placeholder:text-sub md:text-[15px]"
-              />
-              <button onClick={() => setEffects(true)} className={cn("grid size-9 shrink-0 place-items-center rounded-full transition active:scale-90 mb-1", effect ? "text-accent" : "text-sub hover:text-accent")} title="Send with effect">
-                <Sparkles className="size-5" />
-              </button>
-              <div className="relative mb-1 hidden sm:block">
-                <button onClick={() => setPicker((v) => !v)} className="grid size-9 place-items-center rounded-full text-sub hover:text-idle" title="Emoji">
-                  <Smile className="size-5" />
+                  }}
+                  onKeyDown={(e) => {
+                    const touchDevice = window.matchMedia("(hover: none)").matches;
+                    const enterSends = usePrefs.getState().enterToSend;
+                    const mod = e.metaKey || e.ctrlKey;
+                    if (mod && e.key.toLowerCase() === "b") {
+                      e.preventDefault();
+                      applyWrap("**", "**");
+                      return;
+                    }
+                    if (mod && e.key.toLowerCase() === "u") {
+                      e.preventDefault();
+                      applyWrap("__", "__");
+                      return;
+                    }
+                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !touchDevice && (enterSends || e.ctrlKey || e.metaKey)) {
+                      e.preventDefault();
+                      submit();
+                    } else if (e.key === "ArrowUp" && !text) {
+                      const mine = [...useChat.getState().messages].reverse().find((m) => m.author_id === me && !m.deleted_at && !m.attachment_url && !m.pending);
+                      if (mine) {
+                        e.preventDefault();
+                        useChat.setState({ editingId: mine.id });
+                      }
+                    } else if (e.key === "Escape") {
+                      useChat.setState({ replyTo: null });
+                    }
+                  }}
+                  className="max-h-[180px] min-h-11 min-w-0 flex-1 resize-none bg-transparent py-[11px] pl-4 text-[16px] leading-[22px] outline-none placeholder:text-sub md:text-[15px]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setFmtOpen((v) => !v)}
+                  className={cn("mb-1 grid size-9 shrink-0 place-items-center rounded-full transition active:scale-90", fmtOpen ? "text-accent" : "text-sub hover:text-accent")}
+                  title="Text formatting"
+                >
+                  <Type className="size-5" />
                 </button>
-                {picker && (
-                  <EmojiPicker
-                    keepOpen
-                    className="absolute right-0 bottom-12"
-                    onClose={() => setPicker(false)}
-                    onPick={(e) => {
-                      setText((t) => t + e);
-                      area.current?.focus();
-                    }}
-                  />
-                )}
+                <button onClick={() => setEffects(true)} className={cn("grid size-9 shrink-0 place-items-center rounded-full transition active:scale-90 mb-1", effect ? "text-accent" : "text-sub hover:text-accent")} title="Send with effect">
+                  <Sparkles className="size-5" />
+                </button>
+                <div className="relative mb-1 hidden sm:block">
+                  <button onClick={() => setPicker((v) => !v)} className="grid size-9 place-items-center rounded-full text-sub hover:text-idle" title="Emoji">
+                    <Smile className="size-5" />
+                  </button>
+                  {picker && (
+                    <EmojiPicker
+                      keepOpen
+                      className="absolute right-0 bottom-12"
+                      onClose={() => setPicker(false)}
+                      onPick={(e) => {
+                        setText((t) => t + e);
+                        area.current?.focus();
+                      }}
+                    />
+                  )}
+                </div>
               </div>
             </div>
 
@@ -448,7 +499,9 @@ export default function Composer({
       </div>
 
       <Sheet open={timerOpen} onClose={() => setTimerOpen(false)} title="Disappearing messages">
-        <p className="mb-3 text-sm text-sub">All messages in this chat — old and new, from everyone — are deleted for good once they&apos;re older than the time you pick. Files and voice messages too.</p>
+        <p className="mb-3 text-sm text-sub">
+          Chat-wide timer deletes every message older than the time you pick. Tip: select text in the composer → Format → Vanish to hide just that span after a countdown.
+        </p>
         <div className="space-y-1.5 pb-1">
           {TTL_OPTIONS.map((o) => (
             <button
@@ -465,6 +518,48 @@ export default function Composer({
               <Timer className={cn("size-5", o.secs ? "text-accent" : "text-sub")} />
               <span className="flex-1 font-semibold">{o.label}</span>
               {(ttl ?? null) === o.secs && <span className="text-xs font-bold text-accent">ON</span>}
+            </button>
+          ))}
+        </div>
+      </Sheet>
+
+      <Sheet open={colorOpen} onClose={() => setColorOpen(false)} title="Colored text">
+        <p className="mb-3 text-sm text-sub">Select text first (or place the cursor), then pick a color.</p>
+        <div className="grid grid-cols-3 gap-2 pb-2">
+          {FORMAT_COLORS.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => {
+                setColorOpen(false);
+                applyWrap(`{c:${c.id}}`, "{/c}");
+              }}
+              className="flex items-center gap-2 rounded-2xl bg-white/[.06] px-3 py-3 text-left active:scale-[.98]"
+            >
+              <span className="size-5 rounded-full ring-2 ring-white/20" style={{ background: c.hex }} />
+              <span className="font-semibold" style={{ color: c.hex }}>
+                {c.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      </Sheet>
+
+      <Sheet open={vanishOpen} onClose={() => setVanishOpen(false)} title="Vanish selection">
+        <p className="mb-3 text-sm text-sub">Wraps the selected text so it disappears for everyone after the countdown (from when the message is sent).</p>
+        <div className="space-y-1.5 pb-1">
+          {VANISH_PICKS.map((o) => (
+            <button
+              key={o.secs}
+              type="button"
+              onClick={() => {
+                setVanishOpen(false);
+                applyWrap(`{v:${o.secs}}`, "{/v}");
+              }}
+              className="flex w-full items-center gap-3 rounded-2xl bg-white/[.06] px-4 py-3 text-left active:scale-[.98]"
+            >
+              <Timer className="size-5 text-accent" />
+              <span className="flex-1 font-semibold">{o.label}</span>
             </button>
           ))}
         </div>
@@ -508,5 +603,18 @@ export default function Composer({
         />
       )}
     </div>
+  );
+}
+
+function FmtBtn({ title, onClick, children }: { title: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      className="grid size-8 place-items-center rounded-lg text-sub transition hover:bg-white/10 hover:text-txt active:scale-90"
+    >
+      {children}
+    </button>
   );
 }

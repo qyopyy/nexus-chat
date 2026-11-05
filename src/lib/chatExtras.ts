@@ -9,6 +9,8 @@ import { BEAT_PRESETS, type Pattern } from "@/components/music/Tools2";
 
 export const JAM_RE = /\[jam:([0-9a-f-]{36})\]/;
 export const CAPSULE_RE = /\[capsule:([0-9a-f-]{36})\]/;
+/** Live Bump pin shared into a DM / chat: [bump-pin:lat,lng] */
+export const BUMP_PIN_RE = /\[bump-pin:(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)\]/;
 
 export type Jam = { id: string; conversation_id: string; created_by: string; pattern: Pattern; bpm: number; root: number; updated_by: string | null; updated_at: string };
 

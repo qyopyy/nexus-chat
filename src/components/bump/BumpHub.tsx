@@ -42,6 +42,7 @@ import {
   bumpSaveProfile,
   bumpSendMessage,
   bumpSetFollow,
+  bumpShareLocationWithFriend,
   bumpSpotifyTrackEmbed,
   bumpSpotifyTrackOk,
   bumpThread,
@@ -77,6 +78,7 @@ export default function BumpHub({
 }) {
   const me = useApp((s) => s.userId);
   const friendships = useApp((s) => s.friendships);
+  const profiles = useApp((s) => s.profiles);
   const [tab, setTab] = useState<Tab>("nearby");
   const [visible, setVisible] = useState<BumpVisible>("friends");
   const [live, setLive] = useState(false);
@@ -89,6 +91,8 @@ export default function BumpHub({
   const [viewUser, setViewUser] = useState<string | null>(null);
   const [threadUser, setThreadUser] = useState<string | null>(null);
   const [liveLabel, setLiveLabel] = useState("");
+  const [shareFriendOpen, setShareFriendOpen] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
   const [bgShare, setBgShare] = useState(true);
   const [alerts, setAlerts] = useState(true);
   const [autoStopMin, setAutoStopMin] = useState(0);
@@ -277,6 +281,50 @@ export default function BumpHub({
     flashUntil && flashUntil > Date.now() ? Math.max(0, Math.ceil((flashUntil - Date.now()) / 1000)) : 0;
 
   return (
+    <>
+      {shareFriendOpen && (
+        <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/60 sm:items-center" onClick={() => setShareFriendOpen(false)}>
+          <div className="w-full max-w-md rounded-t-3xl bg-chat p-5 pb-safe-4 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center gap-2">
+              <MapPin className="size-5 text-accent" />
+              <span className="flex-1 text-lg font-bold">Share Bump with a friend</span>
+              <button type="button" onClick={() => setShareFriendOpen(false)} className="grid size-8 place-items-center rounded-full hover:bg-hover" aria-label="Close">
+                <X className="size-5" />
+              </button>
+            </div>
+            <p className="mb-3 text-sm text-sub">Opens a Nexus DM with your live pin so they can find you on the map.</p>
+            {!friendIds.length ? (
+              <p className="py-8 text-center text-sm text-sub">Add Nexus friends first, then share your Bump pin.</p>
+            ) : (
+              <ul className="max-h-[50vh] space-y-1 overflow-y-auto">
+                {friendIds.map((id) => (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      disabled={shareBusy}
+                      onClick={() => {
+                        setShareBusy(true);
+                        void bumpShareLocationWithFriend(id, liveLabel.trim() || undefined).finally(() => {
+                          setShareBusy(false);
+                          setShareFriendOpen(false);
+                        });
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-hover disabled:opacity-50"
+                    >
+                      <span className="grid size-9 place-items-center rounded-full bg-accent/20 text-sm font-bold text-accent">
+                        {(profiles[id]?.display_name || profiles[id]?.username || "?").slice(0, 1).toUpperCase()}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate font-semibold">{profiles[id]?.display_name || profiles[id]?.username || "Friend"}</span>
+                      <Share2 className="size-4 text-accent" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
     <div className={cn("flex h-full flex-col bg-chat", (mobile || bumpOnly) && "pb-safe-2")}>
       <header
         className={cn(
@@ -417,6 +465,15 @@ export default function BumpHub({
                     className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-accent/20 disabled:opacity-50 min-[420px]:flex-none"
                   >
                     <Navigation className="size-4" /> {live ? "Refresh pin" : "Bump now"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || shareBusy}
+                    onClick={() => setShareFriendOpen(true)}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold hover:bg-white/15"
+                    title="Share live pin with a Nexus friend"
+                  >
+                    <Share2 className="size-4" /> Share with friend
                   </button>
                   {live && (
                     <button type="button" disabled={busy} onClick={() => void stop()} className="rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold hover:bg-white/15">
@@ -617,6 +674,7 @@ export default function BumpHub({
         )}
       </div>
     </div>
+    </>
   );
 }
 

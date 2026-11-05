@@ -322,9 +322,14 @@ export async function runBotCommand(convId: string, text: string) {
 // ------------------------------------------------------------------ disappearing messages
 export const TTL_OPTIONS: { secs: number | null; label: string; short: string }[] = [
   { secs: null, label: "Off", short: "" },
+  { secs: 30, label: "30 seconds", short: "30s" },
+  { secs: 60, label: "1 minute", short: "1m" },
+  { secs: 300, label: "5 minutes", short: "5m" },
+  { secs: 3600, label: "1 hour", short: "1h" },
+  { secs: 21600, label: "6 hours", short: "6h" },
   { secs: 86400, label: "1 day", short: "1d" },
   { secs: 604800, label: "1 week", short: "1w" },
-  { secs: 2592000, label: "1 month", short: "1m" },
+  { secs: 2592000, label: "1 month", short: "1mo" },
   { secs: 31536000, label: "1 year", short: "1y" },
 ];
 export async function loadTtl(convId: string) {

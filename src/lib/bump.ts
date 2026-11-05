@@ -364,6 +364,55 @@ export async function bumpInbox() {
   return rows;
 }
 
+/** Share live Bump coordinates into a Nexus DM with a friend. */
+export async function bumpShareLocationWithFriend(friendId: string, note?: string) {
+  const me = useApp.getState().userId;
+  if (!me) return null;
+  if (friendId === me) {
+    toast("Pick a friend to share with", "info");
+    return null;
+  }
+  const perm = await requestLocationPermission();
+  if (perm === "denied") {
+    toast("Location is off — enable it in Settings → Nexus → Location", "error");
+    return null;
+  }
+  try {
+    const loc = await getDeviceLocation({ highAccuracy: true });
+    // Keep them visible on Bump for friends while sharing into chat
+    await supabase.rpc("bump_publish", {
+      p_lat: loc.lat,
+      p_lng: loc.lng,
+      p_accuracy: loc.accuracy,
+      p_visible: "friends",
+      p_label: note?.trim() || null,
+    });
+    const { data: conv, error: dmErr } = await supabase.rpc("get_or_create_dm", { p_user: friendId });
+    if (dmErr || !conv) {
+      toast(errorText(dmErr) || "Couldn't open chat with that friend", "error");
+      return null;
+    }
+    const maps = `https://maps.apple.com/?ll=${loc.lat},${loc.lng}&q=Bump`;
+    const body = [
+      "📍 Shared my Bump location with you",
+      note?.trim() ? note.trim() : null,
+      maps,
+      `[bump-pin:${loc.lat.toFixed(5)},${loc.lng.toFixed(5)}]`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    const { sendMessage } = await import("./data");
+    await sendMessage(conv as string, body);
+    const { openConversation } = await import("./data");
+    openConversation(conv as string, null);
+    toast("Bump location sent in chat", "success");
+    return conv as string;
+  } catch (e) {
+    toast(e instanceof Error ? e.message : "Couldn't share location", "error");
+    return null;
+  }
+}
+
 /** Quiet republish for live heartbeat (no toast). */
 export async function bumpHeartbeat(visible: BumpVisible = "friends", label?: string | null) {
   try {

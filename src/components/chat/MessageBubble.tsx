@@ -1,8 +1,8 @@
 "use client";
 
-import { usePrefs } from "@/lib/prefs";
 import { memo, useEffect, useRef, useState } from "react";
 import { Bookmark, Check, Clock, Copy, Download, FileText, Lock, Pencil, Pin, Reply, SmilePlus, Sparkles, Trash2 } from "lucide-react";
+import { usePrefs } from "@/lib/prefs";
 import { useApp, openProfileCard, toast } from "@/store/app";
 import { roleRank } from "@/lib/theme";
 import NameTag from "@/components/ui/NameTag";
@@ -24,11 +24,11 @@ import ServerInvite from "@/components/space/ServerInvite";
 import LinkEmbed from "./LinkEmbed";
 import { PollCard } from "./Poll";
 import { POLL_RE } from "@/lib/polls";
-import { CAPSULE_RE, JAM_RE } from "@/lib/chatExtras";
-import { CapsuleCard, JamCard } from "./Extras";
+import { BUMP_PIN_RE, CAPSULE_RE, JAM_RE } from "@/lib/chatExtras";
+import { BumpPinCard, CapsuleCard, JamCard } from "./Extras";
 import { useSignedUrl } from "@/lib/storage";
 import { downloadAttachment } from "@/lib/downloadAttachment";
-import { URL_RE } from "@/lib/unfurl";
+import { FormattedText } from "@/lib/chatFormat";
 import type { Message, Reaction } from "@/lib/types";
 const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|‍|️|\s)+$/u;
 const EMPTY_REACTIONS: Reaction[] = [];
@@ -38,52 +38,9 @@ export function isVoice(m: Pick<Message, "attachment_type" | "attachment_name">)
   return !!m.attachment_type?.startsWith("audio/") && !!m.attachment_name?.startsWith("voice-");
 }
 
-function Spoiler({ children }: { children: React.ReactNode }) {
-  const auto = usePrefs((s) => s.spoilersAutoReveal);
-  const [shown, setShown] = useState(false);
-  const open = auto || shown;
-  return (
-    <span
-      role={open ? undefined : "button"}
-      tabIndex={open ? undefined : 0}
-      onClick={(e) => (e.stopPropagation(), setShown(true))}
-      onKeyDown={(e) => e.key === "Enter" && setShown(true)}
-      className={cn("rounded px-0.5 transition", open ? "bg-white/10" : "cursor-pointer bg-black text-transparent select-none hover:bg-black/80 [&_*]:invisible")}
-      title={open ? undefined : "Spoiler — click to reveal"}
-    >
-      {children}
-    </span>
-  );
-}
-
-/** text with ||spoilers|| and clickable links */
-function Linkified({ text }: { text: string }) {
-  if (text.includes("||")) {
-    const chunks = text.split(/\|\|([^|]+?)\|\|/);
-    if (chunks.length > 1)
-      return (
-        <>
-          {chunks.map((c, i) => (i % 2 === 1 ? <Spoiler key={i}><Links text={c} /></Spoiler> : <Links key={i} text={c} />))}
-        </>
-      );
-  }
-  return <Links text={text} />;
-}
-function Links({ text }: { text: string }) {
-  const parts = text.split(URL_RE);
-  return (
-    <>
-      {parts.map((p, i) =>
-        i % 2 === 1 ? (
-          <a key={i} href={p} target="_blank" rel="noreferrer noopener" className="text-[#6ab7ff] underline-offset-2 hover:underline">
-            {p}
-          </a>
-        ) : (
-          <span key={i}>{p}</span>
-        ),
-      )}
-    </>
-  );
+/** Discord-style markup, colors, spoilers, timed vanish spans */
+function Linkified({ text, createdAt }: { text: string; createdAt?: string }) {
+  return <FormattedText text={text} createdAt={createdAt} />;
 }
 
 function Attachment({ m, mine }: { m: Message; mine: boolean }) {
@@ -396,17 +353,20 @@ function MessageBubbleImpl({
                 <JamCard id={m.content.match(JAM_RE)![1]} />
               ) : CAPSULE_RE.test(m.content) ? (
                 <CapsuleCard id={m.content.match(CAPSULE_RE)![1]} mine={mine} />
-              ) : m.content && (
+              ) : BUMP_PIN_RE.test(m.content) ? (
+                <BumpPinCard text={m.content} mine={mine} />
+              ) : m.content ? (
                 <span className={cn("break-words whitespace-pre-wrap", bigEmoji ? "text-5xl leading-tight" : "msg-text", m.attachment_url && "mt-1 block")}>
-                  <Linkified text={m.content} />
+                  <Linkified text={m.content} createdAt={m.created_at} />
                 </span>
-              )}
+              ) : null}
               {linkEmbeds &&
                 m.content &&
                 /https?:\/\//i.test(m.content) &&
                 !POLL_RE.test(m.content) &&
                 !JAM_RE.test(m.content) &&
-                !CAPSULE_RE.test(m.content) && <LinkEmbed text={m.content} mine={mine} />}
+                !CAPSULE_RE.test(m.content) &&
+                !BUMP_PIN_RE.test(m.content) && <LinkEmbed text={m.content} mine={mine} />}
               {m.content.includes("/v/") && !deleted && <VideoEmbed text={m.content} />}
               {m.content.includes("play=") && !deleted && <GameInvite text={m.content} />}
               {(m.content.includes("/i/") || /[?&]join=/.test(m.content)) && !deleted && <ServerInvite text={m.content} />}
