@@ -28,7 +28,7 @@ jobs:
       run:
         working-directory: mobile
     env:
-      NEXUS_URL: ${{ github.event.inputs.url || vars.NEXUS_URL || 'https://nexus-chat-plum.vercel.app' }}
+      NEXUS_URL: ${{ github.event.inputs.url || vars.NEXUS_URL || 'https://nexusproject.cc' }}
     steps:
       - uses: actions/checkout@v4
 

@@ -104,6 +104,17 @@ export function botInviteUrl(slug: string) {
   return `${base}/?addbot=${encodeURIComponent(slug)}`;
 }
 
+/** Server-driven catalog (system + public community). Falls back to local SYSTEM_BOTS. */
+export async function listPublicBots(): Promise<{ system: BotCard[]; community: BotCard[] }> {
+  const { data, error } = await supabase.rpc("list_public_bots");
+  if (error || !data) return { system: SYSTEM_BOTS, community: [] };
+  const j = data as { system?: BotCard[]; community?: BotCard[] };
+  return {
+    system: Array.isArray(j.system) && j.system.length ? j.system : SYSTEM_BOTS,
+    community: Array.isArray(j.community) ? j.community : [],
+  };
+}
+
 export async function listCommunityBots(mineOnly = false) {
   let q = supabase.from("community_bots").select("*").order("created_at", { ascending: false }).limit(60);
   if (mineOnly) {

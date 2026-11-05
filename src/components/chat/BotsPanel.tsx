@@ -14,6 +14,7 @@ import {
   deleteCommunityBot,
   installBotToSpace,
   listCommunityBots,
+  listPublicBots,
   listSpaceBotInstalls,
   uninstallBot,
   type BotCard,
@@ -74,6 +75,7 @@ export default function BotsPanel({
   const [hooks, setHooks] = useState<Hook[]>([]);
   const [name, setName] = useState("");
   const [tab, setTab] = useState<Tab>(initialTab ?? "directory");
+  const [systemBots, setSystemBots] = useState<BotCard[]>(SYSTEM_BOTS);
   const [community, setCommunity] = useState<CommunityBot[]>([]);
   const [mine, setMine] = useState<CommunityBot[]>([]);
   const [installs, setInstalls] = useState<any[]>([]);
@@ -91,7 +93,30 @@ export default function BotsPanel({
   const load = useCallback(async () => {
     const { data } = await supabase.from("chat_webhooks").select("id, name, token, uses, created_by, created_at").eq("conversation_id", conversationId).order("created_at");
     setHooks((data ?? []) as Hook[]);
-    setCommunity(await listCommunityBots(false));
+    const catalog = await listPublicBots();
+    setSystemBots(catalog.system);
+    setCommunity(
+      catalog.community.map((b) => ({
+        id: String(b.id),
+        owner_id: "",
+        slug: b.slug,
+        name: b.name,
+        description: b.description,
+        avatar_url: b.avatar_url ?? null,
+        color: b.color,
+        commands: Array.isArray(b.commands)
+          ? (b.commands as unknown[]).map((c) => {
+              if (typeof c === "string") return { cmd: c.replace(/^\//, ""), reply: "" };
+              const o = c as BotCommandDef;
+              return { cmd: String(o.cmd ?? "").replace(/^\//, ""), reply: String(o.reply ?? "") };
+            })
+          : [],
+        webhook_token: "",
+        public: true,
+        uses: Number(b.uses ?? 0),
+        created_at: "",
+      })),
+    );
     setMine(await listCommunityBots(true));
     if (spaceId) setInstalls(await listSpaceBotInstalls(spaceId));
   }, [conversationId, spaceId]);
@@ -179,7 +204,7 @@ export default function BotsPanel({
       {tab === "directory" && (
         <div className="max-h-[55vh] space-y-2 overflow-y-auto">
           <p className="px-1 text-xs text-sub">Official bots + community bots. Open a link, copy invite, or add to a server.</p>
-          {[...SYSTEM_BOTS, ...community.map((b) => ({ kind: "community" as const, id: b.id, slug: b.slug, name: b.name, description: b.description, color: b.color, commands: b.commands }))].map((b) => (
+          {[...systemBots, ...community.map((b) => ({ kind: "community" as const, id: b.id, slug: b.slug, name: b.name, description: b.description, color: b.color, commands: b.commands }))].map((b) => (
             <div key={b.slug} className="rounded-xl border border-line/70 p-3">
               <div className="flex items-start gap-3">
                 <div className="grid size-10 shrink-0 place-items-center rounded-2xl text-sm font-black text-white" style={{ background: b.color }}>
@@ -377,9 +402,9 @@ export default function BotsPanel({
           )}
           <div className="space-y-1">
             <div className="text-xs font-bold text-sub uppercase">Quick add</div>
-            {SYSTEM_BOTS.map((b) => (
+            {systemBots.map((b) => (
               <button
-                key={b.key}
+                key={b.key ?? b.slug}
                 onClick={() => {
                   setPendingInvite(b);
                 }}

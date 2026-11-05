@@ -1,8 +1,9 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 // The iOS/Android apps are native shells around the live site, so every web deploy
-// updates the apps automatically — no rebuild needed for UI changes.
-const url = process.env.NEXUS_URL || "https://nexus-chat-plum.vercel.app";
+// updates the apps automatically — no rebuild needed for UI / bots / server features.
+// Prefer the production domain; NEXUS_URL overrides for staging builds.
+const url = process.env.NEXUS_URL || "https://nexusproject.cc";
 
 const config: CapacitorConfig = {
   appId: "hu.qyopy.nexus",
@@ -15,7 +16,15 @@ const config: CapacitorConfig = {
     url,
     cleartext: false,
     // Spotify login happens inside the app, then returns to the site
-    allowNavigation: ["*.supabase.co", "*.vercel.app", "fonts.googleapis.com", "fonts.gstatic.com", "accounts.spotify.com"],
+    allowNavigation: [
+      "nexusproject.cc",
+      "*.nexusproject.cc",
+      "*.supabase.co",
+      "*.vercel.app",
+      "fonts.googleapis.com",
+      "fonts.gstatic.com",
+      "accounts.spotify.com",
+    ],
   },
   ios: {
     contentInset: "never",
