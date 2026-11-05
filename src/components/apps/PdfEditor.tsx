@@ -1,20 +1,60 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, Download, FilePen, ShieldCheck, Trash2 } from "lucide-react";
+import {
+  AlignLeft,
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  Bold,
+  Download,
+  FilePlus2,
+  FilePen,
+  Italic,
+  Redo2,
+  RotateCw,
+  ShieldCheck,
+  Trash2,
+  Undo2,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
 import { sanitizeDownloadName, sniffPdf } from "@/lib/fileSafety";
-import { buildEditedPdf, PdfEditError, type PdfAnnotation } from "@/lib/pdfEdit";
+import { buildEditedPdf, isBlankPage, nextBlankPageId, PdfEditError, type PdfAnnotation, type PdfFontId } from "@/lib/pdfEdit";
 import { loadPdfjs } from "@/lib/pdfjs";
 import { cn } from "@/lib/utils";
 
 const MAX_BYTES = 40 * 1024 * 1024;
 const MAX_PAGES = 80;
+const LETTER = { width: 612, height: 792 };
 
 type Placed = PdfAnnotation & { pageHeight: number };
 
+type Snapshot = { order: number[]; notes: Placed[]; rotations: Record<number, number>; current: number };
+
 function uid() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+function fontId(bold: boolean, italic: boolean): PdfFontId {
+  if (bold && italic) return "helveticaBoldOblique";
+  if (bold) return "helveticaBold";
+  if (italic) return "helveticaOblique";
+  return "helvetica";
+}
+
+function fontFamilyCss(id: PdfFontId) {
+  if (id.includes("Bold") && id.includes("Oblique")) return "Helvetica, Arial, sans-serif";
+  return "Helvetica, Arial, sans-serif";
+}
+
+function fontWeightCss(id: PdfFontId) {
+  return id.includes("Bold") ? 700 : 400;
+}
+
+function fontStyleCss(id: PdfFontId) {
+  return id.includes("Oblique") ? "italic" : "normal";
 }
 
 export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobile?: boolean }) {
@@ -24,11 +64,18 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
   const [order, setOrder] = useState<number[]>([]);
   const [current, setCurrent] = useState(0);
   const [notes, setNotes] = useState<Placed[]>([]);
+  const [rotations, setRotations] = useState<Record<number, number>>({});
   const [text, setText] = useState("");
   const [size, setSize] = useState(18);
   const [color, setColor] = useState("#111827");
+  const [bold, setBold] = useState(false);
+  const [italic, setItalic] = useState(false);
+  const [opacity, setOpacity] = useState(1);
   const [watermark, setWatermark] = useState("");
+  const [pageNumbers, setPageNumbers] = useState(false);
+  const [zoom, setZoom] = useState(1);
   const [ready, setReady] = useState(false);
+  const [selectedNote, setSelectedNote] = useState<string | null>(null);
   const bytesRef = useRef<Uint8Array | null>(null);
   const docRef = useRef<PDFDocumentProxy | null>(null);
   const taskRef = useRef<PDFDocumentLoadingTask | null>(null);
@@ -36,12 +83,51 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
   const stageRef = useRef<HTMLDivElement>(null);
   const [metrics, setMetrics] = useState<{ scale: number; width: number; height: number } | null>(null);
   const [thumbs, setThumbs] = useState<Record<number, string>>({});
+  const history = useRef<Snapshot[]>([]);
+  const future = useRef<Snapshot[]>([]);
+  const [histTick, setHistTick] = useState(0);
+  const dragRef = useRef<{ id: string; ox: number; oy: number } | null>(null);
+  const dragMoved = useRef(false);
 
   useEffect(() => {
     return () => {
       void taskRef.current?.destroy();
     };
   }, []);
+
+  function snap(): Snapshot {
+    return { order: [...order], notes: notes.map((n) => ({ ...n })), rotations: { ...rotations }, current };
+  }
+
+  function pushHistory() {
+    history.current.push(snap());
+    if (history.current.length > 40) history.current.shift();
+    future.current = [];
+    setHistTick((n) => n + 1);
+  }
+
+  function restore(s: Snapshot) {
+    setOrder(s.order);
+    setNotes(s.notes);
+    setRotations(s.rotations);
+    setCurrent(Math.min(s.current, Math.max(0, s.order.length - 1)));
+  }
+
+  function undo() {
+    const prev = history.current.pop();
+    if (!prev) return;
+    future.current.push(snap());
+    restore(prev);
+    setHistTick((n) => n + 1);
+  }
+
+  function redo() {
+    const next = future.current.pop();
+    if (!next) return;
+    history.current.push(snap());
+    restore(next);
+    setHistTick((n) => n + 1);
+  }
 
   async function clearSession() {
     await taskRef.current?.destroy();
@@ -51,12 +137,18 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
     setReady(false);
     setOrder([]);
     setNotes([]);
+    setRotations({});
     setThumbs({});
     setMetrics(null);
     setWatermark("");
+    setPageNumbers(false);
     setText("");
     setError(null);
     setName("document");
+    setSelectedNote(null);
+    setZoom(1);
+    history.current = [];
+    future.current = [];
   }
 
   async function openFile(file: File) {
@@ -89,8 +181,12 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
       setOrder(nextOrder);
       setCurrent(0);
       setNotes([]);
+      setRotations({});
       setThumbs({});
       setReady(true);
+      setSelectedNote(null);
+      history.current = [];
+      future.current = [];
       void renderThumbs(doc, nextOrder);
     } catch (err) {
       setReady(false);
@@ -101,8 +197,11 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
   }
 
   async function renderThumbs(doc: PDFDocumentProxy, pages: number[]) {
-    const next: Record<number, string> = {};
     for (const index of pages) {
+      if (isBlankPage(index)) {
+        setThumbs((prev) => ({ ...prev, [index]: "" }));
+        continue;
+      }
       try {
         const page = await doc.getPage(index + 1);
         const viewport = page.getViewport({ scale: 0.22 });
@@ -110,8 +209,7 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
         canvas.width = Math.max(1, Math.floor(viewport.width));
         canvas.height = Math.max(1, Math.floor(viewport.height));
         await page.render({ canvas, viewport }).promise;
-        next[index] = canvas.toDataURL("image/jpeg", 0.7);
-        setThumbs((prev) => ({ ...prev, [index]: next[index] }));
+        setThumbs((prev) => ({ ...prev, [index]: canvas.toDataURL("image/jpeg", 0.7) }));
       } catch {
         /* thumbnail is optional */
       }
@@ -123,14 +221,32 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
     const canvas = previewRef.current;
     const stage = stageRef.current;
     const src = order[current];
-    if (!doc || !canvas || !stage || src === undefined) return;
+    if (!canvas || !stage || src === undefined) return;
     let cancel = false;
-    const width = Math.min(768, Math.max(280, stage.clientWidth - 8));
+
+    if (isBlankPage(src)) {
+      const width = Math.min(768, Math.max(280, stage.clientWidth - 8)) * zoom;
+      const scale = width / LETTER.width;
+      canvas.width = Math.floor(LETTER.width * scale);
+      canvas.height = Math.floor(LETTER.height * scale);
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = "#e5e7eb";
+        ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
+      }
+      setMetrics({ scale, width: LETTER.width, height: LETTER.height });
+      return;
+    }
+
+    if (!doc) return;
+    const width = Math.min(768, Math.max(280, stage.clientWidth - 8)) * zoom;
     void (async () => {
       const page = await doc.getPage(src + 1);
       const base = page.getViewport({ scale: 1 });
-      const scale = Math.min(2, width / base.width);
-      const viewport = page.getViewport({ scale });
+      const scale = Math.min(2.5, width / base.width);
+      const viewport = page.getViewport({ scale, rotation: rotations[src] ?? 0 });
       if (cancel) return;
       canvas.width = Math.floor(viewport.width);
       canvas.height = Math.floor(viewport.height);
@@ -143,7 +259,7 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
     return () => {
       cancel = true;
     };
-  }, [order, current, ready]);
+  }, [order, current, ready, zoom, rotations]);
 
   function placeAt(x: number, y: number) {
     const src = order[current];
@@ -155,13 +271,26 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
       return;
     }
     setError(null);
-    setNotes((list) => [
-      ...list,
-      { id: uid(), page: src, text: value, x, y, size: Math.max(8, Math.min(96, size)), color, pageHeight },
-    ]);
+    pushHistory();
+    const note: Placed = {
+      id: uid(),
+      page: src,
+      text: value,
+      x,
+      y,
+      size: Math.max(8, Math.min(96, size)),
+      color,
+      font: fontId(bold, italic),
+      opacity,
+      pageHeight,
+    };
+    setNotes((list) => [...list, note]);
+    setSelectedNote(note.id);
   }
 
   function onStageClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (dragRef.current) return;
+    if ((e.target as HTMLElement).closest("[data-note]")) return;
     const canvas = previewRef.current;
     if (!canvas || !metrics) return;
     const rect = canvas.getBoundingClientRect();
@@ -173,6 +302,7 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
   function move(dir: -1 | 1) {
     const j = current + dir;
     if (j < 0 || j >= order.length) return;
+    pushHistory();
     setOrder((list) => {
       const next = list.slice();
       [next[current], next[j]] = [next[j], next[current]];
@@ -184,9 +314,32 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
   function removePage() {
     if (order.length <= 1) return;
     const src = order[current];
+    pushHistory();
     setOrder((list) => list.filter((_, i) => i !== current));
     setNotes((list) => list.filter((note) => note.page !== src));
     setCurrent((i) => Math.max(0, Math.min(i, order.length - 2)));
+  }
+
+  function insertBlank() {
+    if (order.length >= MAX_PAGES) {
+      setError(`This editor allows up to ${MAX_PAGES} pages.`);
+      return;
+    }
+    pushHistory();
+    const id = nextBlankPageId();
+    setOrder((list) => {
+      const next = list.slice();
+      next.splice(current + 1, 0, id);
+      return next;
+    });
+    setCurrent((i) => i + 1);
+  }
+
+  function rotatePage() {
+    const src = order[current];
+    if (src === undefined || isBlankPage(src)) return;
+    pushHistory();
+    setRotations((r) => ({ ...r, [src]: ((r[src] ?? 0) + 90) % 360 }));
   }
 
   async function download() {
@@ -195,7 +348,7 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
     setBusy(true);
     setError(null);
     try {
-      const out = await buildEditedPdf(bytes.slice(), order, notes, { watermark });
+      const out = await buildEditedPdf(bytes.slice(), order, notes, { watermark, pageNumbers, rotations });
       const blob = new Blob([new Uint8Array(out)], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -212,17 +365,31 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
 
   const srcPage = order[current];
   const pageNotes = notes.filter((note) => note.page === srcPage);
+  const activeFont = fontId(bold, italic);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-chat">
-      <header className={cn("flex shrink-0 items-center gap-2 border-b border-black/20 px-3", mobile ? "pt-safe-3 pb-2" : "h-12")}>
+      <header className={cn("flex shrink-0 items-center gap-1.5 border-b border-black/20 px-3", mobile ? "pt-safe-3 pb-2" : "h-12")}>
         <button onClick={onBack} className="grid size-9 place-items-center rounded-full hover:bg-hover" aria-label="Back to apps">
           <ArrowLeft className="size-5" />
         </button>
-        <FilePen className="size-5 text-[#00a8fc]" />
-        <span className="min-w-0 flex-1 truncate font-bold">PDF editor</span>
+        <FilePen className="size-5 text-[#faa61a]" />
+        <span className="min-w-0 flex-1 truncate font-bold">Docs editor</span>
         {ready && (
           <>
+            <button onClick={undo} disabled={histTick >= 0 && history.current.length === 0} className="grid size-9 place-items-center rounded-full hover:bg-hover disabled:opacity-30" aria-label="Undo">
+              <Undo2 className="size-4" />
+            </button>
+            <button onClick={redo} disabled={histTick >= 0 && future.current.length === 0} className="grid size-9 place-items-center rounded-full hover:bg-hover disabled:opacity-30" aria-label="Redo">
+              <Redo2 className="size-4" />
+            </button>
+            <button onClick={() => setZoom((z) => Math.max(0.6, +(z - 0.15).toFixed(2)))} className="grid size-9 place-items-center rounded-full hover:bg-hover" aria-label="Zoom out">
+              <ZoomOut className="size-4" />
+            </button>
+            <span className="w-10 text-center text-[11px] text-sub">{Math.round(zoom * 100)}%</span>
+            <button onClick={() => setZoom((z) => Math.min(2, +(z + 0.15).toFixed(2)))} className="grid size-9 place-items-center rounded-full hover:bg-hover" aria-label="Zoom in">
+              <ZoomIn className="size-4" />
+            </button>
             <button onClick={() => void clearSession()} className="grid size-9 place-items-center rounded-full hover:bg-hover" aria-label="Clear PDF from memory">
               <Trash2 className="size-4" />
             </button>
@@ -235,7 +402,9 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <div className="mx-auto mb-4 flex max-w-6xl items-start gap-2 rounded-2xl bg-side/80 px-3 py-2 text-xs text-sub">
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-ok" />
-          <span>PDFs stay in this browser tab. File headers are checked, encrypted PDFs are rejected, and the editor caps at {MAX_PAGES} pages. Use Clear to wipe the open file from memory.</span>
+          <span>
+            Professional PDF docs tools — text styles, page tools, watermarks, and page numbers. Files stay in this tab. Caps at {MAX_PAGES} pages · 40 MB. Helvetica family only for overlay text.
+          </span>
         </div>
         {!ready ? (
           <label className="mx-auto grid min-h-72 max-w-xl cursor-pointer place-items-center rounded-2xl border border-dashed border-white/15 bg-side p-8 text-center">
@@ -251,17 +420,17 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
               }}
             />
             <FilePen className="mb-3 size-10 text-sub" />
-            <span className="block font-semibold">{busy ? "Opening PDF…" : "Choose a PDF"}</span>
-            <span className="mt-1 block max-w-sm text-sm text-sub">Add text, reorder pages, delete pages, then download. Editing stays on this device.</span>
+            <span className="block font-semibold">{busy ? "Opening PDF…" : "Open a PDF document"}</span>
+            <span className="mt-1 block max-w-sm text-sm text-sub">Annotate, reorder, rotate, insert blanks, watermark, then download. Editing stays on this device.</span>
           </label>
         ) : (
-          <div className="mx-auto grid max-w-6xl gap-4 lg:grid-cols-[240px_minmax(0,1fr)_280px]">
+          <div className="mx-auto grid max-w-6xl gap-4 lg:grid-cols-[220px_minmax(0,1fr)_300px]">
             <aside className="space-y-2">
               <div className="flex items-center justify-between">
                 <h2 className="font-bold">Pages</h2>
                 <span className="text-xs text-sub">{order.length}</span>
               </div>
-              <div className="space-y-2">
+              <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
                 {order.map((page, index) => (
                   <button
                     key={`${page}-${index}`}
@@ -270,43 +439,91 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
                     aria-label={`Page ${index + 1}`}
                   >
                     <span className="grid h-16 w-12 shrink-0 place-items-center overflow-hidden rounded-md bg-black/30 text-xs text-sub">
-                      {thumbs[page] ? <img src={thumbs[page]} alt="" className="max-h-full max-w-full" /> : index + 1}
+                      {isBlankPage(page) ? (
+                        <span className="text-[10px]">Blank</span>
+                      ) : thumbs[page] ? (
+                        <img src={thumbs[page]} alt="" className="max-h-full max-w-full" />
+                      ) : (
+                        index + 1
+                      )}
                     </span>
                     <span className="min-w-0">
                       <span className="block text-sm font-semibold">Page {index + 1}</span>
-                      <span className="block text-xs text-sub">{notes.filter((n) => n.page === page).length} notes</span>
+                      <span className="block text-xs text-sub">
+                        {isBlankPage(page) ? "Blank" : rotations[page] ? `${rotations[page]}°` : "Original"} · {notes.filter((n) => n.page === page).length} notes
+                      </span>
                     </span>
                   </button>
                 ))}
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => move(-1)} disabled={current === 0} className="grid size-9 flex-1 place-items-center rounded-xl bg-side hover:bg-hover disabled:opacity-40" aria-label="Move page up">
+              <div className="grid grid-cols-4 gap-1.5">
+                <button onClick={() => move(-1)} disabled={current === 0} className="grid size-9 place-items-center rounded-xl bg-side hover:bg-hover disabled:opacity-40" aria-label="Move page up">
                   <ArrowUp className="size-4" />
                 </button>
-                <button onClick={() => move(1)} disabled={current >= order.length - 1} className="grid size-9 flex-1 place-items-center rounded-xl bg-side hover:bg-hover disabled:opacity-40" aria-label="Move page down">
+                <button onClick={() => move(1)} disabled={current >= order.length - 1} className="grid size-9 place-items-center rounded-xl bg-side hover:bg-hover disabled:opacity-40" aria-label="Move page down">
                   <ArrowDown className="size-4" />
                 </button>
-                <button onClick={removePage} disabled={order.length <= 1} className="grid size-9 flex-1 place-items-center rounded-xl bg-side text-dnd hover:bg-hover disabled:opacity-40" aria-label="Delete page">
+                <button onClick={rotatePage} disabled={isBlankPage(srcPage)} className="grid size-9 place-items-center rounded-xl bg-side hover:bg-hover disabled:opacity-40" aria-label="Rotate page">
+                  <RotateCw className="size-4" />
+                </button>
+                <button onClick={removePage} disabled={order.length <= 1} className="grid size-9 place-items-center rounded-xl bg-side text-dnd hover:bg-hover disabled:opacity-40" aria-label="Delete page">
                   <Trash2 className="size-4" />
                 </button>
               </div>
+              <button onClick={insertBlank} className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-white/5 py-2 text-xs font-semibold hover:bg-white/10">
+                <FilePlus2 className="size-3.5" /> Insert blank page
+              </button>
             </aside>
 
-            <div ref={stageRef} className="min-w-0">
-              <div className="relative w-full max-w-3xl cursor-crosshair" style={{ containerType: "inline-size" }} onClick={onStageClick}>
-                <canvas ref={previewRef} className="h-auto w-full rounded-xl bg-white shadow-lg" />
+            <div ref={stageRef} className="min-w-0 overflow-auto">
+              <div className="relative mx-auto w-fit max-w-full cursor-crosshair" onClick={onStageClick}>
+                <canvas ref={previewRef} className="h-auto max-w-full rounded-xl bg-white shadow-lg" />
                 {metrics &&
                   pageNotes.map((note) => (
                     <span
                       key={note.id}
-                      className="pointer-events-none absolute whitespace-pre text-left"
+                      data-note={note.id}
+                      className={cn("absolute cursor-move whitespace-pre text-left select-none", selectedNote === note.id && "outline outline-2 outline-accent")}
                       style={{
                         left: `${(note.x / metrics.width) * 100}%`,
                         top: `${((metrics.height - note.y - note.size) / metrics.height) * 100}%`,
-                        fontSize: `${(note.size / metrics.width) * 100}cqw`,
+                        fontSize: `${Math.max(8, note.size * metrics.scale)}px`,
                         color: note.color,
-                        fontFamily: "Helvetica, Arial, sans-serif",
+                        opacity: note.opacity ?? 1,
+                        fontFamily: fontFamilyCss(note.font ?? "helvetica"),
+                        fontWeight: fontWeightCss(note.font ?? "helvetica"),
+                        fontStyle: fontStyleCss(note.font ?? "helvetica"),
                         lineHeight: 1.25,
+                      }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setSelectedNote(note.id);
+                        const canvas = previewRef.current;
+                        if (!canvas || !metrics) return;
+                        const rect = canvas.getBoundingClientRect();
+                        dragMoved.current = false;
+                        dragRef.current = {
+                          id: note.id,
+                          ox: ((e.clientX - rect.left) / rect.width) * metrics.width - note.x,
+                          oy: metrics.height - ((e.clientY - rect.top) / rect.height) * metrics.height - note.y,
+                        };
+                        const onMove = (ev: MouseEvent) => {
+                          const d = dragRef.current;
+                          if (!d || !metrics || !previewRef.current) return;
+                          dragMoved.current = true;
+                          const r = previewRef.current.getBoundingClientRect();
+                          const nx = ((ev.clientX - r.left) / r.width) * metrics.width - d.ox;
+                          const ny = metrics.height - ((ev.clientY - r.top) / r.height) * metrics.height - d.oy;
+                          setNotes((list) => list.map((n) => (n.id === d.id ? { ...n, x: Math.max(0, nx), y: Math.max(0, ny) } : n)));
+                        };
+                        const onUp = () => {
+                          if (dragRef.current && dragMoved.current) pushHistory();
+                          dragRef.current = null;
+                          window.removeEventListener("mousemove", onMove);
+                          window.removeEventListener("mouseup", onUp);
+                        };
+                        window.addEventListener("mousemove", onMove);
+                        window.addEventListener("mouseup", onUp);
                       }}
                     >
                       {note.text}
@@ -316,8 +533,8 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
             </div>
 
             <aside className="h-fit space-y-3 rounded-2xl bg-side p-4">
-              <h2 className="font-bold">Add text</h2>
-              <p className="text-xs text-sub">Type a note, then click the page or use the button. New text is drawn on top — words already in the PDF are not rewritten.</p>
+              <h2 className="font-bold">Text tools</h2>
+              <p className="text-xs text-sub">Style a note, click the page to place it, then drag to reposition.</p>
               <label className="block">
                 <span className="mb-1 block text-xs font-bold tracking-wide text-sub uppercase">Text</span>
                 <textarea
@@ -325,10 +542,25 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
                   onChange={(e) => setText(e.target.value)}
                   rows={3}
                   aria-label="Annotation text"
-                  placeholder="A note on this page"
+                  placeholder="Heading, caption, stamp…"
                   className="w-full resize-none rounded-xl border border-white/10 bg-input px-3 py-2.5 outline-none focus:border-accent"
                 />
               </label>
+              <div className="flex gap-1.5">
+                <button type="button" onClick={() => setBold((v) => !v)} className={cn("grid size-9 place-items-center rounded-lg", bold ? "bg-accent text-white" : "bg-white/5")} aria-pressed={bold} aria-label="Bold">
+                  <Bold className="size-4" />
+                </button>
+                <button type="button" onClick={() => setItalic((v) => !v)} className={cn("grid size-9 place-items-center rounded-lg", italic ? "bg-accent text-white" : "bg-white/5")} aria-pressed={italic} aria-label="Italic">
+                  <Italic className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => metrics && placeAt(48, Math.max(8, metrics.height - 48 - size))}
+                  className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-white/5 text-xs font-semibold hover:bg-white/10"
+                >
+                  <AlignLeft className="size-3.5" /> Top-left
+                </button>
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <label className="block">
                   <span className="mb-1 block text-xs font-bold tracking-wide text-sub uppercase">Size</span>
@@ -347,35 +579,60 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
                   <input type="color" value={color} aria-label="Text color" onChange={(e) => setColor(e.target.value)} className="h-[46px] w-full rounded-xl border border-white/10 bg-input px-2" />
                 </label>
               </div>
-              <button
-                onClick={() => metrics && placeAt(48, Math.max(8, metrics.height - 48 - size))}
-                className="w-full rounded-xl bg-accent py-2.5 text-sm font-semibold text-white"
-              >
+              <label className="block">
+                <span className="mb-1 flex justify-between text-xs font-bold tracking-wide text-sub uppercase">
+                  Opacity <span>{Math.round(opacity * 100)}%</span>
+                </span>
+                <input type="range" min={0.2} max={1} step={0.05} value={opacity} aria-label="Opacity" onChange={(e) => setOpacity(Number(e.target.value))} className="w-full accent-accent" />
+              </label>
+              <p className="text-[11px] text-sub" style={{ fontFamily: fontFamilyCss(activeFont), fontWeight: fontWeightCss(activeFont), fontStyle: fontStyleCss(activeFont) }}>
+                Preview · Helvetica{bold ? " Bold" : ""}
+                {italic ? " Italic" : ""}
+              </p>
+              <button onClick={() => metrics && placeAt(48, Math.max(8, metrics.height - 48 - size))} className="w-full rounded-xl bg-accent py-2.5 text-sm font-semibold text-white">
                 Add at top of page
               </button>
-              <label className="block">
-                <span className="mb-1 block text-xs font-bold tracking-wide text-sub uppercase">Watermark on download</span>
-                <input
-                  value={watermark}
-                  onChange={(e) => setWatermark(e.target.value.slice(0, 40))}
-                  aria-label="Watermark text"
-                  placeholder="CONFIDENTIAL"
-                  className="w-full rounded-xl border border-white/10 bg-input px-3 py-2.5 outline-none focus:border-accent"
-                />
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                {["CONFIDENTIAL", "DRAFT", "FOR REVIEW"].map((w) => (
-                  <button key={w} type="button" onClick={() => setWatermark(w)} className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-semibold hover:bg-white/10">
-                    {w}
-                  </button>
-                ))}
+
+              <div className="border-t border-white/10 pt-3">
+                <h3 className="mb-2 text-sm font-bold">Export options</h3>
+                <label className="mb-2 flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={pageNumbers} onChange={(e) => setPageNumbers(e.target.checked)} className="accent-accent" />
+                  Page numbers footer
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-bold tracking-wide text-sub uppercase">Watermark</span>
+                  <input
+                    value={watermark}
+                    onChange={(e) => setWatermark(e.target.value.slice(0, 40))}
+                    aria-label="Watermark text"
+                    placeholder="CONFIDENTIAL"
+                    className="w-full rounded-xl border border-white/10 bg-input px-3 py-2.5 outline-none focus:border-accent"
+                  />
+                </label>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {["CONFIDENTIAL", "DRAFT", "FOR REVIEW", "COPY"].map((w) => (
+                    <button key={w} type="button" onClick={() => setWatermark(w)} className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-semibold hover:bg-white/10">
+                      {w}
+                    </button>
+                  ))}
+                </div>
               </div>
+
               {pageNotes.length > 0 && (
-                <ul className="space-y-1">
+                <ul className="space-y-1 border-t border-white/10 pt-3">
                   {pageNotes.map((note) => (
-                    <li key={note.id} className="flex items-center gap-2 rounded-lg bg-black/20 px-2 py-1.5 text-sm">
-                      <span className="min-w-0 flex-1 truncate">{note.text}</span>
-                      <button onClick={() => setNotes((list) => list.filter((item) => item.id !== note.id))} className="text-sub hover:text-dnd" aria-label={`Remove ${note.text}`}>
+                    <li key={note.id} className={cn("flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm", selectedNote === note.id ? "bg-accent/20" : "bg-black/20")}>
+                      <button type="button" className="min-w-0 flex-1 truncate text-left" onClick={() => setSelectedNote(note.id)}>
+                        {note.text}
+                      </button>
+                      <button
+                        onClick={() => {
+                          pushHistory();
+                          setNotes((list) => list.filter((item) => item.id !== note.id));
+                        }}
+                        className="text-sub hover:text-dnd"
+                        aria-label={`Remove ${note.text}`}
+                      >
                         <Trash2 className="size-3.5" />
                       </button>
                     </li>

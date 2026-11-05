@@ -11,7 +11,7 @@ import {
   FileDigit,
   FilePen,
   Fingerprint,
-  ImagePlus,
+  ImageUpscale,
   KeyRound,
   Pipette,
   QrCode,
@@ -22,7 +22,7 @@ import {
 import { useApp } from "@/store/app";
 import { studioGo } from "@/store/studio";
 import { cn } from "@/lib/utils";
-import ImageResizer from "./ImageResizer";
+import ImageStudio from "./ImageStudio";
 import PdfEditor from "./PdfEditor";
 import MusicCheck from "./MusicCheck";
 import QrMaker from "./QrMaker";
@@ -62,18 +62,18 @@ const TOOLS: {
 }[] = [
   {
     id: "image",
-    name: "Image resizer",
-    tag: "Resize on this device",
-    desc: "Set width and height, keep the aspect ratio, preview, and download.",
+    name: "Image studio",
+    tag: "Resize · crop · filters · upscale",
+    desc: "Resize, crop, apply filters, and upscale images locally — then download PNG, JPEG, or WebP.",
     bg: "linear-gradient(135deg,#00a8fc,#0b2a5c)",
     emoji: "🖼️",
-    Icon: ImagePlus,
+    Icon: ImageUpscale,
   },
   {
     id: "pdf",
-    name: "PDF editor",
-    tag: "Notes, pages, download",
-    desc: "Open a PDF, add text, reorder or delete pages, and save a new file.",
+    name: "Docs editor",
+    tag: "PDF · text · pages · stamps",
+    desc: "Professional PDF tools: styled text, page rotate, blanks, watermarks, page numbers, undo/redo.",
     bg: "linear-gradient(135deg,#faa61a,#5c2b0b)",
     emoji: "📄",
     Icon: FilePen,
@@ -181,7 +181,7 @@ const TOOLS: {
 
 export default function AppsHub({ mobile }: { mobile?: boolean }) {
   const [tool, setTool] = useState<ToolId | null>(null);
-  if (tool === "image") return <ImageResizer mobile={mobile} onBack={() => setTool(null)} />;
+  if (tool === "image") return <ImageStudio mobile={mobile} onBack={() => setTool(null)} />;
   if (tool === "pdf") return <PdfEditor mobile={mobile} onBack={() => setTool(null)} />;
   if (tool === "music") return <MusicCheck mobile={mobile} onBack={() => setTool(null)} />;
   if (tool === "spotify-td") {
