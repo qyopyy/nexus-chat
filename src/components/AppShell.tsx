@@ -44,7 +44,6 @@ import RadioHub from "./radio/RadioHub";
 import LiveHub from "./live/LiveHub";
 import PulseHub from "./pulse/PulseHub";
 import StaffDesk from "./staff/StaffDesk";
-import BumpHub from "./bump/BumpHub";
 import SiteNoticeBanner from "./staff/SiteNoticeBanner";
 import { useStudio, videosGo } from "@/store/studio";
 import { releaseByCode } from "@/lib/protect";
@@ -268,10 +267,8 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
             <NexusGram />
           ) : hub === "games" ? (
             <GamesHub />
-          ) : hub === "apps" ? (
+          ) : hub === "apps" || hub === "bump" ? (
             <AppsHub />
-          ) : hub === "bump" ? (
-            <BumpHub />
           ) : hub === "cutroom" || hub === "untitled" ? (
             <UntitledHub />
           ) : hub === "radio" ? (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Activity,
   AppWindow,
@@ -21,7 +21,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useApp } from "@/store/app";
-import { openBump } from "@/lib/bump";
 import { studioGo } from "@/store/studio";
 import { cn } from "@/lib/utils";
 import ImageStudio from "./ImageStudio";
@@ -37,8 +36,10 @@ import JsonLab from "./JsonLab";
 import TokenGen from "./TokenGen";
 import Base64Lab from "./Base64Lab";
 import SpotifyTakedown from "@/components/music/SpotifyTakedown";
+import BumpHub from "@/components/bump/BumpHub";
 
 type ToolId =
+  | "bump"
   | "image"
   | "pdf"
   | "music"
@@ -62,6 +63,15 @@ const TOOLS: {
   emoji: string;
   Icon: LucideIcon;
 }[] = [
+  {
+    id: "bump",
+    name: "Bump",
+    tag: "Nearby · profiles · follows · messages",
+    desc: "Find people nearby, follow bump profiles with bio + Spotify track, pin an Apple Maps place, and message.",
+    bg: "linear-gradient(135deg,#22c55a,#0b3d24)",
+    emoji: "📍",
+    Icon: MapPin,
+  },
   {
     id: "image",
     name: "Image studio",
@@ -182,15 +192,42 @@ const TOOLS: {
 ];
 
 export default function AppsHub({ mobile }: { mobile?: boolean }) {
-  const [tool, setTool] = useState<ToolId | null>(null);
-  if (tool === "image") return <ImageStudio mobile={mobile} onBack={() => setTool(null)} />;
-  if (tool === "pdf") return <PdfEditor mobile={mobile} onBack={() => setTool(null)} />;
-  if (tool === "music") return <MusicCheck mobile={mobile} onBack={() => setTool(null)} />;
+  const appsTool = useApp((s) => s.appsTool);
+  const hub = useApp((s) => s.hub);
+  const [tool, setTool] = useState<ToolId | null>((appsTool as ToolId) || null);
+
+  useEffect(() => {
+    // Legacy hub:"bump" → stay inside Apps with the Bump tool open
+    if (hub === "bump" && appsTool !== "bump") useApp.setState({ hub: "apps", appsTool: "bump" });
+  }, [hub, appsTool]);
+
+  useEffect(() => {
+    if (appsTool && TOOLS.some((t) => t.id === appsTool)) setTool(appsTool as ToolId);
+  }, [appsTool]);
+
+  function backToGrid() {
+    setTool(null);
+    useApp.setState({ appsTool: null });
+  }
+
+  if (tool === "bump") {
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-chat">
+        <BumpHub
+          mobile={mobile}
+          onBack={backToGrid}
+        />
+      </div>
+    );
+  }
+  if (tool === "image") return <ImageStudio mobile={mobile} onBack={backToGrid} />;
+  if (tool === "pdf") return <PdfEditor mobile={mobile} onBack={backToGrid} />;
+  if (tool === "music") return <MusicCheck mobile={mobile} onBack={backToGrid} />;
   if (tool === "spotify-td") {
     return (
       <div className="flex h-full min-h-0 flex-col bg-chat">
         <header className={cn("flex shrink-0 items-center gap-2 border-b border-black/20 px-3", mobile ? "pt-safe-3 pb-2" : "h-12")}>
-          <button onClick={() => setTool(null)} className="grid size-9 place-items-center rounded-full hover:bg-hover" aria-label="Back to apps">
+          <button onClick={backToGrid} className="grid size-9 place-items-center rounded-full hover:bg-hover" aria-label="Back to apps">
             <ArrowLeft className="size-5" />
           </button>
           <ShieldAlert className="size-5 text-[#1DB954]" />
@@ -207,21 +244,21 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
       </div>
     );
   }
-  if (tool === "qr") return <QrMaker mobile={mobile} onBack={() => setTool(null)} />;
-  if (tool === "color") return <ColorStudio mobile={mobile} onBack={() => setTool(null)} />;
-  if (tool === "text") return <TextLab mobile={mobile} onBack={() => setTool(null)} />;
-  if (tool === "checksum") return <Checksum mobile={mobile} onBack={() => setTool(null)} />;
-  if (tool === "metronome") return <Metronome mobile={mobile} onBack={() => setTool(null)} />;
-  if (tool === "bpm") return <BpmTap mobile={mobile} onBack={() => setTool(null)} />;
-  if (tool === "json") return <JsonLab mobile={mobile} onBack={() => setTool(null)} />;
-  if (tool === "token") return <TokenGen mobile={mobile} onBack={() => setTool(null)} />;
-  if (tool === "base64") return <Base64Lab mobile={mobile} onBack={() => setTool(null)} />;
+  if (tool === "qr") return <QrMaker mobile={mobile} onBack={backToGrid} />;
+  if (tool === "color") return <ColorStudio mobile={mobile} onBack={backToGrid} />;
+  if (tool === "text") return <TextLab mobile={mobile} onBack={backToGrid} />;
+  if (tool === "checksum") return <Checksum mobile={mobile} onBack={backToGrid} />;
+  if (tool === "metronome") return <Metronome mobile={mobile} onBack={backToGrid} />;
+  if (tool === "bpm") return <BpmTap mobile={mobile} onBack={backToGrid} />;
+  if (tool === "json") return <JsonLab mobile={mobile} onBack={backToGrid} />;
+  if (tool === "token") return <TokenGen mobile={mobile} onBack={backToGrid} />;
+  if (tool === "base64") return <Base64Lab mobile={mobile} onBack={backToGrid} />;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-chat">
       <header className={cn("flex shrink-0 items-center gap-2 border-b border-black/20 px-3", mobile ? "pt-safe-3 pb-2" : "h-12")}>
         {mobile && (
-          <button onClick={() => useApp.setState({ mobileTab: "me" })} className="grid size-9 place-items-center rounded-full hover:bg-hover" aria-label="Back">
+          <button onClick={() => useApp.setState({ mobileTab: "me", appsTool: null })} className="grid size-9 place-items-center rounded-full hover:bg-hover" aria-label="Back">
             <ArrowLeft className="size-5" />
           </button>
         )}
@@ -231,22 +268,22 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl space-y-6 p-3 sm:p-5">
           <p className="text-sm text-sub">
-            Creator utilities that run in this tab. File tools stay on-device; Music ID and Spotify takedown use your Shield / Spotify server keys when connected.
+            Creator utilities in this tab — including <b className="text-txt">Bump</b>. File tools stay on-device; Music ID and Spotify takedown use your Shield / Spotify server keys when connected.
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <button type="button" onClick={() => openBump()} className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5 sm:col-span-2 lg:col-span-1">
-              <div className="relative grid h-36 place-items-center text-6xl" style={{ background: "linear-gradient(135deg,#22c55a,#0b3d24)" }}>
-                <span className="transition group-hover:scale-110">📍</span>
-                <MapPin className="absolute top-3 left-3 size-5 text-white" />
-              </div>
-              <div className="p-4">
-                <div className="text-lg font-bold">Bump</div>
-                <div className="text-xs font-semibold text-sub">Nearby · profiles · follows · messages</div>
-                <p className="mt-1 text-sm text-sub">Find people nearby, follow bump profiles with bio + Spotify track, pin an Apple Maps place, and message.</p>
-              </div>
-            </button>
             {TOOLS.map((item) => (
-              <button key={item.id} onClick={() => setTool(item.id)} className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5">
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setTool(item.id);
+                  useApp.setState({ appsTool: item.id });
+                }}
+                className={cn(
+                  "group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5",
+                  item.id === "bump" && "ring-1 ring-[#22c55a]/35 sm:col-span-2 lg:col-span-1",
+                )}
+              >
                 <div className="relative grid h-36 place-items-center text-6xl" style={{ background: item.bg }}>
                   <span className="transition group-hover:scale-110">{item.emoji}</span>
                   <item.Icon className="absolute top-3 left-3 size-5 text-white" />

@@ -57,9 +57,14 @@ export type BumpInboxRow = {
   unread: number;
 };
 
+/** Opens Bump inside Apps (desktop hub + phone Apps tab). */
 export function openBump() {
   const mobile = typeof window !== "undefined" && window.innerWidth < 768;
-  useApp.setState(mobile ? { mobileTab: "apps", hub: "bump" } : { hub: "bump" });
+  useApp.setState(
+    mobile
+      ? { mobileTab: "apps", hub: "apps", appsTool: "bump" }
+      : { hub: "apps", appsTool: "bump" },
+  );
 }
 
 export function bumpInviteLink(code: string) {

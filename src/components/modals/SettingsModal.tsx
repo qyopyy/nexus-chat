@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import { H, Label, Select, Slider, Toggle } from "./settingsUi";
 import { AccessibilitySection, AdvancedSection, ChatPrefsBlock, ConnectionsSection, PrivacySection, UsernamesField } from "./MoreSettings";
+import TwoFactorSection from "./TwoFactorSection";
 
 type Section = "account" | "connections" | "privacy" | "appearance" | "accessibility" | "chat" | "voice" | "vavatar" | "notifications" | "advanced" | "admin";
 const ALL: Section[] = ["account", "connections", "privacy", "appearance", "accessibility", "chat", "voice", "vavatar", "notifications", "advanced", "admin"];
@@ -224,6 +225,11 @@ function AccountSection() {
           </div>
 
           <ProfileExtras />
+
+          <div>
+            <Label>Account security</Label>
+            <TwoFactorSection />
+          </div>
 
           <div>
             <Label>Avatar decoration</Label>

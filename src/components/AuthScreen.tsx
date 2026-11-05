@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, AtSign, Eye, EyeOff, Link2, Lock, Mail, MessageCircle, MonitorUp, Palette, ShieldCheck, User, Video } from "lucide-react";
 import { supabase, errorText } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { NexusCredit, copyNexusAppLink } from "@/components/ui/NexusCredit";
+import { mfaChallengeAndVerify, mfaListFactors, mfaNeedsChallenge } from "@/lib/mfa";
 
-export type AuthMode = "login" | "register" | "forgot";
+export type AuthMode = "login" | "register" | "forgot" | "mfa";
 
 function strength(pw: string) {
   let s = 0;
@@ -58,17 +59,44 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
   const honeypot = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (initialMode !== "mfa") return;
+    setModeState("mfa");
+    void mfaListFactors().then(({ totp }) => {
+      const factor = totp.find((f) => f.status === "verified") || totp[0];
+      if (factor) setMfaFactorId(factor.id);
+    });
+  }, [initialMode]);
 
   const setMode = (m: AuthMode) => {
     setModeState(m);
     setError(null);
     setInfo(null);
-    if (m !== "forgot") window.history.replaceState(null, "", `/${m}`);
+    if (m !== "forgot" && m !== "mfa") window.history.replaceState(null, "", `/${m}`);
   };
 
   const pwScore = useMemo(() => strength(password), [password]);
   const cleanUser = username.toLowerCase().replace(/[^a-z0-9_.]/g, "");
+
+  async function enterMfaIfNeeded() {
+    if (!(await mfaNeedsChallenge())) {
+      window.history.replaceState(null, "", "/");
+      return;
+    }
+    const { totp } = await mfaListFactors();
+    const factor = totp.find((f) => f.status === "verified") || totp[0];
+    if (!factor) {
+      window.history.replaceState(null, "", "/");
+      return;
+    }
+    setMfaFactorId(factor.id);
+    setMfaCode("");
+    setMode("mfa");
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -76,10 +104,15 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
     setError(null);
     setInfo(null);
     try {
-      if (mode === "login") {
+      if (mode === "mfa") {
+        if (!mfaFactorId || mfaCode.trim().length < 6) throw new Error("Enter the 6-digit code from your authenticator app.");
+        const ok = await mfaChallengeAndVerify(mfaFactorId, mfaCode.trim());
+        if (!ok) throw new Error("Invalid authenticator code.");
+        window.history.replaceState(null, "", "/");
+      } else if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
         if (error) throw new Error(error.message === "Invalid login credentials" ? "Wrong email or password." : error.message);
-        window.history.replaceState(null, "", "/");
+        await enterMfaIfNeeded();
       } else if (mode === "forgot") {
         const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
         if (error) throw error;
@@ -109,7 +142,7 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
         }
         const { error: loginErr } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
         if (loginErr) throw loginErr;
-        window.history.replaceState(null, "", "/");
+        await enterMfaIfNeeded();
       }
     } catch (err) {
       setError(errorText(err));
@@ -176,7 +209,7 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
             <span className="text-xl font-extrabold text-white">Nexus</span>
           </div>
 
-          {mode !== "forgot" ? (
+          {mode === "login" || mode === "register" ? (
             <div className="mb-6 grid grid-cols-2 rounded-xl bg-white/5 p-1">
               {(["login", "register"] as const).map((m) => (
                 <button
@@ -190,20 +223,49 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
               ))}
             </div>
           ) : (
-            <button type="button" onClick={() => setMode("login")} className="mb-5 flex items-center gap-1.5 text-sm text-white/60 hover:text-white">
+            <button
+              type="button"
+              onClick={async () => {
+                if (mode === "mfa") await supabase.auth.signOut();
+                setMfaFactorId(null);
+                setMfaCode("");
+                setMode("login");
+              }}
+              className="mb-5 flex items-center gap-1.5 text-sm text-white/60 hover:text-white"
+            >
               <ArrowLeft className="size-4" /> Back to login
             </button>
           )}
 
           <h2 className="text-2xl font-bold text-white">
-            {mode === "login" ? "Welcome back!" : mode === "register" ? "Join the crew" : "Reset your password"}
+            {mode === "login" ? "Welcome back!" : mode === "register" ? "Join the crew" : mode === "mfa" ? "Two-factor code" : "Reset your password"}
           </h2>
           <p className="mt-1 mb-6 text-sm text-white/55">
-            {mode === "login" ? "We're so excited to see you again!" : mode === "register" ? "It takes less than a minute." : "We'll email you a link to set a new one."}
+            {mode === "login"
+              ? "We're so excited to see you again!"
+              : mode === "register"
+                ? "It takes less than a minute."
+                : mode === "mfa"
+                  ? "Open your authenticator app and enter the 6-digit code."
+                  : "We'll email you a link to set a new one."}
           </p>
 
           <div className="space-y-4">
-            <Field icon={<Mail className="size-5" />} label="Email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+            {mode === "mfa" ? (
+              <Field
+                icon={<ShieldCheck className="size-5" />}
+                label="Authenticator code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                required
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="123456"
+                maxLength={6}
+              />
+            ) : (
+              <Field icon={<Mail className="size-5" />} label="Email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+            )}
             {mode === "register" && (
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field icon={<User className="size-5" />} label="Display name" value={displayName} maxLength={32} onChange={(e) => setDisplayName(e.target.value)} placeholder="Martin" />
@@ -219,7 +281,7 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
                 />
               </div>
             )}
-            {mode !== "forgot" && (
+            {(mode === "login" || mode === "register") && (
               <div>
                 <Field
                   icon={<Lock className="size-5" />}
@@ -274,7 +336,15 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
             disabled={busy}
             className="mt-6 w-full rounded-xl bg-accent py-3 font-semibold text-white shadow-lg shadow-accent/25 transition hover:bg-accent-2 disabled:opacity-60"
           >
-            {busy ? "Please wait…" : mode === "login" ? "Log In" : mode === "register" ? "Create Account" : "Send reset link"}
+            {busy
+              ? "Please wait…"
+              : mode === "login"
+                ? "Log In"
+                : mode === "register"
+                  ? "Create Account"
+                  : mode === "mfa"
+                    ? "Verify & continue"
+                    : "Send reset link"}
           </button>
           <button
             type="button"
