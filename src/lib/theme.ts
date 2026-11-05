@@ -68,6 +68,26 @@ export const THEMES: Record<string, ThemeDef> = {
     name: "Sunset",
     colors: { rail: "#1a0f14", side: "#24141b", chat: "#2b1820", panel: "#1f1117", hover: "#3a2029", active: "#4d2a36", input: "#382029", line: "#41242f", txt: "#fbe9e7", sub: "#d1a3a8", faint: "#9a6b72", accent: "#ff8a5b", accent2: "#ff6b6b", bubbleMe: "#6b2d3a", bubble: "#382029", menu: "#140b0f", wall: "#24141b" },
   },
+  light: {
+    name: "Daylight",
+    colors: { rail: "#e3e5e8", side: "#f2f3f5", chat: "#ffffff", panel: "#f2f3f5", hover: "#e8eaed", active: "#dcdfe4", input: "#e3e5e8", line: "#d4d7dc", txt: "#060607", sub: "#4e5058", faint: "#80848e", accent: "#5865f2", accent2: "#4752c4", bubbleMe: "#5865f2", bubble: "#e3e5e8", menu: "#ffffff", wall: "#f2f3f5" },
+  },
+  ocean: {
+    name: "Deep Ocean",
+    colors: { rail: "#06121c", side: "#0a1c2a", chat: "#0d2436", panel: "#081823", hover: "#143247", active: "#1a4059", input: "#123040", line: "#1a3a4f", txt: "#e8f4ff", sub: "#8fb4cc", faint: "#5e8096", accent: "#38bdf8", accent2: "#0ea5e9", bubbleMe: "#0c4a6e", bubble: "#123040", menu: "#040e16", wall: "#0a1c2a" },
+  },
+  graphite: {
+    name: "Graphite Pro",
+    colors: { rail: "#121417", side: "#181b20", chat: "#1e2228", panel: "#16191e", hover: "#2a2f37", active: "#353b45", input: "#252a32", line: "#2e343e", txt: "#eef0f3", sub: "#9aa3af", faint: "#6b7380", accent: "#a3e635", accent2: "#84cc16", bubbleMe: "#365314", bubble: "#252a32", menu: "#0d0f12", wall: "#181b20" },
+  },
+  vaporwave: {
+    name: "Vaporwave",
+    colors: { rail: "#1a0a2e", side: "#240e3d", chat: "#2d1450", panel: "#1e0b35", hover: "#3d1a66", active: "#4f2280", input: "#35185a", line: "#452070", txt: "#ffe6fb", sub: "#d4a5ff", faint: "#9b6bc9", accent: "#ff71ce", accent2: "#01cdfe", bubbleMe: "#6b1f7a", bubble: "#35185a", menu: "#12061f", wall: "#240e3d" },
+  },
+  ember: {
+    name: "Ember",
+    colors: { rail: "#140a08", side: "#1c100c", chat: "#241612", panel: "#18100c", hover: "#352018", active: "#462a1f", input: "#2e1c16", line: "#3a261c", txt: "#ffe8df", sub: "#c4a090", faint: "#8a6e60", accent: "#ff5722", accent2: "#ff9800", bubbleMe: "#7a2e14", bubble: "#2e1c16", menu: "#0e0705", wall: "#1c100c" },
+  },
 };
 
 export type FontDef = { name: string; stack: string; url: string | null };
@@ -94,6 +114,10 @@ export type Appearance = {
   theme: string;
   accent: string | null;
   bgImage: string | null;
+  /** optional looping video wallpaper (mp4/webm) — used with glass mode */
+  bgVideo: string | null;
+  /** curated animated CSS preset id, or null */
+  bgAnim: string | null;
   bgBlur: number; // px
   bgDim: number; // 0.3..1 brightness
   panelOpacity: number; // 0.4..1
@@ -109,6 +133,8 @@ export const DEFAULT_APPEARANCE: Appearance = {
   theme: "discord",
   accent: null,
   bgImage: null,
+  bgVideo: null,
+  bgAnim: null,
   bgBlur: 0,
   bgDim: 0.75,
   panelOpacity: 0.78,
@@ -120,15 +146,111 @@ export const DEFAULT_APPEARANCE: Appearance = {
   customCss: "",
 };
 
+/** Curated animated wallpapers (CSS). Safe — no remote fetch. */
+export const BG_ANIMS: Record<string, { name: string; css: string }> = {
+  aurora: {
+    name: "Aurora",
+    css: `html.bg-anim-aurora body::before{background:linear-gradient(125deg,#0b1026,#1b2a6b,#0d9488,#7c3aed,#0b1026)!important;background-size:400% 400%!important;animation:nexusAurora 18s ease infinite!important;filter:brightness(var(--app-bg-dim,.75))!important}
+@keyframes nexusAurora{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}`,
+  },
+  mesh: {
+    name: "Mesh pulse",
+    css: `html.bg-anim-mesh body::before{background:
+      radial-gradient(at 20% 20%,#5865f288 0,transparent 45%),
+      radial-gradient(at 80% 10%,#eb459e77 0,transparent 40%),
+      radial-gradient(at 50% 80%,#23a55a66 0,transparent 45%),
+      #0b0d12!important;background-size:140% 140%!important;animation:nexusMesh 22s ease-in-out infinite alternate!important;filter:brightness(var(--app-bg-dim,.75))!important}
+@keyframes nexusMesh{from{background-position:0% 0%}to{background-position:100% 100%}}`,
+  },
+  waves: {
+    name: "Neon waves",
+    css: `html.bg-anim-waves body::before{background:repeating-linear-gradient(100deg,#050510 0 12%,#ff2a6d33 12% 14%,#050510 14% 28%,#05d9e833 28% 30%)!important;background-size:220% 100%!important;animation:nexusWaves 14s linear infinite!important;filter:brightness(var(--app-bg-dim,.75)) blur(var(--app-bg-blur,0px))!important}
+@keyframes nexusWaves{from{background-position:0 0}to{background-position:220% 0}}`,
+  },
+  stars: {
+    name: "Starfield",
+    css: `html.bg-anim-stars body::before{background:
+      radial-gradient(1px 1px at 10% 20%,#fff8,transparent),
+      radial-gradient(1px 1px at 30% 60%,#fff6,transparent),
+      radial-gradient(1.5px 1.5px at 70% 40%,#fff9,transparent),
+      radial-gradient(1px 1px at 90% 80%,#fff5,transparent),
+      radial-gradient(1px 1px at 50% 10%,#fff7,transparent),
+      #050714!important;animation:nexusStars 40s linear infinite!important;filter:brightness(var(--app-bg-dim,.75))!important}
+@keyframes nexusStars{from{transform:translate3d(0,0,0)}to{transform:translate3d(-40px,-60px,0)}}`,
+  },
+  lava: {
+    name: "Lava lamp",
+    css: `html.bg-anim-lava body::before{background:
+      radial-gradient(circle at 30% 40%,#ff5722aa 0 18%,transparent 42%),
+      radial-gradient(circle at 70% 60%,#ff9800aa 0 16%,transparent 40%),
+      radial-gradient(circle at 50% 20%,#e11d48aa 0 14%,transparent 38%),
+      #1a0a08!important;background-size:160% 160%!important;animation:nexusLava 16s ease-in-out infinite alternate!important;filter:brightness(var(--app-bg-dim,.75)) blur(calc(var(--app-bg-blur,0px) + 8px))!important}
+@keyframes nexusLava{from{background-position:0% 30%}to{background-position:100% 70%}}`,
+  },
+};
+
+/** Map common BetterDiscord / Discord CSS variables → Nexus theme keys */
+const BD_MAP: Record<string, keyof ThemeColors> = {
+  "--background-tertiary": "rail",
+  "--background-secondary": "side",
+  "--background-primary": "chat",
+  "--background-secondary-alt": "panel",
+  "--background-modifier-hover": "hover",
+  "--background-modifier-active": "active",
+  "--background-modifier-selected": "active",
+  "--input-background": "input",
+  "--background-modifier-accent": "line",
+  "--text-normal": "txt",
+  "--text-muted": "sub",
+  "--channels-default": "faint",
+  "--brand-experiment": "accent",
+  "--brand-experiment-560": "accent2",
+  "--brand-500": "accent",
+  "--header-primary": "txt",
+  "--header-secondary": "sub",
+};
+
+/** Parse a BetterDiscord `.theme.css` (or any Discord :root CSS) into a partial Appearance. */
+export function parseDiscordThemeCss(raw: string): Partial<Appearance> & { themeName?: string; colors?: Partial<ThemeColors> } {
+  const css = String(raw || "");
+  const name =
+    css.match(/\/\*\s*Name:\s*(.+?)\s*\*\//i)?.[1]?.trim() ||
+    css.match(/@name\s+(.+)/i)?.[1]?.trim() ||
+    undefined;
+  const block = css.match(/:root\s*\{([\s\S]*?)\}/)?.[1] || css;
+  const colors: Partial<ThemeColors> = {};
+  const re = /(--[a-z0-9-]+)\s*:\s*([^;}{]+)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(block))) {
+    const key = BD_MAP[m[1].toLowerCase()];
+    if (!key) continue;
+    let val = m[2].trim();
+    // Discord often uses hsl(a) — keep as-is if not hex; paint() expects hex for rgba glass.
+    const hex = val.match(/#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})\b/i)?.[0];
+    if (hex) colors[key] = hex.length === 9 ? `#${hex.slice(1, 7)}` : hex;
+  }
+  // Prefer @import-only themes as customCss
+  const imports = [...css.matchAll(/@import\s+url\((['"]?)([^)'"]+)\1\)\s*;?/gi)].map((x) => `@import url("${x[2]}");`).join("\n");
+  const out: Partial<Appearance> & { themeName?: string; colors?: Partial<ThemeColors> } = { themeName: name, colors };
+  if (imports) out.customCss = imports + (Object.keys(colors).length ? `\n\n${css}` : `\n\n${css}`);
+  else if (Object.keys(colors).length < 3) out.customCss = css; // raw QuickCSS fallback
+  return out;
+}
+
 export const APPEARANCE_KEY = "nexus.appearance";
 
 /* eslint-disable no-var */
 // Plain ES5-style on purpose: this function is stringified into the boot script.
-export function paint(a: Appearance, themes: Record<string, ThemeDef>, fonts: Record<string, FontDef>) {
+export function paint(
+  a: Appearance,
+  themes: Record<string, ThemeDef>,
+  fonts: Record<string, FontDef>,
+  anims?: Record<string, { name: string; css: string }>,
+) {
   var root = document.documentElement;
   var t = themes[a.theme] || themes.discord;
   var c = t.colors as unknown as Record<string, string>;
-  var glass = !!a.bgImage;
+  var glass = !!(a.bgImage || a.bgVideo || a.bgAnim);
   var op = a.panelOpacity == null ? 0.78 : a.panelOpacity;
   function rgba(hex: string, al: number) {
     var h = hex.replace("#", "");
@@ -147,13 +269,44 @@ export function paint(a: Appearance, themes: Record<string, ThemeDef>, fonts: Re
     if (glass && see[k]) v = rgba(v, Math.min(1, op * see[k]));
     root.style.setProperty("--color-" + names[k], v);
   }
-  root.style.setProperty("--app-bg", glass ? 'url("' + String(a.bgImage).replace(/"/g, "%22") + '")' : "none");
+  root.style.setProperty("--app-bg", a.bgImage ? 'url("' + String(a.bgImage).replace(/"/g, "%22") + '")' : "none");
   root.style.setProperty("--app-bg-blur", (a.bgBlur || 0) + "px");
   root.style.setProperty("--app-bg-dim", String(a.bgDim == null ? 0.75 : a.bgDim));
   root.classList.toggle("glass", glass);
+  root.classList.toggle("glass-video", !!a.bgVideo);
   root.classList.toggle("reduce-motion", !!a.reduceMotion);
   root.classList.toggle("compact", !!a.compact);
   root.setAttribute("data-theme", a.theme);
+  // animated CSS wallpaper class
+  var prevAnim = root.getAttribute("data-bg-anim");
+  if (prevAnim) root.classList.remove("bg-anim-" + prevAnim);
+  if (a.bgAnim) {
+    root.setAttribute("data-bg-anim", a.bgAnim);
+    root.classList.add("bg-anim-" + a.bgAnim);
+  } else {
+    root.removeAttribute("data-bg-anim");
+  }
+  // video wallpaper element
+  var vid = document.getElementById("nexus-bg-video") as HTMLVideoElement | null;
+  if (a.bgVideo) {
+    if (!vid) {
+      vid = document.createElement("video");
+      vid.id = "nexus-bg-video";
+      vid.muted = true;
+      vid.loop = true;
+      vid.autoplay = true;
+      vid.playsInline = true;
+      vid.setAttribute("playsinline", "");
+      vid.setAttribute("aria-hidden", "true");
+      document.body.prepend(vid);
+    }
+    if (vid.src !== a.bgVideo) {
+      vid.src = a.bgVideo;
+      void vid.play().catch(function () {});
+    }
+  } else if (vid) {
+    vid.remove();
+  }
 
   var f = fonts[a.font] || fonts["default"];
   root.style.setProperty("--app-font", f.stack);
@@ -178,7 +331,9 @@ export function paint(a: Appearance, themes: Record<string, ThemeDef>, fonts: Re
     css.id = "nexus-custom-css";
     document.head.appendChild(css);
   }
-  css.textContent = a.customCss || "";
+  var animCss = "";
+  if (a.bgAnim && anims && anims[a.bgAnim]) animCss = anims[a.bgAnim].css + "\n";
+  css.textContent = animCss + (a.customCss || "");
 }
 /* eslint-enable no-var */
 

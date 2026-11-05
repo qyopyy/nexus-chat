@@ -101,6 +101,8 @@ type CallState = {
   recordingStartedAt: number | null;
   /** aggregate WebRTC link quality */
   callQuality: CallQuality;
+  /** latest max RTT across peers (ms); null when idle / unknown */
+  callPingMs: number | null;
   /** front / back camera preference for flip */
   facingMode: "user" | "environment";
 };
@@ -153,6 +155,7 @@ export const useCall = create<CallState>(() => ({
   recording: false,
   recordingStartedAt: null,
   callQuality: null,
+  callPingMs: null,
   facingMode: "user",
 }));
 
@@ -1200,6 +1203,7 @@ export async function leaveCall() {
     recording: false,
     recordingStartedAt: null,
     callQuality: null,
+    callPingMs: null,
     layout: get().layout,
   });
   sfx.leave();
@@ -1681,12 +1685,13 @@ export async function ringAgain() {
 
 async function sampleCallQuality() {
   if (get().status === "idle" || !peers.size) {
-    if (get().callQuality !== null) set({ callQuality: null });
+    if (get().callQuality !== null || get().callPingMs !== null) set({ callQuality: null, callPingMs: null });
     return;
   }
   let loss = 0;
   let rtt = 0;
   let samples = 0;
+  let rttSamples = 0;
   for (const p of peers.values()) {
     try {
       const stats = await p.pc.getStats();
@@ -1701,17 +1706,22 @@ async function sampleCallQuality() {
         }
         if (r.type === "candidate-pair" && (r as { state?: string }).state === "succeeded") {
           const ms = (r.currentRoundTripTime as number) || 0;
-          if (ms > 0) rtt = Math.max(rtt, ms * 1000);
+          if (ms > 0) {
+            rtt = Math.max(rtt, ms * 1000);
+            rttSamples++;
+          }
         }
       });
     } catch {
       /* ignore */
     }
   }
-  if (!samples) return;
-  const avgLoss = loss / samples;
-  const q: CallQuality = avgLoss > 0.08 || rtt > 400 ? "poor" : avgLoss > 0.03 || rtt > 200 ? "ok" : "good";
-  if (q !== get().callQuality) set({ callQuality: q });
+  if (!samples && !rttSamples) return;
+  const avgLoss = samples ? loss / samples : 0;
+  const ping = rttSamples ? Math.round(rtt) : null;
+  const q: CallQuality = avgLoss > 0.08 || (ping ?? 0) > 400 ? "poor" : avgLoss > 0.03 || (ping ?? 0) > 200 ? "ok" : "good";
+  const cur = get();
+  if (q !== cur.callQuality || ping !== cur.callPingMs) set({ callQuality: q, callPingMs: ping });
   // speaker layout: auto-focus whoever is speaking
   if (get().layout === "speaker" && !get().focused?.endsWith(":screen")) {
     const loud = Object.values(get().participants).find((p) => p.speaking);

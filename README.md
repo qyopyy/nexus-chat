@@ -110,6 +110,21 @@ Options: Cloudflare Calls TURN, Metered.ca, Twilio, or self-hosted coturn.
 - Voice/video calls, chat, notifications sounds, themes all work. **Screen sharing isn't available on iPhone** (iOS doesn't allow it in apps like this) — the button hides automatically.
 - Alternatively: open the site in Safari → Share → **Add to Home Screen** for an app-like icon with no install needed.
 
+## Desktop apps (Windows .exe + Mac)
+
+`desktop/` is an Electron shell that opens the live site (same idea as the phone apps — web deploys update the UI without rebuilding).
+
+- **Get builds:** GitHub → Actions → **Desktop app (.exe / .dmg)** → Run workflow. Artifacts + GitHub Releases (`desktop-win-<n>` / `desktop-mac-<n>`).
+- **Windows:** run `Nexus-Setup-*.exe` (installer) or `Nexus-Portable-*.exe` (no install).
+- **Mac:** open the `.dmg`, drag Nexus to Applications. First launch: right-click → **Open** (unsigned / Gatekeeper).
+- Local: `cd desktop && npm i && npm start` (dev) or `npm run dist:win` / `npm run dist:mac`.
+
+## Appearance & gifts
+
+- **Settings → Appearance:** full UI themes (Discord, Daylight, Ocean, Vaporwave, …), accent, glass backgrounds, **animated presets**, **video wallpapers**, BetterDiscord `.theme.css` import, QuickCSS.
+- **Voice calls** show live **ping (ms)** next to link quality.
+- **Studio → Orders:** admins mint **Nitro-style gift links** (`/gift/<code>`) that friends redeem for Lighting plans.
+
 ## How it works
 
 | Piece | Tech |

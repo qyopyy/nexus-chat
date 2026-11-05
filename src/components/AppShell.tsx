@@ -138,10 +138,28 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
     const play = q.get("play");
     const g = q.get("g");
     const join = q.get("join");
+    const gift = q.get("gift");
     const addbot = q.get("addbot");
     if (play && /^[A-Za-z2-9]{6}$/.test(play)) {
       joinGame(play, g === "geo" || g === "four" || g === "flappy" ? g : "streets");
       window.history.replaceState(null, "", "/");
+    } else if (gift) {
+      window.history.replaceState(null, "", "/");
+      void import("@/lib/premium").then(async ({ redeemPremiumGift, planOf }) => {
+        try {
+          const r = await redeemPremiumGift(gift);
+          const name = planOf(r.tier)?.short ?? r.tier;
+          toast(`Gift claimed — ${r.days} days of ${name}`, "success");
+          // refresh my profile so premium UI unlocks immediately
+          const me = useApp.getState().userId;
+          if (me) {
+            const { data } = await supabase.from("profiles").select("*").eq("id", me).maybeSingle();
+            if (data) useApp.setState((s) => ({ profiles: { ...s.profiles, [me]: data } }));
+          }
+        } catch (e) {
+          toast((e as Error).message || "Couldn't claim gift", "error");
+        }
+      });
     } else if (join) {
       window.history.replaceState(null, "", "/");
       void joinSpace(join).then((err) => {
