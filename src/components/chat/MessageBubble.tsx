@@ -2,12 +2,14 @@
 
 import { usePrefs } from "@/lib/prefs";
 import { memo, useEffect, useRef, useState } from "react";
-import { Check, Clock, Copy, Download, FileText, Lock, Pencil, Reply, SmilePlus, Sparkles, Trash2 } from "lucide-react";
+import { Bookmark, Check, Clock, Copy, Download, FileText, Lock, Pencil, Pin, Reply, SmilePlus, Sparkles, Trash2 } from "lucide-react";
 import { useApp, openProfileCard, toast } from "@/store/app";
 import { roleRank } from "@/lib/theme";
 import NameTag from "@/components/ui/NameTag";
 import { useChat } from "@/store/chat";
 import { deleteMessage, editMessage, toggleReaction } from "@/lib/data";
+import { pinMessage, toggleSaveMessage } from "@/lib/chatDelight";
+import { refreshPins } from "./PinsBar";
 import { EFFECTS, isEffect, playEffect } from "@/lib/effects";
 import { haptic } from "@/lib/haptics";
 import { cn, formatTime, QUICK_REACTIONS } from "@/lib/utils";
@@ -417,6 +419,18 @@ function MessageBubbleImpl({
           <ToolBtn label="Reply" onClick={reply}>
             <Reply className="size-[18px]" />
           </ToolBtn>
+          <ToolBtn
+            label="Save"
+            onClick={() => void toggleSaveMessage(m.id)}
+          >
+            <Bookmark className="size-[18px]" />
+          </ToolBtn>
+          <ToolBtn
+            label="Pin"
+            onClick={() => void pinMessage(m.id).then((ok) => ok && refreshPins())}
+          >
+            <Pin className="size-[18px]" />
+          </ToolBtn>
           {mine && !m.attachment_url && (
             <ToolBtn label="Edit" onClick={() => useChat.setState({ editingId: m.id, replyTo: null })}>
               <Pencil className="size-[18px]" />
@@ -459,6 +473,22 @@ function MessageBubbleImpl({
         </div>
         <SheetGroup>
           <SheetItem icon={<Reply className="size-5" />} label="Reply" onClick={() => (setSheet(false), reply())} />
+          <SheetItem
+            icon={<Bookmark className="size-5" />}
+            label="Save message"
+            onClick={() => {
+              setSheet(false);
+              void toggleSaveMessage(m.id);
+            }}
+          />
+          <SheetItem
+            icon={<Pin className="size-5" />}
+            label="Pin to chat"
+            onClick={() => {
+              setSheet(false);
+              void pinMessage(m.id).then((ok) => ok && refreshPins());
+            }}
+          />
           {m.content && (
             <SheetItem
               icon={<Copy className="size-5" />}
