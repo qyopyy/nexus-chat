@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { useAppearance } from "@/store/appearance";
+import BumpMusicPanel from "@/components/bump/BumpMusicPanel";
 import {
   bumpAttachAppleMaps,
   bumpClear,
@@ -63,21 +64,31 @@ import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 
-type Tab = "nearby" | "friends" | "profile" | "social" | "messages";
+type Tab = "nearby" | "friends" | "music" | "profile" | "social" | "messages";
 
 export default function BumpHub({
   mobile,
   onBack,
   standalone,
+  initialTab,
+  hideChromeTabs,
 }: {
   mobile?: boolean;
   onBack?: () => void;
   /** Standalone Bump IPA shell — hide back-to-Nexus chrome */
   standalone?: boolean;
+  /** Seed / control tab from parent shell nav */
+  initialTab?: Tab;
+  /** Hide top pill tabs (parent provides bottom nav) */
+  hideChromeTabs?: boolean;
 }) {
   const me = useApp((s) => s.userId);
   const friendships = useApp((s) => s.friendships);
-  const [tab, setTab] = useState<Tab>("nearby");
+  const [tab, setTab] = useState<Tab>(initialTab || "nearby");
+
+  useEffect(() => {
+    if (initialTab) setTab(initialTab);
+  }, [initialTab]);
   const [visible, setVisible] = useState<BumpVisible>("friends");
   const [live, setLive] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -268,6 +279,7 @@ export default function BumpHub({
   const tabs: { id: Tab; label: string }[] = [
     { id: "nearby", label: "Nearby" },
     { id: "friends", label: "Friends" },
+    { id: "music", label: "Music" },
     { id: "profile", label: "Profile" },
     { id: "social", label: "People" },
     { id: "messages", label: "Messages" },
@@ -276,73 +288,89 @@ export default function BumpHub({
   const flashLeft =
     flashUntil && flashUntil > Date.now() ? Math.max(0, Math.ceil((flashUntil - Date.now()) / 1000)) : 0;
 
+  const liveChip = (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+        live ? "bg-ok/20 text-ok" : "bg-white/10 text-sub",
+      )}
+    >
+      <span className={cn("size-1.5 animate-pulse rounded-full", live ? "bg-ok" : "bg-faint")} />
+      {live ? (bgShare ? "Live · bg" : "Live") : "Off"}
+    </span>
+  );
+
   return (
-    <div className={cn("flex h-full flex-col bg-chat", (mobile || bumpOnly) && "pb-safe-2")}>
-      <header
-        className={cn(
-          "relative shrink-0 overflow-hidden border-b border-line",
-          mobile || onBack || bumpOnly ? "pt-safe-3" : "",
-        )}
-      >
-        <div
-          className="pointer-events-none absolute inset-0 opacity-90"
-          style={{
-            background:
-              "radial-gradient(ellipse 80% 120% at 0% 0%, color-mix(in oklab, #22c55a 22%, transparent), transparent 55%), radial-gradient(ellipse 60% 80% at 100% 0%, color-mix(in oklab, var(--color-accent) 16%, transparent), transparent 50%)",
-          }}
-        />
-        <div className={cn("relative flex items-center gap-2 px-3 pb-3", mobile || onBack || bumpOnly ? "pt-1" : "pt-3")}>
-          {!bumpOnly && (mobile || onBack) && (
-            <button
-              type="button"
-              onClick={() => (onBack ? onBack() : useApp.setState({ hub: null, appsTool: null }))}
-              className="grid size-9 place-items-center rounded-full bg-black/20 hover:bg-hover"
-              aria-label="Back to apps"
-            >
-              <ArrowLeft className="size-5" />
-            </button>
+    <div className={cn("flex h-full flex-col bg-chat", (mobile || bumpOnly) && !hideChromeTabs && "pb-safe-2")}>
+      {hideChromeTabs ? (
+        <div className="flex shrink-0 items-center gap-2 border-b border-white/5 px-4 py-2">
+          {liveChip}
+          {flashLeft > 0 && (
+            <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent tabular-nums">
+              Everyone {Math.floor(flashLeft / 60)}:{String(flashLeft % 60).padStart(2, "0")}
+            </span>
           )}
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-base font-extrabold tracking-tight sm:text-lg">Bump</h1>
-              <span
+          <span className="ml-auto text-[11px] text-sub">Realtime nearby</span>
+        </div>
+      ) : (
+        <header
+          className={cn(
+            "relative shrink-0 overflow-hidden border-b border-line",
+            mobile || onBack || bumpOnly ? "pt-safe-3" : "",
+          )}
+        >
+          <div
+            className="pointer-events-none absolute inset-0 opacity-90"
+            style={{
+              background:
+                "radial-gradient(ellipse 80% 120% at 0% 0%, color-mix(in oklab, #22c55a 22%, transparent), transparent 55%), radial-gradient(ellipse 60% 80% at 100% 0%, color-mix(in oklab, var(--color-accent) 16%, transparent), transparent 50%)",
+            }}
+          />
+          <div className={cn("relative flex items-center gap-2 px-3 pb-3", mobile || onBack || bumpOnly ? "pt-1" : "pt-3")}>
+            {!bumpOnly && (mobile || onBack) && (
+              <button
+                type="button"
+                onClick={() => (onBack ? onBack() : useApp.setState({ hub: null, appsTool: null }))}
+                className="grid size-9 place-items-center rounded-full bg-black/20 hover:bg-hover"
+                aria-label="Back to apps"
+              >
+                <ArrowLeft className="size-5" />
+              </button>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-base font-extrabold tracking-tight sm:text-lg">Bump</h1>
+                {liveChip}
+                {flashLeft > 0 && (
+                  <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent tabular-nums">
+                    Everyone {Math.floor(flashLeft / 60)}:{String(flashLeft % 60).padStart(2, "0")}
+                  </span>
+                )}
+              </div>
+              <p className="truncate text-[11px] text-sub">
+                {bumpOnly ? "Standalone Bump app · same Nexus account" : "Nearby · friends · live DMs · also a separate IPA"}
+              </p>
+            </div>
+            <MapPin className={cn("size-5 shrink-0", live ? "text-ok" : "text-sub")} />
+          </div>
+
+          <nav className="relative flex gap-1 overflow-x-auto px-3 pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
-                  live ? "bg-ok/20 text-ok" : "bg-white/10 text-sub",
+                  "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition",
+                  tab === t.id ? "bg-accent text-white shadow-sm shadow-accent/25" : "bg-black/25 text-sub hover:bg-white/10 hover:text-txt",
                 )}
               >
-                <span className={cn("size-1.5 animate-pulse rounded-full", live ? "bg-ok" : "bg-faint")} />
-                {live ? (bgShare ? "Live · bg" : "Live") : "Off"}
-              </span>
-              {flashLeft > 0 && (
-                <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent tabular-nums">
-                  Everyone {Math.floor(flashLeft / 60)}:{String(flashLeft % 60).padStart(2, "0")}
-                </span>
-              )}
-            </div>
-            <p className="truncate text-[11px] text-sub">
-              {bumpOnly ? "Standalone Bump app · same Nexus account" : "Nearby · friends · live DMs · also a separate IPA"}
-            </p>
-          </div>
-          <MapPin className={cn("size-5 shrink-0", live ? "text-ok" : "text-sub")} />
-        </div>
-
-        <nav className="relative flex gap-1 overflow-x-auto px-3 pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={cn(
-                "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition",
-                tab === t.id ? "bg-accent text-white shadow-sm shadow-accent/25" : "bg-black/25 text-sub hover:bg-white/10 hover:text-txt",
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
-      </header>
+                {t.label}
+              </button>
+            ))}
+          </nav>
+        </header>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
         {tab === "nearby" && (
@@ -577,6 +605,12 @@ export default function BumpHub({
                 </button>
               </div>
             </section>
+          </div>
+        )}
+
+        {tab === "music" && (
+          <div className="mx-auto h-full max-w-xl">
+            <BumpMusicPanel />
           </div>
         )}
 

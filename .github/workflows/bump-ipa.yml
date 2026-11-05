@@ -58,6 +58,12 @@ jobs:
           pb "Add :UIBackgroundModes:0 string location"
           pb "Add :UIBackgroundModes:1 string remote-notification"
           pb "Add :UIBackgroundModes:2 string fetch"
+          pb "Add :UIBackgroundModes:3 string audio"
+          # Sign in with Apple entitlement hint (unsigned Sideloadly still uses web OAuth fallback)
+          pb "Add :CFBundleURLTypes array"
+          pb "Add :CFBundleURLTypes:0 dict"
+          pb "Add :CFBundleURLTypes:0:CFBundleURLSchemes array"
+          pb "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string hu.qyopy.bump"
           pb "Set :CFBundleDisplayName Bump"
           pb "Add :CFBundleDisplayName string Bump"
           pb "Add :ITSAppUsesNonExemptEncryption bool false"
