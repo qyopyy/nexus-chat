@@ -38,7 +38,7 @@ export const PLANS: Plan[] = [
     price: 19.99,
     color: "#1DB954",
     emoji: "🎵",
-    perks: ["Everything in Premium", "Send releases to Spotify, Apple Music, TikTok & 150+ stores", "Smart links & pre-save pages", "Audia ISRC codes (QT6HV)", "Shield 360 — up to 25 songs"],
+    perks: ["Everything in Premium", "Send releases to Spotify, Apple Music, TikTok, Snapchat & 150+ stores", "Smart links & pre-save pages", "Audia ISRC codes (QT6HV)", "Shield 360 — up to 25 songs"],
   },
   {
     id: "dist_pro",

@@ -113,7 +113,7 @@ export function buildLicensePdf(l: License, lic: Licensor): Uint8Array {
   pdf.para(n("2.1", "Grant", "Licensor grants Licensee an exclusive, worldwide, perpetual license to reproduce, display, distribute and publicly show the Artwork as the cover art of the Release, and to promote the Release."));
   pdf.para(n("2.2", "Permitted uses", ""), { gap: 3 });
   pdf.bullets([
-    "Cover art on streaming and download services (Spotify, Apple Music, YouTube, TikTok and similar), through any distributor Licensee chooses",
+    "Cover art on streaming and download services (Spotify, Apple Music, YouTube, TikTok, Snapchat and similar), through any distributor Licensee chooses",
     "Social media posts, ads, Canvas loops, visualizers, lyric videos and press kits for the Release",
     "Physical formats of the Release (CD, vinyl, cassette)",
     "Merchandise (shirts, posters and similar), only with Licensor's written approval, which Licensor will not unreasonably withhold",

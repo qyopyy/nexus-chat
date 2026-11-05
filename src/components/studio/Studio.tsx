@@ -250,7 +250,7 @@ export default function Studio() {
               <>
                 <H>Takedown notices</H>
                 <p className="-mt-3 mb-4 text-sm text-sub">
-                  Someone uploaded your music to Spotify, Apple Music, Deezer, YouTube Claim / Content ID, SoundCloud, TIDAL, Amazon Music or TikTok? Fill this in and send an official copyright notice in one go.
+                  Someone uploaded your music to Spotify, Apple Music, Deezer, YouTube Claim / Content ID, SoundCloud, TIDAL, Amazon Music, TikTok or Snapchat? Fill this in and send an official copyright notice in one go.
                 </p>
                 <div className="mb-6">
                   <SpotifyTakedown />
@@ -392,7 +392,7 @@ function Dashboard() {
         <Card title="Music distribution">
           {releases.length === 0 ? (
             <div className="text-sm text-sub">
-              Release your music to Spotify, Apple Music, TikTok, YouTube Music and 150+ stores.
+              Release your music to Spotify, Apple Music, TikTok, Snapchat, YouTube Music and 150+ stores.
               <button onClick={() => useStudio.setState({ section: "releases", releaseId: "new" })} className="mt-3 block rounded-full bg-accent px-4 py-2 font-semibold text-white">
                 New release
               </button>

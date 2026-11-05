@@ -388,7 +388,7 @@ export default function TakedownTool({ initial }: { initial?: Platform }) {
         )}
         <p className="text-xs text-sub">
           {srv.configured
-            ? `Nexus can email ${P.email} for you${srv.test ? " (TEST MODE — goes to the test inbox)" : ""}. ${verified ? `Replies go to ${myEmail} ✓` : "First we email you a code to confirm the address replies should go to."} Form-first DSPs (YouTube Claim, Apple, Amazon, TikTok) still recommend their official form.`
+            ? `Nexus can email ${P.email} for you${srv.test ? " (TEST MODE — goes to the test inbox)" : ""}. ${verified ? `Replies go to ${myEmail} ✓` : "First we email you a code to confirm the address replies should go to."} Form-first DSPs (YouTube Claim, Apple, Amazon, TikTok, Snapchat) still recommend their official form.`
             : P.prefer === "form"
               ? `${P.name} prefers its official web form. Open it, then copy each field from the boxes below.`
               : `“Send to ${P.short}” opens your email app with the full notice addressed to ${P.email} — press Send there so they reply to you.`}{" "}

@@ -7,7 +7,7 @@
 import { supabase, errorText } from "./supabase";
 import { useApp, toast } from "@/store/app";
 
-export type Platform = "spotify" | "apple" | "deezer" | "youtube" | "youtube_music" | "soundcloud" | "tidal" | "amazon" | "tiktok";
+export type Platform = "spotify" | "apple" | "deezer" | "youtube" | "youtube_music" | "soundcloud" | "tidal" | "amazon" | "tiktok" | "snapchat";
 export type TakedownStatus = "draft" | "sent" | "resolved" | "rejected";
 export type Contact = { name: string; company: string; role: "owner" | "agent"; email: string; phone: string; address: string; country: string };
 export type Takedown = {
@@ -48,7 +48,7 @@ export type PlatformInfo = {
   prefer: "email" | "form";
 };
 
-export const PLATFORMS: Platform[] = ["spotify", "apple", "deezer", "youtube", "youtube_music", "soundcloud", "tidal", "amazon", "tiktok"];
+export const PLATFORMS: Platform[] = ["spotify", "apple", "deezer", "youtube", "youtube_music", "soundcloud", "tidal", "amazon", "tiktok", "snapchat"];
 
 export const PLATFORM: Record<Platform, PlatformInfo> = {
   spotify: {
@@ -157,6 +157,18 @@ export const PLATFORM: Record<Platform, PlatformInfo> = {
     link: /^https?:\/\/(www\.)?(tiktok\.com|vm\.tiktok\.com)\//i,
     linkHint: "https://www.tiktok.com/@user/video/…",
     blurb: "TikTok copyright report form (music & video)",
+    prefer: "form",
+  },
+  snapchat: {
+    name: "Snapchat",
+    short: "Snapchat",
+    color: "#FFFC00",
+    email: "copyright@snapchat.com",
+    form: "https://help.snapchat.com/hc/en-us/requests/new",
+    policy: "https://www.snap.com/en-US/terms/copyright",
+    link: /^https?:\/\/((www|story)\.)?(snapchat\.com|snap\.com)\//i,
+    linkHint: "https://www.snapchat.com/add/… or Spotlight link",
+    blurb: "Snapchat / Snap Inc. copyright report form",
     prefer: "form",
   },
 };
