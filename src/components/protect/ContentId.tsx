@@ -24,6 +24,7 @@ export default function ContentId() {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [mine, setMine] = useState<Claim[]>([]);
   const [tab, setTab] = useState<"claims" | "refs" | "against">("claims");
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     const [w, c, a] = await Promise.all([listWorks(), myClaims(), claimsAgainstMe()]);
@@ -37,6 +38,19 @@ export default function ContentId() {
   const titles = useMemo(() => Object.fromEntries((works ?? []).map((w) => [w.id, w.title])), [works]);
   const open = claims.filter((c) => c.status === "open" || c.status === "disputed").length;
   const tracking = (works ?? []).filter((w) => w.content_id !== false).length;
+
+  const bulkPolicy = async (patch: { policy?: "block" | "track"; content_id?: boolean }, label: string) => {
+    if (!works?.length) return;
+    setBulkBusy(true);
+    let n = 0;
+    for (const w of works) {
+      const x = await setWorkPolicy(w.id, patch);
+      if (x) n++;
+    }
+    setBulkBusy(false);
+    toast(n ? `${label} · ${n} song${n === 1 ? "" : "s"}` : "Couldn't update policies", n ? "success" : "error");
+    void load();
+  };
 
   return (
     <div className="space-y-4">
@@ -110,12 +124,37 @@ export default function ContentId() {
 
       {tab === "refs" && (
         <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm text-sub">
-            <span className="flex-1">Add reference songs in Shield 360 — release tracks are added automatically.</span>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-sub">
+            <span className="min-w-0 flex-1">Add reference songs in Shield 360 — release tracks are added automatically.</span>
             <button onClick={() => studioGo("shield")} className="rounded-full bg-accent px-3 py-1.5 font-semibold text-white">
               Shield 360
             </button>
           </div>
+          {(works?.length ?? 0) > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                disabled={bulkBusy}
+                onClick={() => void bulkPolicy({ content_id: true }, "Content ID turned on")}
+                className="rounded-full bg-hover px-3 py-1.5 text-xs font-semibold hover:bg-active disabled:opacity-50"
+              >
+                Enable Content ID for all
+              </button>
+              <button
+                disabled={bulkBusy}
+                onClick={() => void bulkPolicy({ policy: "track", content_id: true }, "Track & claim for all")}
+                className="rounded-full bg-hover px-3 py-1.5 text-xs font-semibold hover:bg-active disabled:opacity-50"
+              >
+                Track & claim all
+              </button>
+              <button
+                disabled={bulkBusy}
+                onClick={() => void bulkPolicy({ policy: "block", content_id: true }, "Block uploads for all")}
+                className="rounded-full bg-hover px-3 py-1.5 text-xs font-semibold hover:bg-active disabled:opacity-50"
+              >
+                Block uploads for all
+              </button>
+            </div>
+          )}
           {(works ?? []).map((w) => (
             <RefRow key={w.id} w={w} onChange={(x) => setWorks((l) => (l ?? []).map((y) => (y.id === x.id ? x : y)))} />
           ))}

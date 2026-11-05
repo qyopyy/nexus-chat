@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Phone, Volume2 } from "lucide-react";
 import { useApp, conversationTitle } from "@/store/app";
-import { useCall, joinCall } from "@/lib/call";
+import { useCall, joinCall, unlockCallAudio } from "@/lib/call";
 import { loadMessages } from "@/lib/data";
 import { useTypingChannel } from "@/lib/realtime";
 import ChatHeader from "./ChatHeader";
@@ -128,7 +128,13 @@ function OngoingCallBanner({ conversationId }: { conversationId: string }) {
         ))}
       </span>
       <span className="text-txt">Call in progress</span>
-      <button onClick={() => void joinCall(conversationId)} className="ml-auto flex items-center gap-1.5 rounded-md bg-ok px-3 py-1 font-semibold text-white hover:bg-ok/85">
+      <button
+        onClick={() => {
+          unlockCallAudio();
+          void joinCall(conversationId);
+        }}
+        className="ml-auto flex items-center gap-1.5 rounded-md bg-ok px-3 py-1 font-semibold text-white hover:bg-ok/85"
+      >
         <Phone className="size-4" /> Join
       </button>
     </div>
@@ -158,7 +164,13 @@ function VoiceLobby({ conversationId }: { conversationId: string }) {
             ))}
           </div>
         )}
-        <button onClick={() => void joinCall(conversationId)} className="mt-6 rounded-full bg-ok px-8 py-3 font-semibold text-white transition hover:bg-ok/85">
+        <button
+          onClick={() => {
+            unlockCallAudio();
+            void joinCall(conversationId);
+          }}
+          className="mt-6 rounded-full bg-ok px-8 py-3 font-semibold text-white transition hover:bg-ok/85"
+        >
           Join Voice
         </button>
       </div>

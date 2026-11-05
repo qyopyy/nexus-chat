@@ -290,10 +290,15 @@ export function H({ children, right }: { children: React.ReactNode; right?: Reac
     </div>
   );
 }
-export function Card({ children, className, title }: { children: React.ReactNode; className?: string; title?: string }) {
+export function Card({ children, className, title, right }: { children: React.ReactNode; className?: string; title?: string; right?: React.ReactNode }) {
   return (
     <section className={cn("rounded-2xl border border-line/70 bg-side p-4", className)}>
-      {title && <h2 className="mb-3 font-bold">{title}</h2>}
+      {(title || right) && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {title && <h2 className="min-w-0 flex-1 font-bold">{title}</h2>}
+          {right}
+        </div>
+      )}
       {children}
     </section>
   );

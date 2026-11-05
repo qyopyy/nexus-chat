@@ -103,7 +103,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   autoGainControl: true,
   mode: "vad",
   pttKey: "Backquote",
-  vadThreshold: 0.02,
+  vadThreshold: 0.015,
   screenQuality: "1080p30",
   noiseMode: "ai",
   voiceQuality: 320,
@@ -159,6 +159,10 @@ type Peer = {
   speakHang: number;
   /** the remote's per-join session id — a new id means they reloaded/rejoined */
   session: string | null;
+  /** when connection last looked stuck in new/connecting */
+  stuckSince: number;
+  /** last ICE restart attempt (performance.now) */
+  lastIceRestart: number;
 };
 
 type Envelope = { from: string; session?: string; toSession?: string | null };
@@ -207,7 +211,10 @@ let gate: GainNode | null = null;
 let micDest: MediaStreamAudioDestinationNode | null = null;
 let tickTimer: ReturnType<typeof setInterval> | null = null;
 let vadHangUntil = 0;
+/** after joining, briefly use a softer VAD threshold so the first words aren't clipped */
+let joinBoostUntil = 0;
 let initialized = false;
+let clearReady = false;
 const peers = new Map<string, Peer>();
 const deadSessions = new Set<string>();
 const leaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -231,8 +238,12 @@ function ensureAudio(): AudioContext {
     master = ctx.createGain();
     master.connect(ctx.destination);
   }
-  if (ctx.state === "suspended") void ctx.resume();
+  if (ctx.state === "suspended") void ctx.resume().catch(() => {});
   applyOutput();
+  // Chrome only unlocks remote WebRTC→WebAudio after a media element has played under a gesture.
+  for (const p of peers.values()) {
+    for (const s of p.sinks) void s.el.play().catch(() => {});
+  }
   return ctx;
 }
 
@@ -273,8 +284,32 @@ async function acquireMic(): Promise<MediaStream> {
   return navigator.mediaDevices.getUserMedia({ audio: base });
 }
 
+/** Make sure every peer has our mic sender (needed if peers joined before mic permission, or after rebuild). */
+function attachMicToPeers() {
+  const mt = micTrack();
+  if (!mt || !micDest) return;
+  for (const p of peers.values()) {
+    if (p.senders.mic?.track === mt) continue;
+    if (p.senders.mic) {
+      void p.senders.mic.replaceTrack(mt).then(() => tuneAudioSender(p.senders.mic!)).catch(() => {
+        try {
+          p.pc.removeTrack(p.senders.mic!);
+        } catch {
+          /* closed */
+        }
+        p.senders.mic = p.pc.addTrack(mt, micDest!.stream);
+        void tuneAudioSender(p.senders.mic);
+      });
+    } else {
+      p.senders.mic = p.pc.addTrack(mt, micDest.stream);
+      void tuneAudioSender(p.senders.mic);
+    }
+  }
+}
+
 async function buildMic() {
   const a = ensureAudio();
+  await a.resume().catch(() => {});
   if (!inputGain) {
     inputGain = a.createGain();
     localAnalyser = a.createAnalyser();
@@ -295,8 +330,9 @@ async function buildMic() {
     micSource = a.createMediaStreamSource(stream);
     await buildVoiceChain(a);
     micSource.connect(voiceIn!);
+    attachMicToPeers();
   } catch {
-    set({ error: "Microphone unavailable — you joined in listen-only mode." });
+    set({ error: "Microphone unavailable — you joined in listen-only mode. Check browser mic permission and try Voice settings." });
   }
 }
 
@@ -354,13 +390,17 @@ async function buildVoiceChain(a: AudioContext) {
 
   let chainTail: AudioNode = hp;
   clearVad = 1;
+  clearReady = false;
   if (s.noiseMode === "ai" && (await loadClear(a)) && wasmBytes) {
     try {
       clearNode = new AudioWorkletNode(a, "nexus-clear", { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: { wasm: wasmBytes } });
       clearNode.port.onmessage = (e) => {
         const d = e.data as { vad?: number; ready?: boolean };
         if (typeof d.vad === "number") clearVad = d.vad;
-        if (typeof d.ready === "boolean") set({ clearActive: d.ready });
+        if (typeof d.ready === "boolean") {
+          clearReady = d.ready;
+          set({ clearActive: d.ready });
+        }
       };
       hp.connect(clearNode);
       chainTail = clearNode;
@@ -390,10 +430,11 @@ function tick() {
 
   // local mic gate
   const lvl = localAnalyser ? rms(localAnalyser) : 0;
-  const threshold = s.mode === "vad" ? s.vadThreshold : 0.012;
-  // with Nexus Clear the AI's voice probability must agree too → keyboard clicks / dogs don't open the mic
-  const aiSaysVoice = !clearNode || clearVad > 0.35;
-  if (lvl >= threshold && aiSaysVoice) vadHangUntil = now + 320;
+  const soft = now < joinBoostUntil;
+  const threshold = s.mode === "vad" ? (soft ? Math.min(s.vadThreshold, 0.01) : s.vadThreshold) : 0.012;
+  // only enforce Nexus Clear VAD after the worklet reports ready — otherwise the mic stays closed forever
+  const aiSaysVoice = !(clearNode && clearReady) || clearVad > 0.22;
+  if (lvl >= threshold && aiSaysVoice) vadHangUntil = now + (soft ? 500 : 320);
   const voiced = now < vadHangUntil;
   const silenced = st.muted || st.deafened;
   const open = !silenced && (s.mode === "ptt" ? st.pttActive : voiced);
@@ -409,7 +450,7 @@ function tick() {
   if (speaking !== st.speaking) patch.speaking = speaking;
   if (Math.abs(lvl - st.inputLevel) > 0.004) patch.inputLevel = lvl;
 
-  // remote speaking
+  // remote speaking + ICE watchdog for peers stuck on "connecting"
   let changed = false;
   const parts = { ...st.participants };
   for (const p of peers.values()) {
@@ -420,6 +461,27 @@ function tick() {
     if (cur && cur.speaking !== sp) {
       parts[p.id] = { ...cur, speaking: sp };
       changed = true;
+    }
+    const cs = p.pc.connectionState;
+    if (cs === "new" || cs === "connecting") {
+      if (!p.stuckSince) p.stuckSince = now;
+      else if (now - p.stuckSince > 14000) {
+        const session = p.session;
+        removePeer(p.id, true);
+        const np = ensurePeer(p.id, session);
+        void renegotiate(np);
+      } else if (now - p.stuckSince > 4500 && now - p.lastIceRestart > 4000) {
+        p.lastIceRestart = now;
+        try {
+          p.pc.restartIce();
+        } catch {
+          /* ignore */
+        }
+        // missed early offers (sent before both sides were SUBSCRIBED) — re-offer
+        void renegotiate(p);
+      }
+    } else {
+      p.stuckSince = 0;
     }
   }
   if (changed) patch.participants = parts;
@@ -541,6 +603,8 @@ function ensurePeer(id: string, session?: string | null): Peer {
     senders: { screen: [] },
     speakHang: 0,
     session: session ?? null,
+    stuckSince: performance.now(),
+    lastIceRestart: 0,
   };
   peers.set(id, p);
 
@@ -562,6 +626,11 @@ function ensurePeer(id: string, session?: string | null): Peer {
       },
     },
   });
+  // callee presence means the ring was answered — clear the caller's "connecting" ring UI
+  if (get().outgoingRing) {
+    set({ outgoingRing: null });
+    stopRing();
+  }
 
   const mt = micTrack();
   if (mt && micDest) {
@@ -589,13 +658,40 @@ function ensurePeer(id: string, session?: string | null): Peer {
   pc.ontrack = (ev) => onRemoteTrack(p, ev);
   pc.onconnectionstatechange = () => {
     updateParticipant(id, { connection: pc.connectionState });
-    if (pc.connectionState === "failed") pc.restartIce();
-    if (pc.connectionState === "connected") pc.getSenders().forEach((sn) => sn.track?.kind === "audio" && void tuneAudioSender(sn));
+    if (pc.connectionState === "failed") {
+      p.lastIceRestart = performance.now();
+      try {
+        pc.restartIce();
+      } catch {
+        /* ignore */
+      }
+      void renegotiate(p);
+    }
+    if (pc.connectionState === "connected") {
+      p.stuckSince = 0;
+      pc.getSenders().forEach((sn) => sn.track?.kind === "audio" && void tuneAudioSender(sn));
+    }
   };
 
   applyPeerVolume(id);
   sfx.join();
   return p;
+}
+
+/** Force a new local offer — recovers when the first offer was broadcast before the peer subscribed. */
+async function renegotiate(p: Peer) {
+  if (!p || p.pc.signalingState === "closed") return;
+  if (p.makingOffer || p.pc.signalingState !== "stable") return;
+  try {
+    p.makingOffer = true;
+    await p.pc.setLocalDescription();
+    const desc = p.pc.localDescription;
+    if (desc) send("signal", { to: p.id, toSession: p.session, description: desc.toJSON() });
+  } catch (e) {
+    console.warn("renegotiate failed", e);
+  } finally {
+    p.makingOffer = false;
+  }
 }
 
 async function handleSignal(p: Peer, msg: SignalPayload) {
@@ -920,6 +1016,7 @@ export async function joinCall(conversationId: string, opts: { video?: boolean }
   ensureAudio();
   await buildMic();
   if (get().conversationId !== conversationId) return; // left while waiting for permission
+  joinBoostUntil = performance.now() + 2000;
   applyMuteState();
   startTick();
 
@@ -928,6 +1025,15 @@ export async function joinCall(conversationId: string, opts: { video?: boolean }
   });
   ch.on("broadcast", { event: "signal" }, ({ payload }) => onSignal(payload as SignalPayload))
     .on("broadcast", { event: "state" }, ({ payload }) => onState(payload as StatePayload))
+    .on("broadcast", { event: "hello" }, ({ payload }) => {
+      const msg = payload as Envelope;
+      if (!me || msg.from === me || isStale(msg)) return;
+      const p = ensurePeer(msg.from, msg.session);
+      attachMicToPeers();
+      broadcastState();
+      // peer just came online — re-offer in case our first offer was lost pre-subscribe
+      void renegotiate(p);
+    })
     .on("broadcast", { event: "sound" }, ({ payload }) => onSound(payload as SoundMsg))
     .on("broadcast", { event: "soundstop" }, ({ payload }) => onSoundStop(payload as Envelope))
     .on("broadcast", { event: "react" }, ({ payload }) => {
@@ -958,8 +1064,10 @@ export async function joinCall(conversationId: string, opts: { video?: boolean }
       if (session && deadSessions.has(session)) return;
       clearTimeout(leaveTimers.get(key));
       leaveTimers.delete(key);
-      ensurePeer(key, session);
+      const p = ensurePeer(key, session);
+      attachMicToPeers();
       broadcastState();
+      void renegotiate(p);
     })
     .on("presence", { event: "leave" }, ({ key, currentPresences }) => {
       if (key === me || currentPresences.length > 0) return;
@@ -980,7 +1088,11 @@ export async function joinCall(conversationId: string, opts: { video?: boolean }
       await ch.track({ user_id: me, session: mySession, at: Date.now() });
       if (get().conversationId === conversationId) {
         set({ status: "connected" });
+        attachMicToPeers();
         broadcastState();
+        // announce ourselves so the other side can recover any offer lost while we were connecting
+        send("hello", {});
+        for (const p of peers.values()) void renegotiate(p);
       }
     } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
       set({ error: "Couldn't reach the call server. Check Realtime settings / your connection." });
@@ -1017,6 +1129,9 @@ export async function leaveCall() {
   }
   stopTick();
   stopRing();
+  joinBoostUntil = 0;
+  clearReady = false;
+  clearVad = 1;
   if (outgoingRing && me) {
     void supabase.from("call_events").insert({ conversation_id: outgoingRing, caller_id: me, kind: "cancel" });
   }
@@ -1036,12 +1151,19 @@ export async function leaveCall() {
     speaking: false,
     pttActive: false,
     error: null,
+    clearActive: null,
   });
   sfx.leave();
 }
 
+/** Unlock WebAudio under a user gesture (accept / join click) so remote audio + mic resume work. */
+export function unlockCallAudio() {
+  ensureAudio();
+}
+
 /** Start a call in a DM/group and ring the other members. */
 export async function startCall(conversationId: string, opts: { video?: boolean } = {}) {
+  unlockCallAudio();
   await joinCall(conversationId, opts);
   if (!me) return;
   const { error } = await supabase.from("call_events").insert({ conversation_id: conversationId, caller_id: me, kind: "ring" });

@@ -247,6 +247,28 @@ export async function syncAcr(workId: string): Promise<{ ok: boolean; skipped?: 
   return data as { ok: boolean; skipped?: boolean };
 }
 
+/** Push every vault-backed work that isn't already ACR-ready (skips when ACR isn't configured). */
+export async function syncAllAcr(works: ShieldWork[]): Promise<{ ok: number; fail: number; skipped: number }> {
+  let ok = 0;
+  let fail = 0;
+  let skipped = 0;
+  for (const w of works) {
+    if (!w.file_path) {
+      skipped++;
+      continue;
+    }
+    if (w.acr_status === "ready" || w.acr_status === "pending") {
+      skipped++;
+      continue;
+    }
+    const r = await syncAcr(w.id);
+    if (r.ok) ok++;
+    else if (r.skipped) skipped++;
+    else fail++;
+  }
+  return { ok, fail, skipped };
+}
+
 // ------------------------------------------------------------------ documents (contracts, split sheets, proof…)
 export type ShieldDoc = { id: string; work_id: string; owner_id: string; kind: DocKind; name: string; path: string; mime: string | null; bytes: number | null; created_at: string };
 export type DocKind = "contract" | "split_sheet" | "proof" | "license" | "artwork" | "other";
