@@ -174,7 +174,17 @@ export async function updateProject(id: string, patch: Partial<Pick<UntitledProj
 
 export async function deleteProject(id: string) {
   const tracks = await listTracks(id);
-  if (tracks.length) await supabase.storage.from("untitled").remove(tracks.map((t) => t.path));
+  const paths = new Set<string>();
+  for (const t of tracks) {
+    paths.add(t.path);
+    try {
+      const versions = await listTrackVersions(t.id);
+      for (const v of versions) paths.add(v.path);
+    } catch {
+      /* best-effort */
+    }
+  }
+  if (paths.size) await supabase.storage.from("untitled").remove([...paths]);
   const { error } = await supabase.from("untitled_projects").delete().eq("id", id).eq("owner_id", me());
   if (error) toast(errorText(error), "error");
   return !error;
@@ -186,7 +196,81 @@ export async function listTracks(projectId: string) {
   return (data ?? []) as UntitledTrack[];
 }
 
+const UNTITLED_EXT = /\.(mp3|wav|flac|m4a|aac|ogg|opus|webm|mp4|m4b|aiff?|caf)$/i;
+
+/** Phones often send M4A/MP4 as video/mp4 and WAV without a useful type. */
+export function isUntitledAudioFile(f: File): boolean {
+  const t = (f.type || "").toLowerCase().trim();
+  if (t.startsWith("audio/")) return true;
+  if (t === "video/mp4" || t === "video/quicktime" || t === "application/mp4" || t === "audio/mp4") return true;
+  if (t === "application/octet-stream" || t === "binary/octet-stream" || !t) return UNTITLED_EXT.test(f.name) || !f.name.includes(".");
+  return UNTITLED_EXT.test(f.name);
+}
+
+function byExt(name: string): string {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  const m: Record<string, string> = {
+    mp3: "audio/mpeg",
+    m4a: "audio/mp4",
+    m4b: "audio/mp4",
+    aac: "audio/aac",
+    wav: "audio/wav",
+    flac: "audio/flac",
+    ogg: "audio/ogg",
+    opus: "audio/ogg",
+    webm: "audio/webm",
+    mp4: "video/mp4",
+    mov: "video/mp4",
+    caf: "audio/mp4",
+    aiff: "audio/wav",
+    aif: "audio/wav",
+  };
+  return m[ext] || "";
+}
+
+function untitledContentType(file: File): string {
+  const t = (file.type || "").toLowerCase().trim();
+  const map: Record<string, string> = {
+    "audio/mpeg": "audio/mpeg",
+    "audio/mp3": "audio/mpeg",
+    "audio/mp4": "audio/mp4",
+    "audio/x-m4a": "audio/mp4",
+    "audio/m4a": "audio/mp4",
+    "audio/aac": "audio/aac",
+    "audio/wav": "audio/wav",
+    "audio/x-wav": "audio/wav",
+    "audio/wave": "audio/wav",
+    "audio/vnd.wave": "audio/wav",
+    "audio/flac": "audio/flac",
+    "audio/x-flac": "audio/flac",
+    "audio/ogg": "audio/ogg",
+    "audio/opus": "audio/ogg",
+    "audio/webm": "audio/webm",
+    "video/mp4": "video/mp4",
+    "video/quicktime": "video/mp4",
+    "application/mp4": "video/mp4",
+    "application/octet-stream": "",
+  };
+  if (t && map[t]) return map[t] || byExt(file.name) || "application/octet-stream";
+  if (t.startsWith("audio/")) return t;
+  return byExt(file.name) || t || "application/octet-stream";
+}
+
+function untitledUploadBody(file: File, safeName: string, contentType: string): Blob {
+  try {
+    if (file.type && file.type.toLowerCase() === contentType) return file;
+    return new File([file], safeName, { type: contentType, lastModified: file.lastModified || Date.now() });
+  } catch {
+    return file.slice(0, file.size, contentType);
+  }
+}
+
+function isPhone() {
+  return typeof navigator !== "undefined" && /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
+}
+
 async function audioDuration(file: File): Promise<number | null> {
+  const budget = isPhone() ? 1500 : 4000;
   const url = URL.createObjectURL(file);
   try {
     const a = new Audio();
@@ -195,37 +279,67 @@ async function audioDuration(file: File): Promise<number | null> {
     await new Promise<void>((res) => {
       a.onloadedmetadata = () => res();
       a.onerror = () => res();
-      setTimeout(res, 4000);
+      setTimeout(res, budget);
     });
-    return Number.isFinite(a.duration) ? a.duration : null;
+    return Number.isFinite(a.duration) && a.duration > 0 ? a.duration : null;
+  } catch {
+    return null;
   } finally {
     URL.revokeObjectURL(url);
   }
 }
 
 async function putAudio(projectId: string, file: File, onProgress?: (p: number) => void) {
-  if (!file.type.startsWith("audio/") && !/\.(mp3|wav|flac|m4a|aac|ogg|webm)$/i.test(file.name)) {
-    throw new Error("Upload an audio file");
-  }
+  if (!isUntitledAudioFile(file)) throw new Error("Upload an audio file (mp3, wav, m4a, mp4…)");
+  if (file.size <= 0) throw new Error("That file is empty");
   if (file.size > 200 * 1024 * 1024) throw new Error("Tracks can be up to 200 MB");
+  const uid = me();
+  if (!uid) throw new Error("Sign in to upload");
+
+  const contentType = untitledContentType(file) || "application/octet-stream";
   const id = crypto.randomUUID();
-  const ext = (file.name.split(".").pop() || "mp3").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp3";
-  const path = `${me()}/${projectId}/${id}.${ext}`;
+  const rawExt = (file.name.split(".").pop() || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const ext =
+    rawExt ||
+    (contentType.includes("mpeg") ? "mp3" : contentType.includes("wav") ? "wav" : contentType.includes("mp4") ? "m4a" : contentType.includes("flac") ? "flac" : "bin");
+  const safeName = `${id}.${ext}`;
+  const path = `${uid}/${projectId}/${safeName}`;
+  const body = untitledUploadBody(file, safeName, contentType);
   const duration = await audioDuration(file);
   const { data: s } = await supabase.auth.getSession();
+  if (!s.session?.access_token) throw new Error("Session expired — sign in again");
+
   await new Promise<void>((res, rej) => {
     const x = new XMLHttpRequest();
     x.open("POST", `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/untitled/${path.split("/").map(encodeURIComponent).join("/")}`);
-    x.setRequestHeader("Authorization", `Bearer ${s.session?.access_token}`);
+    x.setRequestHeader("Authorization", `Bearer ${s.session!.access_token}`);
     x.setRequestHeader("apikey", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "");
-    x.setRequestHeader("Content-Type", file.type || "audio/mpeg");
+    x.setRequestHeader("Content-Type", contentType);
     x.setRequestHeader("x-upsert", "true");
     x.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
-    x.onload = () => (x.status < 300 ? res() : rej(new Error(`Upload failed (${x.status})`)));
+    x.onload = () => {
+      if (x.status < 300) return res();
+      let detail = "";
+      try {
+        const j = JSON.parse(x.responseText) as { message?: string; error?: string };
+        detail = j.message || j.error || "";
+      } catch {
+        detail = x.responseText?.slice(0, 160) || "";
+      }
+      const msg = detail || `Upload failed (${x.status})`;
+      if (/mime|not supported|invalid/i.test(msg)) return rej(new Error(`File type blocked (${contentType || file.type || "unknown"}). Try MP3 or WAV.`));
+      if (/row-level security|policy|authorized|jwt|permission/i.test(msg) || x.status === 401 || x.status === 403) {
+        return rej(new Error("Upload failed: storage permission denied. Re-sign in and try again."));
+      }
+      if (/payload|too large|entity too large|413/i.test(msg) || x.status === 413) {
+        return rej(new Error("Upload failed: file is too large for the server."));
+      }
+      rej(new Error(msg));
+    };
     x.onerror = () => rej(new Error("Network error while uploading"));
-    x.send(file);
+    x.send(body);
   });
-  return { id, path, duration, mime: file.type || null, bytes: file.size };
+  return { id, path, duration, mime: contentType, bytes: file.size };
 }
 
 export async function uploadTrack(projectId: string, file: File, onProgress?: (p: number) => void, folder?: string | null) {
@@ -378,9 +492,11 @@ export async function createShare(
   projectId: string,
   o: { permission: SharePermission; password?: string; expiresInHours?: number | null; label?: string },
 ) {
+  // "edit" was never a real collaborator mode — treat as download.
+  const permission: SharePermission = o.permission === "edit" ? "download" : o.permission;
   const { data, error } = await supabase.rpc("untitled_share_create", {
     p_project: projectId,
-    p_permission: o.permission,
+    p_permission: permission,
     p_password: o.password || null,
     p_expires: o.expiresInHours ? new Date(Date.now() + o.expiresInHours * 3600_000).toISOString() : null,
     p_label: o.label || null,
