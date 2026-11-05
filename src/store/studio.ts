@@ -9,6 +9,7 @@ export type StudioSection =
   | "comments"
   | "customization"
   | "dist-overview"
+  | "live-catalog"
   | "releases"
   | "royalties"
   | "review"

@@ -29,6 +29,7 @@ import {
   Palette,
   Pencil,
   Plus,
+  Radio,
   Settings,
   ShieldCheck,
   Trash2,
@@ -50,6 +51,7 @@ import { Thumb } from "@/components/videos/VideoCard";
 import UploadDialog from "./UploadDialog";
 import { Releases, ReviewQueue, Royalties, DistSettings } from "./Distribution";
 import DistOverview from "./DistOverview";
+import LiveCatalog from "./LiveCatalog";
 import OrdersAdmin from "./OrdersAdmin";
 import { NEED, gate, useCanReview } from "@/lib/premium";
 import ShieldStudio from "./ShieldStudio";
@@ -71,6 +73,7 @@ const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: st
   { id: "comments", label: "Comments", icon: <MessageSquare className="size-5" /> },
   { id: "customization", label: "Customization", icon: <Palette className="size-5" /> },
   { id: "dist-overview", label: "Overview", icon: <Gauge className="size-5" />, group: "Music distribution" },
+  { id: "live-catalog", label: "Live catalog", icon: <Radio className="size-5" />, group: "Music distribution" },
   { id: "releases", label: "Releases", icon: <Disc3 className="size-5" />, group: "Music distribution" },
   { id: "royalties", label: "Royalties", icon: <Wallet className="size-5" />, group: "Music distribution" },
   { id: "isrc", label: "ISRC codes", icon: <Barcode className="size-5" />, group: "Music distribution" },
@@ -216,6 +219,7 @@ export default function Studio() {
             {section === "comments" && <CommentsSection />}
             {section === "customization" && <Customization />}
             {section === "dist-overview" && <DistOverview />}
+            {section === "live-catalog" && <LiveCatalog />}
             {section === "releases" && <Releases />}
             {section === "royalties" && <Royalties />}
             {section === "tools" && <StudioTools />}

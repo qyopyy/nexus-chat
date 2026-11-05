@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, CircleCheck, Disc3, Link2, MousePointerClick, Plus, ShieldAlert, TriangleAlert, Eye } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, CircleCheck, Disc3, Link2, MousePointerClick, Plus, Radio, ShieldAlert, TriangleAlert, Eye } from "lucide-react";
 import { useApp } from "@/store/app";
 import { useStudio, studioGo, openRelease } from "@/store/studio";
 import { STATUS_INFO, listReleases, tunearo } from "@/lib/dist";
 import { latestChecks, type AudioCheck } from "@/lib/audio";
 import { LINK_SERVICES, linkStats, listSmartLinks, smartUrl, statusLog, summarize, type LinkStatRow, type SmartLink, type StatusLog } from "@/lib/distExtras";
+import { DELIVERY_STAGES, FEATURED_STORES } from "@/lib/distStores";
 import { myRank } from "@/lib/admin";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -121,6 +122,42 @@ export default function DistOverview() {
       >
         Distribution overview
       </H>
+
+      <div className="mb-5 overflow-hidden rounded-3xl border border-[#23a55a]/25 bg-gradient-to-br from-[#0b3a1f] via-[#0f172a] to-[#1e1b4b] p-5 text-white">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-xl">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-[#23a55a]/20 px-2.5 py-1 text-[10px] font-black tracking-widest text-[#4ade80] uppercase">
+              <Radio className="size-3" /> Live music distribution
+            </div>
+            <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">From draft to Spotify in one pipeline</h2>
+            <p className="mt-2 text-sm text-white/75">
+              Nexus reviews your release, Tunearo delivers to 150+ stores, and you get smart links, pitches and royalties in one place.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {DELIVERY_STAGES.map((s, i) => (
+                <span key={s.id} className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">
+                  {i + 1}. {s.label}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <button onClick={() => openRelease("new")} className="rounded-full bg-[#23a55a] px-5 py-2.5 text-sm font-black text-black">
+              New release
+            </button>
+            <button onClick={() => studioGo("live-catalog")} className="rounded-full bg-white/10 px-5 py-2.5 text-sm font-bold hover:bg-white/15">
+              Open live catalog
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-1.5">
+          {FEATURED_STORES.map((s) => (
+            <span key={s.id} className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: s.color, color: s.id === "tidal" ? "#fff" : "#000" }}>
+              {s.name}
+            </span>
+          ))}
+        </div>
+      </div>
 
       {rows === null ? (
         <p className="text-sub">Loading…</p>
