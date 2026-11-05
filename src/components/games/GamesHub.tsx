@@ -17,13 +17,23 @@ import WebSwing from "./WebSwing";
 import GeoGuess from "./GeoGuess";
 import FourInRow from "./FourInRow";
 import SunsetBay from "./bay/SunsetBay";
+import FlappyHappy from "./flappy/FlappyHappy";
+import Pinball from "./Pinball";
+import BrickBash from "./BrickBash";
+import PongDuel from "./PongDuel";
+import MemoryFlip from "./MemoryFlip";
 
 const GAMES: { id: GameId; name: string; tag: string; desc: string; bg: string; emoji: string; C: typeof Blocks | null; isNew?: boolean }[] = [
   { id: "streets", name: "Neon Streets", tag: "Open-city driving", desc: "Open-world island city. Jobs, cash, cops — and play live with friends using an invite code.", bg: "linear-gradient(135deg,#ff2bd6,#2b0b5c)", emoji: "🚗", C: null },
   { id: "bay", name: "Sunset Bay", tag: "3D open world · 80s neon", desc: "Drive a neon coastal city in 3D — drifts, stunt jumps, hidden tapes and a ranked checkpoint rush.", bg: "linear-gradient(180deg,#2b1055,#ff4f9a 70%,#ffb347)", emoji: "🌴", C: null, isNew: true },
   { id: "geo", name: "GeoGuess", tag: "Real places · multiplayer", desc: "Real photos from around the world — pin where you think you are.", bg: "linear-gradient(135deg,#00c96b,#0b2a5c)", emoji: "🌍", C: null, isNew: true },
-  { id: "swing", name: "Web Swing", tag: "Action · swing the city", desc: "Hold to web the rooftops, release to fly. Flip for combos, dodge drones, never touch the street.", bg: "linear-gradient(135deg,#8b5cff,#ff2bd6)", emoji: "🕸️", C: WebSwing, isNew: true },
-  { id: "four", name: "Four in a Row", tag: "Vs friends or bot", desc: "Connect four discs before your opponent does.", bg: "linear-gradient(135deg,#ff4d6d,#2b5cff)", emoji: "🔴", C: null, isNew: true },
+  { id: "flappy", name: "Flappy Happy", tag: "Arcade · multiplayer race", desc: "Worlds, birds, daily gifts, chests — and live pipe races with friends.", bg: "linear-gradient(135deg,#38bdf8,#4ade80)", emoji: "🐤", C: null, isNew: true },
+  { id: "pinball", name: "Sky Pinball", tag: "Arcade · flippers", desc: "Launch the ball, slap the bumpers, keep it alive with the flippers.", bg: "linear-gradient(135deg,#7c3aed,#0b1a5c)", emoji: "🌀", C: Pinball, isNew: true },
+  { id: "bricks", name: "Brick Bash", tag: "Arcade · breakout", desc: "Bounce the ball, clear the rainbow wall, grow your paddle.", bg: "linear-gradient(135deg,#ef4444,#7c2d12)", emoji: "🧱", C: BrickBash, isNew: true },
+  { id: "pong", name: "Pong Duel", tag: "Vs bot · first to 7", desc: "Classic paddle battle against a tracking bot.", bg: "linear-gradient(135deg,#38bdf8,#f472b6)", emoji: "🏓", C: PongDuel, isNew: true },
+  { id: "memory", name: "Memory Flip", tag: "Puzzle · match pairs", desc: "Flip cards, find pairs, finish in fewer moves for a higher score.", bg: "linear-gradient(135deg,#a855f7,#1e293b)", emoji: "🃏", C: MemoryFlip, isNew: true },
+  { id: "swing", name: "Web Swing", tag: "Action · swing the city", desc: "Hold to web the rooftops, release to fly. Flip for combos, dodge drones, never touch the street.", bg: "linear-gradient(135deg,#8b5cff,#ff2bd6)", emoji: "🕸️", C: WebSwing },
+  { id: "four", name: "Four in a Row", tag: "Vs friends or bot", desc: "Connect four discs before your opponent does.", bg: "linear-gradient(135deg,#ff4d6d,#2b5cff)", emoji: "🔴", C: null },
   { id: "blocks", name: "Neon Blocks", tag: "Puzzle", desc: "Stack falling blocks and clear lines. It speeds up every 10 lines.", bg: "linear-gradient(135deg,#00e5ff,#0b1a5c)", emoji: "🧱", C: Blocks },
   { id: "beatbird", name: "Beat Bird", tag: "Arcade · with sound", desc: "Flap through the speaker stacks — every gap plays a note.", bg: "linear-gradient(135deg,#ffd400,#5c0b3a)", emoji: "🐦", C: BeatBird },
   { id: "snake", name: "Snake", tag: "Classic", desc: "Eat the notes, grow longer, don't bite yourself.", bg: "linear-gradient(135deg,#00ff9c,#0b3a2a)", emoji: "🐍", C: Snake },
@@ -46,18 +56,17 @@ const WEB_GAMES: { name: string; url: string; tag: string; color: string }[] = [
 export default function GamesHub({ mobile }: { mobile?: boolean }) {
   const [open, setOpen] = useState<GameId | null>(null);
   const [frame, setFrame] = useState<(typeof WEB_GAMES)[number] | null>(null);
-  const [flappy, setFlappy] = useState(false);
   const joinCode = useGames((s) => s.joinCode);
   const joinFor = useGames((s) => s.joinGame);
   useEffect(() => {
-    if (joinCode) setOpen(joinFor);
+    if (joinCode) setOpen(joinFor === "flappy" ? "flappy" : joinFor);
   }, [joinCode, joinFor]);
-  if (flappy) return <LocalFrame title="Flappy Happy" src="/games/flappy-happy.html" onBack={() => setFlappy(false)} mobile={mobile} />;
   if (frame) return <WebFrame game={frame} onBack={() => setFrame(null)} mobile={mobile} />;
   if (open === "streets") return <StreetsLauncher onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "bay") return <SunsetBay onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "geo") return <GeoGuess onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "four") return <FourInRow onBack={() => setOpen(null)} mobile={mobile} />;
+  if (open === "flappy") return <FlappyHappy onBack={() => setOpen(null)} mobile={mobile} />;
   if (open) return <GameScreen id={open} onBack={() => setOpen(null)} mobile={mobile} />;
   return (
     <div className="flex h-full min-h-0 flex-col bg-chat">
@@ -112,19 +121,22 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
             <div className="absolute -right-6 -bottom-8 text-[140px] opacity-90 sm:text-[200px]">🚓</div>
           </button>
 
+          {/* featured Flappy Happy */}
+          <button onClick={() => setOpen("flappy")} className="group relative block w-full overflow-hidden rounded-3xl text-left" style={{ background: "linear-gradient(180deg,#7dd3fc 0%,#4ade80 55%,#15803d 100%)" }}>
+            <div className="relative z-10 p-5 sm:p-8">
+              <div className="text-xs font-bold tracking-widest text-white/90 uppercase">Updated · worlds · multiplayer race</div>
+              <div className="mt-1 text-3xl font-black text-white sm:text-5xl">Flappy Happy</div>
+              <p className="mt-2 max-w-md text-sm text-white/90">Collect birds, claim daily gifts, open Top-3 chests, and race friends on a shared pipe seed.</p>
+              <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#facc15] px-5 py-2.5 font-black text-black transition group-hover:scale-105">
+                <Play className="size-4 fill-current" /> Play now
+              </span>
+            </div>
+            <div className="absolute -right-4 -bottom-6 text-[120px] sm:text-[170px]">🐤</div>
+          </button>
+
           <section>
             <h2 className="mb-3 text-lg font-bold">Nexus games</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              <button onClick={() => setFlappy(true)} className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5">
-                <div className="relative grid aspect-[4/3] place-items-center text-5xl" style={{ background: "linear-gradient(135deg,#38bdf8,#facc15)" }}>
-                  <span className="transition group-hover:scale-110">🐤</span>
-                  <span className="absolute top-2 left-2 rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-black">NEW</span>
-                </div>
-                <div className="p-2.5">
-                  <div className="truncate font-semibold">Flappy Happy</div>
-                  <div className="truncate text-xs text-sub">Arcade · birds & coins</div>
-                </div>
-              </button>
               {GAMES.map((g) => (
                 <button key={g.id} onClick={() => setOpen(g.id)} className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5">
                   <div className="relative grid aspect-[4/3] place-items-center text-5xl" style={{ background: g.bg }}>

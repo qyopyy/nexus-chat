@@ -1213,6 +1213,10 @@ function triggerGameOver() {
         bestScore = score;
         localStorage.setItem('flappyHappyBestScore', bestScore.toString());
     }
+    try {
+        const bank = parseInt(localStorage.getItem('flappyHappyCoins') || '0', 10) || 0;
+        localStorage.setItem('flappyHappyCoins', String(bank + coinsCollected + score));
+    } catch (_) { /* ignore */ }
 
     finalScore.innerText = score;
     finalBest.innerText = bestScore;
@@ -1221,6 +1225,13 @@ function triggerGameOver() {
 
     hud.classList.add('hidden');
     gameOverScreen.classList.remove('hidden');
+
+    // Notify Nexus embed host (FlappySolo) so lobby can award coins / progress
+    try {
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'flappy-happy-over', score, coins: coinsCollected + score }, window.location.origin);
+        }
+    } catch (_) { /* ignore */ }
 }
 
 function pauseGame() {
@@ -1358,8 +1369,37 @@ document.getElementById('pauseQuitBtn').addEventListener('click', (e) => {
 
 document.getElementById('overMenuBtn').addEventListener('click', (e) => {
     e.stopPropagation();
+    // In Nexus embed, Menu returns to the Flappy Happy lobby
+    try {
+        const q = new URLSearchParams(location.search);
+        if (q.get('embed') === '1' && window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'flappy-happy-over', score, coins: coinsCollected + score }, window.location.origin);
+            return;
+        }
+    } catch (_) { /* ignore */ }
     returnToMenu();
 });
+
+// Prefill bird + auto-start when launched from the Nexus Flappy lobby
+(function bootFromQuery() {
+    try {
+        const q = new URLSearchParams(location.search);
+        const birdId = q.get('bird');
+        if (birdId) {
+            const b = BIRDS.find((x) => x.id === birdId);
+            if (b) {
+                selectedBird = b;
+                selectedBirdLabel.innerText = b.name;
+                document.querySelectorAll('.character-card').forEach((el, i) => {
+                    el.classList.toggle('active', BIRDS[i]?.id === birdId);
+                });
+            }
+        }
+        if (q.get('embed') === '1' && q.get('autostart') === '1') {
+            setTimeout(() => startNewGame(), 120);
+        }
+    } catch (_) { /* ignore */ }
+})();
 </script>
 
 </body>

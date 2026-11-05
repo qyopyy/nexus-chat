@@ -4,12 +4,27 @@ import { supabase } from "./supabase";
 import { useApp } from "@/store/app";
 import { loadProfiles } from "./data";
 
-export type GameId = "streets" | "blocks" | "snake" | "2048" | "beatbird" | "geo" | "swing" | "four" | "bay";
+export type GameId =
+  | "streets"
+  | "blocks"
+  | "snake"
+  | "2048"
+  | "beatbird"
+  | "geo"
+  | "swing"
+  | "four"
+  | "bay"
+  | "flappy"
+  | "pinball"
+  | "bricks"
+  | "pong"
+  | "memory";
 export type Row = { user_id: string; best: number; at: string };
 
 export async function submitScore(game: GameId, score: number) {
   const me = useApp.getState().userId;
   if (!me || score <= 0) return;
+  // newer game ids may not be in the live check constraint yet — local best still works
   await supabase.from("game_scores").insert({ user_id: me, game, score: Math.floor(score) });
 }
 

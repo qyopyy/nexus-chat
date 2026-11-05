@@ -96,7 +96,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
     const play = q.get("play");
     const g = q.get("g");
     if (play && /^[A-Za-z2-9]{6}$/.test(play)) {
-      joinGame(play, g === "geo" || g === "four" ? g : "streets");
+      joinGame(play, g === "geo" || g === "four" || g === "flappy" ? g : "streets");
       window.history.replaceState(null, "", "/");
     }
   }, [bootstrapped]);

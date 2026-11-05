@@ -9,6 +9,7 @@ import { loadProfiles } from "./data";
 import { sfx } from "./sounds";
 
 export const GAME_NAMES: Record<RoomGame, { name: string; emoji: string; bg: string }> = {
+  flappy: { name: "Flappy Race", emoji: "🐤", bg: "linear-gradient(135deg,#38bdf8,#4ade80)" },
   streets: { name: "Neon Streets", emoji: "🚗", bg: "linear-gradient(135deg,#ff2bd6,#2b0b5c)" },
   geo: { name: "GeoGuess", emoji: "🌍", bg: "linear-gradient(135deg,#00c96b,#0b2a5c)" },
   four: { name: "Four in a Row", emoji: "🔴", bg: "linear-gradient(135deg,#ff4d6d,#5c0b2b)" },
