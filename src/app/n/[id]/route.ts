@@ -153,6 +153,7 @@ ${jsonLd(ld)}
   <div class="meta">${likes} likes · ${views} views${kind === "post" ? ` · ${post!.comment_count} comments` : ""}</div>
 </div>
 <a class="cta" href="${app}">Open in NexusGram</a>
+<p style="margin-top:18px;text-align:center;font-size:12px;color:rgba(255,255,255,.4)">Made with ❤️ by Nexus Project / qyopy · <a href="${esc(absoluteUrl("/", base))}" style="color:#9fb3ff">Share Nexus</a></p>
 </div></body></html>`;
 
   return new Response(body, { headers: { ...html, "Cache-Control": "public, max-age=60, s-maxage=120" } });

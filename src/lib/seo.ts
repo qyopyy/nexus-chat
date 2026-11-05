@@ -7,6 +7,8 @@ export const SITE = {
   tagline: "Chat, voice, video, NexusGram, Live, Radio — one place for your friends.",
   gramTagline: "Photos, Shorts, and Stories on NexusGram.",
   twitter: "@nexusproject",
+  credit: "Made with ❤️ by Nexus Project / qyopy",
+  makers: { org: "Nexus Project", handle: "qyopy" },
 } as const;
 
 export const esc = (s: unknown) =>
@@ -16,6 +18,17 @@ export function absoluteUrl(path: string, origin?: string) {
   const base = (origin || SITE.url).replace(/\/$/, "");
   if (/^https?:\/\//i.test(path)) return path;
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+/** Canonical invite / share link for the Nexus app itself */
+export function shareAppUrl(origin?: string) {
+  if (origin) return absoluteUrl("/", origin);
+  if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
+  return SITE.url;
+}
+
+export function shareAppText() {
+  return `Join me on Nexus — chat, voice, video, NexusGram & more.\n${shareAppUrl()}`;
 }
 
 export function truncate(s: string, n = 160) {

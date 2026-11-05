@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag, { Badges } from "@/components/ui/NameTag";
 import LargeTitle from "./LargeTitle";
+import NexusShareFooter from "@/components/ui/NexusCredit";
 import type { UserStatus } from "@/lib/types";
 
 const STATUSES: { id: UserStatus; label: string; dot: string }[] = [
@@ -151,7 +152,7 @@ export default function MobileMe() {
         </div>
       )}
 
-      <div className="mx-4 mt-4 mb-8 overflow-hidden rounded-2xl bg-side">
+      <div className="mx-4 mt-4 overflow-hidden rounded-2xl bg-side">
         <button
           onClick={async () => {
             await leaveCall();
@@ -161,6 +162,10 @@ export default function MobileMe() {
         >
           <LogOut className="size-[18px]" /> Log out
         </button>
+      </div>
+
+      <div className="mx-4 mt-4 mb-10">
+        <NexusShareFooter />
       </div>
     </div>
   );

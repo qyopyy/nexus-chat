@@ -146,6 +146,7 @@ ${stories.length ? `<div class="sec">Story · ${stories.length}</div><div class=
 <div id="posts" class="grid">${posts.map(tile).join("") || ""}</div>${posts.length ? "" : `<div class="empty" id="posts-e">No posts yet.</div>`}
 <div id="shorts" class="grid shorts" style="display:none">${shorts.map(tile).join("")}</div><div class="empty" id="shorts-e" style="display:none">${shorts.length ? "" : "No Shorts yet."}</div>
 <p class="foot">Join <a href="${base}/register">Nexus</a> to follow @${esc(p.username)}, add friends, and post your own stories &amp; Shorts.</p>
+<p class="foot" style="margin-top:12px">Made with ❤️ by Nexus Project / qyopy · <a href="${base}">Share Nexus</a></p>
 </div>
 <div class="viewer" id="v"><div class="box"><div class="bars" id="bars"></div><button class="x" onclick="closeStory()" aria-label="Close">×</button><button class="l" onclick="step(-1)" aria-label="Previous"></button><button class="r" onclick="step(1)" aria-label="Next"></button><div id="m" style="height:100%"></div><div class="cap" id="cap"></div></div></div>
 <div class="toast" id="toast">Link copied</div>

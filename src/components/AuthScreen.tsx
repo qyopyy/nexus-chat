@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { ArrowLeft, AtSign, Eye, EyeOff, Lock, Mail, MessageCircle, MonitorUp, Palette, ShieldCheck, User, Video } from "lucide-react";
+import { ArrowLeft, AtSign, Eye, EyeOff, Link2, Lock, Mail, MessageCircle, MonitorUp, Palette, ShieldCheck, User, Video } from "lucide-react";
 import { supabase, errorText } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import { NexusCredit, copyNexusAppLink } from "@/components/ui/NexusCredit";
 
 export type AuthMode = "login" | "register" | "forgot";
 
@@ -275,6 +276,14 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
           >
             {busy ? "Please wait…" : mode === "login" ? "Log In" : mode === "register" ? "Create Account" : "Send reset link"}
           </button>
+          <button
+            type="button"
+            onClick={() => void copyNexusAppLink()}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 py-2.5 text-sm font-semibold text-white/70 transition hover:bg-white/5 hover:text-white"
+          >
+            <Link2 className="size-4" /> Share Nexus app link
+          </button>
+          <NexusCredit className="mt-4 text-white/45" />
         </form>
       </section>
     </div>

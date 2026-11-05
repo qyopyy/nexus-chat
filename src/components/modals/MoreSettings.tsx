@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 import type { UserStatus } from "@/lib/types";
 import { H, Label, Select, Slider, Toggle } from "./settingsUi";
 import { claimUsername, loadAliases, makePrimary, releaseUsername, useAliases } from "@/lib/usernames";
+import { NexusCredit, copyNexusAppLink } from "@/components/ui/NexusCredit";
+import { shareAppUrl } from "@/lib/seo";
 
 const Hr = () => <div className="my-8 h-px bg-line" />;
 
@@ -382,6 +384,16 @@ export function AdvancedSection() {
           </div>
         ))}
       </div>
+      <Hr />
+      <Label>Share Nexus</Label>
+      <p className="mb-2 text-sm text-sub">Invite friends with the app link. Works on web and when Nexus is installed as an app.</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={() => void copyNexusAppLink()} className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-white">
+          Share / copy app link
+        </button>
+        <code className="rounded-lg bg-side px-3 py-2 text-xs break-all text-sub">{shareAppUrl()}</code>
+      </div>
+      <NexusCredit className="mt-4" />
       <Hr />
       <Label>Advanced</Label>
       <Toggle label="Developer mode" hint="Adds “Copy ID” to profiles for bots, support and integrations." checked={p.devMode} onChange={(v) => setPref("devMode", v)} />
