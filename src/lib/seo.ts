@@ -14,6 +14,9 @@ export const SITE = {
   icon512: "/icon-512.png",
   credit: "Made with ❤️ @qyopy",
   makers: { org: "Nexus Project", handle: "qyopy", url: "https://github.com/qyopyy" },
+  /** Support / social */
+  revolut: { handle: "qyopylol", url: "https://revolut.me/qyopylol" },
+  instagram: { handle: "nexusproject_chat", url: "https://www.instagram.com/nexusproject_chat/" },
 } as const;
 
 export const esc = (s: unknown) =>
