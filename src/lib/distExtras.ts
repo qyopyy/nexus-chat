@@ -50,6 +50,7 @@ export const LINK_SERVICES: { id: string; name: string; color: string; hint: str
   { id: "beatport", name: "Beatport", color: "#01FF95", hint: "https://www.beatport.com/…" },
   { id: "bandcamp", name: "Bandcamp", color: "#1DA0C3", hint: "https://….bandcamp.com/…" },
   { id: "tiktok", name: "TikTok sound", color: "#FE2C55", hint: "https://www.tiktok.com/music/…" },
+  { id: "snapchat", name: "Snapchat", color: "#FFFC00", hint: "https://www.snapchat.com/…" },
   { id: "instagram", name: "Instagram", color: "#E1306C", hint: "https://instagram.com/…" },
   { id: "website", name: "Website", color: "#9AA0A6", hint: "https://…" },
 ];

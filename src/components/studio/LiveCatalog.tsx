@@ -113,7 +113,7 @@ export default function LiveCatalog() {
             <div className="text-xs font-black tracking-widest text-[#23a55a] uppercase">Nexus Live Distribution</div>
             <h2 className="mt-0.5 text-2xl font-black tracking-tight">Your music, live worldwide</h2>
             <p className="mt-1 max-w-2xl text-sm text-sub">
-              Releases that cleared Nexus review and Tunearo delivery. Pull store links, share smart pages, and keep royalties flowing — 150+ destinations including Spotify, Apple Music, TikTok and YouTube Music.
+              Releases that cleared Nexus review and Tunearo delivery. Pull store links, share smart pages, and keep royalties flowing — 150+ destinations including Spotify, Apple Music, TikTok, Snapchat and YouTube Music.
             </p>
           </div>
           <div className="rounded-2xl bg-black/30 px-4 py-3 text-center">

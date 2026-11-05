@@ -114,7 +114,7 @@ function ReleaseList() {
         Music releases
       </H>
       {defaultsOpen && <DefaultsDialog onClose={() => setDefaultsOpen(false)} />}
-      <p className="-mt-3 mb-4 text-sm text-sub">Distribute to Spotify, Apple Music, TikTok, YouTube Music, Amazon, Deezer and 150+ stores via Tunearo. An admin reviews every release before it&apos;s sent.</p>
+      <p className="-mt-3 mb-4 text-sm text-sub">Distribute to Spotify, Apple Music, TikTok, Snapchat, YouTube Music, Amazon, Deezer and 150+ stores via Tunearo. An admin reviews every release before it&apos;s sent.</p>
       {rows && rows.length > 0 && (
         <div className="mb-4 space-y-2">
           <div className="flex gap-1.5 overflow-x-auto pb-1">

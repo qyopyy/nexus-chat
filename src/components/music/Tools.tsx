@@ -26,7 +26,7 @@ export const TOOLS: { id: ToolId; label: string; sub: string; color: string; ico
   { id: "takedown", label: "Takedown notice", sub: "Spotify & Apple Music", color: "#E5484D", icon: <ShieldAlert className="size-5" /> },
   { id: "master", label: "Quick master", sub: "Loud, clean, streaming-ready", color: "#8B5CFF", icon: <SlidersHorizontal className="size-5" /> },
   { id: "vibe", label: "Slowed / sped up", sub: "Live remix: reverb, 8D, lo-fi", color: "#FF2BD6", icon: <Waves className="size-5" /> },
-  { id: "visualizer", label: "Visualizer video", sub: "Song → TikTok / Reels video", color: "#00B8D9", icon: <Clapperboard className="size-5" /> },
+  { id: "visualizer", label: "Visualizer video", sub: "Song → TikTok / Snap / Reels", color: "#00B8D9", icon: <Clapperboard className="size-5" /> },
   { id: "beats", label: "Beat maker", sub: "16-step drums + 808", color: "#FF9F40", icon: <Grid3x3 className="size-5" /> },
   { id: "analyzer", label: "Audio analyzer", sub: "BPM, key, LUFS, true peak", color: "#F0B232", icon: <AudioWaveform className="size-5" /> },
   { id: "copyright", label: "Copyright check", sub: "Find copyrighted music", color: "#ED4245", icon: <Fingerprint className="size-5" /> },

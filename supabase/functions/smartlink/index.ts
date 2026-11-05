@@ -16,7 +16,7 @@ const json = (body: unknown, status = 200) =>
 
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const RANK: Record<string, number> = { owner: 4, admin: 3, moderator: 2, vip: 1, member: 0 };
-export const SERVICES = ["spotify", "apple", "youtube", "youtube_music", "amazon", "deezer", "tidal", "soundcloud", "beatport", "bandcamp", "audiomack", "pandora", "boomplay", "tiktok", "instagram", "website"];
+export const SERVICES = ["spotify", "apple", "youtube", "youtube_music", "amazon", "deezer", "tidal", "soundcloud", "beatport", "bandcamp", "audiomack", "pandora", "boomplay", "tiktok", "snapchat", "instagram", "website"];
 
 class HttpError extends Error {
   constructor(public status: number, message: string) {

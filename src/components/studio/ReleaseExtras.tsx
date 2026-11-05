@@ -331,7 +331,7 @@ export function PitchCard({ pitch, tracks, canEdit, onSave }: { pitch: Pitch | n
         </div>
         <label className="block text-sm">
           <span className="mb-1 block text-xs text-sub">Marketing plans</span>
-          <textarea value={p.marketing ?? ""} maxLength={1000} rows={2} onChange={(e) => set({ marketing: e.target.value })} placeholder="TikTok campaign, music video, live shows, press…" className="w-full resize-y rounded-lg border border-line bg-transparent px-3 py-2 outline-none focus:border-accent" />
+          <textarea value={p.marketing ?? ""} maxLength={1000} rows={2} onChange={(e) => set({ marketing: e.target.value })} placeholder="TikTok / Snapchat campaign, music video, live shows, press…" className="w-full resize-y rounded-lg border border-line bg-transparent px-3 py-2 outline-none focus:border-accent" />
         </label>
       </fieldset>
       {canEdit && (

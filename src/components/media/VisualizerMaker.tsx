@@ -13,7 +13,7 @@ type Aspect = "9:16" | "1:1" | "16:9";
 const SIZE: Record<Aspect, [number, number]> = { "9:16": [720, 1280], "1:1": [1080, 1080], "16:9": [1280, 720] };
 const MIMES = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
 
-/** song (+ cover) → animated visualizer video for TikTok / Reels / Shorts / YouTube */
+/** song (+ cover) → animated visualizer video for TikTok / Snapchat / Reels / Shorts / YouTube */
 export default function VisualizerMaker() {
   const [audio, setAudio] = useState<{ file: File; buf: AudioBuffer } | null>(null);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
@@ -175,7 +175,7 @@ export default function VisualizerMaker() {
         <Row label="Format">
           {(["9:16", "1:1", "16:9"] as const).map((a) => (
             <Chip key={a} on={aspect === a} onClick={() => setAspect(a)}>
-              {a === "9:16" ? "9:16 · TikTok/Reels/Shorts" : a === "1:1" ? "1:1 · Feed" : "16:9 · YouTube"}
+              {a === "9:16" ? "9:16 · TikTok/Snap/Reels/Shorts" : a === "1:1" ? "1:1 · Feed" : "16:9 · YouTube"}
             </Chip>
           ))}
         </Row>

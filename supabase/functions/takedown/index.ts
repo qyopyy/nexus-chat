@@ -35,6 +35,7 @@ const PLATFORM: Record<string, { name: string; email: string }> = {
   tidal: { name: "TIDAL", email: "copyright@tidal.com" },
   amazon: { name: "Amazon Music", email: "copyright@amazon.com" },
   tiktok: { name: "TikTok", email: "copyright@tiktok.com" },
+  snapchat: { name: "Snapchat", email: "copyright@snapchat.com" },
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

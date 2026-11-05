@@ -47,6 +47,7 @@ export const SERVICE_INFO: Record<string, { name: string; color: string; action:
   beatport: { name: "Beatport", color: "#01FF95", action: "Buy" },
   bandcamp: { name: "Bandcamp", color: "#1DA0C3", action: "Buy" },
   tiktok: { name: "TikTok", color: "#FE2C55", action: "Use sound" },
+  snapchat: { name: "Snapchat", color: "#FFFC00", action: "Open" },
   instagram: { name: "Instagram", color: "#E1306C", action: "Follow" },
   website: { name: "Website", color: "#9AA0A6", action: "Visit" },
 };
@@ -64,7 +65,7 @@ export function renderPage(d: PageData, base: string) {
   const rows = services
     .map((k) => {
       const s = SERVICE_INFO[k];
-      return `<a class="row" href="${base}/l/${esc(d.slug)}/go/${k}" rel="noopener"><span class="dot" style="background:${s.color}"></span><span class="nm">${s.name}</span><span class="btn">${d.presave && k !== "instagram" && k !== "website" && k !== "tiktok" ? "Pre-save" : s.action}</span></a>`;
+      return `<a class="row" href="${base}/l/${esc(d.slug)}/go/${k}" rel="noopener"><span class="dot" style="background:${s.color}"></span><span class="nm">${s.name}</span><span class="btn">${d.presave && k !== "instagram" && k !== "website" && k !== "tiktok" && k !== "snapchat" ? "Pre-save" : s.action}</span></a>`;
     })
     .join("");
   const tracks =

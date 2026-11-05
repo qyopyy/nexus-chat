@@ -54,7 +54,7 @@ export default function VideosHub({ mobile }: { mobile?: boolean }) {
         {route.view === "create" && (
           <div className="mx-auto max-w-5xl p-3 sm:p-5">
             <h1 className="text-xl font-bold">Create a music video</h1>
-            <p className="mb-4 text-sm text-sub">Turn a song + cover art into an animated visualizer for Videos, NexusGram Shorts, TikTok or Reels.</p>
+            <p className="mb-4 text-sm text-sub">Turn a song + cover art into an animated visualizer for Videos, NexusGram Shorts, TikTok, Snapchat or Reels.</p>
             <VisualizerMaker />
           </div>
         )}
