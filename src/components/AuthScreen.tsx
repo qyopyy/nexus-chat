@@ -7,11 +7,6 @@ import { cn } from "@/lib/utils";
 
 export type AuthMode = "login" | "register" | "forgot";
 
-function gateToken() {
-  const m = document.cookie.match(/(?:^|;\s*)nexus_gate=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : "";
-}
-
 function strength(pw: string) {
   let s = 0;
   if (pw.length >= 8) s++;
@@ -93,7 +88,7 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
         if (password !== confirm) throw new Error("Passwords don't match.");
         if (!agree) throw new Error("Please accept the community rules.");
         const { error } = await supabase.functions.invoke("signup", {
-          body: { email: email.trim(), password, username: cleanUser, display_name: displayName.trim() || cleanUser, gate: gateToken() },
+          body: { email: email.trim(), password, username: cleanUser, display_name: displayName.trim() || cleanUser },
         });
         if (error) {
           let msg = errorText(error);

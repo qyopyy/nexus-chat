@@ -35,7 +35,6 @@ Next.js 16 + Supabase + WebRTC. Chat, voice/video calls, screen sharing, servers
 - Animated avatars (GIF / animated WebP), 8 animated avatar decorations, profile banners, "About me"
 
 **Access**
-- Site-wide password gate (default `qyopy.hu`, checked on the server, cookie lasts 30 days)
 - Dedicated `/login` and `/register` pages, password strength meter, forgot/reset password
 
 **Social**
@@ -51,7 +50,9 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000 → site password `qyopy.hu` → **Create account**. The first account becomes the 👑 Owner — that's you, so register first. Then open **Settings → Admin Panel** to give friends VIP / Moderator / badges.
+Open http://localhost:3000 → **Create account**. The first account becomes the 👑 Owner — that's you, so register first. Then open **Settings → Admin Panel** to give friends VIP / Moderator / badges.
+
+If registration says a site password is required, redeploy `supabase/functions/signup`. That check is gone from the function in this repo, but an already-deployed copy still enforces it until you redeploy.
 
 Before sharing a deployed URL: Supabase → Authentication → URL Configuration → set **Site URL** to it (used by password-reset emails).
 
@@ -64,7 +65,7 @@ Before sharing a deployed URL: Supabase → Authentication → URL Configuration
    ```bash
    npx supabase functions deploy signup --no-verify-jwt --project-ref YOUR-REF
    ```
-   If you change the site password, also set `SITE_GATE_TOKEN` on the function to `sha256("nexus-gate:<new password>")`.
+   Redeploy it if an older copy is already live. Older copies reject registration unless the caller presents the removed site-password token.
 4. **Password reset emails:** Authentication → URL Configuration → set Site URL to your deployed URL.
 5. **Env vars:**
    ```bash
@@ -76,11 +77,11 @@ Before sharing a deployed URL: Supabase → Authentication → URL Configuration
    npm install
    npm run dev
    ```
-   Open http://localhost:3000, enter the site password, register (first account = Owner), register a second account in a private window, add each other by username, and call.
+   Open http://localhost:3000, register (first account = Owner), register a second account in a private window, add each other by username, and call.
 
 ## Deploying
 
-Push to GitHub and import into Vercel (or any Node host), adding the same env vars (including `SITE_PASSWORD`).
+Push to GitHub and import into Vercel (or any Node host), adding the same env vars.
 Camera, microphone and screen sharing only work on **HTTPS** (or `localhost`).
 
 ### TURN server (recommended for real-world use)
@@ -130,7 +131,7 @@ src/components/modals/       settings (account / voice & video / notifications),
 ```
 
 ## Notes
-- The site password protects the app pages; the Supabase API itself is protected by accounts + RLS as usual.
+- Chat data is protected by Supabase accounts and row-level security. Public pages (smart links, gram profiles, vault shares) do not require a signed-in session.
 - The `attachments` and `avatars` buckets are public-read with random, unguessable paths. Switch to signed URLs if you need stricter privacy.
 - Any signed-in user can see who is online (presence). Restrict `can_access_topic('online')` if you want friends-only presence.
 - Push-to-talk works while the tab is focused (browsers can't capture global keys).
