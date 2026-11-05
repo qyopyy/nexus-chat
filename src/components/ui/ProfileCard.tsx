@@ -9,8 +9,8 @@ import { openDM } from "@/lib/data";
 import { startCall } from "@/lib/call";
 import { supabase } from "@/lib/supabase";
 import { isBanned, isMuted, myRank } from "@/lib/admin";
-import { audienceWord, fmtCount, linkLabel, platformById, spotifyArtistId, spotifyEmbed } from "@/lib/links";
-import { sp, type SpArtist } from "@/lib/music";
+import { audienceWord, fmtCount, linkLabel, platformById, spotifyEmbed } from "@/lib/links";
+import { fetchLiveFollowers, followersCacheKey, supportsLiveFollowers } from "@/lib/followers";
 import type { ProfileLink } from "@/lib/types";
 import { BadgeToggles, ModerationControls } from "@/components/admin/ModTools";
 import { ROLE_INFO, roleRank, type SiteRole } from "@/lib/theme";
@@ -325,26 +325,24 @@ export function CardBody({ userId }: { userId: string }) {
   );
 }
 
-const liveFans = new Map<string, Promise<number | null>>();
-/** real follower count for Spotify artist links (others use the number the owner entered) */
+/** Live audience counts for X / YouTube / TikTok / Twitch / GitHub / SoundCloud / Spotify */
 function useLiveFollowers(link: ProfileLink) {
-  const id = link.type === "spotify" ? spotifyArtistId(link.url) : null;
+  const key = supportsLiveFollowers(link.type, link.url) ? followersCacheKey(link.type, link.url) ?? `${link.type}:${link.url}` : null;
   const [n, setN] = useState<number | null>(null);
   useEffect(() => {
-    if (!id) return;
-    if (!liveFans.has(id))
-      liveFans.set(
-        id,
-        sp<{ artists: SpArtist[] }>("artists", { ids: [id] })
-          .then((r) => r.artists?.[0]?.followers ?? null)
-          .catch(() => null),
-      );
+    if (!key) {
+      setN(null);
+      return;
+    }
     let alive = true;
-    void liveFans.get(id)!.then((v) => alive && setN(v));
+    setN(null);
+    void fetchLiveFollowers(link.type, link.url).then((v) => {
+      if (alive) setN(v);
+    });
     return () => {
       alive = false;
     };
-  }, [id]);
+  }, [key, link.type, link.url]);
   return n;
 }
 
@@ -352,6 +350,7 @@ export function LinkRow({ link }: { link: ProfileLink }) {
   const plat = platformById(link.type);
   const live = useLiveFollowers(link);
   const count = live ?? link.followers ?? null;
+  const liveOk = live != null && live > 0;
   return (
     <a href={link.url} target="_blank" rel="noreferrer noopener" className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 hover:bg-white/5 active:bg-white/10">
       <span className="grid size-7 shrink-0 place-items-center rounded-lg text-[13px] font-bold text-white" style={{ background: plat.color }}>
@@ -364,7 +363,11 @@ export function LinkRow({ link }: { link: ProfileLink }) {
       {count != null && count > 0 && (
         <span
           className="flex shrink-0 items-baseline gap-1 rounded-full bg-gradient-to-r from-[#ffd400] via-[#ff8a00] to-[#ff2bd6] px-2.5 py-1 text-black shadow-[0_0_14px_rgba(255,138,0,.45)]"
-          title={live != null ? `${count.toLocaleString()} ${audienceWord(link.type)} (live from Spotify)` : `${count.toLocaleString()} ${audienceWord(link.type)}`}
+          title={
+            liveOk
+              ? `${count.toLocaleString()} ${audienceWord(link.type)} (live)`
+              : `${count.toLocaleString()} ${audienceWord(link.type)}`
+          }
         >
           <b className="text-sm leading-none font-black tabular-nums">{fmtCount(count)}</b>
           <span className="text-[10px] leading-none font-bold">{audienceWord(link.type)}</span>

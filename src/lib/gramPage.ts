@@ -55,8 +55,14 @@ h1{margin-top:12px;font-size:26px;font-weight:900;letter-spacing:-.02em;display:
 h1 svg{width:22px;height:22px;flex:none}
 .user{color:#a9a3c9;font-weight:600}
 .bio{margin:10px auto 0;max-width:460px;white-space:pre-wrap;color:#dcd8f4}
-.links{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:10px}
-.links a{font-size:13px;font-weight:600;color:#9fb3ff}
+.links{display:flex;flex-direction:column;gap:6px;margin:12px auto 0;max-width:420px;text-align:left}
+.links a{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:14px;background:rgba(255,255,255,.05);font-size:13px;font-weight:600;color:#dcd8f4}
+.links a:hover{background:rgba(255,255,255,.09)}
+.links .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.links .fans{flex:none;display:none;align-items:baseline;gap:4px;padding:4px 10px;border-radius:999px;background:linear-gradient(90deg,#ffd400,#ff8a00,#ff2bd6);color:#000;font-weight:900;font-variant-numeric:tabular-nums}
+.links .fans.on{display:inline-flex}
+.links .fans b{font-size:13px}
+.links .fans i{font-size:10px;font-style:normal;font-weight:800}
 .stats{display:flex;justify-content:center;gap:6px;margin-top:18px}
 .stats div{min-width:84px;padding:8px 6px;border-radius:16px;background:rgba(255,255,255,.05)}
 .stats b{display:block;font-size:20px;font-weight:900;font-variant-numeric:tabular-nums}
@@ -133,7 +139,7 @@ export function renderGramProfile(p: PublicGram, base: string) {
   <h1>${esc(p.display_name || p.username)}${p.verified ? ICON.check : ""}</h1>
   <div class="user">@${esc(p.username)}</div>
   ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ""}
-  ${links.length ? `<div class="links">${links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener nofollow">${esc(l.label || l.type)}</a>`).join("")}</div>` : ""}
+  ${links.length ? `<div class="links" id="soc">${links.map((l, i) => `<a href="${esc(l.url)}" target="_blank" rel="noopener nofollow" data-i="${i}" data-type="${esc(l.type || "")}" data-url="${esc(l.url)}"><span class="nm">${esc(l.label || l.type || "Link")}</span><span class="fans" id="fans-${i}"><b></b><i></i></span></a>`).join("")}</div>` : ""}
   <div class="stats"><div><b>${fmt(p.followers)}</b><span>Followers</span></div><div><b>${fmt(p.following)}</b><span>Following</span></div><div><b>${fmt(p.posts)}</b><span>Posts</span></div><div><b>${fmt(p.likes)}</b><span>Likes</span></div></div>
   <div class="btns">
     <a class="btn main" href="${app}">${ICON.plus} Follow</a>
@@ -154,6 +160,9 @@ ${stories.length ? `<div class="sec">Story · ${stories.length}</div><div class=
 var S=${JSON.stringify(stories).replace(/</g, "\\u003c")},i=0,tm=null,t0=0;
 document.querySelectorAll(".tabs button").forEach(function(b){b.onclick=function(){document.querySelectorAll(".tabs button").forEach(function(x){x.classList.toggle("on",x===b)});["posts","shorts"].forEach(function(k){var on=b.dataset.t===k;document.getElementById(k).style.display=on?"grid":"none";var e=document.getElementById(k+"-e");if(e)e.style.display=on&&e.textContent?"block":"none"})}});
 function share(){var u=${JSON.stringify(url)};if(navigator.share){navigator.share({title:${JSON.stringify(`${p.display_name} (@${p.username}) on NexusGram`)},url:u}).catch(function(){})}else{navigator.clipboard.writeText(u);var t=document.getElementById("toast");t.classList.add("on");setTimeout(function(){t.classList.remove("on")},1500)}}
+function fmtFans(n){return n>=1e9?(n/1e9).toFixed(1).replace(/\\.0$/,"")+"B":n>=1e6?(n/1e6).toFixed(n>=1e7?0:1).replace(/\\.0$/,"")+"M":n>=1e4?Math.round(n/1e3)+"K":n>=1e3?(n/1e3).toFixed(1).replace(/\\.0$/,"")+"K":String(n)}
+function word(t){return t==="youtube"?"subscribers":(t==="discord"||t==="telegram")?"members":"followers"}
+(function(){var root=document.getElementById("soc");if(!root)return;root.querySelectorAll("a[data-url]").forEach(function(a){var type=a.getAttribute("data-type")||"";var href=a.getAttribute("data-url")||"";var i=a.getAttribute("data-i");if(!href)return;fetch("/api/followers?url="+encodeURIComponent(href)+"&type="+encodeURIComponent(type)).then(function(r){return r.ok?r.json():null}).then(function(j){if(!j||!(j.followers>0))return;var el=document.getElementById("fans-"+i);if(!el)return;el.querySelector("b").textContent=fmtFans(j.followers);el.querySelector("i").textContent=word(j.platform||type);el.classList.add("on")}).catch(function(){})})})();
 function bars(){document.getElementById("bars").innerHTML=S.map(function(_,k){return '<span><i style="width:'+(k<i?100:0)+'%"></i></span>'}).join("")}
 function show(){clearInterval(tm);var s=S[i],m=document.getElementById("m");bars();document.getElementById("cap").textContent=s.c||"";var bar=document.querySelectorAll("#bars i")[i];
 if(s.t==="video"){m.innerHTML='<video autoplay muted playsinline preload="auto" src="'+s.u+'" poster="'+s.p+'"></video>';var v=m.firstChild;var fb=Math.max(6,Math.min(30,s.d||15));t0=Date.now();tm=setInterval(function(){if(v&&!v.paused&&v.currentTime>0.05&&v.duration>0){bar.style.width=(v.currentTime/v.duration*100)+"%";return}var k=(Date.now()-t0)/(fb*1000);bar.style.width=Math.min(100,k*100)+"%";if(k>=1)step(1)},50);v.ontimeupdate=function(){if(v.duration>0)bar.style.width=(v.currentTime/v.duration*100)+"%"};v.onended=function(){step(1)};v.onerror=function(){step(1)};v.play&&v.play().catch(function(){})}

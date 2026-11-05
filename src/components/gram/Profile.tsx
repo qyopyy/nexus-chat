@@ -9,7 +9,9 @@ import { changeUsername, fmt, followList, gramGo, mediaUrl, profile, publicProfi
 import type { ProfileLink } from "@/lib/types";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
+import { LinkRow } from "@/components/ui/ProfileCard";
 import { Ring } from "./Stories";
+import { detectPlatform } from "@/lib/links";
 
 export default function Profile({ username }: { username: string }) {
   const meId = useApp((s) => s.userId);
@@ -59,12 +61,14 @@ export default function Profile({ username }: { username: string }) {
         </div>
         {(live?.bio ?? p.bio) && <p className="mt-2 text-sm whitespace-pre-wrap">{live?.bio ?? p.bio}</p>}
         {!!(live?.links ?? []).length && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {(live?.links ?? []).filter((l) => l.url).map((l, i) => (
-              <a key={i} href={/^https?:\/\//i.test(l.url) ? l.url : `https://${l.url}`} target="_blank" rel="noopener noreferrer" className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-[#9fb3ff] hover:bg-white/12">
-                {l.label || l.type || "Link"}
-              </a>
-            ))}
+          <div className="mt-3 space-y-0.5 rounded-2xl bg-white/[0.04] p-1.5">
+            {(live?.links ?? [])
+              .filter((l) => l.url)
+              .map((l, i) => {
+                const href = /^https?:\/\//i.test(l.url) ? l.url : `https://${l.url}`;
+                const type = l.type && l.type !== "link" ? l.type : detectPlatform(href).id;
+                return <LinkRow key={i} link={{ ...l, type, url: href }} />;
+              })}
           </div>
         )}
 
@@ -222,7 +226,12 @@ export function EditProfile({ onClose }: { onClose: () => void }) {
         toast(`Username changed to @${u}`, "success");
       }
       const cleanLinks = links
-        .map((l) => ({ type: (l.type || "link").slice(0, 40), url: l.url.trim().slice(0, 300), label: (l.label || "").trim().slice(0, 40) }))
+        .map((l) => ({
+          type: (l.type || "link").slice(0, 40),
+          url: l.url.trim().slice(0, 300),
+          label: (l.label || "").trim().slice(0, 40),
+          ...(l.followers != null && l.followers > 0 ? { followers: l.followers } : {}),
+        }))
         .filter((l) => l.url);
       await updateMyProfile({
         display_name: name.trim().slice(0, 32) || me?.display_name,

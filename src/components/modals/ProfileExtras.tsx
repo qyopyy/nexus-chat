@@ -5,7 +5,8 @@ import { ImagePlus, Plus, Trash2 } from "lucide-react";
 import { useApp, toast, openModal } from "@/store/app";
 import { NEED, gate, useMyTier } from "@/lib/premium";
 import { updateMyProfile, uploadBanner } from "@/lib/data";
-import { PLATFORMS, audienceWord, fmtCount, linkLabel, normalizeLink, parseCount, platformById, spotifyArtistId, spotifyEmbed } from "@/lib/links";
+import { PLATFORMS, audienceWord, fmtCount, linkLabel, normalizeLink, parseCount, platformById, spotifyEmbed } from "@/lib/links";
+import { supportsLiveFollowers } from "@/lib/followers";
 import type { ProfileLink } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import SpotifyConnect from "@/components/music/SpotifyConnect";
@@ -176,7 +177,7 @@ export default function ProfileExtras() {
 function LinkEditRow({ link, onRemove, onUp, onDown, onFollowers }: { link: ProfileLink; onRemove: () => void; onUp?: () => void; onDown?: () => void; onFollowers: (n: number | null) => void }) {
   const p = platformById(link.type);
   const [fans, setFans] = useState(link.followers ? fmtCount(link.followers) : "");
-  const autoSpotify = link.type === "spotify" && !!spotifyArtistId(link.url);
+  const autoLive = supportsLiveFollowers(link.type, link.url);
   const commit = () => {
     const n = fans.trim() ? parseCount(fans) : null;
     if (fans.trim() && n == null) return toast("Type a number like 12500, 12.5k or 1.2M", "error");
@@ -192,8 +193,11 @@ function LinkEditRow({ link, onRemove, onUp, onDown, onFollowers }: { link: Prof
         <span className="block truncate text-sm font-medium">{linkLabel(link)}</span>
         <span className="block truncate text-[11px] text-sub">{link.url}</span>
       </a>
-      {autoSpotify ? (
-        <span className="shrink-0 rounded-full bg-[#1DB954]/15 px-2 py-1 text-[10px] font-bold text-[#1DB954]" title="Follower count comes live from Spotify">
+      {autoLive ? (
+        <span
+          className="shrink-0 rounded-full bg-accent/15 px-2 py-1 text-[10px] font-bold text-accent"
+          title={`Live ${audienceWord(link.type)} are fetched automatically when someone opens your profile`}
+        >
           LIVE COUNT
         </span>
       ) : (
