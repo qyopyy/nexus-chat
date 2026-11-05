@@ -139,6 +139,10 @@ function NewGroupModal() {
 function CreateChannelModal({ spaceId }: { spaceId: string }) {
   const [kind, setKind] = useState<"text" | "voice">("text");
   const [name, setName] = useState("");
+  const [topic, setTopic] = useState("");
+  const [isPrivate, setPrivate] = useState(false);
+  const [password, setPassword] = useState("");
+  const [nsfw, setNsfw] = useState(false);
   return (
     <Modal
       open
@@ -150,9 +154,14 @@ function CreateChannelModal({ spaceId }: { spaceId: string }) {
             Cancel
           </Button>
           <Button
-            disabled={!name.trim()}
+            disabled={!name.trim() || (isPrivate && !password.trim())}
             onClick={async () => {
-              await createChannel(spaceId, name, kind);
+              await createChannel(spaceId, name, kind, {
+                isPrivate,
+                password: isPrivate ? password.trim() : undefined,
+                topic: topic.trim() || undefined,
+                nsfw,
+              });
               closeModal();
             }}
           >
@@ -175,10 +184,31 @@ function CreateChannelModal({ spaceId }: { spaceId: string }) {
         ))}
       </div>
       <span className="mb-2 block text-xs font-bold tracking-wide text-sub uppercase">Channel name</span>
-      <div className="flex items-center gap-2 rounded-md bg-rail px-3">
+      <div className="mb-3 flex items-center gap-2 rounded-md bg-rail px-3">
         {kind === "text" ? <Hash className="size-4 text-sub" /> : <Volume2 className="size-4 text-sub" />}
         <input autoFocus value={name} maxLength={40} onChange={(e) => setName(e.target.value)} placeholder="new-channel" className="flex-1 bg-transparent py-2.5 outline-none" />
       </div>
+      <label className="mb-3 block">
+        <span className="mb-1 block text-xs font-bold tracking-wide text-sub uppercase">Topic (optional)</span>
+        <input value={topic} maxLength={200} onChange={(e) => setTopic(e.target.value)} placeholder="What’s this room for?" className="w-full rounded-md bg-rail px-3 py-2 text-sm outline-none" />
+      </label>
+      <label className="mb-2 flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={isPrivate} onChange={(e) => setPrivate(e.target.checked)} />
+        Private room with password
+      </label>
+      {isPrivate && (
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value.slice(0, 64))}
+          placeholder="Room password"
+          className="mb-3 w-full rounded-md bg-rail px-3 py-2 text-sm outline-none"
+        />
+      )}
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={nsfw} onChange={(e) => setNsfw(e.target.checked)} />
+        Mark as NSFW
+      </label>
     </Modal>
   );
 }
@@ -187,21 +217,28 @@ function InviteModal({ spaceId }: { spaceId: string }) {
   const space = useApp((s) => s.spaces.find((x) => x.id === spaceId));
   const [copied, setCopied] = useState(false);
   if (!space) return null;
+  const code = space.vanity_code || space.invite_code;
+  const link = typeof window !== "undefined" ? `${window.location.origin}/?join=${encodeURIComponent(code)}` : code;
   return (
-    <Modal open onClose={closeModal} title={`Invite friends to ${space.name}`} subtitle="Share this code — they can join from “Add a Space → Join”.">
-      <div className="flex items-center gap-2 rounded-md bg-rail p-1.5 pl-3">
-        <code className="flex-1 font-mono text-lg tracking-widest">{space.invite_code}</code>
+    <Modal open onClose={closeModal} title={`Invite friends to ${space.name}`} subtitle="Share the link or code — they can join from Add a Space → Join.">
+      <div className="mb-3 flex items-center gap-2 rounded-md bg-rail p-1.5 pl-3">
+        <code className="flex-1 truncate font-mono text-sm">{link.replace(/^https?:\/\//, "")}</code>
         <button
           onClick={() => {
-            void navigator.clipboard.writeText(space.invite_code);
+            void navigator.clipboard.writeText(link);
             setCopied(true);
             setTimeout(() => setCopied(false), 1500);
           }}
           className={cn("flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white", copied ? "bg-ok" : "bg-accent hover:bg-accent-2")}
         >
           {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-          {copied ? "Copied" : "Copy"}
+          {copied ? "Copied" : "Copy link"}
         </button>
+      </div>
+      <div className="rounded-md bg-side px-3 py-2 text-sm text-sub">
+        Code: <span className="font-mono font-bold tracking-widest text-txt">{code}</span>
+        {space.vanity_code && <span className="mt-1 block text-xs">Vanity alias for {space.invite_code}</span>}
+        <p className="mt-2 text-xs">Need custom invites with expiry or max uses? Open Server Hub → Invites.</p>
       </div>
     </Modal>
   );

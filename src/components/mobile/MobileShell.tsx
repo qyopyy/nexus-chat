@@ -23,12 +23,14 @@ import LiveHub from "@/components/live/LiveHub";
 import PulseHub from "@/components/pulse/PulseHub";
 import StaffDesk from "@/components/staff/StaffDesk";
 import SiteNoticeBanner from "@/components/staff/SiteNoticeBanner";
+import ChannelLockGate from "@/components/space/ChannelLockGate";
 
 /** Phone layout: bottom tabs + push-style chat screen with swipe-from-edge to go back */
 export default function MobileShell() {
   const tab = useApp((s) => s.mobileTab);
   const hub = useApp((s) => s.hub);
   const conversationId = useApp((s) => s.conversationId);
+  const spaceId = useApp((s) => s.spaceId);
   const mobileSidebar = useApp((s) => s.mobileSidebar);
   const callConv = useCall((s) => (s.status !== "idle" ? s.conversationId : null));
   const inChat = !!conversationId && !mobileSidebar;
@@ -105,6 +107,7 @@ export default function MobileShell() {
           >
             {callConv && callConv !== conversationId && <MobileCallBar className="absolute inset-x-0 top-14 z-30" />}
             <ChatView conversationId={conversationId} />
+            {spaceId && <ChannelLockGate spaceId={spaceId} />}
           </div>
         )}
 

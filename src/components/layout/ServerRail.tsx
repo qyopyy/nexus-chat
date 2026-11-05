@@ -124,9 +124,14 @@ export default function ServerRail() {
             unread={spaceUnread}
             label={sp.name}
             onClick={() => (useApp.setState({ hub: null }), void selectSpace(sp.id))}
-            color={sp.icon_color}
+            color={sp.icon_url ? undefined : sp.icon_color}
           >
-            <span className="text-base font-semibold">{initials(sp.name)}</span>
+            {sp.icon_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={sp.icon_url} alt="" className="size-12 rounded-[inherit] object-cover" />
+            ) : (
+              <span className="text-base font-semibold">{initials(sp.name)}</span>
+            )}
           </RailItem>
         );
       })}
