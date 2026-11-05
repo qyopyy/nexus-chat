@@ -31,7 +31,14 @@ export const metadata: Metadata = {
   category: "social",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "Nexus", statusBarStyle: "black-translucent" },
-  icons: { icon: "/icon.png", apple: "/apple-touch-icon.png" },
+  icons: {
+    icon: [
+      { url: "/icon.png", sizes: "192x192", type: "image/png" },
+      { url: SITE.icon512, sizes: "512x512", type: "image/png" },
+      { url: SITE.icon1024, sizes: "1024x1024", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
@@ -40,13 +47,21 @@ export const metadata: Metadata = {
     siteName: SITE.name,
     title: "Nexus",
     description: SITE.tagline,
-    images: [{ url: "/icon-512.png", width: 512, height: 512, alt: "Nexus" }],
+    images: [
+      {
+        url: SITE.ogImage,
+        width: 1200,
+        height: 630,
+        alt: "Nexus — chat, voice, video, create",
+        type: "image/jpeg",
+      },
+    ],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "Nexus",
     description: SITE.tagline,
-    images: ["/icon-512.png"],
+    images: [SITE.ogImage],
   },
   robots: {
     index: true,

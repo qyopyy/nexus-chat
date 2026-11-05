@@ -7,6 +7,11 @@ export const SITE = {
   tagline: "Chat, voice, video, NexusGram, Live, Radio — one place for your friends.",
   gramTagline: "Photos, Shorts, and Stories on NexusGram.",
   twitter: "@nexusproject",
+  /** Default Open Graph / Twitter share image (1200×630) */
+  ogImage: "/og-image.jpg",
+  /** Full-size app icon */
+  icon1024: "/icon-1024.png",
+  icon512: "/icon-512.png",
   credit: "Made with ❤️ by Nexus Project / qyopy",
   makers: { org: "Nexus Project", handle: "qyopy" },
 } as const;
@@ -87,7 +92,7 @@ ${kw ? `<meta name="keywords" content="${esc(kw)}">` : ""}
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(desc)}">
 <meta property="og:url" content="${esc(url)}">
-${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">` : ""}
+${image ? `<meta property="og:image" content="${esc(image)}"><meta property="og:image:alt" content="${esc(title)}">${image.includes("og-image") ? `<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">` : ""}` : ""}
 ${publishedTime ? `<meta property="article:published_time" content="${esc(publishedTime)}">` : ""}
 ${authorName ? `<meta property="article:author" content="${esc(authorName)}">` : ""}
 <meta name="twitter:card" content="${twitterCard}">
@@ -96,6 +101,11 @@ ${authorName ? `<meta property="article:author" content="${esc(authorName)}">` :
 ${image ? `<meta name="twitter:image" content="${esc(image)}">` : ""}
 <meta name="theme-color" content="#0b0b0f">
 <link rel="icon" href="/icon.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png">`;
+}
+
+/** Absolute URL for the default site share / OG image */
+export function defaultOgImageUrl(origin?: string) {
+  return absoluteUrl(SITE.ogImage, origin);
 }
 
 export function socialPostingLd(opts: {
