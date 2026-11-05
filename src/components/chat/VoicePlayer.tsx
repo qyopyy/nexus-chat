@@ -112,18 +112,21 @@ export default function VoicePlayer({ url, mine, seed }: { url: string; mine: bo
   const off = mine ? "bg-white/35" : "bg-sub/45";
 
   return (
-    <div className="flex w-[min(260px,62vw)] items-center gap-2.5 py-0.5">
+    <div className="flex w-[min(260px,78vw)] max-w-full items-center gap-2 py-0.5 min-[400px]:w-[min(260px,62vw)] min-[400px]:gap-2.5">
       <button
         onClick={toggle}
-        className={cn("grid size-10 shrink-0 place-items-center rounded-full transition active:scale-90", mine ? "bg-white text-bubble-me" : "bg-accent text-white")}
+        className={cn(
+          "grid size-9 shrink-0 place-items-center rounded-full transition active:scale-90 min-[400px]:size-10",
+          mine ? "bg-white text-bubble-me" : "bg-accent text-white",
+        )}
         aria-label={playing ? "Pause voice message" : "Play voice message"}
       >
-        {playing ? <Pause className="size-[18px] fill-current" /> : <Play className="ml-0.5 size-[18px] fill-current" />}
+        {playing ? <Pause className="size-4 fill-current min-[400px]:size-[18px]" /> : <Play className="ml-0.5 size-4 fill-current min-[400px]:size-[18px]" />}
       </button>
       <div className="min-w-0 flex-1">
         <div
           ref={bar}
-          className="flex h-7 cursor-pointer touch-none items-center gap-[2px]"
+          className="flex h-6 cursor-pointer touch-none items-center gap-[2px] min-[400px]:h-7"
           onPointerDown={(e) => {
             (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
             seek(e.clientX);
@@ -134,7 +137,7 @@ export default function VoicePlayer({ url, mine, seed }: { url: string; mine: bo
             <span key={i} className={cn("flex-1 rounded-full transition-colors", i / BARS < progress ? on : off)} style={{ height: `${Math.round(p * 100)}%`, minHeight: 3 }} />
           ))}
         </div>
-        <div className={cn("mt-0.5 flex items-center justify-between text-[11px] tabular-nums", mine ? "text-white/70" : "text-sub")}>
+        <div className={cn("mt-0.5 flex items-center justify-between text-[10px] tabular-nums min-[400px]:text-[11px]", mine ? "text-white/70" : "text-sub")}>
           <span>{fmt(playing || pos ? pos : duration)}</span>
           <button
             onClick={() => {

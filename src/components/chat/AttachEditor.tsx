@@ -56,13 +56,46 @@ function isImage(f: File) {
   return /^image\//.test(f.type) || /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(f.name);
 }
 
+/** Viewport-aware stage size so the editor fits SE / small Androids through large phones. */
+function useStageBudget() {
+  const [box, setBox] = useState({ w: 360, h: 280 });
+  useEffect(() => {
+    const measure = () => {
+      const vv = window.visualViewport;
+      const vw = Math.min(window.innerWidth, vv?.width ?? window.innerWidth);
+      const vh = Math.min(window.innerHeight, vv?.height ?? window.innerHeight);
+      // Header ~52 + footer tabs/controls ~200–260 on phones; leave breathing room.
+      const chrome = vw < 400 ? 300 : vw < 640 ? 280 : 240;
+      const pad = vw < 400 ? 16 : 32;
+      setBox({
+        w: Math.max(200, Math.floor(vw - pad)),
+        h: Math.max(160, Math.floor(vh - chrome)),
+      });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("scroll", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("scroll", measure);
+    };
+  }, []);
+  return box;
+}
+
 export default function AttachEditor({ file, open, onClose, onApply }: Props) {
   if (!open || typeof document === "undefined") return null;
   const mode = isImage(file) ? "image" : isEditableAudio(file) ? "audio" : null;
   if (!mode) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[95] flex flex-col bg-[#0b0d12]/95 backdrop-blur-md" role="dialog" aria-modal>
+    <div
+      className="fixed inset-0 z-[95] flex flex-col bg-[#0b0d12]/95 pt-safe backdrop-blur-md"
+      role="dialog"
+      aria-modal
+    >
       {mode === "image" ? (
         <ImageAttachEditor file={file} onClose={onClose} onApply={onApply} />
       ) : (
@@ -94,24 +127,28 @@ function EditorChrome({
 }) {
   return (
     <>
-      <header className="flex shrink-0 items-center gap-2 border-b border-white/10 px-3 py-3 sm:px-5">
-        <button onClick={onClose} className="grid size-10 place-items-center rounded-full text-sub hover:bg-white/5" aria-label="Cancel">
+      <header className="flex shrink-0 items-center gap-1.5 border-b border-white/10 px-2 py-2 min-[400px]:gap-2 min-[400px]:px-3 min-[400px]:py-3 sm:px-5">
+        <button
+          onClick={onClose}
+          className="grid size-9 place-items-center rounded-full text-sub hover:bg-white/5 min-[400px]:size-10"
+          aria-label="Cancel"
+        >
           <X className="size-5" />
         </button>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[15px] font-semibold">{title}</div>
-          {subtitle && <div className="truncate text-xs text-sub">{subtitle}</div>}
+          <div className="truncate text-sm font-semibold min-[400px]:text-[15px]">{title}</div>
+          {subtitle && <div className="hidden truncate text-xs text-sub min-[360px]:block">{subtitle}</div>}
         </div>
         <button
           disabled={busy}
           onClick={onApply}
-          className="inline-flex h-10 items-center gap-1.5 rounded-full bg-accent px-4 text-sm font-bold text-white shadow-lg shadow-accent/25 disabled:opacity-50"
+          className="inline-flex h-9 items-center gap-1 rounded-full bg-accent px-3 text-xs font-bold text-white shadow-lg shadow-accent/25 disabled:opacity-50 min-[400px]:h-10 min-[400px]:gap-1.5 min-[400px]:px-4 min-[400px]:text-sm"
         >
           <Check className="size-4" />
-          {busy ? "Working…" : applyLabel}
+          {busy ? "…" : applyLabel}
         </button>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
       {footer}
     </>
   );
@@ -134,6 +171,7 @@ function ImageAttachEditor({ file, onClose, onApply }: { file: File; onClose: ()
   const [busy, setBusy] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  const budget = useStageBudget();
 
   useEffect(() => {
     let dead = false;
@@ -155,8 +193,8 @@ function ImageAttachEditor({ file, onClose, onApply }: { file: File; onClose: ()
   const aspect = ASPECTS.find((a) => a.id === aspectId)?.ratio ?? null;
 
   const frame = useMemo(() => {
-    const maxW = 720;
-    const maxH = 480;
+    const maxW = Math.min(720, budget.w);
+    const maxH = Math.min(480, budget.h);
     let fw = nat.w;
     let fh = nat.h;
     if (aspect) {
@@ -169,8 +207,8 @@ function ImageAttachEditor({ file, onClose, onApply }: { file: File; onClose: ()
       }
     }
     const k = Math.min(1, maxW / fw, maxH / fh);
-    return { w: Math.round(fw * k), h: Math.round(fh * k), srcW: fw, srcH: fh };
-  }, [nat, aspect]);
+    return { w: Math.max(120, Math.round(fw * k)), h: Math.max(120, Math.round(fh * k)), srcW: fw, srcH: fh };
+  }, [nat, aspect, budget]);
 
   const coverScale = useMemo(() => {
     if (!img) return 1;
@@ -271,38 +309,45 @@ function ImageAttachEditor({ file, onClose, onApply }: { file: File; onClose: ()
       busy={busy}
       applyLabel="Attach"
       footer={
-        <div className="shrink-0 border-t border-white/10 bg-[#0b0d12] px-3 pt-2 pb-safe-2 sm:px-5">
-          <div className="mb-2 flex gap-1 rounded-full bg-white/[.06] p-1">
+        <div className="shrink-0 border-t border-white/10 bg-[#0b0d12] px-2 pt-1.5 pb-safe-2 min-[400px]:px-3 min-[400px]:pt-2 sm:px-5">
+          <div className="mb-1.5 flex gap-1 rounded-full bg-white/[.06] p-0.5 min-[400px]:mb-2 min-[400px]:p-1">
             {(
               [
-                ["frame", "Resize & move", Move],
-                ["effects", "Effects", Sparkles],
+                ["frame", "Resize", "Resize & move", Move],
+                ["effects", "Effects", "Effects", Sparkles],
               ] as const
-            ).map(([id, label, Icon]) => (
+            ).map(([id, short, label, Icon]) => (
               <button
                 key={id}
                 onClick={() => setTab(id)}
-                className={cn("flex flex-1 items-center justify-center gap-1.5 rounded-full py-2 text-xs font-semibold", tab === id ? "bg-accent text-white" : "text-sub")}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1 rounded-full py-1.5 text-[11px] font-semibold min-[400px]:gap-1.5 min-[400px]:py-2 min-[400px]:text-xs",
+                  tab === id ? "bg-accent text-white" : "text-sub",
+                )}
               >
                 <Icon className="size-3.5" />
-                {label}
+                <span className="min-[400px]:hidden">{short}</span>
+                <span className="hidden min-[400px]:inline">{label}</span>
               </button>
             ))}
           </div>
           {tab === "frame" ? (
-            <div className="space-y-3 pb-2">
-              <div className="flex flex-wrap gap-1.5">
+            <div className="max-h-[38vh] space-y-2 overflow-y-auto overscroll-contain pb-1 min-[400px]:space-y-3 min-[400px]:pb-2 sm:max-h-none">
+              <div className="flex gap-1 overflow-x-auto pb-0.5 min-[400px]:flex-wrap min-[400px]:gap-1.5">
                 {ASPECTS.map((a) => (
                   <button
                     key={a.id}
                     onClick={() => setAspectId(a.id)}
-                    className={cn("rounded-full px-3 py-1.5 text-xs font-semibold", aspectId === a.id ? "bg-white/15 text-txt" : "bg-white/[.05] text-sub")}
+                    className={cn(
+                      "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold min-[400px]:px-3 min-[400px]:py-1.5 min-[400px]:text-xs",
+                      aspectId === a.id ? "bg-white/15 text-txt" : "bg-white/[.05] text-sub",
+                    )}
                   >
                     {a.label}
                   </button>
                 ))}
               </div>
-              <label className="block text-xs font-semibold text-sub">
+              <label className="block text-[11px] font-semibold text-sub min-[400px]:text-xs">
                 <span className="mb-1 flex items-center gap-1.5">
                   <ZoomIn className="size-3.5" /> Zoom {Math.round(scale * 100)}%
                 </span>
@@ -316,34 +361,34 @@ function ImageAttachEditor({ file, onClose, onApply }: { file: File; onClose: ()
                   className="w-full accent-[var(--accent)]"
                 />
               </label>
-              <label className="flex items-center gap-3 rounded-2xl bg-white/[.05] px-3 py-2.5 text-sm">
-                <input type="checkbox" checked={compress} onChange={(e) => setCompress(e.target.checked)} className="size-4 accent-[var(--accent)]" />
-                <span className="flex-1">
+              <label className="flex items-center gap-2 rounded-2xl bg-white/[.05] px-2.5 py-2 text-xs min-[400px]:gap-3 min-[400px]:px-3 min-[400px]:py-2.5 min-[400px]:text-sm">
+                <input type="checkbox" checked={compress} onChange={(e) => setCompress(e.target.checked)} className="size-4 shrink-0 accent-[var(--accent)]" />
+                <span className="min-w-0 flex-1">
                   <span className="font-semibold">Send compressed</span>
-                  <span className="block text-xs text-sub">Smaller JPEG · long edge ≤ 1600</span>
+                  <span className="block text-[10px] text-sub min-[400px]:text-xs">Smaller JPEG · long edge ≤ 1600</span>
                 </span>
               </label>
               {compress && (
-                <label className="block text-xs font-semibold text-sub">
+                <label className="block text-[11px] font-semibold text-sub min-[400px]:text-xs">
                   Quality {Math.round(quality * 100)}%
                   <input type="range" min={0.55} max={0.95} step={0.01} value={quality} onChange={(e) => setQuality(Number(e.target.value))} className="mt-1 w-full accent-[var(--accent)]" />
                 </label>
               )}
             </div>
           ) : (
-            <div className="space-y-3 pb-2">
-              <div className="flex gap-1.5 overflow-x-auto pb-1">
+            <div className="max-h-[38vh] space-y-2 overflow-y-auto overscroll-contain pb-1 min-[400px]:space-y-3 min-[400px]:pb-2 sm:max-h-none">
+              <div className="flex gap-1 overflow-x-auto pb-1 min-[400px]:gap-1.5">
                 {IMG_FILTERS.map((p) => (
                   <button
                     key={p.label}
                     onClick={() => setFilters({ ...DEFAULT_FILTERS, ...p.patch })}
-                    className="shrink-0 rounded-full bg-white/[.08] px-3 py-1.5 text-xs font-semibold"
+                    className="shrink-0 rounded-full bg-white/[.08] px-2.5 py-1 text-[11px] font-semibold min-[400px]:px-3 min-[400px]:py-1.5 min-[400px]:text-xs"
                   >
                     {p.label}
                   </button>
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5 min-[400px]:gap-2">
                 {(
                   [
                     ["brightness", "Brightness", 50, 150],
@@ -352,7 +397,7 @@ function ImageAttachEditor({ file, onClose, onApply }: { file: File; onClose: ()
                     ["blur", "Blur", 0, 4],
                   ] as const
                 ).map(([key, label, min, max]) => (
-                  <label key={key} className="text-[11px] font-semibold text-sub">
+                  <label key={key} className="text-[10px] font-semibold text-sub min-[400px]:text-[11px]">
                     {label}
                     <input
                       type="range"
@@ -366,10 +411,13 @@ function ImageAttachEditor({ file, onClose, onApply }: { file: File; onClose: ()
                   </label>
                 ))}
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-1.5 min-[400px]:gap-2">
                 <button
                   onClick={() => setFlipH((v) => !v)}
-                  className={cn("inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-semibold", flipH ? "bg-accent/25 text-accent" : "bg-white/[.06]")}
+                  className={cn(
+                    "inline-flex flex-1 items-center justify-center gap-1 rounded-xl py-2 text-xs font-semibold min-[400px]:gap-1.5 min-[400px]:py-2.5 min-[400px]:text-sm",
+                    flipH ? "bg-accent/25 text-accent" : "bg-white/[.06]",
+                  )}
                 >
                   <FlipHorizontal2 className="size-4" /> Flip
                 </button>
@@ -381,7 +429,7 @@ function ImageAttachEditor({ file, onClose, onApply }: { file: File; onClose: ()
                     setOffset({ x: 0, y: 0 });
                     setAspectId("free");
                   }}
-                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/[.06] py-2.5 text-sm font-semibold"
+                  className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl bg-white/[.06] py-2 text-xs font-semibold min-[400px]:gap-1.5 min-[400px]:py-2.5 min-[400px]:text-sm"
                 >
                   <RotateCcw className="size-4" /> Reset
                 </button>
@@ -391,10 +439,10 @@ function ImageAttachEditor({ file, onClose, onApply }: { file: File; onClose: ()
         </div>
       }
     >
-      <div className="flex h-full min-h-[280px] items-center justify-center p-4">
+      <div className="flex h-full min-h-[140px] items-center justify-center p-2 min-[400px]:min-h-[200px] min-[400px]:p-4 sm:min-h-[280px]">
         <div
           ref={stageRef}
-          className="relative touch-none overflow-hidden rounded-2xl bg-black/50 ring-1 ring-white/10"
+          className="relative touch-none overflow-hidden rounded-xl bg-black/50 ring-1 ring-white/10 min-[400px]:rounded-2xl"
           style={{ width: frame.w, height: frame.h, maxWidth: "100%" }}
           onPointerDown={(e) => {
             (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -402,7 +450,7 @@ function ImageAttachEditor({ file, onClose, onApply }: { file: File; onClose: ()
           }}
           onPointerMove={(e) => {
             if (!drag.current) return;
-            const k = frame.srcW / frame.w;
+            const k = frame.srcW / Math.max(1, frame.w);
             const nx = drag.current.ox + (e.clientX - drag.current.x) * k;
             const ny = drag.current.oy + (e.clientY - drag.current.y) * k;
             setOffset(clampOffset(nx, ny));
@@ -425,7 +473,7 @@ function ImageAttachEditor({ file, onClose, onApply }: { file: File; onClose: ()
             />
           )}
           <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_0_1px_rgba(255,255,255,.12)]" />
-          <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-white/80 uppercase">
+          <div className="pointer-events-none absolute bottom-1.5 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-2 py-0.5 text-[9px] font-semibold tracking-wide text-white/80 uppercase min-[400px]:bottom-2 min-[400px]:px-2.5 min-[400px]:py-1 min-[400px]:text-[10px]">
             Drag to move
           </div>
         </div>
@@ -549,21 +597,21 @@ function AudioAttachEditor({ file, onClose, onApply }: { file: File; onClose: ()
       busy={busy}
       applyLabel="Attach"
     >
-      <div className="mx-auto flex max-w-lg flex-col gap-5 px-4 py-6 sm:px-6">
-        <div className="flex flex-col items-center gap-4 rounded-3xl bg-gradient-to-b from-white/[.08] to-white/[.03] px-5 py-8 ring-1 ring-white/10">
-          <div className="grid size-20 place-items-center rounded-full bg-accent/20 text-accent">
-            <Disc3 className={cn("size-10", playing && "animate-spin")} style={{ animationDuration: "3s" }} />
+      <div className="mx-auto flex max-w-lg flex-col gap-3 px-3 py-4 min-[400px]:gap-5 min-[400px]:px-4 min-[400px]:py-6 sm:px-6">
+        <div className="flex flex-col items-center gap-3 rounded-2xl bg-gradient-to-b from-white/[.08] to-white/[.03] px-4 py-5 ring-1 ring-white/10 min-[400px]:gap-4 min-[400px]:rounded-3xl min-[400px]:px-5 min-[400px]:py-8">
+          <div className="grid size-14 place-items-center rounded-full bg-accent/20 text-accent min-[400px]:size-20">
+            <Disc3 className={cn("size-7 min-[400px]:size-10", playing && "animate-spin")} style={{ animationDuration: "3s" }} />
           </div>
           <div className="text-center">
-            <div className="text-lg font-semibold">{formatDuration(outDur)}</div>
-            <div className="text-xs text-sub">after speed · was {formatDuration(duration)}</div>
+            <div className="text-base font-semibold min-[400px]:text-lg">{formatDuration(outDur)}</div>
+            <div className="text-[11px] text-sub min-[400px]:text-xs">after speed · was {formatDuration(duration)}</div>
           </div>
-          <button onClick={() => void togglePlay()} className="rounded-full bg-accent px-6 py-2.5 text-sm font-bold text-white">
+          <button onClick={() => void togglePlay()} className="rounded-full bg-accent px-5 py-2 text-xs font-bold text-white min-[400px]:px-6 min-[400px]:py-2.5 min-[400px]:text-sm">
             {playing ? "Pause preview" : "Preview"}
           </button>
         </div>
 
-        <label className="block text-sm font-semibold">
+        <label className="block text-xs font-semibold min-[400px]:text-sm">
           <span className="mb-1 flex items-center justify-between">
             <span className="flex items-center gap-1.5 text-sub">
               <SlidersHorizontal className="size-3.5" /> Speed
@@ -580,7 +628,7 @@ function AudioAttachEditor({ file, onClose, onApply }: { file: File; onClose: ()
           </div>
         </label>
 
-        <label className="block text-sm font-semibold">
+        <label className="block text-xs font-semibold min-[400px]:text-sm">
           <span className="mb-1 flex items-center justify-between">
             <span className="text-sub">Bass</span>
             <span className="tabular-nums text-accent">
@@ -598,17 +646,17 @@ function AudioAttachEditor({ file, onClose, onApply }: { file: File; onClose: ()
           </div>
         </label>
 
-        <label className="flex items-start gap-3 rounded-2xl bg-white/[.05] px-3 py-3 text-sm">
-          <input type="checkbox" checked={compress} onChange={(e) => setCompress(e.target.checked)} className="mt-0.5 size-4 accent-[var(--accent)]" />
-          <span className="flex-1">
+        <label className="flex items-start gap-2 rounded-2xl bg-white/[.05] px-2.5 py-2.5 text-xs min-[400px]:gap-3 min-[400px]:px-3 min-[400px]:py-3 min-[400px]:text-sm">
+          <input type="checkbox" checked={compress} onChange={(e) => setCompress(e.target.checked)} className="mt-0.5 size-4 shrink-0 accent-[var(--accent)]" />
+          <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5 font-semibold">
-              <Minimize2 className="size-4 text-accent" /> Send compressed
+              <Minimize2 className="size-4 shrink-0 text-accent" /> Send compressed
             </span>
-            <span className="mt-0.5 block text-xs text-sub">Re-encode to AAC/Opus ~96 kbps so big WAV/MP3/AAC/M4A uploads stay small.</span>
+            <span className="mt-0.5 block text-[10px] text-sub min-[400px]:text-xs">Re-encode to AAC/Opus ~96 kbps so big WAV/MP3/AAC/M4A uploads stay small.</span>
           </span>
         </label>
 
-        <p className="text-center text-xs text-sub">Supports WAV, MP3, AAC, and M4A. {status && <span className="text-accent">{status}</span>}</p>
+        <p className="text-center text-[11px] text-sub min-[400px]:text-xs">Supports WAV, MP3, AAC, and M4A. {status && <span className="text-accent">{status}</span>}</p>
       </div>
     </EditorChrome>
   );
