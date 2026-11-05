@@ -50,7 +50,8 @@ export type GramRoute =
   | { view: "profile"; username: string }
   | { view: "post"; id: string }
   | { view: "explore" }
-  | { view: "saved" };
+  | { view: "saved" }
+  | { view: "admin" };
 export const useGram = create<{ stack: GramRoute[]; story: { authors: string[]; index: number } | null; create: null | "post" | "short" | "story"; trayEpoch: number }>(() => ({
   stack: [{ view: "home" }],
   story: null,
@@ -73,6 +74,9 @@ export const publicProfileUrl = (username: string) => `${typeof window !== "unde
 /** Public shareable content link — /n/<id> works for posts and stories */
 export const publicContentUrl = (id: string) => `${typeof window !== "undefined" ? window.location.origin : "https://nexusproject.cc"}/n/${id}`;
 export const appContentUrl = (id: string) => `${typeof window !== "undefined" ? window.location.origin : "https://nexusproject.cc"}/n/${id}`;
+/** Legacy aliases — /g and /gram/p still work */
+export const publicPostUrl = (id: string) => publicContentUrl(id);
+export const appPostUrl = (id: string) => `${typeof window !== "undefined" ? window.location.origin : "https://nexusproject.cc"}/gram/c/${id}`;
 export const fmt = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}K` : String(n));
 export const ago = (d: string) => {
   const s = (Date.now() - new Date(d).getTime()) / 1000;
@@ -332,7 +336,7 @@ export async function removeStory(id: string) {
   return !error;
 }
 
-// ------------------------------------------------------------------ saves
+// ------------------------------------------------------------------ saves, reports, admin
 export async function setSave(postId: string, on: boolean) {
   const q = on ? supabase.from("gram_saves").insert({ post_id: postId, user_id: me() }) : supabase.from("gram_saves").delete().eq("post_id", postId).eq("user_id", me());
   const { error } = await q;
@@ -358,9 +362,65 @@ export async function savedFeed(before?: string | null) {
     .map((r) => {
       const p = (r as { gram_posts: Post | Post[] | null }).gram_posts;
       const post = Array.isArray(p) ? p[0] : p;
-      return post ? ({ ...post, saved: true } as Post) : null;
+      return post ? ({ ...post, liked: false, saved: true } as Post) : null;
     })
     .filter(Boolean) as Post[];
+  void loadProfiles([...new Set(rows.map((r) => r.author_id))]);
+  return rows;
+}
+export async function reportPost(postId: string, reason: string) {
+  const { error } = await supabase.from("gram_reports").insert({ post_id: postId, reporter_id: me(), reason: reason.trim().slice(0, 500) });
+  if (error) {
+    toast(errorText(error), "error");
+    return false;
+  }
+  toast("Report sent — thanks", "success");
+  return true;
+}
+export async function adminSetUsername(userId: string, username: string) {
+  const { data, error } = await supabase.rpc("admin_set_username", { p_user: userId, p_username: username });
+  if (error) throw new Error(errorText(error));
+  const u = data as string;
+  useApp.setState((s) => ({ profiles: { ...s.profiles, [userId]: { ...s.profiles[userId], username: u } } }));
+  return u;
+}
+export async function modRemoveGramPost(postId: string, reason = "") {
+  const { error } = await supabase.rpc("mod_remove_gram_post", { p_post: postId, p_reason: reason });
+  if (error) {
+    toast(errorText(error), "error");
+    return false;
+  }
+  toast("Post removed", "success");
+  return true;
+}
+export async function gramAdminStats() {
+  const { data, error } = await supabase.rpc("gram_admin_stats");
+  if (error) return null;
+  return data as Record<string, number>;
+}
+export async function listOpenReports() {
+  const { data, error } = await supabase.from("gram_reports").select("*").eq("status", "open").order("created_at", { ascending: false }).limit(50);
+  if (error) {
+    toast(errorText(error), "error");
+    return [];
+  }
+  return (data ?? []) as { id: number; post_id: string | null; story_id: string | null; reporter_id: string; reason: string; created_at: string }[];
+}
+export async function reviewReport(id: number, status: "reviewed" | "dismissed" | "removed") {
+  const { error } = await supabase
+    .from("gram_reports")
+    .update({ status, reviewed_at: new Date().toISOString(), reviewed_by: me() })
+    .eq("id", id);
+  if (error) toast(errorText(error), "error");
+  return !error;
+}
+export async function recentGramPosts(limit = 40) {
+  const { data, error } = await supabase.from("gram_posts").select("*").order("created_at", { ascending: false }).limit(limit);
+  if (error) {
+    toast(errorText(error), "error");
+    return [];
+  }
+  const rows = (data ?? []) as Post[];
   void loadProfiles([...new Set(rows.map((r) => r.author_id))]);
   return rows;
 }

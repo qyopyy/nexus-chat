@@ -350,6 +350,7 @@ export type DistTrack = {
 
 // ------------------------------------------------------------------ videos
 export type VideoLink = { label: string; url: string };
+export type VideoChapter = { t: number; title: string };
 
 export type Video = {
   id: string;
@@ -382,6 +383,7 @@ export type Video = {
   removed_at: string | null;
   created_at: string;
   updated_at: string;
+  chapters?: VideoChapter[];
 };
 
 export type VideoComment = {

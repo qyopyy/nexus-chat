@@ -6,6 +6,7 @@ import { useApp, toast } from "@/store/app";
 import { openDM, sendFriendRequest, updateMyProfile, uploadAvatar, uploadBanner } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { changeUsername, fmt, followList, gramGo, mediaUrl, profile, publicProfileUrl, setFollow, useGram, type GramProfile } from "@/lib/gram";
+import type { ProfileLink } from "@/lib/types";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import { Ring } from "./Stories";
@@ -57,6 +58,15 @@ export default function Profile({ username }: { username: string }) {
           @{live?.username ?? p.username} · {fmt(p.likes)} likes{p.follows_you && !mine ? " · follows you" : ""}
         </div>
         {(live?.bio ?? p.bio) && <p className="mt-2 text-sm whitespace-pre-wrap">{live?.bio ?? p.bio}</p>}
+        {!!(live?.links ?? []).length && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {(live?.links ?? []).filter((l) => l.url).map((l, i) => (
+              <a key={i} href={/^https?:\/\//i.test(l.url) ? l.url : `https://${l.url}`} target="_blank" rel="noopener noreferrer" className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-[#9fb3ff] hover:bg-white/12">
+                {l.label || l.type || "Link"}
+              </a>
+            ))}
+          </div>
+        )}
 
         <div className="mt-4 flex flex-wrap gap-2">
           {mine ? (
@@ -197,6 +207,7 @@ export function EditProfile({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState(me?.display_name ?? "");
   const [user, setUser] = useState(me?.username ?? "");
   const [bio, setBio] = useState(me?.bio ?? "");
+  const [links, setLinks] = useState<ProfileLink[]>(me?.links?.length ? me.links : [{ type: "website", url: "", label: "" }]);
   const [busy, setBusy] = useState<string | null>(null);
   const av = useRef<HTMLInputElement>(null);
   const bg = useRef<HTMLInputElement>(null);
@@ -210,7 +221,14 @@ export function EditProfile({ onClose }: { onClose: () => void }) {
         setUser(u);
         toast(`Username changed to @${u}`, "success");
       }
-      if (name.trim() !== me?.display_name || (bio ?? "") !== (me?.bio ?? "")) await updateMyProfile({ display_name: name.trim().slice(0, 32) || me?.display_name, bio: bio.slice(0, 190) || null });
+      const cleanLinks = links
+        .map((l) => ({ type: (l.type || "link").slice(0, 40), url: l.url.trim().slice(0, 300), label: (l.label || "").trim().slice(0, 40) }))
+        .filter((l) => l.url);
+      await updateMyProfile({
+        display_name: name.trim().slice(0, 32) || me?.display_name,
+        bio: bio.slice(0, 190) || null,
+        links: cleanLinks.slice(0, 6),
+      });
       onClose();
     } catch (e) {
       toast((e as Error).message, "error");
@@ -260,6 +278,24 @@ export function EditProfile({ onClose }: { onClose: () => void }) {
             <span className="mb-1 block text-xs text-sub">Bio ({(bio ?? "").length}/190)</span>
             <textarea className={cn(inp, "min-h-20")} value={bio ?? ""} maxLength={190} onChange={(e) => setBio(e.target.value)} />
           </label>
+          <div>
+            <div className="mb-1 flex items-center justify-between text-xs text-sub">
+              <span>Share links (shown on your public /u page)</span>
+              {links.length < 6 && (
+                <button type="button" onClick={() => setLinks([...links, { type: "link", url: "", label: "" }])} className="font-semibold text-accent">
+                  + Add
+                </button>
+              )}
+            </div>
+            <div className="space-y-2">
+              {links.map((l, i) => (
+                <div key={i} className="grid grid-cols-[1fr_2fr] gap-2">
+                  <input className={inp} placeholder="Label" value={l.label ?? ""} maxLength={40} onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
+                  <input className={inp} placeholder="https://…" value={l.url} maxLength={300} onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} />
+                </div>
+              ))}
+            </div>
+          </div>
           <button disabled={!!busy} onClick={() => void save()} className="w-full rounded-full bg-accent py-2.5 font-bold text-white disabled:opacity-50">
             {busy ?? "Save"}
           </button>

@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, ChevronLeft, ChevronRight, Heart, Link2, MessageCircle, Ellipsis, Send, Share2, Trash2, X } from "lucide-react";
+import { Bookmark, ChevronLeft, ChevronRight, Flag, Heart, Link2, MessageCircle, Ellipsis, Send, Share2, Trash2, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
-import { addComment, ago, comments, fmt, gramGo, isSaved, mediaUrl, publicContentUrl, publicProfileUrl, removeComment, removePost, setLike, setSave, type Comment, type Post } from "@/lib/gram";
+import { addComment, ago, comments, fmt, gramGo, isSaved, mediaUrl, publicContentUrl, publicProfileUrl, removeComment, removePost, reportPost, setLike, setSave, type Comment, type Post } from "@/lib/gram";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 
@@ -80,7 +80,7 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
             <Ellipsis className="size-5" />
           </button>
           {menu && (
-            <div className="absolute top-9 right-0 z-20 w-48 rounded-xl bg-menu p-1 shadow-2xl" onMouseLeave={() => setMenu(false)}>
+            <div className="absolute top-9 right-0 z-20 w-52 rounded-xl bg-menu p-1 shadow-2xl" onMouseLeave={() => setMenu(false)}>
               <button
                 onClick={() => {
                   void navigator.clipboard.writeText(publicContentUrl(post.id));
@@ -101,6 +101,18 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-hover"
                 >
                   <Share2 className="size-4" /> Copy profile link
+                </button>
+              )}
+              {post.author_id !== meId && (
+                <button
+                  onClick={async () => {
+                    setMenu(false);
+                    const reason = prompt("Why are you reporting this post?");
+                    if (reason?.trim()) await reportPost(post.id, reason);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-hover"
+                >
+                  <Flag className="size-4" /> Report
                 </button>
               )}
               {(post.author_id === meId || (useApp.getState().profiles[meId ?? ""]?.site_role ?? "member") !== "member") && (

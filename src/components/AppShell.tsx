@@ -44,7 +44,7 @@ import NexusGram from "./gram/NexusGram";
 import { getPost, openGram, useGram } from "@/lib/gram";
 import { openUntitled } from "@/lib/untitled";
 
-export default function AppShell({ userId, initialVideo, initialRelease, initialGram, initialGramContent, initialUntitled }: { userId: string; initialVideo?: string; initialRelease?: string; initialGram?: string; initialGramContent?: string; initialUntitled?: string }) {
+export default function AppShell({ userId, initialVideo, initialRelease, initialGram, initialGramPost, initialGramContent, initialUntitled }: { userId: string; initialVideo?: string; initialRelease?: string; initialGram?: string; initialGramPost?: string; initialGramContent?: string; initialUntitled?: string }) {
   const spaceId = useApp((s) => s.spaceId);
   const conversationId = useApp((s) => s.conversationId);
   const showMembers = useApp((s) => s.showMembers);
@@ -82,6 +82,12 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
     window.history.replaceState(null, "", "/");
     openGram(initialGram ? { view: "profile", username: initialGram } : { view: "home" });
   }, [bootstrapped, initialGram]);
+  // /gram/p/<id> or /g/<id> deep-link opens a post
+  useEffect(() => {
+    if (!bootstrapped || !initialGramPost) return;
+    window.history.replaceState(null, "", "/");
+    openGram({ view: "post", id: initialGramPost });
+  }, [bootstrapped, initialGramPost]);
   // /n/<id> or /gram/c/<id> opens a post or story
   useEffect(() => {
     if (!bootstrapped || !initialGramContent) return;

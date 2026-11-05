@@ -26,7 +26,12 @@ export type StudioSection =
   | "checkmark"
   | "orders";
 
-export type VideosRoute = { view: "home"; q?: string; tab?: "all" | "subs" | "later" | "history" } | { view: "watch"; key: string; t?: number } | { view: "channel"; userId: string } | { view: "create" };
+export type VideosRoute =
+  | { view: "home"; q?: string; tab?: "all" | "subs" | "later" | "history" | "playlists" }
+  | { view: "watch"; key: string; t?: number; playlist?: string }
+  | { view: "channel"; userId: string }
+  | { view: "create" }
+  | { view: "playlist"; id: string };
 
 type S = {
   section: StudioSection;
