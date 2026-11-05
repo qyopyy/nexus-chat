@@ -123,6 +123,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
   useEffect(() => {
     if (!bootstrapped || initialUntitled === undefined) return;
     window.history.replaceState(null, "", "/");
+    // /untitled/<username> deep-link into Cutroom
     openUntitled(initialUntitled ? { view: "profile", username: initialUntitled } : { view: "home" });
   }, [bootstrapped, initialUntitled]);
   useEffect(() => {
@@ -209,7 +210,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
             <GamesHub />
           ) : hub === "apps" ? (
             <AppsHub />
-          ) : hub === "untitled" ? (
+          ) : hub === "cutroom" || hub === "untitled" ? (
             <UntitledHub />
           ) : hub === "radio" ? (
             <RadioHub />

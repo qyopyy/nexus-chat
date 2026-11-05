@@ -1,6 +1,6 @@
 "use client";
 
-// Untitled — WIP music projects, share links, listens, profiles.
+// Cutroom (internal: untitled) — WIP music projects, share links, listens, profiles.
 
 import { supabase, errorText } from "./supabase";
 import { useApp, toast } from "@/store/app";
@@ -125,10 +125,31 @@ export const untitledGo = (r: UntitledRoute) => useUntitled.setState((s) => ({ s
 export const untitledBack = () => useUntitled.setState((s) => ({ stack: s.stack.length > 1 ? s.stack.slice(0, -1) : s.stack }));
 export const untitledHome = (r: UntitledRoute = { view: "home" }) => useUntitled.setState({ stack: [r] });
 
+/** Product name shown in the UI. */
+export const CUTROOM = "Cutroom";
+
 export function openUntitled(r?: UntitledRoute) {
   if (r) untitledHome(r);
   const mobile = typeof window !== "undefined" && window.innerWidth < 768;
-  useApp.setState(mobile ? { mobileTab: "music", hub: "untitled" } : { hub: "untitled" });
+  useApp.setState(mobile ? { mobileTab: "music", hub: "cutroom" } : { hub: "cutroom" });
+}
+
+export const openCutroom = openUntitled;
+
+/** Snapshot FileList before clearing an <input> (Safari/Capacitor invalidates live FileList). */
+export async function snapshotAudioFiles(list: FileList | File[]): Promise<File[]> {
+  const out: File[] = [];
+  for (const f of [...list]) {
+    try {
+      const buf = await f.arrayBuffer();
+      const type = untitledContentType(f) || f.type || "application/octet-stream";
+      const name = f.name || `track.${type.includes("wav") ? "wav" : type.includes("mp4") ? "m4a" : "mp3"}`;
+      out.push(new File([buf], name, { type, lastModified: f.lastModified || Date.now() }));
+    } catch {
+      /* skip unreadable */
+    }
+  }
+  return out;
 }
 
 const me = () => useApp.getState().userId!;
@@ -156,10 +177,10 @@ export async function getProject(id: string) {
   return data as UntitledProject | null;
 }
 
-export async function createProject(title = "Untitled") {
+export async function createProject(title = "New cut") {
   const { data, error } = await supabase
     .from("untitled_projects")
-    .insert({ owner_id: me(), title: title.trim().slice(0, 120) || "Untitled" })
+    .insert({ owner_id: me(), title: title.trim().slice(0, 120) || "New cut" })
     .select()
     .single();
   if (error) throw new Error(errorText(error));
@@ -291,7 +312,7 @@ async function audioDuration(file: File): Promise<number | null> {
 
 async function putAudio(projectId: string, file: File, onProgress?: (p: number) => void) {
   if (!isUntitledAudioFile(file)) throw new Error("Upload an audio file (mp3, wav, m4a, mp4…)");
-  if (file.size <= 0) throw new Error("That file is empty");
+  if (file.size <= 0) throw new Error("That file is empty — try picking it again");
   if (file.size > 200 * 1024 * 1024) throw new Error("Tracks can be up to 200 MB");
   const uid = me();
   if (!uid) throw new Error("Sign in to upload");
@@ -304,48 +325,46 @@ async function putAudio(projectId: string, file: File, onProgress?: (p: number) 
     (contentType.includes("mpeg") ? "mp3" : contentType.includes("wav") ? "wav" : contentType.includes("mp4") ? "m4a" : contentType.includes("flac") ? "flac" : "bin");
   const safeName = `${id}.${ext}`;
   const path = `${uid}/${projectId}/${safeName}`;
-  const body = untitledUploadBody(file, safeName, contentType);
-  const duration = await audioDuration(file);
-  const { data: s } = await supabase.auth.getSession();
-  if (!s.session?.access_token) throw new Error("Session expired — sign in again");
 
-  await new Promise<void>((res, rej) => {
-    const x = new XMLHttpRequest();
-    x.open("POST", `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/untitled/${path.split("/").map(encodeURIComponent).join("/")}`);
-    x.setRequestHeader("Authorization", `Bearer ${s.session!.access_token}`);
-    x.setRequestHeader("apikey", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "");
-    x.setRequestHeader("Content-Type", contentType);
-    x.setRequestHeader("x-upsert", "true");
-    x.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
-    x.onload = () => {
-      if (x.status < 300) return res();
-      let detail = "";
-      try {
-        const j = JSON.parse(x.responseText) as { message?: string; error?: string };
-        detail = j.message || j.error || "";
-      } catch {
-        detail = x.responseText?.slice(0, 160) || "";
-      }
-      const msg = detail || `Upload failed (${x.status})`;
-      if (/mime|not supported|invalid/i.test(msg)) return rej(new Error(`File type blocked (${contentType || file.type || "unknown"}). Try MP3 or WAV.`));
-      if (/row-level security|policy|authorized|jwt|permission/i.test(msg) || x.status === 401 || x.status === 403) {
-        return rej(new Error("Upload failed: storage permission denied. Re-sign in and try again."));
-      }
-      if (/payload|too large|entity too large|413/i.test(msg) || x.status === 413) {
-        return rej(new Error("Upload failed: file is too large for the server."));
-      }
-      rej(new Error(msg));
-    };
-    x.onerror = () => rej(new Error("Network error while uploading"));
-    x.send(body);
+  // Read bytes up front — Capacitor/Safari File handles can go stale mid-upload.
+  let body: Blob;
+  try {
+    const buf = await file.arrayBuffer();
+    if (!buf.byteLength) throw new Error("empty");
+    body = new Blob([buf], { type: contentType });
+  } catch {
+    body = untitledUploadBody(file, safeName, contentType);
+  }
+  if (!body.size) throw new Error("That file is empty — try picking it again");
+
+  onProgress?.(0.05);
+  // Duration after bytes are safe; don't block phones long.
+  const durationPromise = audioDuration(file instanceof File ? file : new File([body], safeName, { type: contentType }));
+
+  const { error } = await supabase.storage.from("untitled").upload(path, body, {
+    contentType,
+    upsert: true,
+    cacheControl: "3600",
   });
-  return { id, path, duration, mime: contentType, bytes: file.size };
+  if (error) {
+    const msg = errorText(error);
+    if (/mime|not supported|invalid/i.test(msg)) throw new Error(`File type blocked (${contentType}). Try MP3 or WAV.`);
+    if (/row-level security|policy|authorized|jwt|permission|401|403/i.test(msg)) {
+      throw new Error("Upload failed: storage permission denied. Re-sign in and try again.");
+    }
+    if (/payload|too large|entity too large|413/i.test(msg)) throw new Error("Upload failed: file is too large for the server.");
+    throw new Error(msg || "Upload failed");
+  }
+  onProgress?.(0.95);
+  const duration = await durationPromise;
+  onProgress?.(1);
+  return { id, path, duration, mime: contentType, bytes: body.size };
 }
 
 export async function uploadTrack(projectId: string, file: File, onProgress?: (p: number) => void, folder?: string | null) {
   const existing = await listTracks(projectId);
   const uploaded = await putAudio(projectId, file, onProgress);
-  const title = file.name.replace(/\.[^.]+$/, "").slice(0, 200) || "Untitled track";
+  const title = file.name.replace(/\.[^.]+$/, "").slice(0, 200) || "Untitled cut";
 
   const { data, error } = await supabase
     .from("untitled_tracks")
@@ -478,7 +497,11 @@ export async function removeTrack(t: UntitledTrack) {
 }
 
 export async function trackUrl(path: string, downloadName?: string) {
-  const { data } = await supabase.storage.from("untitled").createSignedUrl(path, 3600, downloadName ? { download: downloadName } : undefined);
+  const { data, error } = await supabase.storage.from("untitled").createSignedUrl(path, 3600, downloadName ? { download: downloadName } : undefined);
+  if (error) {
+    console.warn("[cutroom] signed url", error.message);
+    return null;
+  }
   return data?.signedUrl ?? null;
 }
 
@@ -579,12 +602,12 @@ export async function explorePublic(limit = 24) {
 }
 
 export async function playTrack(projectId: string, track: UntitledTrack, queue?: UntitledTrack[]) {
+  const q = (queue ?? [track]).map((t) => t.id);
   const url = await trackUrl(track.path);
   if (!url) {
-    toast("Couldn't load this track", "error");
+    toast("Couldn't load this track — try again or re-upload", "error");
     return;
   }
-  const q = (queue ?? [track]).map((t) => t.id);
   useUntitled.setState({ playing: { projectId, trackId: track.id, title: track.title, url, queue: q } });
   void recordListen(projectId, track.id);
 }

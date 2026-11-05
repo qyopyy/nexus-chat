@@ -55,7 +55,7 @@ export default function MobileShell() {
           )}
           {tab === "gram" && (hub === "pulse" ? <PulseHub mobile /> : <NexusGram mobile />)}
           {tab === "videos" && (hub === "live" ? <LiveHub mobile /> : <VideosHub mobile />)}
-          {tab === "music" && (hub === "untitled" ? <UntitledHub mobile /> : hub === "radio" ? <RadioHub mobile /> : <MusicHub mobile />)}
+          {tab === "music" && (hub === "cutroom" || hub === "untitled" ? <UntitledHub mobile /> : hub === "radio" ? <RadioHub mobile /> : <MusicHub mobile />)}
           {tab === "games" && <GamesHub mobile />}
           {tab === "apps" && <AppsHub mobile />}
           {tab === "me" && (hub === "staff" ? <StaffDesk mobile /> : <MobileMe />)}
