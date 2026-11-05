@@ -7,6 +7,7 @@ import { sfx } from "@/lib/sounds";
 import { isNexusDesktop, triggerDiscordoEgg } from "@/lib/desktop";
 import { pickWelcomeFact } from "@/lib/welcomeFacts";
 import { cn } from "@/lib/utils";
+import { NexusCredit } from "@/components/ui/NexusCredit";
 
 const SESSION_KEY = "nexus.welcome.shown";
 
@@ -160,6 +161,7 @@ export default function WelcomeSplash({ name, force }: Props) {
           <div className={cn("h-full rounded-full bg-white/70", egg ? "bg-[#5865f2] animate-[welcomeBarEgg_4.4s_linear]" : "animate-[welcomeBar_3.5s_linear]")} />
         </div>
         <p className="text-[11px] text-white/35">Tap to continue{isNexusDesktop() ? " · type discordo" : ""}</p>
+        <NexusCredit className="pointer-events-auto mt-3 text-[12px] text-white/45" support />
       </div>
     </div>,
     document.body,
