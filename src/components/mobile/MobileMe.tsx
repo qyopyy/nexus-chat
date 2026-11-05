@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { AppWindow, Bell, ChevronRight, Copy, Crown, Gamepad2, Headphones, LayoutDashboard, LogOut, Megaphone, Mic, Moon, Palette, Radio, Shield, Sparkles, Tv, UserPen, Users, Vault } from "lucide-react";
+import { AppWindow, Bell, ChevronRight, Copy, Crown, Gamepad2, Headphones, LayoutDashboard, LogOut, Megaphone, Mic, Moon, Palette, Radio, Shield, Sparkles, Tv, UserPen, Users, Vault, Volume2, VolumeX } from "lucide-react";
 import { useApp, openModal, toast } from "@/store/app";
 import { useStudio } from "@/store/studio";
 import { openUntitled } from "@/lib/untitled";
@@ -14,10 +14,12 @@ import { supabase } from "@/lib/supabase";
 import { roleRank } from "@/lib/theme";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
+import { setPref, usePrefs } from "@/lib/prefs";
 import Avatar from "@/components/ui/Avatar";
 import NameTag, { Badges } from "@/components/ui/NameTag";
 import LargeTitle from "./LargeTitle";
 import NexusShareFooter from "@/components/ui/NexusCredit";
+import MenuMusic from "@/components/layout/MenuMusic";
 import type { UserStatus } from "@/lib/types";
 
 const STATUSES: { id: UserStatus; label: string; dot: string }[] = [
@@ -34,6 +36,7 @@ export default function MobileMe() {
   const spaces = useApp((s) => s.spaces.length);
   const chats = useApp((s) => s.chatList.length);
   const pending = useApp((s) => s.friendships.filter((f) => f.status === "pending" && f.addressee_id === s.userId).length);
+  const buttonFx = usePrefs((s) => s.buttonFx !== false);
   const scroller = useRef<HTMLDivElement>(null);
   if (!me) return null;
   const staff = roleRank(me.site_role) >= 2;
@@ -138,9 +141,27 @@ export default function MobileMe() {
         {row(<Palette className="size-[18px]" />, "#9b59b6", "Themes & appearance", () => openModal("settings", "appearance"))}
       </div>
 
+      <div className="mx-4 mt-4 overflow-hidden rounded-2xl bg-side p-2">
+        <MenuMusic />
+      </div>
+
       <div className="mx-4 mt-4 overflow-hidden rounded-2xl bg-side [&>button+button]:border-t [&>button+button]:border-white/[.05]">
         {row(<Mic className="size-[18px]" />, "#23a55a", "Voice & video", () => openModal("settings", "voice"))}
         {row(<Bell className="size-[18px]" />, "#f23f43", "Notifications", () => openModal("settings", "notifications"))}
+        {row(
+          buttonFx ? <Volume2 className="size-[18px]" /> : <VolumeX className="size-[18px]" />,
+          "#5865f2",
+          `Button FX ${buttonFx ? "on" : "off"}`,
+          () => {
+            haptic.select();
+            setPref("buttonFx", !buttonFx);
+          },
+          (
+            <span className={cn("relative mr-1 h-[30px] w-[50px] rounded-full transition", buttonFx ? "bg-ok" : "bg-white/15")}>
+              <span className={cn("absolute top-[2px] size-[26px] rounded-full bg-white shadow transition-all", buttonFx ? "left-[22px]" : "left-[2px]")} />
+            </span>
+          ),
+        )}
         {row(<Moon className="size-[18px]" />, "#f0a020", "Do Not Disturb", () => useApp.setState({ myStatus: myStatus === "dnd" ? "online" : "dnd" }), (
           <span className={cn("relative mr-1 h-[30px] w-[50px] rounded-full transition", myStatus === "dnd" ? "bg-ok" : "bg-white/15")}>
             <span className={cn("absolute top-[2px] size-[26px] rounded-full bg-white shadow transition-all", myStatus === "dnd" ? "left-[22px]" : "left-[2px]")} />

@@ -22,6 +22,8 @@ export type Prefs = {
   uiSounds: boolean;
   uiVolume: number; // 0–1
   ringtone: boolean;
+  /** Soft click FX when tapping buttons / links */
+  buttonFx: boolean;
   // advanced
   devMode: boolean;
 };
@@ -42,10 +44,17 @@ export const PREF_DEFAULTS: Prefs = {
   uiSounds: true,
   uiVolume: 1,
   ringtone: true,
+  buttonFx: true,
   devMode: false,
 };
 
-export const usePrefs = create<Prefs>()(persist(() => ({ ...PREF_DEFAULTS }), { name: "nexus.prefs", version: 1 }));
+export const usePrefs = create<Prefs>()(
+  persist(() => ({ ...PREF_DEFAULTS }), {
+    name: "nexus.prefs",
+    version: 2,
+    migrate: (persisted) => ({ ...PREF_DEFAULTS, ...((persisted as object) ?? {}) }),
+  }),
+);
 export const setPref = <K extends keyof Prefs>(k: K, v: Prefs[K]) => usePrefs.setState({ [k]: v } as Partial<Prefs>);
 export const prefs = () => usePrefs.getState();
 

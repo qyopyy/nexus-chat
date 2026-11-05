@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Crown, Headphones, HeadphoneOff, Link2, LogOut, Mic, MicOff, MonitorOff, MonitorUp, PhoneOff, Settings, Signal, UserPen, Video, VideoOff } from "lucide-react";
+import { Crown, Headphones, HeadphoneOff, Link2, LogOut, Mic, MicOff, MonitorOff, MonitorUp, PhoneOff, Settings, Signal, UserPen, Video, VideoOff, Volume2, VolumeX } from "lucide-react";
 import { useApp, openModal, conversationTitle, findChannel } from "@/store/app";
 import { useCall, canScreenShare, leaveCall, toggleDeafen, toggleMute, toggleScreen, toggleVideo } from "@/lib/call";
 import { openConversation } from "@/lib/data";
 import { can, openStaffDesk } from "@/lib/privileges";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import { setPref, usePrefs } from "@/lib/prefs";
 import Avatar, { statusLabel } from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import { NexusCredit, copyNexusAppLink } from "@/components/ui/NexusCredit";
+import MenuMusic from "./MenuMusic";
 import type { UserStatus } from "@/lib/types";
 
 export default function UserPanel() {
@@ -89,6 +91,7 @@ function MeRow() {
   const muted = useCall((s) => s.muted);
   const deafened = useCall((s) => s.deafened);
   const speaking = useCall((s) => s.speaking);
+  const buttonFx = usePrefs((s) => s.buttonFx !== false);
   const [menu, setMenu] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -159,6 +162,14 @@ function MeRow() {
             >
               <Link2 className="size-4" /> Share Nexus app link
             </button>
+            <button
+              onClick={() => setPref("buttonFx", !buttonFx)}
+              className="flex w-full items-center gap-3 rounded px-2 py-1.5 hover:bg-accent hover:text-white"
+            >
+              {buttonFx ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
+              Button FX {buttonFx ? "on" : "off"}
+            </button>
+            <MenuMusic />
             <button
               onClick={async () => {
                 await leaveCall();

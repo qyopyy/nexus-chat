@@ -288,8 +288,14 @@ export function ChatPrefsBlock() {
       <Hr />
       <Label>Sounds</Label>
       <Toggle label="App sounds" hint="Message, join/leave, mute and screen-share sounds." checked={p.uiSounds} onChange={(v) => setPref("uiSounds", v)} />
+      <Toggle
+        label="Button FX"
+        hint="Soft click sound when you tap buttons and links. Toggle on or off anytime."
+        checked={p.buttonFx !== false}
+        onChange={(v) => setPref("buttonFx", v)}
+      />
       <Toggle label="Call ringtone" checked={p.ringtone} onChange={(v) => setPref("ringtone", v)} />
-      <div className={cn("py-3", !p.uiSounds && "pointer-events-none opacity-50")}>
+      <div className={cn("py-3", !p.uiSounds && p.buttonFx === false && "pointer-events-none opacity-50")}>
         <div className="mb-1 font-medium">Sound volume</div>
         <Slider value={p.uiVolume} max={1} onChange={(v) => setPref("uiVolume", v)} format={(v) => `${Math.round(v * 100)}%`} />
       </div>
