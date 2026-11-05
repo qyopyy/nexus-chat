@@ -126,7 +126,8 @@ export default function Composer({
     if (!text.trim() && !file) return;
     haptic.light();
     const t = text.trim();
-    const isCmd = !file && /^\/(help|roll|flip|8ball|choose|isrc|song|upc|premium|orders)\b/i.test(t);
+    // Any /command — built-in or community bots
+    const isCmd = !file && /^\/[a-z][\w-]{0,30}\b/i.test(t);
     void sendMessage(conversationId, text, file, withEffect).then(() => {
       if (isCmd) void runBotCommand(conversationId, t);
     });

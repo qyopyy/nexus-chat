@@ -21,6 +21,7 @@ export type ModalKind =
   | "createChannel"
   | "spaceInvite"
   | "profile"
+  | "addBot"
   | null;
 
 export type ProfileCardState = { userId: string; x: number; y: number } | null;
