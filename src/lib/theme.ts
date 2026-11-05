@@ -252,6 +252,10 @@ const g = (family: string, weights = "400;500;600;700") =>
 export const FONTS: Record<string, FontDef> = {
   default: { name: "Default (Inter)", stack: '"Inter", ui-sans-serif, system-ui, sans-serif', url: g("Inter") },
   system: { name: "System UI", stack: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', url: null },
+  // Sans
+  manrope: { name: "Manrope", stack: '"Manrope", sans-serif', url: g("Manrope") },
+  dmSans: { name: "DM Sans", stack: '"DM Sans", sans-serif', url: g("DM Sans") },
+  jakarta: { name: "Plus Jakarta", stack: '"Plus Jakarta Sans", sans-serif', url: g("Plus Jakarta Sans") },
   nunito: { name: "Nunito", stack: '"Nunito", sans-serif', url: g("Nunito") },
   poppins: { name: "Poppins", stack: '"Poppins", sans-serif', url: g("Poppins") },
   montserrat: { name: "Montserrat", stack: '"Montserrat", sans-serif', url: g("Montserrat") },
@@ -259,10 +263,26 @@ export const FONTS: Record<string, FontDef> = {
   outfit: { name: "Outfit", stack: '"Outfit", sans-serif', url: g("Outfit") },
   ubuntu: { name: "Ubuntu", stack: '"Ubuntu", sans-serif', url: g("Ubuntu", "400;500;700") },
   roboto: { name: "Roboto", stack: '"Roboto", sans-serif', url: g("Roboto", "400;500;700") },
+  ibmPlex: { name: "IBM Plex Sans", stack: '"IBM Plex Sans", sans-serif', url: g("IBM Plex Sans", "400;500;600;700") },
+  syne: { name: "Syne", stack: '"Syne", sans-serif', url: g("Syne", "400;500;600;700") },
+  // Serif / display
+  sourceSerif: { name: "Source Serif", stack: '"Source Serif 4", Georgia, serif', url: g("Source Serif 4") },
+  literata: { name: "Literata", stack: '"Literata", Georgia, serif', url: g("Literata") },
+  fraunces: { name: "Fraunces", stack: '"Fraunces", Georgia, serif', url: g("Fraunces") },
+  newsreader: { name: "Newsreader", stack: '"Newsreader", Georgia, serif', url: g("Newsreader") },
+  // Fun / mono
   comic: { name: "Comic Neue", stack: '"Comic Neue", "Comic Sans MS", cursive', url: g("Comic Neue", "400;700") },
   mono: { name: "JetBrains Mono", stack: '"JetBrains Mono", ui-monospace, monospace', url: g("JetBrains Mono") },
+  ibmMono: { name: "IBM Plex Mono", stack: '"IBM Plex Mono", ui-monospace, monospace', url: g("IBM Plex Mono", "400;500;600;700") },
   pixel: { name: "Pixel (Silkscreen)", stack: '"Silkscreen", monospace', url: g("Silkscreen", "400;700") },
 };
+
+/** Groups for Appearance → Font picker */
+export const FONT_GROUPS: { id: string; label: string; fonts: string[] }[] = [
+  { id: "sans", label: "Sans", fonts: ["default", "system", "manrope", "dmSans", "jakarta", "nunito", "poppins", "montserrat", "spacegrotesk", "outfit", "ubuntu", "roboto", "ibmPlex", "syne"] },
+  { id: "serif", label: "Serif", fonts: ["sourceSerif", "literata", "fraunces", "newsreader"] },
+  { id: "mono", label: "Mono & fun", fonts: ["mono", "ibmMono", "comic", "pixel"] },
+];
 
 export type Appearance = {
   theme: string;
@@ -279,6 +299,8 @@ export type Appearance = {
   uiScale: number; // root font-size px (14..18)
   messageSize: number; // px
   compact: boolean;
+  /** Chat / Bump DM bubbles with tails (Telegram/Discord style) */
+  messageBubbles: boolean;
   reduceMotion: boolean;
   customCss: string;
 };
@@ -296,6 +318,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   uiScale: 16,
   messageSize: 15,
   compact: false,
+  messageBubbles: true,
   reduceMotion: false,
   customCss: "",
 };
@@ -488,6 +511,8 @@ export function paint(
   }
   root.style.fontSize = (a.uiScale || 16) + "px";
   root.style.setProperty("--msg-size", (a.messageSize || 15) + "px");
+  root.classList.toggle("msg-bubbles", a.messageBubbles !== false);
+  root.classList.toggle("msg-flat", a.messageBubbles === false);
 
   var css = document.getElementById("nexus-custom-css");
   if (!css) {
