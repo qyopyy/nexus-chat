@@ -47,8 +47,9 @@ export default function VideoTile({
 
   const hasVideo = !!tile.stream;
   const avatarOn = useCall((s) => s.avatarOn);
+  const mirrorSelf = useCall((s) => s.settings.mirrorSelf !== false);
   const hand = useCall((s) => (tile.kind !== "cam" ? false : tile.isMe ? s.myHand : !!s.participants[tile.userId]?.hand));
-  const mirror = tile.isMe && tile.kind === "cam" && !avatarOn; // the V-Avatar already moves like a reflection
+  const mirror = tile.isMe && tile.kind === "cam" && !avatarOn && mirrorSelf; // V-Avatar already moves like a reflection
   const name = tile.isMe ? `${profile?.display_name ?? "You"}` : profile?.display_name ?? "…";
 
   return (

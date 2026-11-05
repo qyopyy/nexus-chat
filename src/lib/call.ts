@@ -58,9 +58,13 @@ export type VoiceSettings = {
   /** settings schema bump: v2 moved everyone to 320 kbps */
   qualityV?: number;
   soundboardVolume: number; // 0..1
+  /** mirror local camera tile */
+  mirrorSelf: boolean;
 };
 
 export type IncomingCall = { conversationId: string; callerId: string; at: number };
+export type CallLayout = "gallery" | "speaker";
+export type CallQuality = "good" | "ok" | "poor" | null;
 
 type CallState = {
   status: "idle" | "connecting" | "connected";
@@ -90,6 +94,15 @@ type CallState = {
   /** floating emoji reactions over the call */
   reactions: { id: number; from: string; emoji: string; x: number }[];
   myHand: boolean;
+  /** gallery grid vs auto-spotlight the loudest / focused tile */
+  layout: CallLayout;
+  /** local call-audio recording in progress */
+  recording: boolean;
+  recordingStartedAt: number | null;
+  /** aggregate WebRTC link quality */
+  callQuality: CallQuality;
+  /** front / back camera preference for flip */
+  facingMode: "user" | "environment";
 };
 
 export const DEFAULT_SETTINGS: VoiceSettings = {
@@ -109,6 +122,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   voiceQuality: 320,
   qualityV: 2,
   soundboardVolume: 0.7,
+  mirrorSelf: true,
 };
 
 export const useCall = create<CallState>(() => ({
@@ -135,6 +149,11 @@ export const useCall = create<CallState>(() => ({
   soundToast: null,
   reactions: [],
   myHand: false,
+  layout: "gallery",
+  recording: false,
+  recordingStartedAt: null,
+  callQuality: null,
+  facingMode: "user",
 }));
 
 const get = useCall.getState;
@@ -220,6 +239,11 @@ const deadSessions = new Set<string>();
 const leaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 let mySession = "";
 const buf = new Float32Array(512);
+let recorder: MediaRecorder | null = null;
+let recordChunks: BlobPart[] = [];
+let recordDest: MediaStreamAudioDestinationNode | null = null;
+let recordLocalTap: GainNode | null = null;
+let qualityTimer: ReturnType<typeof setInterval> | null = null;
 
 function rms(an: AnalyserNode) {
   an.getFloatTimeDomainData(buf);
@@ -982,8 +1006,23 @@ export function initCallEngine(userId: string) {
 
   window.addEventListener("keydown", (e) => {
     const s = get().settings;
-    if (s.mode !== "ptt" || e.code !== s.pttKey || e.repeat || isTyping(e.target)) return;
-    if (get().status !== "idle") set({ pttActive: true });
+    if (s.mode === "ptt" && e.code === s.pttKey && !e.repeat && !isTyping(e.target) && get().status !== "idle") {
+      set({ pttActive: true });
+      return;
+    }
+    // Call shortcuts (Discord-style) — ignored while typing
+    if (get().status === "idle" || isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if (k === "m") (e.preventDefault(), toggleMute());
+    else if (k === "d") (e.preventDefault(), toggleDeafen());
+    else if (k === "v") (e.preventDefault(), void toggleVideo());
+    else if (k === "h") (e.preventDefault(), toggleHand());
+    else if (k === "g") (e.preventDefault(), setCallLayout(get().layout === "gallery" ? "speaker" : "gallery"));
+    else if (k === "r" && !e.shiftKey) (e.preventDefault(), sendReaction(REACTIONS[Math.floor(Math.random() * REACTIONS.length)]!));
+    else if (k === "r" && e.shiftKey) (e.preventDefault(), toggleCallRecording());
+    else if (e.code === "Space" && s.mode !== "ptt") {
+      /* don't steal space from scroll unless PTT — skip */
+    }
   });
   window.addEventListener("keyup", (e) => {
     if (e.code === get().settings.pttKey) set({ pttActive: false });
@@ -1100,15 +1139,21 @@ export async function joinCall(conversationId: string, opts: { video?: boolean }
   });
 
   sfx.join();
+  startQualityMonitor();
   if (opts.video) await toggleVideo();
 }
 
 export async function leaveCall() {
   const { conversationId, outgoingRing } = get();
   if (!conversationId) return;
+  if (get().recording) stopCallRecording(false);
   send("bye", {});
   leaveTimers.forEach((t) => clearTimeout(t));
   leaveTimers.clear();
+  if (qualityTimer) {
+    clearInterval(qualityTimer);
+    qualityTimer = null;
+  }
   for (const id of [...peers.keys()]) removePeer(id, true);
   if (avatarEngine) {
     avatarEngine.stop();
@@ -1152,6 +1197,10 @@ export async function leaveCall() {
     pttActive: false,
     error: null,
     clearActive: null,
+    recording: false,
+    recordingStartedAt: null,
+    callQuality: null,
+    layout: get().layout,
   });
   sfx.leave();
 }
@@ -1321,7 +1370,12 @@ export async function toggleVideo() {
   }
   try {
     const s = get().settings;
-    const video: MediaTrackConstraints = { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
+    const video: MediaTrackConstraints = {
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      frameRate: { ideal: 30 },
+      facingMode: { ideal: get().facingMode },
+    };
     if (s.cameraDeviceId && s.cameraDeviceId !== "default") video.deviceId = { exact: s.cameraDeviceId };
     const cam = await navigator.mediaDevices.getUserMedia({ video });
     if (get().status === "idle") {
@@ -1452,8 +1506,226 @@ export function setFocused(tile: string | null) {
   set({ focused: get().focused === tile ? null : tile });
 }
 
+export function setCallLayout(layout: CallLayout) {
+  set({ layout });
+  if (layout === "gallery") set({ focused: null });
+  else if (!get().focused) {
+    const parts = Object.values(get().participants);
+    const loud = parts.find((p) => p.speaking) ?? parts[0];
+    if (loud) set({ focused: `${loud.id}:cam` });
+    else if (get().localCam && me) set({ focused: `${me}:cam` });
+  }
+}
+
 export function clearCallError() {
   set({ error: null });
+}
+
+/** Cycle Nexus Clear → browser NS → off */
+export async function cycleNoiseMode() {
+  const order: NoiseMode[] = ["ai", "standard", "off"];
+  const cur = get().settings.noiseMode;
+  const next = order[(order.indexOf(cur) + 1) % order.length]!;
+  await updateSettings({ noiseMode: next, noiseSuppression: next === "standard" });
+  return next;
+}
+
+export function toggleMirrorSelf() {
+  const mirrorSelf = !get().settings.mirrorSelf;
+  void updateSettings({ mirrorSelf });
+  return mirrorSelf;
+}
+
+/** Flip between front and back camera (phones) or reacquire with opposite facingMode. */
+export async function flipCamera() {
+  if (get().status === "idle" || get().avatarOn) return;
+  const next: "user" | "environment" = get().facingMode === "user" ? "environment" : "user";
+  set({ facingMode: next });
+  const cam = get().localCam;
+  if (!cam) {
+    await toggleVideo();
+    return;
+  }
+  try {
+    const fresh = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 }, facingMode: { ideal: next } },
+    });
+    const nt = fresh.getVideoTracks()[0];
+    if (!nt) throw new Error("no track");
+    nt.contentHint = "motion";
+    for (const p of peers.values()) await p.senders.cam?.replaceTrack(nt);
+    cam.getVideoTracks().forEach((t) => {
+      cam.removeTrack(t);
+      t.stop();
+    });
+    cam.addTrack(nt);
+    set({ localCam: cam, settings: { ...get().settings, cameraDeviceId: "default" } });
+  } catch {
+    set({ error: "Couldn't flip the camera on this device." });
+  }
+}
+
+export function canRecordCall() {
+  return typeof MediaRecorder !== "undefined";
+}
+
+/** Record mixed call audio locally (your mic + everyone you hear). Downloads a .webm when stopped. */
+export function startCallRecording() {
+  if (get().status === "idle") return false;
+  if (recorder) return true;
+  if (!canRecordCall()) {
+    set({ error: "Recording isn't supported in this browser." });
+    return false;
+  }
+  const a = ensureAudio();
+  recordDest = a.createMediaStreamDestination();
+  // everyone you hear
+  if (master) master.connect(recordDest);
+  // your own processed mic (not normally played back through master)
+  recordLocalTap = a.createGain();
+  recordLocalTap.gain.value = 1;
+  if (inputGain) inputGain.connect(recordLocalTap);
+  recordLocalTap.connect(recordDest);
+
+  const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+    ? "audio/webm;codecs=opus"
+    : MediaRecorder.isTypeSupported("audio/webm")
+      ? "audio/webm"
+      : "";
+  try {
+    recorder = mime ? new MediaRecorder(recordDest.stream, { mimeType: mime }) : new MediaRecorder(recordDest.stream);
+  } catch {
+    set({ error: "Couldn't start call recording." });
+    teardownRecordGraph();
+    return false;
+  }
+  recordChunks = [];
+  recorder.ondataavailable = (e) => {
+    if (e.data.size) recordChunks.push(e.data);
+  };
+  recorder.onstop = () => {
+    const blob = new Blob(recordChunks, { type: recorder?.mimeType || "audio/webm" });
+    recordChunks = [];
+    const rec = recorder;
+    recorder = null;
+    teardownRecordGraph();
+    if (blob.size < 256) return;
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const aEl = document.createElement("a");
+    aEl.href = URL.createObjectURL(blob);
+    aEl.download = `nexus-call-${stamp}.webm`;
+    aEl.click();
+    setTimeout(() => URL.revokeObjectURL(aEl.href), 60_000);
+    void rec;
+  };
+  recorder.start(1000);
+  set({ recording: true, recordingStartedAt: Date.now() });
+  return true;
+}
+
+export function stopCallRecording(download = true) {
+  if (!recorder) {
+    set({ recording: false, recordingStartedAt: null });
+    return;
+  }
+  try {
+    if (!download) {
+      recorder.ondataavailable = null;
+      recorder.onstop = () => {
+        recorder = null;
+        recordChunks = [];
+        teardownRecordGraph();
+      };
+    }
+    if (recorder.state !== "inactive") recorder.stop();
+    else {
+      recorder = null;
+      teardownRecordGraph();
+    }
+  } catch {
+    recorder = null;
+    teardownRecordGraph();
+  }
+  set({ recording: false, recordingStartedAt: null });
+}
+
+export function toggleCallRecording() {
+  if (get().recording) stopCallRecording(true);
+  else startCallRecording();
+}
+
+function teardownRecordGraph() {
+  try {
+    recordLocalTap?.disconnect();
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (master && recordDest) master.disconnect(recordDest);
+  } catch {
+    /* ignore */
+  }
+  recordLocalTap = null;
+  recordDest = null;
+}
+
+/** Re-ring members who aren't in the call yet. */
+export async function ringAgain() {
+  const cid = get().conversationId;
+  if (!cid || !me) return;
+  set({ outgoingRing: cid });
+  const { error } = await supabase.from("call_events").insert({ conversation_id: cid, caller_id: me, kind: "ring" });
+  if (error) set({ error: "Couldn't send the ring." });
+  else startRing(true);
+}
+
+async function sampleCallQuality() {
+  if (get().status === "idle" || !peers.size) {
+    if (get().callQuality !== null) set({ callQuality: null });
+    return;
+  }
+  let loss = 0;
+  let rtt = 0;
+  let samples = 0;
+  for (const p of peers.values()) {
+    try {
+      const stats = await p.pc.getStats();
+      stats.forEach((r) => {
+        if (r.type === "inbound-rtp" && r.kind === "audio") {
+          const packets = (r.packetsReceived as number) || 0;
+          const lost = (r.packetsLost as number) || 0;
+          if (packets + lost > 0) {
+            loss += lost / (packets + lost);
+            samples++;
+          }
+        }
+        if (r.type === "candidate-pair" && (r as { state?: string }).state === "succeeded") {
+          const ms = (r.currentRoundTripTime as number) || 0;
+          if (ms > 0) rtt = Math.max(rtt, ms * 1000);
+        }
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+  if (!samples) return;
+  const avgLoss = loss / samples;
+  const q: CallQuality = avgLoss > 0.08 || rtt > 400 ? "poor" : avgLoss > 0.03 || rtt > 200 ? "ok" : "good";
+  if (q !== get().callQuality) set({ callQuality: q });
+  // speaker layout: auto-focus whoever is speaking
+  if (get().layout === "speaker" && !get().focused?.endsWith(":screen")) {
+    const loud = Object.values(get().participants).find((p) => p.speaking);
+    if (loud) {
+      const key = `${loud.id}:cam`;
+      if (get().focused !== key) set({ focused: key });
+    }
+  }
+}
+
+export function startQualityMonitor() {
+  if (qualityTimer) return;
+  qualityTimer = setInterval(() => void sampleCallQuality(), 2500);
+  void sampleCallQuality();
 }
 
 /** iOS Safari / in-app WebViews don't support screen capture */
@@ -1463,4 +1735,8 @@ export function canScreenShare() {
 
 export function myCallId() {
   return me;
+}
+
+export function noiseModeLabel(m: NoiseMode) {
+  return m === "ai" ? "Nexus Clear" : m === "standard" ? "Browser NS" : "Noise off";
 }
