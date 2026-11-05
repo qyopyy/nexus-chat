@@ -59,7 +59,7 @@ Before sharing a deployed URL: Supabase → Authentication → URL Configuration
 ### Stability, cache purge & anti-malware
 
 - **`GET /api/health`** — liveness + Supabase reachability for uptime monitors.
-- **`GET|POST /api/cache/purge`** — clears in-memory API caches (followers/unfurl). Vercel Cron runs it **every hour** (`vercel.json`). Set `CRON_SECRET` for manual calls (`Authorization: Bearer …`).
+- **`GET|POST /api/cache/purge`** — clears in-memory API caches (followers/unfurl). Vercel Cron runs it **daily** at 04:00 UTC (`vercel.json`) — Hobby plans reject hourly crons and fail the whole deploy. On Pro you can change the schedule to `0 * * * *`. Set `CRON_SECRET` for manual calls (`Authorization: Bearer …`).
 - **Anti-malware upload gate** (`src/lib/malwareGuard.ts`) blocks executables, scripts, SVG/HTML, dangerous extensions, and mismatched image magic bytes before chat/radio/music/Gram/Cutroom uploads. Complements Nexus Shield (copyright), not a full AV engine.
 - App Router `error.tsx` / `global-error.tsx` + ErrorBoundaries keep one broken panel from blanking the whole app.
 

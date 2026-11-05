@@ -1,6 +1,7 @@
 /**
  * Shared in-memory API caches (followers, unfurl, …).
- * Cleared hourly by /api/cache/purge so serverless instances stay lean and fresh.
+ * Cleared by /api/cache/purge (daily Vercel cron on Hobby; hourly on Pro if configured)
+ * so serverless instances stay lean and fresh.
  */
 
 export type CacheEntry<T> = { at: number; value: T };
@@ -50,7 +51,7 @@ export function cachePrune(name?: string): number {
   return removed;
 }
 
-/** Hard clear — used by the hourly cron. */
+/** Hard clear — used by the cache-purge cron. */
 export function cacheClearAll(): { buckets: number; entries: number } {
   let entries = 0;
   for (const b of buckets.values()) entries += b.size;

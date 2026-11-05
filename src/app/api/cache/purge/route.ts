@@ -6,8 +6,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Hourly cron (vercel.json) + manual admin purge.
+ * Daily cron (vercel.json — Hobby-safe) + manual admin purge.
  * Clears process-local API caches so the server stays fast and fresh.
+ * Use `0 * * * *` on Vercel Pro if you want hourly.
  */
 export async function GET(req: NextRequest) {
   if (!authorizeCron(req)) {
