@@ -413,12 +413,12 @@ export default function FlappyRace({
       <FlappyFrameHeader title="Flappy Race" onBack={() => { leaveRoom(); onBack(); }} mobile={mobile} />
       {!room || phase === "lobby" ? (
         <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 p-4">
-          <div className="rounded-3xl p-5" style={{ background: "linear-gradient(135deg,#38bdf8,#4ade80)" }}>
-            <div className="text-xs font-bold tracking-widest text-white/85 uppercase">Multiplayer · Win Top 3</div>
-            <div className="mt-1 text-3xl font-black">Race the pipes</div>
-            <p className="mt-2 text-sm text-white/90">Same pipe seed for everyone. Highest score when you crash ranks the lobby — top 3 earn a chest.</p>
+          <div className="rounded-3xl border border-white/10 p-5" style={{ background: "linear-gradient(160deg,#0b1220 0%,#0f172a 50%,#164e63 100%)" }}>
+            <div className="text-[10px] font-semibold tracking-[0.2em] text-cyan-300/80 uppercase">Multiplayer · top 3</div>
+            <div className="mt-1 text-3xl font-black tracking-tight">Race the pipes</div>
+            <p className="mt-2 text-sm text-slate-300">Same pipe seed for everyone. Highest score when you crash ranks the lobby — top 3 earn a chest.</p>
           </div>
-          <button onClick={() => void host()} className="flex items-center justify-center gap-2 rounded-2xl bg-[#facc15] py-3.5 font-black text-black">
+          <button onClick={() => void host()} className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-500 py-3.5 font-bold text-white">
             <Users className="size-5" /> Host a race
           </button>
           <div className="flex gap-2">
@@ -451,7 +451,7 @@ export default function FlappyRace({
                 ))}
               </div>
               {room.isHost() ? (
-                <button disabled={players.length < 1} onClick={startRace} className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#22c55e] py-3 font-black disabled:opacity-40">
+                <button disabled={players.length < 1} onClick={startRace} className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500 py-3 font-bold disabled:opacity-40">
                   <Play className="size-4 fill-current" /> Start race ({players.length})
                 </button>
               ) : (
