@@ -3,8 +3,8 @@
 import { useChatFx } from "@/lib/chatFx";
 import { TypingAnim } from "./TypingBubbles";
 
-import { useMemo, useState } from "react";
-import { Bot, ChevronLeft, Hash, Maximize2, MessageSquare, Phone, Users, Video, Volume2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Bookmark, Bot, ChevronLeft, Hash, Maximize2, MessageSquare, Phone, Search, Users, Video, Volume2 } from "lucide-react";
 import { useApp, conversationTitle, findChannel, openProfileCard } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { useChat } from "@/store/chat";
@@ -14,6 +14,8 @@ import Avatar, { statusLabel } from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import { useIsMobile } from "@/lib/useMobile";
 import BotsPanel from "./BotsPanel";
+import ChatSearch from "./ChatSearch";
+import SavedMessages from "./SavedMessages";
 
 export default function ChatHeader({
   conversationId,
@@ -26,6 +28,8 @@ export default function ChatHeader({
 }) {
   const mobile = useIsMobile();
   const [bots, setBots] = useState(false);
+  const [search, setSearch] = useState(false);
+  const [saved, setSaved] = useState(false);
   const title = useApp((s) => conversationTitle(s, conversationId));
   const chat = useApp((s) => s.chatList.find((c) => c.id === conversationId));
   const channel = useApp((s) => findChannel(s, conversationId));
@@ -52,6 +56,8 @@ export default function ChatHeader({
         {typers.length === 1 ? `${typers[0]} is typing` : `${typers.length} people are typing`}
       </span>
     );
+  } else if (channel?.topic) {
+    subtitle = <span className="text-sub">{channel.topic}</span>;
   } else if (chat?.kind === "dm" && chat.other_user_id) {
     const st = presence[chat.other_user_id]?.status;
     subtitle = <span className={st ? "text-accent" : "text-sub"}>{statusLabel(st).toLowerCase()}</span>;
@@ -60,6 +66,20 @@ export default function ChatHeader({
   }
 
   const canCall = kind === "dm" || kind === "group";
+
+  useEffect(() => {
+    if (kind === "voice") return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f" && !e.shiftKey) {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+        e.preventDefault();
+        setSearch(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [kind]);
 
   return (
     <header className="chat-header flex h-14 shrink-0 items-center gap-3 border-b border-black/25 bg-chat/90 px-3 shadow-sm backdrop-blur-xl max-md:gap-2 max-md:border-white/[.06] max-md:pl-0.5">
@@ -111,6 +131,16 @@ export default function ChatHeader({
           </HeaderBtn>
         )}
         {kind !== "voice" && (
+          <HeaderBtn label="Find in chat" onClick={() => setSearch(true)}>
+            <Search className="size-5" />
+          </HeaderBtn>
+        )}
+        {kind !== "voice" && (
+          <HeaderBtn label="Saved messages" onClick={() => setSaved(true)}>
+            <Bookmark className="size-5" />
+          </HeaderBtn>
+        )}
+        {kind !== "voice" && (
           <HeaderBtn label="Bots & webhooks" onClick={() => setBots(true)}>
             <Bot className="size-5" />
           </HeaderBtn>
@@ -122,6 +152,8 @@ export default function ChatHeader({
         )}
       </div>
       {bots && <BotsPanel conversationId={conversationId} spaceId={channel?.space_id} open onClose={() => setBots(false)} />}
+      <ChatSearch conversationId={conversationId} open={search} onClose={() => setSearch(false)} />
+      <SavedMessages open={saved} onClose={() => setSaved(false)} />
     </header>
   );
 }

@@ -9,6 +9,7 @@ import { useTypingChannel } from "@/lib/realtime";
 import ChatHeader from "./ChatHeader";
 import MessageList from "./MessageList";
 import Composer from "./Composer";
+import PinsBar from "./PinsBar";
 import CallStage from "@/components/call/CallStage";
 import Avatar from "@/components/ui/Avatar";
 import MobileCallScreen from "@/components/call/MobileCallScreen";
@@ -82,6 +83,7 @@ export default function ChatView({ conversationId }: { conversationId: string })
 
       {showChat && (
         <>
+          <PinsBar conversationId={conversationId} />
           <MessageList conversationId={conversationId} initialUnread={initialUnread} />
           {muted ? <MutedBar until={myProfile?.muted_until ?? null} reason={myProfile?.mute_reason ?? null} /> : <Composer conversationId={conversationId} file={file} setFile={setFile} />}
         </>
