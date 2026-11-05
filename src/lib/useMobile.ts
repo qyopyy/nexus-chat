@@ -17,9 +17,20 @@ export function useIsMobile() {
   return mobile;
 }
 
-/** Running inside the Nexus iOS app (Capacitor shell)? */
+/** Running inside a Nexus Capacitor shell (Nexus IPA/APK or standalone Bump IPA)? */
 export function isNativeApp() {
   if (typeof window === "undefined") return false;
   const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
   return !!cap?.isNativePlatform?.();
+}
+
+/** Standalone Bump IPA/APK (`hu.qyopy.bump`, UA includes BumpApp). */
+export function isBumpApp() {
+  if (typeof window === "undefined") return false;
+  if (/BumpApp/i.test(navigator.userAgent)) return true;
+  try {
+    return window.location.pathname.startsWith("/bump/app");
+  } catch {
+    return false;
+  }
 }

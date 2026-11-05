@@ -3,14 +3,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
+  Bell,
+  BellOff,
   Copy,
+  Download,
   ExternalLink,
+  Hand,
   Link2,
   MapPin,
   MessageCircle,
   Navigation,
   Radio,
   Share2,
+  Timer,
   UserPlus,
   UserMinus,
   Users,
@@ -27,6 +32,7 @@ import {
   bumpHeartbeat,
   bumpInbox,
   bumpInviteLink,
+  bumpIpaReleasesUrl,
   bumpListFamily,
   bumpMyPresence,
   bumpNearby,
@@ -39,6 +45,7 @@ import {
   bumpSpotifyTrackEmbed,
   bumpSpotifyTrackOk,
   bumpThread,
+  bumpWave,
   subscribeBumpLive,
   type BumpInboxRow,
   type BumpMessage,
@@ -46,17 +53,28 @@ import {
   type BumpProfile,
   type BumpVisible,
 } from "@/lib/bump";
+import { startBumpBackground, stopBumpBackground, updateBumpBackgroundOptions } from "@/lib/bumpBackground";
 import { appleMapsLink } from "@/lib/appleMaps";
 import { formatMeters } from "@/lib/location";
 import { fmtClock } from "@/lib/prefs";
 import { haptic } from "@/lib/haptics";
+import { isBumpApp, isNativeApp } from "@/lib/useMobile";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 
 type Tab = "nearby" | "friends" | "profile" | "social" | "messages";
 
-export default function BumpHub({ mobile, onBack }: { mobile?: boolean; onBack?: () => void }) {
+export default function BumpHub({
+  mobile,
+  onBack,
+  standalone,
+}: {
+  mobile?: boolean;
+  onBack?: () => void;
+  /** Standalone Bump IPA shell — hide back-to-Nexus chrome */
+  standalone?: boolean;
+}) {
   const me = useApp((s) => s.userId);
   const friendships = useApp((s) => s.friendships);
   const [tab, setTab] = useState<Tab>("nearby");
@@ -70,6 +88,12 @@ export default function BumpHub({ mobile, onBack }: { mobile?: boolean; onBack?:
   const [radius, setRadius] = useState(500);
   const [viewUser, setViewUser] = useState<string | null>(null);
   const [threadUser, setThreadUser] = useState<string | null>(null);
+  const [liveLabel, setLiveLabel] = useState("");
+  const [bgShare, setBgShare] = useState(true);
+  const [alerts, setAlerts] = useState(true);
+  const [autoStopMin, setAutoStopMin] = useState(0);
+  const [flashUntil, setFlashUntil] = useState<number | null>(null);
+  const bumpOnly = standalone || isBumpApp();
 
   const friendIds = useMemo(() => {
     if (!me) return [] as string[];
@@ -126,51 +150,93 @@ export default function BumpHub({ mobile, onBack }: { mobile?: boolean; onBack?:
     });
   }, [me, refresh]);
 
-  // Heartbeat while live so the pin stays fresh without a native rebuild
+  // Background watch + heartbeat while Live (works in Bump IPA / Nexus IPA)
   useEffect(() => {
-    if (!live || !me) return;
-    const beat = () => {
-      void bumpHeartbeat(visible);
+    if (!live || !me) {
+      void stopBumpBackground({ clearServer: false });
+      return;
+    }
+    if (!bgShare) {
+      void stopBumpBackground({ clearServer: false });
+      const t = setInterval(() => void bumpHeartbeat(visible, liveLabel.trim() || undefined), 50_000);
+      return () => clearInterval(t);
+    }
+    void startBumpBackground({
+      visible,
+      label: liveLabel,
+      alerts,
+      autoStopMinutes: autoStopMin,
+      onNearby: setNearby,
+    });
+    return () => {
+      void stopBumpBackground({ clearServer: false });
     };
-    beat();
-    const t = setInterval(beat, 50_000);
+  }, [live, me, bgShare]); // eslint-disable-line react-hooks/exhaustive-deps -- restart only on live/bg
+
+  useEffect(() => {
+    if (!live) return;
+    updateBumpBackgroundOptions({ visible, label: liveLabel.trim() || null, alerts });
+  }, [live, visible, liveLabel, alerts]);
+
+  // Flash "everyone" countdown
+  useEffect(() => {
+    if (!flashUntil) return;
+    const t = setInterval(() => {
+      if (Date.now() >= flashUntil) {
+        setFlashUntil(null);
+        setVisible("friends");
+        toast("Everyone flash ended — back to Friends only", "info");
+      }
+    }, 1000);
     return () => clearInterval(t);
-  }, [live, me, visible]);
+  }, [flashUntil]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const q = new URLSearchParams(window.location.search).get("bump");
-    const path = window.location.pathname.match(/^\/bump\/([a-z0-9]+)/i)?.[1];
-    const code = q || path;
+    const pathCode = window.location.pathname.match(/^\/bump\/([a-z0-9]+)/i)?.[1];
+    const code = q || (pathCode && pathCode.toLowerCase() !== "app" ? pathCode : null);
     if (code) {
       setRedeem(code);
       void bumpRedeemInvite(code).then(() => {
         const u = new URL(window.location.href);
         u.searchParams.delete("bump");
-        if (u.pathname.startsWith("/bump/")) u.pathname = "/";
+        if (u.pathname.startsWith("/bump/") && !u.pathname.startsWith("/bump/app")) u.pathname = bumpOnly ? "/bump/app" : "/";
         window.history.replaceState(null, "", u.pathname + u.search);
         void refresh();
       });
     }
-  }, [refresh]);
+  }, [refresh, bumpOnly]);
 
   async function goLive() {
     setBusy(true);
     haptic.medium();
-    const row = await bumpPublish(visible);
+    const row = await bumpPublish(visible, liveLabel.trim() || undefined);
     setBusy(false);
     if (row) {
       setLive(true);
       await refresh();
+      if (bgShare) {
+        toast(isNativeApp() ? "Live — background sharing on" : "Live — keep Bump open for updates", "success");
+      }
     }
   }
 
   async function stop() {
     setBusy(true);
+    await stopBumpBackground({ clearServer: true });
     await bumpClear();
     setBusy(false);
     setLive(false);
     setNearby([]);
+    setFlashUntil(null);
+  }
+
+  function startEveryoneFlash(minutes: number) {
+    setVisible("everyone");
+    setFlashUntil(Date.now() + minutes * 60_000);
+    toast(`Visible to everyone for ${minutes} min`, "success");
+    if (live) void bumpPublish("everyone", liveLabel.trim() || undefined);
   }
 
   async function makeInvite(kind: "family" | "friend" | "nearby") {
@@ -207,12 +273,15 @@ export default function BumpHub({ mobile, onBack }: { mobile?: boolean; onBack?:
     { id: "messages", label: "Messages" },
   ];
 
+  const flashLeft =
+    flashUntil && flashUntil > Date.now() ? Math.max(0, Math.ceil((flashUntil - Date.now()) / 1000)) : 0;
+
   return (
-    <div className={cn("flex h-full flex-col bg-chat", mobile && "pb-safe-2")}>
+    <div className={cn("flex h-full flex-col bg-chat", (mobile || bumpOnly) && "pb-safe-2")}>
       <header
         className={cn(
           "relative shrink-0 overflow-hidden border-b border-line",
-          mobile || onBack ? "pt-safe-3" : "",
+          mobile || onBack || bumpOnly ? "pt-safe-3" : "",
         )}
       >
         <div
@@ -222,8 +291,8 @@ export default function BumpHub({ mobile, onBack }: { mobile?: boolean; onBack?:
               "radial-gradient(ellipse 80% 120% at 0% 0%, color-mix(in oklab, #22c55a 22%, transparent), transparent 55%), radial-gradient(ellipse 60% 80% at 100% 0%, color-mix(in oklab, var(--color-accent) 16%, transparent), transparent 50%)",
           }}
         />
-        <div className={cn("relative flex items-center gap-2 px-3 pb-3", mobile || onBack ? "pt-1" : "pt-3")}>
-          {(mobile || onBack) && (
+        <div className={cn("relative flex items-center gap-2 px-3 pb-3", mobile || onBack || bumpOnly ? "pt-1" : "pt-3")}>
+          {!bumpOnly && (mobile || onBack) && (
             <button
               type="button"
               onClick={() => (onBack ? onBack() : useApp.setState({ hub: null, appsTool: null }))}
@@ -234,7 +303,7 @@ export default function BumpHub({ mobile, onBack }: { mobile?: boolean; onBack?:
             </button>
           )}
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-base font-extrabold tracking-tight sm:text-lg">Bump</h1>
               <span
                 className={cn(
@@ -243,11 +312,17 @@ export default function BumpHub({ mobile, onBack }: { mobile?: boolean; onBack?:
                 )}
               >
                 <span className={cn("size-1.5 animate-pulse rounded-full", live ? "bg-ok" : "bg-faint")} />
-                {live ? "Live" : "Off"}
+                {live ? (bgShare ? "Live · bg" : "Live") : "Off"}
               </span>
-              <span className="hidden text-[10px] font-semibold text-sub sm:inline">Realtime</span>
+              {flashLeft > 0 && (
+                <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent tabular-nums">
+                  Everyone {Math.floor(flashLeft / 60)}:{String(flashLeft % 60).padStart(2, "0")}
+                </span>
+              )}
             </div>
-            <p className="truncate text-[11px] text-sub">Nearby · friends · live DMs · updates without app store</p>
+            <p className="truncate text-[11px] text-sub">
+              {bumpOnly ? "Standalone Bump app · same Nexus account" : "Nearby · friends · live DMs · also a separate IPA"}
+            </p>
           </div>
           <MapPin className={cn("size-5 shrink-0", live ? "text-ok" : "text-sub")} />
         </div>
@@ -272,13 +347,30 @@ export default function BumpHub({ mobile, onBack }: { mobile?: boolean; onBack?:
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
         {tab === "nearby" && (
           <div className="mx-auto max-w-xl space-y-4">
+            {!bumpOnly && (
+              <a
+                href={bumpIpaReleasesUrl()}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-3 rounded-2xl bg-[#0b3d24] px-4 py-3 ring-1 ring-[#22c55a]/30 transition hover:bg-[#14532d]"
+              >
+                <span className="grid size-10 place-items-center rounded-xl bg-black/25 text-lg">📍</span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold text-white">Get the Bump iOS app</div>
+                  <div className="truncate text-[11px] text-white/70">Separate IPA · background Live · Sideloadly</div>
+                </div>
+                <Download className="size-4 shrink-0 text-[#86efac]" />
+              </a>
+            )}
+
             <section className="overflow-hidden rounded-2xl bg-side ring-1 ring-white/5">
               <div className="border-b border-white/5 px-4 py-3">
                 <div className="flex items-center gap-2 text-sm font-bold">
                   <Radio className="size-4 text-accent" /> Share location
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-sub">
-                  Rounded to ~100 m, expires after 20 minutes. On iPhone: Settings → Nexus → Location.
+                  Rounded to ~100 m, expires after 20 minutes. Background sharing keeps your pin fresh while Live
+                  {isNativeApp() ? " (Allow Location → Always)." : "."}
                 </p>
               </div>
               <div className="space-y-3 p-4">
@@ -293,7 +385,10 @@ export default function BumpHub({ mobile, onBack }: { mobile?: boolean; onBack?:
                     <button
                       key={id}
                       type="button"
-                      onClick={() => setVisible(id)}
+                      onClick={() => {
+                        setVisible(id);
+                        if (id !== "everyone") setFlashUntil(null);
+                      }}
                       className={cn(
                         "rounded-full px-3 py-1.5 text-xs font-semibold transition",
                         visible === id ? "bg-accent text-white" : "bg-white/5 text-sub hover:bg-white/10",
@@ -303,6 +398,17 @@ export default function BumpHub({ mobile, onBack }: { mobile?: boolean; onBack?:
                     </button>
                   ))}
                 </div>
+
+                <label className="block text-[11px] font-semibold text-sub">
+                  Live status label
+                  <input
+                    value={liveLabel}
+                    onChange={(e) => setLiveLabel(e.target.value.slice(0, 40))}
+                    placeholder="Coffee @ park · optional"
+                    className="mt-1.5 w-full rounded-xl bg-black/30 px-3 py-2 text-sm font-medium text-txt outline-none ring-1 ring-transparent focus:ring-accent"
+                  />
+                </label>
+
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -318,6 +424,62 @@ export default function BumpHub({ mobile, onBack }: { mobile?: boolean; onBack?:
                     </button>
                   )}
                 </div>
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setBgShare((v) => !v)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-semibold ring-1",
+                      bgShare ? "bg-ok/15 text-ok ring-ok/30" : "bg-white/5 text-sub ring-white/10",
+                    )}
+                  >
+                    <Radio className="size-3.5 shrink-0" />
+                    Background Live {bgShare ? "on" : "off"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAlerts((v) => !v)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-semibold ring-1",
+                      alerts ? "bg-accent/15 text-accent ring-accent/30" : "bg-white/5 text-sub ring-white/10",
+                    )}
+                  >
+                    {alerts ? <Bell className="size-3.5 shrink-0" /> : <BellOff className="size-3.5 shrink-0" />}
+                    Nearby alerts {alerts ? "on" : "off"}
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="mr-1 inline-flex items-center gap-1 text-[11px] font-semibold text-sub">
+                    <Timer className="size-3.5" /> Flash everyone
+                  </span>
+                  {[5, 15, 30].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => startEveryoneFlash(m)}
+                      className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-bold text-sub hover:bg-white/10 hover:text-txt"
+                    >
+                      {m}m
+                    </button>
+                  ))}
+                </div>
+
+                <label className="block text-[11px] font-semibold text-sub">
+                  Auto-stop after
+                  <select
+                    value={autoStopMin}
+                    onChange={(e) => setAutoStopMin(Number(e.target.value))}
+                    className="mt-1.5 w-full rounded-xl bg-black/30 px-3 py-2 text-sm font-medium text-txt outline-none"
+                  >
+                    <option value={0}>Until I stop</option>
+                    <option value={20}>20 minutes</option>
+                    <option value={60}>1 hour</option>
+                    <option value={180}>3 hours</option>
+                  </select>
+                </label>
+
                 <label className="block text-[11px] font-semibold text-sub">
                   Search radius · {radius >= 1000 ? `${(radius / 1000).toFixed(1)} km` : `${radius} m`}
                   <input type="range" min={100} max={2000} step={50} value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="mt-2 w-full accent-[var(--accent)]" />
@@ -335,6 +497,14 @@ export default function BumpHub({ mobile, onBack }: { mobile?: boolean; onBack?:
               }}
               onOpen={openPerson}
               onMessage={openMessages}
+              onWave={(id) => {
+                void bumpWave(id).then((row) => {
+                  if (row) {
+                    toast("Wave sent", "success");
+                    openMessages(id);
+                  }
+                });
+              }}
               onRefresh={() => void refresh()}
             />
 
@@ -423,6 +593,14 @@ export default function BumpHub({ mobile, onBack }: { mobile?: boolean; onBack?:
               badge={(id) => (nearbyById.has(id) ? "Near" : null)}
               onOpen={openPerson}
               onMessage={openMessages}
+              onWave={(id) => {
+                void bumpWave(id).then((row) => {
+                  if (row) {
+                    toast("Wave sent", "success");
+                    openMessages(id);
+                  }
+                });
+              }}
               onRefresh={() => void refresh()}
             />
           </div>
@@ -450,6 +628,7 @@ function PersonList({
   badge,
   onOpen,
   onMessage,
+  onWave,
   onRefresh,
 }: {
   title: string;
@@ -459,6 +638,7 @@ function PersonList({
   badge?: (id: string) => string | null;
   onOpen: (id: string) => void;
   onMessage: (id: string) => void;
+  onWave?: (id: string) => void;
   onRefresh?: () => void;
 }) {
   return (
@@ -480,7 +660,7 @@ function PersonList({
         <ul>
           {ids.map((id) => (
             <li key={id} className="border-b border-white/5 last:border-0">
-              <div className="flex items-center gap-2 px-3 py-2.5">
+              <div className="flex items-center gap-1.5 px-3 py-2.5">
                 <button type="button" onClick={() => onOpen(id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
                   <Avatar userId={id} size={42} />
                   <div className="min-w-0 flex-1">
@@ -493,6 +673,17 @@ function PersonList({
                     <div className="truncate text-[11px] text-sub">{meta(id)}</div>
                   </div>
                 </button>
+                {onWave && (
+                  <button
+                    type="button"
+                    onClick={() => onWave(id)}
+                    className="grid size-9 shrink-0 place-items-center rounded-full bg-white/5 text-ok hover:bg-ok/20"
+                    aria-label="Wave"
+                    title="Wave"
+                  >
+                    <Hand className="size-4" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onMessage(id)}

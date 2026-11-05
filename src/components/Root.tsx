@@ -17,6 +17,14 @@ export default function Root({ mode, initialVideo, initialRelease, initialGram, 
   // Capacitor APK/IPA load the live site — reload when a new web deploy lands
   useEffect(() => startLiveUpdates(), []);
 
+  // Standalone Bump IPA (UA BumpApp) always uses the slim /bump/app shell
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!/BumpApp/i.test(navigator.userAgent)) return;
+    if (window.location.pathname.startsWith("/bump/app")) return;
+    window.location.replace("/bump/app" + window.location.search);
+  }, []);
+
   useEffect(() => {
     if (!isConfigured) return;
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
