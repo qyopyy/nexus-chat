@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { useApp, toast } from "@/store/app";
+import { useApp, openModal, toast } from "@/store/app";
 import { initCallEngine } from "@/lib/call";
 import { useRealtime } from "@/lib/realtime";
 import { joinSpace, loadProfiles, refreshChatList, refreshFriends, refreshSpaces, refreshUnread } from "@/lib/data";
@@ -137,6 +137,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
     const play = q.get("play");
     const g = q.get("g");
     const join = q.get("join");
+    const addbot = q.get("addbot");
     if (play && /^[A-Za-z2-9]{6}$/.test(play)) {
       joinGame(play, g === "geo" || g === "four" || g === "flappy" ? g : "streets");
       window.history.replaceState(null, "", "/");
@@ -146,6 +147,9 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
         if (err) toast(err, "error");
         else toast("Joined the server", "success");
       });
+    } else if (addbot) {
+      window.history.replaceState(null, "", "/");
+      openModal("addBot", addbot);
     }
   }, [bootstrapped]);
 

@@ -121,7 +121,7 @@ export default function ChatHeader({
           </HeaderBtn>
         )}
       </div>
-      {bots && <BotsPanel conversationId={conversationId} open onClose={() => setBots(false)} />}
+      {bots && <BotsPanel conversationId={conversationId} spaceId={channel?.space_id} open onClose={() => setBots(false)} />}
     </header>
   );
 }

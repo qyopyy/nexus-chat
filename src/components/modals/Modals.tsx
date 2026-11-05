@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Copy, Hash, Volume2 } from "lucide-react";
 import { useApp, closeModal } from "@/store/app";
 import { createChannel, createGroup, createSpace, friendIds, joinSpace } from "@/lib/data";
+import { fetchBotBySlug, installBotToSpace, type BotCard, type SystemBotKey } from "@/lib/bots";
 import { cn } from "@/lib/utils";
 import Modal, { Button } from "@/components/ui/Modal";
 import Avatar from "@/components/ui/Avatar";
@@ -26,9 +27,84 @@ export default function Modals() {
       return arg ? <CreateChannelModal spaceId={arg} /> : null;
     case "spaceInvite":
       return arg ? <InviteModal spaceId={arg} /> : null;
+    case "addBot":
+      return arg ? <AddBotModal slug={arg} /> : null;
     default:
       return null;
   }
+}
+
+function AddBotModal({ slug }: { slug: string }) {
+  const spaces = useApp((s) => s.spaces);
+  const [bot, setBot] = useState<BotCard | null>(null);
+  const [spaceId, setSpaceId] = useState(spaces[0]?.id ?? "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetchBotBySlug(slug).then((b) => {
+      if (!b) setErr("Bot not found");
+      else setBot(b);
+    });
+  }, [slug]);
+
+  return (
+    <Modal
+      open
+      onClose={closeModal}
+      title={bot ? `Invite ${bot.name}` : "Invite bot"}
+      subtitle="Add this bot to a server you manage"
+      footer={
+        <div className="flex w-full justify-end gap-2">
+          <Button variant="ghost" onClick={closeModal}>
+            Cancel
+          </Button>
+          <Button
+            disabled={busy || !bot || !spaceId}
+            onClick={async () => {
+              if (!bot || !spaceId) return;
+              setBusy(true);
+              const ok =
+                bot.kind === "system"
+                  ? await installBotToSpace(spaceId, { systemKey: bot.key as SystemBotKey })
+                  : await installBotToSpace(spaceId, { communityBotId: bot.id });
+              setBusy(false);
+              if (ok) closeModal();
+            }}
+          >
+            Add to server
+          </Button>
+        </div>
+      }
+    >
+      {err && <p className="text-sm text-dnd">{err}</p>}
+      {bot && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 rounded-xl bg-rail p-3">
+            <div className="grid size-12 place-items-center rounded-2xl text-lg font-black text-white" style={{ background: bot.color }}>
+              🤖
+            </div>
+            <div className="min-w-0">
+              <div className="font-semibold">{bot.name}</div>
+              <p className="text-xs text-sub">{bot.description}</p>
+            </div>
+          </div>
+          <label className="block text-xs font-bold tracking-wide text-sub uppercase">
+            Server
+            <select value={spaceId} onChange={(e) => setSpaceId(e.target.value)} className="mt-2 w-full rounded-md bg-rail px-3 py-2.5 text-sm font-normal normal-case text-txt outline-none">
+              <option value="">Select a server…</option>
+              {spaces.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {!spaces.length && <p className="text-sm text-sub">Create a server first, then invite the bot.</p>}
+        </div>
+      )}
+    </Modal>
+  );
 }
 
 function CreateSpaceModal() {
