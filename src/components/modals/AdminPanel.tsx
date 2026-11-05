@@ -19,6 +19,7 @@ import {
 } from "@/lib/admin";
 import { loadProfiles } from "@/lib/data";
 import { ROLE_INFO, roleRank, type SiteRole } from "@/lib/theme";
+import { openStaffDesk } from "@/lib/privileges";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
@@ -49,13 +50,18 @@ export default function AdminPanel({ focusUser }: { focusUser: string | null }) 
         <div className="grid size-10 place-items-center rounded-xl bg-dnd/20">
           <Shield className="size-5 text-dnd" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-xl font-bold">Admin Panel</h2>
           <p className="text-sm text-sub">
             You are <span style={{ color: ROLE_INFO[(me?.site_role ?? "member") as SiteRole].color }}>{ROLE_INFO[(me?.site_role ?? "member") as SiteRole].label}</span>
             {rank < 3 && " — moderators can time out, ban and delete messages."}
           </p>
         </div>
+        {rank >= 1 && (
+          <button type="button" onClick={() => openStaffDesk()} className="shrink-0 rounded-full bg-[#eb459e]/20 px-3 py-1.5 text-xs font-semibold text-[#eb459e] hover:bg-[#eb459e]/30">
+            Staff Desk
+          </button>
+        )}
       </div>
       <div className="mb-6 flex gap-1 overflow-x-auto border-b border-line">
         {tabs

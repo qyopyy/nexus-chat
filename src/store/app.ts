@@ -61,7 +61,7 @@ export type AppState = {
   /** phone layout: which bottom tab is showing */
   mobileTab: "chats" | "spaces" | "videos" | "music" | "games" | "friends" | "me" | "gram" | "apps";
   /** a full-width hub replaces the chat pane: music, videos, games, apps, or the creator studio */
-  hub: "music" | "videos" | "studio" | "games" | "gram" | "apps" | "untitled" | "radio" | "live" | "pulse" | null;
+  hub: "music" | "videos" | "studio" | "games" | "gram" | "apps" | "untitled" | "radio" | "live" | "pulse" | "staff" | null;
   /** phone layout: call screen minimized to the floating bar */
   callMinimized: boolean;
 };

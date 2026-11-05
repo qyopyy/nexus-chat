@@ -1,13 +1,14 @@
 "use client";
 
 import { useRef } from "react";
-import { AppWindow, Bell, ChevronRight, Copy, Headphones, LayoutDashboard, LogOut, Megaphone, Mic, Moon, Palette, Radio, Shield, Sparkles, Tv, UserPen, Users, Gamepad2, Crown, Vault } from "lucide-react";
+import { AppWindow, Bell, ChevronRight, Copy, Crown, Gamepad2, Headphones, LayoutDashboard, LogOut, Megaphone, Mic, Moon, Palette, Radio, Shield, Sparkles, Tv, UserPen, Users, Vault } from "lucide-react";
 import { useApp, openModal, toast } from "@/store/app";
 import { useStudio } from "@/store/studio";
 import { openUntitled } from "@/lib/untitled";
 import { openRadio } from "@/lib/radio";
 import { openLiveHub } from "@/lib/live";
 import { openPulse } from "@/lib/pulse";
+import { openStaffDesk } from "@/lib/privileges";
 import { leaveCall } from "@/lib/call";
 import { supabase } from "@/lib/supabase";
 import { roleRank } from "@/lib/theme";
@@ -36,6 +37,7 @@ export default function MobileMe() {
   const scroller = useRef<HTMLDivElement>(null);
   if (!me) return null;
   const staff = roleRank(me.site_role) >= 2;
+  const vipPlus = roleRank(me.site_role) >= 1;
   const banner = me.banner_color || me.avatar_color;
 
   const row = (icon: React.ReactNode, tint: string, label: string, onClick: () => void, right?: React.ReactNode) => (
@@ -146,9 +148,10 @@ export default function MobileMe() {
         ))}
       </div>
 
-      {staff && (
-        <div className="mx-4 mt-4 overflow-hidden rounded-2xl bg-side">
-          {row(<Shield className="size-[18px]" />, "#ed4245", "Admin Panel", () => openModal("settings", "admin"))}
+      {vipPlus && (
+        <div className="mx-4 mt-4 overflow-hidden rounded-2xl bg-side [&>button+button]:border-t [&>button+button]:border-white/[.05]">
+          {row(<Crown className="size-[18px]" />, "#eb459e", "Staff Desk — VIP & staff perks", () => openStaffDesk())}
+          {staff && row(<Shield className="size-[18px]" />, "#ed4245", "Admin Panel", () => openModal("settings", "admin"))}
         </div>
       )}
 

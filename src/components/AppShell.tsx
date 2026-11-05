@@ -38,6 +38,8 @@ import UntitledHub from "./untitled/UntitledHub";
 import RadioHub from "./radio/RadioHub";
 import LiveHub from "./live/LiveHub";
 import PulseHub from "./pulse/PulseHub";
+import StaffDesk from "./staff/StaffDesk";
+import SiteNoticeBanner from "./staff/SiteNoticeBanner";
 import { useStudio, videosGo } from "@/store/studio";
 import { releaseByCode } from "@/lib/protect";
 import NexusGram from "./gram/NexusGram";
@@ -200,6 +202,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       {/* main */}
       <main className={cn("h-full min-w-0 flex-1 md:flex", mobileSidebar ? "hidden" : "flex")}>
         <div className="flex h-full min-w-0 flex-1 flex-col bg-chat">
+          <SiteNoticeBanner />
           {hub === "gram" ? (
             <NexusGram />
           ) : hub === "games" ? (
@@ -214,6 +217,8 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
             <LiveHub />
           ) : hub === "pulse" ? (
             <PulseHub />
+          ) : hub === "staff" ? (
+            <StaffDesk />
           ) : hub === "music" ? (
             <MusicHub />
           ) : hub === "videos" ? (
