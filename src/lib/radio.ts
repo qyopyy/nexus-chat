@@ -385,14 +385,15 @@ function pushTrackLocal(row: RadioTrack) {
   });
 }
 
-/** Shield decodeAudioData hangs on many phones — skip there; otherwise fail open fast. */
+/** Shield / YouTube CID decode can hang on phones — skip there; otherwise fail open fast. */
 async function radioShieldOk(file: File) {
   if (isPhone()) return true;
   try {
     const { shieldGate } = await import("./shield");
+    const { youtubeCidGate } = await import("./audio");
     const blocked = await Promise.race([
-      shieldGate(file, "space"),
-      new Promise<false>((resolve) => setTimeout(() => resolve(false), 2_500)),
+      (async () => (await shieldGate(file, "space")) || (await youtubeCidGate(file, "space")))(),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 8_000)),
     ]);
     return !blocked;
   } catch {

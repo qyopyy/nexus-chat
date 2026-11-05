@@ -43,7 +43,7 @@ import { DefaultsDialog, PitchCard, PitchSummary, ReadinessCard, SmartLinkCard, 
 import LiveDeliveryCard from "./LiveDeliveryCard";
 import { duplicateRelease, getDefaults, getPitch, getSmartLink, readiness, remoteImageSize, savePitch, statusLog, type Pitch, type SmartLink, type StatusLog } from "@/lib/distExtras";
 import { CheckPill, CheckView, Chips, ReportView, SplitEditor, printSplitSheet } from "@/components/music/AudioBits";
-import { analyzeAudio, checkStatus, clearCheckConfig, saveShieldBucket, clipFromBuffer, copyrightCheck, decodeFile, latestChecks, lyricsLookExplicit, saveCheckConfig, type AudioCheck, type AudioReport } from "@/lib/audio";
+import { analyzeAudio, checkStatus, clearCheckConfig, saveShieldBucket, clipFromBuffer, copyrightCheck, decodeFile, latestChecks, lyricsLookExplicit, saveCheckConfig, setYoutubeCidBlock, type AudioCheck, type AudioReport } from "@/lib/audio";
 import type { DistArtist, DistRelease, DistStatus, DistTrack } from "@/lib/types";
 
 // ------------------------------------------------------------------ list
@@ -706,7 +706,8 @@ function TrackRow(props: {
         setChecking(true);
         const c = await copyrightCheck(await clipFromBuffer(buf), { kind: "track", id: t.id });
         onCheck(c);
-        if (c.status === "match") toast(`"${t.title}" matches a copyrighted recording — see the track for details`, "error");
+        if (c.status === "blocked") toast(c.note ?? `"${t.title}" blocked by global YouTube Content ID`, "error");
+        else if (c.status === "match") toast(`"${t.title}" matches a copyrighted recording — see the track for details`, "error");
       }
     } catch (e) {
       toast((e as Error).message, "error");
@@ -782,6 +783,8 @@ function TrackRow(props: {
                     if (!/\.(wav|flac)$/i.test(f.name)) return toast("Use a WAV or FLAC file (stores don't accept MP3)", "error");
                     const { shieldGate } = await import("@/lib/shield");
                     if (await shieldGate(f, "release")) return;
+                    const { youtubeCidGate } = await import("@/lib/audio");
+                    if (await youtubeCidGate(f, "release")) return;
                     const dur = await audioDuration(f);
                     setProgress(0);
                     const path = await uploadDistFile(r.id, f, "audio", setProgress);
@@ -1068,7 +1071,7 @@ function ReviewItem({ r, open, onToggle, onDone }: { r: DistRelease; open: boole
       void latestChecks("track", x.tracks.map((t) => t.id)).then(setChecks);
     });
   }, [open, r.id]);
-  const flagged = tracks.filter((t) => checks[t.id]?.status === "match");
+  const flagged = tracks.filter((t) => checks[t.id]?.status === "match" || checks[t.id]?.status === "blocked");
   const [pitch, setPitch] = useState<Pitch | null>(null);
   useEffect(() => {
     if (open) void getPitch(r.id).then(setPitch);
@@ -1137,7 +1140,7 @@ function ReviewItem({ r, open, onToggle, onDone }: { r: DistRelease; open: boole
                   {checks[t.id] ? <CheckPill c={checks[t.id]} /> : <span className="text-[11px] text-faint">not copyright-checked</span>}
                   {t.splits?.length ? <span className="text-[11px] text-sub">splits: {t.splits.map((x) => `${x.name} ${x.share}%`).join(", ")}</span> : null}
                 </div>
-                {checks[t.id]?.status === "match" && (
+                {(checks[t.id]?.status === "match" || checks[t.id]?.status === "blocked") && (
                   <div className="mt-1.5 pl-7">
                     <CheckView c={checks[t.id]} />
                   </div>
@@ -1391,11 +1394,14 @@ function CopyrightSettings() {
   const [bucketOn, setBucketOn] = useState(false);
   const [token, setToken] = useState("");
   const [bucket, setBucket] = useState("");
+  const [ytCid, setYtCid] = useState(false);
+  const [ytBusy, setYtBusy] = useState(false);
   const load = useCallback(
     () =>
       void checkStatus().then((x) => {
         setOn(x.configured);
         setBucketOn(!!x.shieldBucket);
+        setYtCid(!!x.youtubeCidBlock);
       }),
     [],
   );
@@ -1405,6 +1411,35 @@ function CopyrightSettings() {
       <div className="mb-3 flex items-center gap-2 text-sm">
         {on ? <CircleCheck className="size-5 text-ok" /> : <X className="size-5 text-sub" />}
         {on === null ? "Checking…" : on ? "Connected — tracks and videos are checked automatically" : "Not connected"}
+      </div>
+      <div className="mb-4 rounded-xl border border-line/70 bg-black/20 p-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold">Global YouTube Content ID block</div>
+            <p className="text-xs text-sub">
+              Separate from per-song Shield Content ID. When on, uploads that match commercial / YouTube catalog audio are hard-blocked live across chat, videos, spaces, radio and releases.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={ytBusy || !on}
+            onClick={async () => {
+              setYtBusy(true);
+              try {
+                const next = !ytCid;
+                await setYoutubeCidBlock(next);
+                setYtCid(next);
+                toast(next ? "YouTube Content ID block is ON — live" : "YouTube Content ID block is OFF", "success");
+              } catch (err) {
+                toast((err as Error).message, "error");
+              }
+              setYtBusy(false);
+            }}
+            className={`rounded-full px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 ${ytCid ? "bg-dnd" : "bg-hover hover:bg-active"}`}
+          >
+            {ytBusy ? "Saving…" : ytCid ? "ON · live" : "OFF"}
+          </button>
+        </div>
       </div>
       <p className="mb-2 text-sm text-sub">
         Create an &quot;Audio &amp; Video Recognition&quot; project at console.acrcloud.com (bucket: ACRCloud Music), then paste its host, access key and access secret. They&apos;re stored on the server
