@@ -127,8 +127,24 @@ export function ConnectionsSection() {
 
 /* ───────────────────────── Privacy & Safety ───────────────────────── */
 
-type Privacy = { dm_from: "everyone" | "friends" | "nobody"; friend_requests: "everyone" | "mutuals" | "nobody"; game_invites: boolean; show_stats: boolean };
-const PRIV_DEF: Privacy = { dm_from: "everyone", friend_requests: "everyone", game_invites: true, show_stats: true };
+type Privacy = {
+  dm_from: "everyone" | "servers" | "friends" | "nobody";
+  friend_requests: "everyone" | "mutuals" | "nobody";
+  game_invites: boolean;
+  show_stats: boolean;
+  show_online: boolean;
+  read_receipts: boolean;
+  profile_discoverable: boolean;
+};
+const PRIV_DEF: Privacy = {
+  dm_from: "servers",
+  friend_requests: "everyone",
+  game_invites: true,
+  show_stats: true,
+  show_online: true,
+  read_receipts: true,
+  profile_discoverable: true,
+};
 
 export function PrivacySection() {
   const me = useApp((s) => s.userId);
@@ -139,10 +155,18 @@ export function PrivacySection() {
     if (!me) return;
     void supabase
       .from("user_privacy")
-      .select("dm_from,friend_requests,game_invites,show_stats")
+      .select("dm_from,friend_requests,game_invites,show_stats,show_online,read_receipts,profile_discoverable")
       .eq("user_id", me)
       .maybeSingle()
-      .then(({ data }) => setP({ ...PRIV_DEF, ...((data as Privacy) ?? {}) }));
+      .then(({ data }) => {
+        const raw = (data as Privacy | null) ?? null;
+        // Legacy: "everyone" used to mean friends+servers before true Everyone existed
+        const dm =
+          raw?.dm_from === "everyone" || raw?.dm_from === "servers" || raw?.dm_from === "friends" || raw?.dm_from === "nobody"
+            ? raw.dm_from
+            : PRIV_DEF.dm_from;
+        setP({ ...PRIV_DEF, ...raw, dm_from: dm });
+      });
     startSpotifySync();
   }, [me]);
 
@@ -164,13 +188,14 @@ export function PrivacySection() {
         <div className="h-40 animate-pulse rounded-xl bg-side" />
       ) : (
         <>
-          <Label>Direct messages</Label>
-          <p className="mb-2 text-sm text-sub">Who can start a new DM with you. Existing chats stay open.</p>
+          <Label>Who can start a DM with you</Label>
+          <p className="mb-2 text-sm text-sub">Applies to new chats only — existing conversations stay open.</p>
           <Select
             value={p.dm_from}
             onChange={(v) => void save({ dm_from: v as Privacy["dm_from"] })}
             options={[
-              { value: "everyone", label: "Friends and people in my servers" },
+              { value: "everyone", label: "Everyone on Nexus" },
+              { value: "servers", label: "Friends and people in my servers" },
               { value: "friends", label: "Friends only" },
               { value: "nobody", label: "Nobody (no new DMs)" },
             ]}
@@ -189,6 +214,9 @@ export function PrivacySection() {
           <div className="h-4" />
           <Toggle label="Allow game invites" hint="Friends can send you a “join my game” popup." checked={p.game_invites} onChange={(v) => void save({ game_invites: v })} />
           <Toggle label="Show my profile views and likes" hint="When off, other people can still like your profile but won't see the numbers." checked={p.show_stats} onChange={(v) => void save({ show_stats: v })} />
+          <Toggle label="Show when I'm online" hint="Off hides your green/idle/busy status from other people." checked={p.show_online} onChange={(v) => void save({ show_online: v })} />
+          <Toggle label="Send read receipts" hint="When off, others won't see that you've read their DMs." checked={p.read_receipts} onChange={(v) => void save({ read_receipts: v })} />
+          <Toggle label="Discoverable in search" hint="When off, your profile is harder to find from People search." checked={p.profile_discoverable} onChange={(v) => void save({ profile_discoverable: v })} />
         </>
       )}
 
