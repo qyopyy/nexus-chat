@@ -32,6 +32,27 @@ function tone(freqs: number[], dur = 0.09, gap = 0.02, vol = 0.12, type: Oscilla
   }
 }
 
+function clickTone() {
+  const p = prefs();
+  if (p.buttonFx === false) return;
+  const vol = Math.max(0, (p.uiVolume ?? 1) * 0.07);
+  if (vol <= 0) return;
+  const a = audio();
+  if (!a) return;
+  const t = a.currentTime;
+  const o = a.createOscillator();
+  const g = a.createGain();
+  o.type = "triangle";
+  o.frequency.setValueAtTime(920, t);
+  o.frequency.exponentialRampToValueAtTime(420, t + 0.045);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+  o.connect(g).connect(a.destination);
+  o.start(t);
+  o.stop(t + 0.06);
+}
+
 export const sfx = {
   join: () => tone([523, 784], 0.1),
   leave: () => tone([784, 523], 0.1),
@@ -40,6 +61,8 @@ export const sfx = {
   message: () => tone([880], 0.07, 0, 0.06, "triangle"),
   screenOn: () => tone([660, 880, 990], 0.06),
   screenOff: () => tone([990, 880, 660], 0.06),
+  /** Soft UI button / control click — uses prefs.buttonFx */
+  click: () => clickTone(),
 };
 
 let ringTimer: ReturnType<typeof setInterval> | null = null;

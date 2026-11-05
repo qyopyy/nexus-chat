@@ -25,6 +25,7 @@ import MessageBanner from "./ui/MessageBanner";
 import Modals from "./modals/Modals";
 import MobileShell from "./mobile/MobileShell";
 import EffectsLayer from "./effects/EffectsLayer";
+import ButtonFxBoot from "./ButtonFxBoot";
 import ErrorBoundary from "./ErrorBoundary";
 import { useIsMobile } from "@/lib/useMobile";
 import { startSpotifySync } from "@/lib/spotifyUser";
@@ -203,6 +204,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
         <Modals />
         <Toasts />
         <EffectsLayer />
+        <ButtonFxBoot />
       </>
     );
   }
@@ -217,6 +219,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
         <Modals />
         <Toasts />
         <EffectsLayer />
+        <ButtonFxBoot />
       </>
     );
   }
@@ -291,6 +294,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       <MessageBanner />
       <Toasts />
       <EffectsLayer />
+      <ButtonFxBoot />
     </div>
   );
 }
