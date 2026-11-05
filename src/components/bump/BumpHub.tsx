@@ -51,7 +51,7 @@ import NameTag from "@/components/ui/NameTag";
 
 type Tab = "nearby" | "profile" | "social" | "messages";
 
-export default function BumpHub({ mobile }: { mobile?: boolean }) {
+export default function BumpHub({ mobile, onBack }: { mobile?: boolean; onBack?: () => void }) {
   const me = useApp((s) => s.userId);
   const [tab, setTab] = useState<Tab>("nearby");
   const [visible, setVisible] = useState<BumpVisible>("friends");
@@ -144,15 +144,20 @@ export default function BumpHub({ mobile }: { mobile?: boolean }) {
 
   return (
     <div className={cn("flex h-full flex-col bg-chat", mobile && "pb-safe-2")}>
-      <header className={cn("flex shrink-0 items-center gap-2 border-b border-line px-3", mobile ? "pt-safe-3 pb-2" : "h-12")}>
-        {mobile && (
-          <button type="button" onClick={() => useApp.setState({ hub: null })} className="grid size-9 place-items-center rounded-full hover:bg-hover" aria-label="Back">
+      <header className={cn("flex shrink-0 items-center gap-2 border-b border-line px-3", mobile || onBack ? "pt-safe-3 pb-2" : "h-12")}>
+        {(mobile || onBack) && (
+          <button
+            type="button"
+            onClick={() => (onBack ? onBack() : useApp.setState({ hub: null, appsTool: null }))}
+            className="grid size-9 place-items-center rounded-full hover:bg-hover"
+            aria-label="Back to apps"
+          >
             <ArrowLeft className="size-5" />
           </button>
         )}
         <div className="min-w-0 flex-1">
           <div className="text-sm font-bold">Bump</div>
-          <div className="truncate text-[11px] text-sub">Nearby · profiles · follows · messages</div>
+          <div className="truncate text-[11px] text-sub">Apps · nearby · profiles · follows · messages</div>
         </div>
         <MapPin className={cn("size-5", live ? "text-ok" : "text-sub")} />
       </header>

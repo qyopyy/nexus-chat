@@ -63,6 +63,8 @@ export type AppState = {
   mobileTab: "chats" | "spaces" | "videos" | "music" | "games" | "friends" | "me" | "gram" | "apps";
   /** a full-width hub replaces the chat pane: music, videos, games, apps, or the creator studio */
   hub: "music" | "videos" | "studio" | "games" | "gram" | "apps" | "untitled" | "cutroom" | "radio" | "live" | "pulse" | "staff" | "bump" | null;
+  /** deep-link into an Apps hub tool (e.g. bump) — cleared when leaving Apps */
+  appsTool: string | null;
   /** phone layout: call screen minimized to the floating bar */
   callMinimized: boolean;
 };
@@ -97,6 +99,7 @@ export const useApp = create<AppState>(() => ({
   profileCard: null,
   mobileTab: "chats",
   hub: null,
+  appsTool: null,
   callMinimized: false,
 }));
 
