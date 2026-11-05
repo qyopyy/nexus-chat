@@ -17,6 +17,7 @@ import Avatar from "@/components/ui/Avatar";
 import EmojiPicker from "@/components/ui/EmojiPicker";
 import Sheet, { SheetGroup, SheetItem } from "@/components/ui/Sheet";
 import VoicePlayer from "./VoicePlayer";
+import AttachViewer, { AttachDownloadButton } from "./AttachViewer";
 import VideoEmbed from "@/components/videos/VideoEmbed";
 import GameInvite from "@/components/games/GameInvite";
 import ServerInvite from "@/components/space/ServerInvite";
@@ -26,6 +27,7 @@ import { POLL_RE } from "@/lib/polls";
 import { CAPSULE_RE, JAM_RE } from "@/lib/chatExtras";
 import { CapsuleCard, JamCard } from "./Extras";
 import { useSignedUrl } from "@/lib/storage";
+import { downloadAttachment } from "@/lib/downloadAttachment";
 import { URL_RE } from "@/lib/unfurl";
 import type { Message, Reaction } from "@/lib/types";
 const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|‍|️|\s)+$/u;
@@ -86,9 +88,11 @@ function Links({ text }: { text: string }) {
 
 function Attachment({ m, mine }: { m: Message; mine: boolean }) {
   const { url, loading, failed } = useSignedUrl(m.attachment_url);
+  const [viewer, setViewer] = useState(false);
   if (!m.attachment_url) return null;
   const type = m.attachment_type ?? "";
   const media = type.startsWith("image/") || type.startsWith("video/");
+  const name = m.attachment_name ?? "attachment";
   if (loading) {
     return media ? (
       <div className="grid h-36 w-[min(16rem,72vw)] max-w-full animate-pulse place-items-center rounded-xl bg-black/25 text-xs opacity-60 min-[400px]:h-48 min-[400px]:w-64">Loading…</div>
@@ -103,47 +107,94 @@ function Attachment({ m, mine }: { m: Message; mine: boolean }) {
       </div>
     );
   }
-  if (isVoice(m)) return <VoicePlayer url={url} mine={mine} seed={m.id} />;
+  if (isVoice(m)) {
+    return (
+      <div className="flex min-w-0 items-center gap-1">
+        <VoicePlayer url={url} mine={mine} seed={m.id} />
+        <AttachDownloadButton
+          url={url}
+          name={name.endsWith(".webm") || name.endsWith(".m4a") || name.endsWith(".ogg") ? name : `${name}.webm`}
+          className={cn("grid size-8 shrink-0 place-items-center rounded-full opacity-70 hover:opacity-100", mine ? "text-white/80 hover:bg-white/15" : "text-sub hover:bg-black/10")}
+        />
+      </div>
+    );
+  }
   if (type.startsWith("image/")) {
     return (
-      <a href={url} target="_blank" rel="noreferrer" className="block max-w-full overflow-hidden rounded-xl" onClick={(e) => e.stopPropagation()}>
-        <img
-          src={url}
-          alt={m.attachment_name ?? ""}
-          className="max-h-[min(52vh,280px)] w-auto max-w-full object-cover min-[400px]:max-h-[min(60vh,360px)]"
-          loading="lazy"
-          draggable={false}
-        />
-      </a>
+      <>
+        <div className="group relative max-w-full">
+          <button
+            type="button"
+            className="block max-w-full overflow-hidden rounded-xl text-left"
+            onClick={(e) => {
+              e.stopPropagation();
+              setViewer(true);
+            }}
+            aria-label={`View ${name}`}
+          >
+            <img
+              src={url}
+              alt={name}
+              className="max-h-[min(52vh,280px)] w-auto max-w-full object-cover min-[400px]:max-h-[min(60vh,360px)]"
+              loading="lazy"
+              draggable={false}
+            />
+          </button>
+          <AttachDownloadButton
+            url={url}
+            name={name}
+            className="absolute right-1.5 bottom-1.5 grid size-8 place-items-center rounded-full bg-black/55 text-white opacity-95 shadow-sm hover:bg-black/70 min-[400px]:opacity-0 min-[400px]:group-hover:opacity-100"
+          />
+        </div>
+        <AttachViewer open={viewer} url={url} name={name} onClose={() => setViewer(false)} />
+      </>
     );
   }
   if (type.startsWith("video/")) {
-    return <video src={url} controls playsInline className="max-h-[min(52vh,280px)] max-w-full rounded-xl min-[400px]:max-h-[min(60vh,360px)]" />;
+    return (
+      <div className="relative max-w-full">
+        <video src={url} controls playsInline className="max-h-[min(52vh,280px)] max-w-full rounded-xl min-[400px]:max-h-[min(60vh,360px)]" />
+        <AttachDownloadButton
+          url={url}
+          name={name}
+          className="absolute top-1.5 right-1.5 grid size-8 place-items-center rounded-full bg-black/55 text-white hover:bg-black/70"
+        />
+      </div>
+    );
   }
   if (type.startsWith("audio/")) {
     return (
       <div className="w-full min-w-0 max-w-[min(100%,18rem)] min-[400px]:min-w-[220px] min-[400px]:max-w-full">
-        <div className="mb-1 truncate text-[11px] opacity-70 min-[400px]:text-xs">{m.attachment_name}</div>
+        <div className="mb-1 flex items-center gap-2">
+          <div className="min-w-0 flex-1 truncate text-[11px] opacity-70 min-[400px]:text-xs">{name}</div>
+          <AttachDownloadButton
+            url={url}
+            name={name}
+            className={cn("grid size-7 shrink-0 place-items-center rounded-full opacity-80 hover:opacity-100", mine ? "text-white/80 hover:bg-white/15" : "text-sub hover:bg-black/10")}
+          />
+        </div>
         <audio src={url} controls className="w-full max-w-full" />
       </div>
     );
   }
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer"
-      className="flex w-full min-w-0 max-w-[min(100%,18rem)] items-center gap-2 rounded-lg bg-black/20 p-2 hover:bg-black/30 min-[400px]:min-w-[200px] min-[400px]:max-w-full min-[400px]:gap-3 min-[400px]:p-2.5"
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        void downloadAttachment(url, name).then((ok) => toast(ok ? "Saved" : "Opened download", ok ? "success" : "info"));
+      }}
+      className="flex w-full min-w-0 max-w-[min(100%,18rem)] items-center gap-2 rounded-lg bg-black/20 p-2 text-left hover:bg-black/30 min-[400px]:min-w-[200px] min-[400px]:max-w-full min-[400px]:gap-3 min-[400px]:p-2.5"
     >
       <div className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-white min-[400px]:size-10">
         <FileText className="size-4 min-[400px]:size-5" />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-xs font-medium min-[400px]:text-sm">{m.attachment_name}</div>
+        <div className="truncate text-xs font-medium min-[400px]:text-sm">{name}</div>
         <div className="text-[10px] opacity-60 min-[400px]:text-xs">Tap to download</div>
       </div>
       <Download className="size-4 shrink-0 opacity-60" />
-    </a>
+    </button>
   );
 }
 
