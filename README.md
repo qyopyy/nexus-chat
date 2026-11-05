@@ -93,12 +93,13 @@ NEXT_PUBLIC_TURN_CREDENTIAL=...
 ```
 Options: Cloudflare Calls TURN, Metered.ca, Twilio, or self-hosted coturn.
 
-## iPhone app
+## Phone apps (APK + IPA)
 
-`mobile/` is a native iOS shell (Capacitor) that opens the live site, so every web deploy updates the app instantly.
+`mobile/` is a Capacitor shell (iOS + Android) that opens the live site, so every web deploy updates the apps instantly. The shell ships the current Nexus app icon from `mobile/resources/icon-1024.png`.
 
-- **Get the .ipa:** GitHub → Actions → "iOS app (.ipa)" builds it on a Mac runner and attaches `Nexus.ipa` to a Release. Re-run it any time (Run workflow → optional URL).
-- **Install:** open **Sideloadly** on your Mac, plug in your iPhone, drag in `Nexus.ipa`, sign in with your Apple ID → Start. On the iPhone: Settings → General → VPN & Device Management → trust your Apple ID. With a free Apple ID the app must be re-signed every 7 days (Sideloadly can auto-refresh).
+- **Get the .apk / .ipa:** GitHub → Actions → **Android app (.apk / .aab)** or **iOS app (.ipa)** → Run workflow (optional URL). Builds also start automatically when `mobile/` changes land on `main`, and each run publishes a GitHub Release (`android-<n>` / `ios-<n>`).
+- **Android install:** download `Nexus.apk` from the latest Android release → allow “Install unknown apps” → open the file.
+- **iPhone install:** open **Sideloadly** on your Mac, plug in your iPhone, drag in `Nexus.ipa`, sign in with your Apple ID → Start. On the iPhone: Settings → General → VPN & Device Management → trust your Apple ID. With a free Apple ID the app must be re-signed every 7 days (Sideloadly can auto-refresh).
 - Voice/video calls, chat, notifications sounds, themes all work. **Screen sharing isn't available on iPhone** (iOS doesn't allow it in apps like this) — the button hides automatically.
 - Alternatively: open the site in Safari → Share → **Add to Home Screen** for an app-like icon with no install needed.
 
