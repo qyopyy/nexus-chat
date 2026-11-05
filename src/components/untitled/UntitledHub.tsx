@@ -3,15 +3,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
+  ChevronDown,
+  ChevronUp,
   Copy,
   Disc3,
+  Download,
   Eye,
+  FolderOpen,
   Headphones,
+  History,
   Link2,
   Lock,
-  Pause,
   Play,
   Plus,
+  RefreshCw,
   Share2,
   Trash2,
   Upload,
@@ -21,6 +26,7 @@ import {
 import { useApp, toast } from "@/store/app";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
+import PlayerBar from "./PlayerBar";
 import {
   createProject,
   createShare,
@@ -33,18 +39,25 @@ import {
   listListens,
   listMyProjects,
   listShares,
+  listTrackVersions,
   listTracks,
   loadUntitledProfile,
+  moveTrack,
   playTrack,
   profileUrl,
   removeTrack,
   renameTrack,
+  replaceTrackAudio,
+  restoreTrackVersion,
   revokeShare,
+  setTrackFolder,
   setUntitledFollow,
   shareUrl,
+  trackUrl,
+  untitledFollowList,
   updateProject,
   updateSharePermission,
-  uploadTrack,
+  uploadMany,
   untitledBack,
   untitledGo,
   untitledHome,
@@ -55,6 +68,7 @@ import {
   type UntitledProject,
   type UntitledShare,
   type UntitledTrack,
+  type UntitledTrackVersion,
   type Visibility,
 } from "@/lib/untitled";
 import { loadProfiles } from "@/lib/data";
@@ -66,16 +80,7 @@ const COLORS = ["#c4a574", "#7aa2a0", "#b07a8a", "#8a9a6a", "#6a8ab0", "#a08a6a"
 export default function UntitledHub({ mobile }: { mobile?: boolean }) {
   const stack = useUntitled((s) => s.stack);
   const route = stack[stack.length - 1];
-  const playing = useUntitled((s) => s.playing);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [paused, setPaused] = useState(false);
-
-  useEffect(() => {
-    const a = audioRef.current;
-    if (!a || !playing) return;
-    a.src = playing.url;
-    void a.play().then(() => setPaused(false)).catch(() => setPaused(true));
-  }, [playing]);
+  const [queueTracks, setQueueTracks] = useState<UntitledTrack[]>([]);
 
   return (
     <div className="relative flex h-full min-h-0 flex-col text-[#f3efe6]" style={{ background: "linear-gradient(180deg,#12100e 0%,#1a1714 45%,#0f0e0c 100%)" }}>
@@ -103,43 +108,14 @@ export default function UntitledHub({ mobile }: { mobile?: boolean }) {
         </div>
       </header>
 
-      <div className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 pb-28">
+      <div className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 pb-32">
         {route.view === "home" && <Home />}
-        {route.view === "project" && <ProjectView id={route.id} />}
+        {route.view === "project" && <ProjectView id={route.id} onTracks={setQueueTracks} />}
         {route.view === "profile" && <ProfileView username={route.username} />}
         {route.view === "explore" && <Explore />}
       </div>
 
-      {playing && (
-        <div className="absolute inset-x-0 bottom-0 z-20 border-t border-white/5 bg-[#161310]/95 px-4 py-3 backdrop-blur-md">
-          <div className="mx-auto flex max-w-2xl items-center gap-3">
-            <button
-              onClick={() => {
-                const a = audioRef.current;
-                if (!a) return;
-                if (a.paused) {
-                  void a.play();
-                  setPaused(false);
-                } else {
-                  a.pause();
-                  setPaused(true);
-                }
-              }}
-              className="grid size-10 place-items-center rounded-full bg-[#c4a574] text-black"
-            >
-              {paused ? <Play className="size-4 fill-current" /> : <Pause className="size-4 fill-current" />}
-            </button>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">{playing.title}</div>
-              <div className="text-[11px] text-[#8a8478]">Now playing</div>
-            </div>
-            <button onClick={() => useUntitled.setState({ playing: null })} className="text-xs text-[#8a8478] hover:text-white">
-              Close
-            </button>
-          </div>
-          <audio ref={audioRef} className="hidden" onEnded={() => setPaused(true)} onPause={() => setPaused(true)} onPlay={() => setPaused(false)} />
-        </div>
-      )}
+      <PlayerBar tracks={queueTracks} />
     </div>
   );
 }
@@ -224,7 +200,7 @@ function Home() {
   );
 }
 
-function ProjectView({ id }: { id: string }) {
+function ProjectView({ id, onTracks }: { id: string; onTracks?: (t: UntitledTrack[]) => void }) {
   const me = useApp((s) => s.userId);
   const [project, setProject] = useState<UntitledProject | null | undefined>(undefined);
   const [tracks, setTracks] = useState<UntitledTrack[]>([]);
@@ -232,7 +208,12 @@ function ProjectView({ id }: { id: string }) {
   const [listens, setListens] = useState<UntitledListen[]>([]);
   const [tab, setTab] = useState<ProjectTab>("tracks");
   const [upPct, setUpPct] = useState<number | null>(null);
+  const [folder, setFolder] = useState("");
+  const [folderFilter, setFolderFilter] = useState<string | "all">("all");
+  const [dragOver, setDragOver] = useState(false);
+  const [versionsFor, setVersionsFor] = useState<{ track: UntitledTrack; versions: UntitledTrackVersion[] } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const replaceRef = useRef<{ input: HTMLInputElement | null; track: UntitledTrack | null }>({ input: null, track: null });
 
   const reload = useCallback(async () => {
     try {
@@ -241,6 +222,7 @@ function ProjectView({ id }: { id: string }) {
       if (!p) return;
       const [t, s, l] = await Promise.all([listTracks(id), me === p.owner_id ? listShares(id) : Promise.resolve([]), me === p.owner_id ? listListens(id) : Promise.resolve([])]);
       setTracks(t);
+      onTracks?.(t);
       setShares(s);
       setListens(l);
       if (t.length || p.owner_id) void loadProfiles([p.owner_id, ...l.map((x) => x.listener_id).filter(Boolean) as string[]]);
@@ -248,18 +230,55 @@ function ProjectView({ id }: { id: string }) {
       toast(String((e as Error).message ?? e), "error");
       setProject(null);
     }
-  }, [id, me]);
+  }, [id, me, onTracks]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
+  const doUpload = async (files: FileList | File[]) => {
+    const list = [...files].filter((f) => f.type.startsWith("audio/") || /\.(mp3|wav|flac|m4a|aac|ogg|webm)$/i.test(f.name));
+    if (!list.length) return toast("Drop audio files", "error");
+    setUpPct(0);
+    try {
+      await uploadMany(id, list, folder || null, (done) => setUpPct(done));
+      toast(list.length === 1 ? "Track uploaded" : `${list.length} tracks uploaded`, "success");
+      await reload();
+    } catch (err) {
+      toast(String((err as Error).message ?? err), "error");
+    } finally {
+      setUpPct(null);
+    }
+  };
+
   if (project === undefined) return <div className="py-20 text-center text-sm text-[#8a8478]">Loading…</div>;
   if (!project) return <div className="py-20 text-center text-sm text-[#8a8478]">Project not found.</div>;
   const mine = project.owner_id === me;
+  const folders = Array.from(new Set(tracks.map((t) => t.folder).filter(Boolean) as string[])).sort();
+  const visible = folderFilter === "all" ? tracks : tracks.filter((t) => (t.folder || "") === folderFilter);
 
   return (
-    <div className="mx-auto max-w-2xl py-5">
+    <div
+      className="mx-auto max-w-2xl py-5"
+      onDragOver={(e) => {
+        if (!mine) return;
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        if (!mine) return;
+        e.preventDefault();
+        setDragOver(false);
+        void doUpload(e.dataTransfer.files);
+      }}
+    >
+      {dragOver && (
+        <div className="pointer-events-none fixed inset-4 z-30 grid place-items-center rounded-3xl border-2 border-dashed border-[#c4a574]/60 bg-[#12100e]/80 text-sm font-semibold text-[#c4a574]">
+          Drop audio to upload
+        </div>
+      )}
+
       <div className="mb-5 flex items-start gap-4">
         <div className="grid size-20 shrink-0 place-items-center rounded-2xl" style={{ background: `linear-gradient(145deg,${project.color},#12100e)` }}>
           <Disc3 className="size-8 text-white/85" />
@@ -311,57 +330,46 @@ function ProjectView({ id }: { id: string }) {
       </div>
 
       {mine && (
-        <div className="mb-4 flex flex-wrap gap-2">
-          <button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-full bg-[#c4a574] px-3.5 py-2 text-xs font-semibold text-black">
-            <Upload className="size-3.5" /> Upload track
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg"
-            className="hidden"
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
-              e.target.value = "";
-              if (!f) return;
-              setUpPct(0);
-              try {
-                await uploadTrack(project.id, f, setUpPct);
-                toast("Track uploaded", "success");
-                await reload();
-              } catch (err) {
-                toast(String((err as Error).message ?? err), "error");
-              } finally {
-                setUpPct(null);
-              }
-            }}
-          />
-          <div className="flex gap-1">
-            {COLORS.map((c) => (
-              <button
-                key={c}
-                onClick={() => {
-                  setProject({ ...project, color: c });
-                  void updateProject(project.id, { color: c });
-                }}
-                className={cn("size-7 rounded-full ring-2", project.color === c ? "ring-white" : "ring-transparent")}
-                style={{ background: c }}
-                aria-label={`Color ${c}`}
-              />
-            ))}
+        <div className="mb-4 space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-full bg-[#c4a574] px-3.5 py-2 text-xs font-semibold text-black">
+              <Upload className="size-3.5" /> Upload
+            </button>
+            <input ref={fileRef} type="file" accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg" multiple className="hidden" onChange={(e) => { const f = e.target.files; e.target.value = ""; if (f?.length) void doUpload(f); }} />
+            <input
+              value={folder}
+              onChange={(e) => setFolder(e.target.value)}
+              placeholder="Folder for new uploads"
+              className="min-w-[10rem] flex-1 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs outline-none"
+            />
+            <div className="flex gap-1">
+              {COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => {
+                    setProject({ ...project, color: c });
+                    void updateProject(project.id, { color: c });
+                  }}
+                  className={cn("size-7 rounded-full ring-2", project.color === c ? "ring-white" : "ring-transparent")}
+                  style={{ background: c }}
+                  aria-label={`Color ${c}`}
+                />
+              ))}
+            </div>
+            <button
+              onClick={async () => {
+                if (!confirm("Delete this project and all tracks?")) return;
+                if (await deleteProject(project.id)) {
+                  toast("Project deleted");
+                  untitledHome();
+                }
+              }}
+              className="ml-auto inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-2 text-xs text-[#b07a8a]"
+            >
+              <Trash2 className="size-3.5" /> Delete
+            </button>
           </div>
-          <button
-            onClick={async () => {
-              if (!confirm("Delete this project and all tracks?")) return;
-              if (await deleteProject(project.id)) {
-                toast("Project deleted");
-                untitledHome();
-              }
-            }}
-            className="ml-auto inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-2 text-xs text-[#b07a8a]"
-          >
-            <Trash2 className="size-3.5" /> Delete
-          </button>
+          <p className="text-[11px] text-[#8a8478]">Drag & drop audio anywhere on this project, or pick multiple files.</p>
         </div>
       )}
 
@@ -372,7 +380,7 @@ function ProjectView({ id }: { id: string }) {
       )}
 
       <div className="mb-3 flex gap-1 border-b border-white/5">
-        {((mine ? (["tracks", "share", "activity"] as ProjectTab[]) : (["tracks"] as ProjectTab[]))).map((t) => (
+        {(mine ? (["tracks", "share", "activity"] as ProjectTab[]) : (["tracks"] as ProjectTab[])).map((t) => (
           <button key={t} onClick={() => setTab(t)} className={cn("px-3 py-2 text-xs font-semibold capitalize", tab === t ? "border-b-2 border-[#c4a574] text-[#c4a574]" : "text-[#8a8478]")}>
             {t}
           </button>
@@ -380,45 +388,177 @@ function ProjectView({ id }: { id: string }) {
       </div>
 
       {tab === "tracks" && (
-        <div className="space-y-1">
-          {tracks.length === 0 ? (
-            <p className="py-10 text-center text-sm text-[#8a8478]">No tracks yet.</p>
-          ) : (
-            tracks.map((t, i) => (
-              <div key={t.id} className="group flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-white/[0.04]">
-                <button onClick={() => void playTrack(project.id, t)} className="grid size-9 place-items-center rounded-full bg-white/5 text-[#c4a574]">
-                  <Play className="size-3.5 fill-current" />
+        <div className="space-y-3">
+          {(folders.length > 0 || mine) && (
+            <div className="flex flex-wrap gap-1.5">
+              <button onClick={() => setFolderFilter("all")} className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", folderFilter === "all" ? "bg-[#c4a574] text-black" : "bg-white/5 text-[#8a8478]")}>
+                All
+              </button>
+              {folders.map((f) => (
+                <button key={f} onClick={() => setFolderFilter(f)} className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold", folderFilter === f ? "bg-[#c4a574] text-black" : "bg-white/5 text-[#8a8478]")}>
+                  <FolderOpen className="size-3" /> {f}
                 </button>
-                <div className="min-w-0 flex-1">
-                  {mine ? (
-                    <input
-                      defaultValue={t.title}
-                      onBlur={(e) => {
-                        const v = e.target.value.trim();
-                        if (v && v !== t.title) void renameTrack(t.id, v).then(reload);
-                      }}
-                      className="w-full truncate bg-transparent text-sm font-medium outline-none"
-                    />
-                  ) : (
-                    <div className="truncate text-sm font-medium">{t.title}</div>
-                  )}
-                  <div className="text-[11px] text-[#8a8478]">
-                    {i + 1} · {fmtDur(t.duration)} · {fmtBytes(t.bytes)} · {fmtCount(t.listen_count)} listens
-                  </div>
-                </div>
-                {mine && (
-                  <button
-                    onClick={async () => {
-                      if (!confirm("Remove this track?")) return;
-                      if (await removeTrack(t)) await reload();
-                    }}
-                    className="opacity-0 group-hover:opacity-100"
-                  >
-                    <Trash2 className="size-4 text-[#8a8478]" />
+              ))}
+            </div>
+          )}
+
+          {visible.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-white/10 px-4 py-12 text-center text-sm text-[#8a8478]">
+              {mine ? "No tracks yet — upload or drop audio here." : "No tracks yet."}
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {visible.map((t) => (
+                <div key={t.id} className="group flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-white/[0.04]">
+                  <button onClick={() => void playTrack(project.id, t, tracks)} className="grid size-9 place-items-center rounded-full bg-white/5 text-[#c4a574]">
+                    <Play className="size-3.5 fill-current" />
                   </button>
+                  <div className="min-w-0 flex-1">
+                    {mine ? (
+                      <input
+                        defaultValue={t.title}
+                        onBlur={(e) => {
+                          const v = e.target.value.trim();
+                          if (v && v !== t.title) void renameTrack(t.id, v).then(reload);
+                        }}
+                        className="w-full truncate bg-transparent text-sm font-medium outline-none"
+                      />
+                    ) : (
+                      <div className="truncate text-sm font-medium">{t.title}</div>
+                    )}
+                    <div className="text-[11px] text-[#8a8478]">
+                      {t.position} · {fmtDur(t.duration)} · {fmtBytes(t.bytes)} · v{t.version}
+                      {t.folder ? ` · ${t.folder}` : ""} · {fmtCount(t.listen_count)} listens
+                    </div>
+                  </div>
+                  {mine && (
+                    <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                      <button onClick={() => void moveTrack(project.id, t.id, -1).then(reload)} className="rounded p-1 hover:bg-white/5" aria-label="Move up">
+                        <ChevronUp className="size-3.5 text-[#8a8478]" />
+                      </button>
+                      <button onClick={() => void moveTrack(project.id, t.id, 1).then(reload)} className="rounded p-1 hover:bg-white/5" aria-label="Move down">
+                        <ChevronDown className="size-3.5 text-[#8a8478]" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          const name = prompt("Folder name (empty to clear)", t.folder ?? "");
+                          if (name === null) return;
+                          void setTrackFolder(t.id, name).then(reload);
+                        }}
+                        className="rounded p-1 hover:bg-white/5"
+                        aria-label="Set folder"
+                      >
+                        <FolderOpen className="size-3.5 text-[#8a8478]" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          replaceRef.current.track = t;
+                          replaceRef.current.input?.click();
+                        }}
+                        className="rounded p-1 hover:bg-white/5"
+                        title="Replace audio (keeps title, adds version)"
+                      >
+                        <RefreshCw className="size-3.5 text-[#8a8478]" />
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const versions = await listTrackVersions(t.id);
+                          setVersionsFor({ track: t, versions });
+                        }}
+                        className="rounded p-1 hover:bg-white/5"
+                        aria-label="Version history"
+                      >
+                        <History className="size-3.5 text-[#8a8478]" />
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const url = await trackUrl(t.path, t.title);
+                          if (url) window.open(url, "_blank");
+                        }}
+                        className="rounded p-1 hover:bg-white/5"
+                        aria-label="Download"
+                      >
+                        <Download className="size-3.5 text-[#8a8478]" />
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!confirm("Remove this track?")) return;
+                          if (await removeTrack(t)) await reload();
+                        }}
+                        className="rounded p-1 hover:bg-white/5"
+                      >
+                        <Trash2 className="size-3.5 text-[#8a8478]" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <input
+            ref={(el) => {
+              replaceRef.current.input = el;
+            }}
+            type="file"
+            accept="audio/*"
+            className="hidden"
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              const track = replaceRef.current.track;
+              e.target.value = "";
+              if (!f || !track) return;
+              setUpPct(0);
+              try {
+                await replaceTrackAudio(track, f, setUpPct);
+                toast(`Updated to v${track.version + 1}`, "success");
+                await reload();
+              } catch (err) {
+                toast(String((err as Error).message ?? err), "error");
+              } finally {
+                setUpPct(null);
+              }
+            }}
+          />
+
+          {versionsFor && (
+            <div className="fixed inset-0 z-40 grid place-items-center bg-black/60 p-4" onClick={() => setVersionsFor(null)}>
+              <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#1a1714] p-4" onClick={(e) => e.stopPropagation()}>
+                <div className="mb-3 text-sm font-semibold">Versions · {versionsFor.track.title}</div>
+                <div className="mb-2 text-xs text-[#8a8478]">Current v{versionsFor.track.version}</div>
+                {versionsFor.versions.length === 0 ? (
+                  <p className="text-sm text-[#8a8478]">No previous versions yet. Replace audio to start a history.</p>
+                ) : (
+                  <div className="max-h-60 space-y-1 overflow-y-auto">
+                    {versionsFor.versions.map((v) => (
+                      <div key={v.id} className="flex items-center gap-2 rounded-xl border border-white/5 px-3 py-2 text-sm">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium">v{v.version}</div>
+                          <div className="text-[11px] text-[#8a8478]">
+                            {fmtDur(v.duration)} · {fmtBytes(v.bytes)} · {new Date(v.created_at).toLocaleString()}
+                          </div>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (await restoreTrackVersion(versionsFor.track, v)) {
+                              toast("Version restored", "success");
+                              setVersionsFor(null);
+                              await reload();
+                            }
+                          }}
+                          className="rounded-full bg-[#c4a574] px-2.5 py-1 text-[11px] font-semibold text-black"
+                        >
+                          Restore
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
+                <button onClick={() => setVersionsFor(null)} className="mt-3 w-full rounded-full border border-white/10 py-2 text-xs font-semibold">
+                  Close
+                </button>
               </div>
-            ))
+            </div>
           )}
         </div>
       )}
@@ -565,7 +705,9 @@ function ActivityPanel({ listens, tracks }: { listens: UntitledListen[]; tracks:
 
 function ProfileView({ username }: { username: string }) {
   const me = useApp((s) => s.userId);
+  const profiles = useApp((s) => s.profiles);
   const [p, setP] = useState<UntitledProfile | null | undefined>(undefined);
+  const [list, setList] = useState<{ which: "followers" | "following"; ids: string[] } | null>(null);
 
   const load = useCallback(() => {
     void loadUntitledProfile(username)
@@ -589,14 +731,20 @@ function ProfileView({ username }: { username: string }) {
           <div className="text-xl font-semibold">{p.display_name}</div>
           <div className="text-sm text-[#8a8478]">@{p.username}{p.follows_you && !mine ? " · follows you" : ""}</div>
           <div className="mt-3 flex gap-6 text-center">
-            <div>
+            <button
+              className="hover:opacity-80"
+              onClick={async () => setList({ which: "followers", ids: await untitledFollowList(p.id, "followers") })}
+            >
               <div className="text-lg font-semibold">{fmtCount(p.followers)}</div>
               <div className="text-[10px] tracking-wide text-[#8a8478] uppercase">Followers</div>
-            </div>
-            <div>
+            </button>
+            <button
+              className="hover:opacity-80"
+              onClick={async () => setList({ which: "following", ids: await untitledFollowList(p.id, "following") })}
+            >
               <div className="text-lg font-semibold">{fmtCount(p.following)}</div>
               <div className="text-[10px] tracking-wide text-[#8a8478] uppercase">Following</div>
-            </div>
+            </button>
             <div>
               <div className="text-lg font-semibold">{p.projects.length}</div>
               <div className="text-[10px] tracking-wide text-[#8a8478] uppercase">Projects</div>
@@ -648,6 +796,42 @@ function ProfileView({ username }: { username: string }) {
               </span>
             </button>
           ))}
+        </div>
+      )}
+
+      {list && (
+        <div className="fixed inset-0 z-40 grid place-items-center bg-black/60 p-4" onClick={() => setList(null)}>
+          <div className="max-h-[70vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-white/10 bg-[#1a1714] p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 text-sm font-semibold capitalize">{list.which}</div>
+            {list.ids.length === 0 ? (
+              <p className="text-sm text-[#8a8478]">Nobody here yet.</p>
+            ) : (
+              <div className="space-y-1">
+                {list.ids.map((id) => {
+                  const u = profiles[id];
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => {
+                        setList(null);
+                        if (u) untitledGo({ view: "profile", username: u.username });
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-white/5"
+                    >
+                      <Avatar userId={id} size={36} />
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold">{u?.display_name ?? "User"}</span>
+                        <span className="block text-xs text-[#8a8478]">@{u?.username ?? "…"}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <button onClick={() => setList(null)} className="mt-3 w-full rounded-full border border-white/10 py-2 text-xs font-semibold">
+              Close
+            </button>
+          </div>
         </div>
       )}
     </div>
