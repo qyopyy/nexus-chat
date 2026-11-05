@@ -1,6 +1,8 @@
 // Server-only: renders the public NexusGram profile (/u/<username>) as plain HTML.
 
-type M = { path: string; type: "image" | "video"; poster?: string | null; dur?: number | null };
+import { jsonLd, personLd, seoHead, truncate } from "@/lib/seo";
+
+type M = { path: string; type: "image" | "video"; poster?: string | null; dur?: number | null; alt?: string | null };
 export type PublicGram = {
   id: string;
   username: string;
@@ -104,12 +106,11 @@ const ICON = {
   share: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>`,
 };
 
-function shell(title: string, desc: string, image: string, url: string, body: string) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>${esc(title)}</title><meta name="description" content="${esc(desc)}">
-<meta property="og:type" content="profile"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:url" content="${esc(url)}">
-${image ? `<meta property="og:image" content="${esc(image)}"><meta name="twitter:image" content="${esc(image)}">` : ""}<meta name="twitter:card" content="summary">
-<meta name="theme-color" content="#07060f"><link rel="icon" href="/icon.png"><style>${CSS}</style></head><body>${body}</body></html>`;
+function shell(title: string, desc: string, image: string, url: string, body: string, extraHead = "", noindex = false) {
+  return `<!doctype html><html lang="en"><head>
+${seoHead({ title, description: desc, url, image: image || null, type: "profile", keywords: ["NexusGram", "profile", "social"], twitterCard: image ? "summary_large_image" : "summary", noindex })}
+${extraHead}
+<style>${CSS}</style></head><body>${body}</body></html>`;
 }
 
 export function renderGramProfile(p: PublicGram, base: string) {
@@ -161,7 +162,16 @@ function closeStory(){clearInterval(tm);document.getElementById("v").classList.r
 function step(d){var n=i+d;if(n<0)n=0;if(n>=S.length)return closeStory();i=n;show()}
 document.addEventListener("keydown",function(e){if(!document.getElementById("v").classList.contains("on"))return;if(e.key==="Escape")closeStory();if(e.key==="ArrowRight")step(1);if(e.key==="ArrowLeft")step(-1)});
 </script>`;
-  return shell(`${p.display_name} (@${p.username}) · NexusGram`, `${fmt(p.followers)} followers · ${fmt(p.posts)} posts${p.bio ? ` · ${p.bio.slice(0, 120)}` : ""}`, p.avatar_url ?? "", url, body);
+  const desc = truncate(`${fmt(p.followers)} followers · ${fmt(p.posts)} posts${p.bio ? ` · ${p.bio}` : ` · @${p.username} on NexusGram`}`);
+  const ld = personLd({
+    name: p.display_name || p.username,
+    username: p.username,
+    url,
+    image: p.avatar_url,
+    description: p.bio,
+    followers: p.followers,
+  });
+  return shell(`${p.display_name} (@${p.username}) · NexusGram`, desc, p.avatar_url ?? "", url, body, jsonLd(ld));
 }
 
 export function gramNotFound(name: string, base: string) {
@@ -171,5 +181,7 @@ export function gramNotFound(name: string, base: string) {
     "",
     `${base}/u/${name}`,
     `<div class="wrap" style="display:grid;place-items:center;min-height:100vh;text-align:center;padding:24px"><div><div style="font-size:54px">🔭</div><h1 style="margin-top:8px">@${esc(name)} isn't here</h1><p class="user" style="margin-top:6px">This account doesn't exist or changed its username.</p><p style="margin-top:20px"><a class="btn main" style="display:inline-flex;padding:12px 22px" href="${base}">Go to Nexus</a></p></div></div>`,
+    "",
+    true,
   );
 }

@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, ChevronLeft, ChevronRight, Flag, Heart, Link2, MessageCircle, Ellipsis, Send, Share2, Trash2, X } from "lucide-react";
+import { Bookmark, ChevronLeft, ChevronRight, Flag, Heart, Link2, MessageCircle, Ellipsis, Repeat2, Send, Share2, Trash2, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
-import { addComment, ago, comments, fmt, gramGo, isSaved, mediaUrl, publicContentUrl, publicProfileUrl, removeComment, removePost, reportPost, setLike, setSave, type Comment, type Post } from "@/lib/gram";
+import { addComment, ago, comments, extractHashtags, fmt, GRAM_MOODS, gramGo, isSaved, mediaUrl, publicContentUrl, publicProfileUrl, removeComment, removePost, reportPost, setLike, setSave, useGram, type Comment, type Post } from "@/lib/gram";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 
@@ -103,6 +103,15 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
                   <Share2 className="size-4" /> Copy profile link
                 </button>
               )}
+              <button
+                onClick={() => {
+                  setMenu(false);
+                  useGram.setState({ create: post.kind === "short" ? "short" : "post", remixOf: post.id });
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-hover"
+              >
+                <Repeat2 className="size-4" /> Remix
+              </button>
               {post.author_id !== meId && (
                 <button
                   onClick={async () => {
@@ -136,7 +145,23 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
           <video src={mediaUrl(m.path)} poster={mediaUrl(m.poster)} controls playsInline loop className="max-h-[78vh] w-full object-contain" />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={mediaUrl(m.path)} alt="" loading="lazy" draggable={false} className="max-h-[78vh] w-full object-contain" style={m.w && m.h ? { aspectRatio: `${m.w}/${m.h}` } : undefined} />
+          <img src={mediaUrl(m.path)} alt={m.alt || post.caption || "NexusGram post"} loading="lazy" draggable={false} className="max-h-[78vh] w-full object-contain" style={m.w && m.h ? { aspectRatio: `${m.w}/${m.h}` } : undefined} />
+        )}
+        {post.mood && (
+          <span className="absolute top-3 left-3 rounded-full px-2.5 py-1 text-[11px] font-bold text-black shadow" style={{ background: GRAM_MOODS.find((x) => x.id === post.mood)?.hue || "#fff" }}>
+            {GRAM_MOODS.find((x) => x.id === post.mood)?.label || post.mood}
+          </span>
+        )}
+        {post.remix_of && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              gramGo({ view: "post", id: post.remix_of! });
+            }}
+            className="absolute top-3 right-3 flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur"
+          >
+            <Repeat2 className="size-3.5" /> Remix
+          </button>
         )}
         <Burst show={burst} />
         {post.media.length > 1 && (
@@ -197,8 +222,17 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
         {post.caption && (
           <p className={cn("px-1 text-sm whitespace-pre-wrap", !more && "line-clamp-2")} onClick={() => setMore(true)}>
             <b className="mr-1.5">{author?.username}</b>
-            {post.caption}
+            <CaptionText text={post.caption} />
           </p>
+        )}
+        {extractHashtags(post.caption).length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1.5 px-1">
+            {extractHashtags(post.caption).slice(0, 6).map((t) => (
+              <button key={t} onClick={() => gramGo({ view: "explore", tag: t })} className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-[#9fb3ff] hover:bg-white/10">
+                #{t}
+              </button>
+            ))}
+          </div>
         )}
         {post.comment_count > 0 && (
           <button onClick={() => setShowComments(true)} className="px-1 pt-1 text-sm text-sub">
@@ -208,6 +242,31 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
       </div>
       {showComments && <CommentsSheet post={post} onClose={() => setShowComments(false)} />}
     </article>
+  );
+}
+
+function CaptionText({ text }: { text: string }) {
+  const parts = text.split(/(#[\p{L}\p{N}_]+)/gu);
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.startsWith("#") ? (
+          <button
+            key={i}
+            type="button"
+            className="font-semibold text-[#9fb3ff]"
+            onClick={(e) => {
+              e.stopPropagation();
+              gramGo({ view: "explore", tag: p.slice(1).toLowerCase() });
+            }}
+          >
+            {p}
+          </button>
+        ) : (
+          <span key={i}>{p}</span>
+        ),
+      )}
+    </>
   );
 }
 

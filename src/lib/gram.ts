@@ -18,8 +18,35 @@ export type Media = {
   /** client compression generation — 2 = hq 60fps pipeline */
   v?: number;
   fps?: number;
+  /** accessibility / SEO alt text */
+  alt?: string | null;
 };
-export type Post = { id: string; author_id: string; kind: "post" | "short"; media: Media[]; caption: string; like_count: number; comment_count: number; view_count: number; created_at: string; liked?: boolean; following?: boolean; saved?: boolean };
+export type GramMood = "chill" | "hype" | "focus" | "night" | "soft" | "fire" | "dream";
+export const GRAM_MOODS: { id: GramMood; label: string; hue: string }[] = [
+  { id: "chill", label: "Chill", hue: "#6ec8ff" },
+  { id: "hype", label: "Hype", hue: "#ff5c8a" },
+  { id: "focus", label: "Focus", hue: "#9fb3ff" },
+  { id: "night", label: "Night", hue: "#7a6cff" },
+  { id: "soft", label: "Soft", hue: "#ffb4d9" },
+  { id: "fire", label: "Fire", hue: "#ff8a3d" },
+  { id: "dream", label: "Dream", hue: "#c9b8ff" },
+];
+export type Post = {
+  id: string;
+  author_id: string;
+  kind: "post" | "short";
+  media: Media[];
+  caption: string;
+  like_count: number;
+  comment_count: number;
+  view_count: number;
+  created_at: string;
+  liked?: boolean;
+  following?: boolean;
+  saved?: boolean;
+  mood?: GramMood | null;
+  remix_of?: string | null;
+};
 export type Story = { id: string; author_id: string; media: Media; caption: string; duration_h: 24 | 48; expires_at: string; like_count: number; view_count: number; created_at: string };
 export type TrayItem = { author_id: string; latest: string; count: number; unseen: number };
 export type GramProfile = {
@@ -49,13 +76,27 @@ export type GramRoute =
   | { view: "shorts"; start?: string }
   | { view: "profile"; username: string }
   | { view: "post"; id: string }
-  | { view: "explore" }
+  | { view: "explore"; tag?: string; mood?: GramMood }
   | { view: "saved" }
+  | { view: "insights" }
+  | { view: "memories" }
   | { view: "admin" };
-export const useGram = create<{ stack: GramRoute[]; story: { authors: string[]; index: number } | null; create: null | "post" | "short" | "story"; trayEpoch: number }>(() => ({
+
+export function extractHashtags(text: string): string[] {
+  const found = text.match(/#[\p{L}\p{N}_]+/gu) ?? [];
+  return [...new Set(found.map((t) => t.slice(1).toLowerCase()))].slice(0, 20);
+}
+export const useGram = create<{
+  stack: GramRoute[];
+  story: { authors: string[]; index: number } | null;
+  create: null | "post" | "short" | "story";
+  remixOf: string | null;
+  trayEpoch: number;
+}>(() => ({
   stack: [{ view: "home" }],
   story: null,
   create: null,
+  remixOf: null,
   trayEpoch: 0,
 }));
 export const gramGo = (r: GramRoute) => useGram.setState((s) => ({ stack: [...s.stack, r] }));
@@ -206,10 +247,102 @@ export async function uploadMedia(file: File, onStep?: (s: string) => void): Pro
 }
 
 // ------------------------------------------------------------------ posts
-export async function createPost(kind: "post" | "short", media: Media[], caption: string) {
-  const { data, error } = await supabase.from("gram_posts").insert({ author_id: me(), kind, media, caption: caption.trim().slice(0, 2200) }).select().single();
+export async function createPost(
+  kind: "post" | "short",
+  media: Media[],
+  caption: string,
+  opts?: { mood?: GramMood | null; remixOf?: string | null; alt?: string | null },
+) {
+  const mediaOut = media.map((m, i) => (i === 0 && opts?.alt ? { ...m, alt: opts.alt.slice(0, 200) } : m));
+  const row: Record<string, unknown> = {
+    author_id: me(),
+    kind,
+    media: mediaOut,
+    caption: caption.trim().slice(0, 2200),
+  };
+  if (opts?.mood) row.mood = opts.mood;
+  if (opts?.remixOf) row.remix_of = opts.remixOf;
+  let { data, error } = await supabase.from("gram_posts").insert(row).select().single();
+  // mood/remix columns may not be migrated yet — retry without them
+  if (error && (opts?.mood || opts?.remixOf) && /mood|remix_of|schema|column/i.test(error.message + (error as { details?: string }).details)) {
+    delete row.mood;
+    delete row.remix_of;
+    ({ data, error } = await supabase.from("gram_posts").insert(row).select().single());
+  }
   if (error) throw new Error(errorText(error));
   return data as Post;
+}
+
+export async function postsByTag(tag: string, before?: string | null) {
+  const clean = tag.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 40);
+  if (!clean) return [] as Post[];
+  let q = supabase.from("gram_posts").select("*").ilike("caption", `%#${clean}%`).order("created_at", { ascending: false }).limit(30);
+  if (before) q = q.lt("created_at", before);
+  const { data, error } = await q;
+  if (error) {
+    toast(errorText(error), "error");
+    return [];
+  }
+  const rows = (data ?? []) as Post[];
+  void loadProfiles([...new Set(rows.map((r) => r.author_id))]);
+  return rows;
+}
+
+export async function postsByMood(mood: GramMood, before?: string | null) {
+  let q = supabase.from("gram_posts").select("*").eq("mood", mood).order("created_at", { ascending: false }).limit(30);
+  if (before) q = q.lt("created_at", before);
+  const { data, error } = await q;
+  if (error) {
+    toast(errorText(error), "error");
+    return [];
+  }
+  const rows = (data ?? []) as Post[];
+  void loadProfiles([...new Set(rows.map((r) => r.author_id))]);
+  return rows;
+}
+
+export async function myCreatorInsights() {
+  const uid = me();
+  const { data: posts } = await supabase
+    .from("gram_posts")
+    .select("id, kind, caption, like_count, comment_count, view_count, created_at, media, mood")
+    .eq("author_id", uid)
+    .order("created_at", { ascending: false })
+    .limit(80);
+  const rows = (posts ?? []) as Pick<Post, "id" | "kind" | "caption" | "like_count" | "comment_count" | "view_count" | "created_at" | "media" | "mood">[];
+  const ids = rows.map((r) => r.id);
+  let saves = 0;
+  if (ids.length) {
+    const { count } = await supabase.from("gram_saves").select("post_id", { count: "exact", head: true }).in("post_id", ids);
+    saves = count ?? 0;
+  }
+  const totals = rows.reduce(
+    (a, p) => {
+      a.likes += p.like_count;
+      a.comments += p.comment_count;
+      a.views += p.view_count;
+      return a;
+    },
+    { likes: 0, comments: 0, views: 0 },
+  );
+  const top = [...rows].sort((a, b) => b.like_count + b.view_count * 0.2 - (a.like_count + a.view_count * 0.2)).slice(0, 8);
+  return { posts: rows, totals, top, saves };
+}
+
+export async function memoryLane() {
+  const uid = me();
+  const now = new Date();
+  const mmdd = `${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
+  const { data, error } = await supabase.from("gram_posts").select("*").eq("author_id", uid).order("created_at", { ascending: false }).limit(250);
+  if (error) {
+    toast(errorText(error), "error");
+    return [] as Post[];
+  }
+  const year = now.getUTCFullYear();
+  return ((data ?? []) as Post[]).filter((p) => {
+    const d = new Date(p.created_at);
+    return d.getUTCFullYear() < year && p.created_at.slice(5, 10) === mmdd;
+  });
 }
 export async function feed(scope: "following" | "discover", kind: "post" | "short" | null, before?: string | null) {
   const { data, error } = await supabase.rpc("gram_feed", { p_scope: scope, p_kind: kind, p_before: before ?? null, p_limit: 15 });

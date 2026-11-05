@@ -1,11 +1,13 @@
 {
   "name": "Nexus",
   "short_name": "Nexus",
-  "description": "Chat, voice, video and screen sharing with your friends.",
+  "description": "Chat, voice, video, NexusGram, Live, and Radio — one place for your friends.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1e1f22",
-  "theme_color": "#1e1f22",
+  "background_color": "#0b0b0f",
+  "theme_color": "#0b0b0f",
+  "categories": ["social", "entertainment"],
+  "lang": "en",
   "icons": [
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }

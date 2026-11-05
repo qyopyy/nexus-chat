@@ -1,11 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Bookmark, Clapperboard, Compass, Heart, House, Megaphone, Play, Shield, SquarePlus, UserRound } from "lucide-react";
+import { ArrowLeft, Bookmark, Clapperboard, Compass, Heart, House, Megaphone, Play, Shield, Sparkles, SquarePlus, UserRound } from "lucide-react";
 import { useApp } from "@/store/app";
 import { myRank } from "@/lib/admin";
 import { cn } from "@/lib/utils";
-import { feed, fmt, getPost, gramBack, gramGo, gramHome, mediaUrl, savedFeed, scheduleStoryRepair, useGram, type Post } from "@/lib/gram";
+import {
+  feed,
+  fmt,
+  getPost,
+  GRAM_MOODS,
+  gramBack,
+  gramGo,
+  gramHome,
+  mediaUrl,
+  memoryLane,
+  myCreatorInsights,
+  postsByMood,
+  postsByTag,
+  savedFeed,
+  scheduleStoryRepair,
+  useGram,
+  type GramMood,
+  type Post,
+} from "@/lib/gram";
 import { openPulse } from "@/lib/pulse";
 import Avatar from "@/components/ui/Avatar";
 import PostCard from "./PostCard";
@@ -41,6 +59,7 @@ export default function NexusGram({ mobile }: { mobile?: boolean }) {
     { id: "shorts", label: "Shorts", icon: <Clapperboard className="size-5" />, on: r.view === "shorts", go: () => gramHome({ view: "shorts" }) },
     { id: "explore", label: "Explore", icon: <Compass className="size-5" />, on: r.view === "explore", go: () => gramHome({ view: "explore" }) },
     { id: "saved", label: "Saved", icon: <Bookmark className="size-5" />, on: r.view === "saved", go: () => gramHome({ view: "saved" }) },
+    { id: "insights", label: "Pulse", icon: <Sparkles className="size-5" />, on: r.view === "insights" || r.view === "memories", go: () => gramHome({ view: "insights" }) },
     {
       id: "me",
       label: "Profile",
@@ -77,7 +96,7 @@ export default function NexusGram({ mobile }: { mobile?: boolean }) {
           <button onClick={() => openPulse()} className="ml-0.5 grid size-9 place-items-center rounded-lg text-white/45 hover:bg-white/5 hover:text-white" aria-label="Pulse" title="Pulse">
             <Megaphone className="size-5" />
           </button>
-          <button onClick={() => useGram.setState({ create: r.view === "shorts" ? "short" : "post" })} className="ml-1 grid size-9 place-items-center rounded-lg bg-white text-black" aria-label="Create" title="Create">
+          <button onClick={() => useGram.setState({ create: r.view === "shorts" ? "short" : "post", remixOf: null })} className="ml-1 grid size-9 place-items-center rounded-lg bg-white text-black" aria-label="Create" title="Create">
             <SquarePlus className="size-5" />
           </button>
         </nav>
@@ -91,8 +110,10 @@ export default function NexusGram({ mobile }: { mobile?: boolean }) {
         <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="mx-auto w-full max-w-[640px]">
             {r.view === "home" && <Home />}
-            {r.view === "explore" && <Explore />}
+            {r.view === "explore" && <Explore tag={r.tag} mood={r.mood} />}
             {r.view === "saved" && <Saved />}
+            {r.view === "insights" && <Insights />}
+            {r.view === "memories" && <Memories />}
             {r.view === "admin" && <GramAdmin />}
             {r.view === "profile" && <Profile key={r.username} username={r.username} />}
             {r.view === "post" && <OnePost key={r.id} id={r.id} />}
@@ -224,7 +245,7 @@ function Empty({ following }: { following: boolean }) {
       <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-white/5 text-xl font-black">N</div>
       <p className="mt-3 font-semibold">{following ? "Nothing from people you follow yet" : "No posts yet"}</p>
       <p className="mt-1 text-sm text-white/45">{following ? "Follow people from Explore or Shorts to fill your feed." : "Share a photo, Short, or story to get started."}</p>
-      <button onClick={() => useGram.setState({ create: "post" })} className="mt-4 rounded-full bg-white px-5 py-2 font-semibold text-black">
+      <button onClick={() => useGram.setState({ create: "post", remixOf: null })} className="mt-4 rounded-full bg-white px-5 py-2 font-semibold text-black">
         Create a post
       </button>
     </div>
@@ -263,30 +284,189 @@ function ShortTeaser({ p }: { p: Post }) {
   );
 }
 
-function Explore() {
-  const { rows, done, more } = useFeed("discover", null);
-  if (rows === null) return <div className="grid grid-cols-3 gap-0.5">{Array.from({ length: 12 }, (_, k) => <div key={k} className="aspect-square animate-pulse bg-white/5" />)}</div>;
-  if (!rows.length) return <Empty following={false} />;
+function Explore({ tag, mood }: { tag?: string; mood?: GramMood }) {
+  const discover = useFeed("discover", null);
+  const [filterRows, setFilterRows] = useState<Post[] | null>(null);
+  const [q, setQ] = useState(tag ?? "");
+  useEffect(() => {
+    setQ(tag ?? "");
+  }, [tag]);
+  useEffect(() => {
+    if (!tag && !mood) {
+      setFilterRows(null);
+      return;
+    }
+    setFilterRows(null);
+    void (mood ? postsByMood(mood) : postsByTag(tag!)).then(setFilterRows);
+  }, [tag, mood]);
+
+  const rows = tag || mood ? filterRows : discover.rows;
+  const trending = ["nexus", "shorts", "night", "music", "live", "friends"];
+
   return (
     <div className="pb-10">
-      <div className="grid grid-cols-3 gap-0.5">
-        {rows.map((p, k) => {
-          const m = p.media[0];
-          const tall = p.kind === "short" && k % 5 === 2;
-          return (
-            <button key={p.id} onClick={() => gramGo(p.kind === "short" ? { view: "shorts", start: p.id } : { view: "post", id: p.id })} className={cn("group relative overflow-hidden bg-black", tall ? "row-span-2" : "aspect-square")}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={mediaUrl(m.type === "video" ? m.poster : m.path)} alt="" loading="lazy" className="h-full w-full object-cover transition group-hover:scale-105" />
-              {p.kind === "short" && <Clapperboard className="absolute top-1.5 right-1.5 size-4 text-white drop-shadow" />}
-              {p.kind === "post" && p.media.length > 1 && <span className="absolute top-1.5 right-1.5 rounded bg-black/50 px-1 text-[10px] font-bold text-white">{p.media.length}</span>}
-              <span className="absolute inset-0 hidden items-center justify-center gap-1 bg-black/40 text-sm font-bold text-white group-hover:flex">
-                <Heart className="size-4 fill-white" /> {fmt(p.like_count)}
-              </span>
+      <div className="space-y-3 px-3 pt-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const t = q.replace(/^#/, "").trim().toLowerCase();
+            if (t) gramHome({ view: "explore", tag: t });
+            else gramHome({ view: "explore" });
+          }}
+          className="flex gap-2"
+        >
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search #hashtags"
+            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/25"
+          />
+          <button type="submit" className="rounded-xl bg-white px-4 text-sm font-semibold text-black">
+            Go
+          </button>
+        </form>
+        <div className="flex flex-wrap gap-1.5">
+          {trending.map((t) => (
+            <button key={t} onClick={() => gramHome({ view: "explore", tag: t })} className={cn("rounded-full px-3 py-1 text-xs font-semibold", tag === t ? "bg-white text-black" : "bg-white/5 text-white/60 hover:bg-white/10")}>
+              #{t}
             </button>
-          );
-        })}
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {GRAM_MOODS.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => gramHome({ view: "explore", mood: m.id })}
+              className={cn("rounded-full px-3 py-1 text-xs font-semibold", mood === m.id ? "text-black" : "bg-white/5 text-white/60 hover:bg-white/10")}
+              style={mood === m.id ? { background: m.hue } : undefined}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        {(tag || mood) && (
+          <div className="flex items-center justify-between text-sm">
+            <p className="font-semibold">{mood ? `Mood · ${GRAM_MOODS.find((x) => x.id === mood)?.label}` : `#${tag}`}</p>
+            <button onClick={() => gramHome({ view: "explore" })} className="text-white/45 hover:text-white">
+              Clear
+            </button>
+          </div>
+        )}
       </div>
-      {!done && <Sentinel onHit={more} />}
+      {rows === null ? (
+        <div className="mt-3 grid grid-cols-3 gap-0.5">{Array.from({ length: 12 }, (_, k) => <div key={k} className="aspect-square animate-pulse bg-white/5" />)}</div>
+      ) : !rows.length ? (
+        <Empty following={false} />
+      ) : (
+        <>
+          <div className="mt-3 grid grid-cols-3 gap-0.5">
+            {rows.map((p, k) => {
+              const m = p.media[0];
+              const tall = p.kind === "short" && k % 5 === 2;
+              return (
+                <button key={p.id} onClick={() => gramGo(p.kind === "short" ? { view: "shorts", start: p.id } : { view: "post", id: p.id })} className={cn("group relative overflow-hidden bg-black", tall ? "row-span-2" : "aspect-square")}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={mediaUrl(m.type === "video" ? m.poster : m.path)} alt={m.alt || p.caption || ""} loading="lazy" className="h-full w-full object-cover transition group-hover:scale-105" />
+                  {p.kind === "short" && <Clapperboard className="absolute top-1.5 right-1.5 size-4 text-white drop-shadow" />}
+                  {p.kind === "post" && p.media.length > 1 && <span className="absolute top-1.5 right-1.5 rounded bg-black/50 px-1 text-[10px] font-bold text-white">{p.media.length}</span>}
+                  <span className="absolute inset-0 hidden items-center justify-center gap-1 bg-black/40 text-sm font-bold text-white group-hover:flex">
+                    <Heart className="size-4 fill-white" /> {fmt(p.like_count)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {!tag && !mood && !discover.done && <Sentinel onHit={discover.more} />}
+        </>
+      )}
+    </div>
+  );
+}
+
+function Insights() {
+  const [data, setData] = useState<Awaited<ReturnType<typeof myCreatorInsights>> | null>(null);
+  useEffect(() => {
+    void myCreatorInsights().then(setData);
+  }, []);
+  if (!data) return <div className="grid h-48 place-items-center text-sm text-white/40">Loading your pulse…</div>;
+  const { totals, top, posts, saves } = data;
+  return (
+    <div className="space-y-5 px-4 py-5 pb-12">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Creator Pulse</h2>
+          <p className="text-sm text-white/45">How your posts are landing</p>
+        </div>
+        <button onClick={() => gramHome({ view: "memories" })} className="rounded-full bg-white/8 px-3 py-1.5 text-xs font-semibold hover:bg-white/12">
+          On this day
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[
+          ["Views", totals.views],
+          ["Likes", totals.likes],
+          ["Comments", totals.comments],
+          ["Saves", saves],
+        ].map(([l, n]) => (
+          <div key={l as string} className="rounded-2xl bg-white/5 px-3 py-3">
+            <div className="text-xl font-semibold tabular-nums">{fmt(n as number)}</div>
+            <div className="text-xs text-white/45">{l as string}</div>
+          </div>
+        ))}
+      </div>
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-white/70">Top posts</h3>
+        {!top.length ? (
+          <p className="text-sm text-white/40">Share something to see insights here.</p>
+        ) : (
+          <div className="space-y-2">
+            {top.map((p) => {
+              const m = p.media[0];
+              return (
+                <button key={p.id} onClick={() => gramGo({ view: "post", id: p.id })} className="flex w-full items-center gap-3 rounded-xl bg-white/5 p-2 text-left hover:bg-white/8">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={mediaUrl(m?.type === "video" ? m.poster : m?.path)} alt="" className="size-14 rounded-lg object-cover" />
+                  <span className="min-w-0 flex-1">
+                    <span className="line-clamp-1 text-sm font-medium">{p.caption || (p.kind === "short" ? "Short" : "Post")}</span>
+                    <span className="mt-0.5 block text-xs text-white/45">
+                      {fmt(p.like_count)} likes · {fmt(p.view_count)} views
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <p className="text-center text-xs text-white/35">{posts.length} recent posts analyzed</p>
+    </div>
+  );
+}
+
+function Memories() {
+  const [rows, setRows] = useState<Post[] | null>(null);
+  useEffect(() => {
+    void memoryLane().then(setRows);
+  }, []);
+  if (rows === null) return <div className="grid h-48 place-items-center text-sm text-white/40">Looking back…</div>;
+  return (
+    <div className="pb-12">
+      <div className="px-4 pt-5">
+        <button onClick={() => gramHome({ view: "insights" })} className="mb-2 text-xs font-semibold text-white/45 hover:text-white">
+          ← Creator Pulse
+        </button>
+        <h2 className="text-lg font-semibold">On this day</h2>
+        <p className="text-sm text-white/45">Posts you shared on this calendar day in past years</p>
+      </div>
+      {!rows.length ? (
+        <p className="px-6 py-16 text-center text-sm text-white/40">No memories for today yet — check back next year.</p>
+      ) : (
+        <div className="mt-4 space-y-2 sm:space-y-4 sm:px-3">
+          {rows.map((p) => (
+            <PostCard key={p.id} post={p} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
