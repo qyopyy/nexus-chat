@@ -1,0 +1,73 @@
+{
+  "name": "nexus-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Nexus desktop shell (Windows .exe + macOS .app) — loads the live site like the Capacitor phone apps.",
+  "main": "main.js",
+  "author": "Nexus",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win --mac",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "hu.qyopy.nexus.desktop",
+    "productName": "Nexus",
+    "copyright": "Copyright © Nexus",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "icon.png"
+    ],
+    "extraMetadata": {
+      "main": "main.js"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Nexus-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Nexus-Portable-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.social-networking",
+      "artifactName": "Nexus-${version}-mac.${ext}",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "artifactName": "Nexus-${version}.dmg"
+    }
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  }
+}

@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ImagePlus, RotateCcw, Trash2 } from "lucide-react";
+import { Check, FileCode2, ImagePlus, RotateCcw, Sparkles, Trash2, Upload } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { useAppearance, setAppearance, resetAppearance } from "@/store/appearance";
-import { FONTS, THEMES } from "@/lib/theme";
+import { BG_ANIMS, FONTS, THEMES, parseDiscordThemeCss, type ThemeColors } from "@/lib/theme";
 import { supabase, errorText } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
@@ -54,9 +54,13 @@ export default function AppearanceSection() {
   const a = useAppearance((s) => s);
   const me = useApp((s) => s.userId);
   const [bgUrl, setBgUrl] = useState(a.bgImage ?? "");
+  const [bgVideo, setBgVideo] = useState(a.bgVideo ?? "");
   const [css, setCss] = useState(a.customCss);
+  const [bdPaste, setBdPaste] = useState("");
   const [uploading, setUploading] = useState(false);
   const file = useRef<HTMLInputElement>(null);
+  const videoFile = useRef<HTMLInputElement>(null);
+  const themeFile = useRef<HTMLInputElement>(null);
 
   // preview every font in its own face
   useEffect(() => {
@@ -76,26 +80,61 @@ export default function AppearanceSection() {
     return () => clearTimeout(t);
   }, [css]);
 
-  async function uploadBg(f: File) {
+  async function uploadBg(f: File, kind: "image" | "video") {
     if (!me) return;
-    if (f.size > 10 * 1024 * 1024) return toast("Max 10 MB", "error");
+    const max = kind === "video" ? 40 * 1024 * 1024 : 10 * 1024 * 1024;
+    if (f.size > max) return toast(kind === "video" ? "Max 40 MB for video wallpapers" : "Max 10 MB", "error");
     const { malwareGate } = await import("@/lib/malwareGuard");
-    if (await malwareGate(f, { fileName: f.name, context: "image" })) return;
+    if (await malwareGate(f, { fileName: f.name, context: kind === "video" ? "media" : "image" })) return;
     setUploading(true);
-    const path = `${me}/background-${Date.now()}.${f.name.split(".").pop() || "jpg"}`;
+    const path = `${me}/background-${Date.now()}.${f.name.split(".").pop() || (kind === "video" ? "mp4" : "jpg")}`;
     const { error } = await supabase.storage.from("avatars").upload(path, f, { contentType: f.type, upsert: true });
     setUploading(false);
     if (error) return toast(errorText(error), "error");
     const url = supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl;
-    setBgUrl(url);
-    setAppearance({ bgImage: url });
+    if (kind === "video") {
+      setBgVideo(url);
+      setAppearance({ bgVideo: url, bgAnim: null });
+    } else {
+      setBgUrl(url);
+      setAppearance({ bgImage: url, bgAnim: null });
+    }
+  }
+
+  function applyDiscordTheme(raw: string) {
+    const parsed = parseDiscordThemeCss(raw);
+    const patch: Parameters<typeof setAppearance>[0] = {};
+    if (parsed.customCss) {
+      patch.customCss = parsed.customCss;
+      setCss(parsed.customCss);
+    }
+    // If we extracted enough hex colors, inject as a one-off QuickCSS override of Nexus vars
+    if (parsed.colors && Object.keys(parsed.colors).length >= 3) {
+      const lines = Object.entries(parsed.colors as Partial<ThemeColors>)
+        .map(([k, v]) => {
+          const map: Record<string, string> = {
+            rail: "rail", side: "side", chat: "chat", panel: "panel", hover: "hover", active: "active",
+            input: "input", line: "line", txt: "txt", sub: "sub", faint: "faint", accent: "accent",
+            accent2: "accent-2", bubbleMe: "bubble-me", bubble: "bubble", menu: "menu", wall: "wall",
+          };
+          return map[k] ? `--color-${map[k]}: ${v} !important;` : "";
+        })
+        .filter(Boolean);
+      const block = `/* Imported Discord theme${parsed.themeName ? `: ${parsed.themeName}` : ""} */\n:root {\n  ${lines.join("\n  ")}\n}`;
+      patch.customCss = (parsed.customCss ? parsed.customCss + "\n\n" : "") + block;
+      setCss(patch.customCss);
+    }
+    if (!patch.customCss) return toast("Couldn't read that theme — paste a BetterDiscord .theme.css or :root CSS", "error");
+    setAppearance(patch);
+    toast(parsed.themeName ? `Imported “${parsed.themeName}”` : "Discord theme imported", "success");
+    setBdPaste("");
   }
 
   return (
     <>
       <div className="mb-5 flex items-center justify-between">
         <h2 className="text-xl font-bold">Appearance</h2>
-        <button onClick={() => (resetAppearance(), setBgUrl(""), setCss(""))} className="flex items-center gap-1.5 text-sm text-sub hover:text-txt">
+        <button onClick={() => (resetAppearance(), setBgUrl(""), setBgVideo(""), setCss(""))} className="flex items-center gap-1.5 text-sm text-sub hover:text-txt">
           <RotateCcw className="size-4" /> Reset all
         </button>
       </div>
@@ -163,19 +202,19 @@ export default function AppearanceSection() {
         )}
       </div>
 
-      <Label hint="Any image URL or upload — panels turn see-through like a modded client.">Background image</Label>
+      <Label hint="Static image, GIF/WebP, or URL — panels go glass like a modded Discord client.">Background image</Label>
       <div className="mb-3 flex gap-2">
         <input
           value={bgUrl}
           onChange={(e) => setBgUrl(e.target.value)}
-          onBlur={() => setAppearance({ bgImage: bgUrl.trim() || null })}
-          onKeyDown={(e) => e.key === "Enter" && setAppearance({ bgImage: bgUrl.trim() || null })}
-          placeholder="https://…/wallpaper.jpg"
+          onBlur={() => setAppearance({ bgImage: bgUrl.trim() || null, bgAnim: bgUrl.trim() ? null : a.bgAnim })}
+          onKeyDown={(e) => e.key === "Enter" && setAppearance({ bgImage: bgUrl.trim() || null, bgAnim: bgUrl.trim() ? null : a.bgAnim })}
+          placeholder="https://…/wallpaper.jpg or .gif"
           className="min-w-0 flex-1 rounded-md bg-rail px-3 py-2 outline-none focus:ring-2 focus:ring-accent/60"
         />
-        <input ref={file} type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && void uploadBg(e.target.files[0])} />
+        <input ref={file} type="file" accept="image/*,.gif,.webp" hidden onChange={(e) => e.target.files?.[0] && void uploadBg(e.target.files[0], "image")} />
         <button onClick={() => file.current?.click()} disabled={uploading} className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-2 disabled:opacity-50">
-          <ImagePlus className="size-4" /> {uploading ? "Uploading…" : "Upload"}
+          <ImagePlus className="size-4" /> {uploading ? "…" : "Upload"}
         </button>
         {a.bgImage && (
           <button onClick={() => (setBgUrl(""), setAppearance({ bgImage: null }))} className="rounded-md bg-hover px-3 text-sub hover:text-dnd" title="Remove background">
@@ -183,7 +222,48 @@ export default function AppearanceSection() {
           </button>
         )}
       </div>
-      {a.bgImage && (
+
+      <Label hint="Looping MP4/WebM wallpaper (mobile + PC). Cleared when you pick an animated preset.">Animated video background</Label>
+      <div className="mb-3 flex gap-2">
+        <input
+          value={bgVideo}
+          onChange={(e) => setBgVideo(e.target.value)}
+          onBlur={() => setAppearance({ bgVideo: bgVideo.trim() || null, bgAnim: bgVideo.trim() ? null : a.bgAnim })}
+          onKeyDown={(e) => e.key === "Enter" && setAppearance({ bgVideo: bgVideo.trim() || null, bgAnim: bgVideo.trim() ? null : a.bgAnim })}
+          placeholder="https://…/wallpaper.mp4"
+          className="min-w-0 flex-1 rounded-md bg-rail px-3 py-2 outline-none focus:ring-2 focus:ring-accent/60"
+        />
+        <input ref={videoFile} type="file" accept="video/mp4,video/webm,video/*" hidden onChange={(e) => e.target.files?.[0] && void uploadBg(e.target.files[0], "video")} />
+        <button onClick={() => videoFile.current?.click()} disabled={uploading} className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-2 disabled:opacity-50">
+          <Upload className="size-4" /> Video
+        </button>
+        {a.bgVideo && (
+          <button onClick={() => (setBgVideo(""), setAppearance({ bgVideo: null }))} className="rounded-md bg-hover px-3 text-sub hover:text-dnd" title="Remove video">
+            <Trash2 className="size-4" />
+          </button>
+        )}
+      </div>
+
+      <Label hint="Built-in animated wallpapers — works on phone and desktop. Respects Reduce motion.">Animated presets</Label>
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <button
+          onClick={() => setAppearance({ bgAnim: null })}
+          className={cn("rounded-lg border-2 px-3 py-2.5 text-left text-sm", !a.bgAnim ? "border-accent bg-accent/10" : "border-line hover:border-sub")}
+        >
+          Off
+        </button>
+        {Object.entries(BG_ANIMS).map(([id, p]) => (
+          <button
+            key={id}
+            onClick={() => setAppearance({ bgAnim: id, bgImage: null, bgVideo: null })}
+            className={cn("flex items-center gap-1.5 rounded-lg border-2 px-3 py-2.5 text-left text-sm", a.bgAnim === id ? "border-accent bg-accent/10" : "border-line hover:border-sub")}
+          >
+            <Sparkles className="size-3.5 shrink-0 text-accent" /> {p.name}
+          </button>
+        ))}
+      </div>
+
+      {(a.bgImage || a.bgVideo || a.bgAnim) && (
         <div className="mb-8 grid gap-4 rounded-xl bg-side p-4 sm:grid-cols-3">
           <div>
             <Label>Blur</Label>
@@ -199,7 +279,7 @@ export default function AppearanceSection() {
           </div>
         </div>
       )}
-      {!a.bgImage && <div className="mb-8" />}
+      {!(a.bgImage || a.bgVideo || a.bgAnim) && <div className="mb-8" />}
 
       <H>Text</H>
       <Label>Font</Label>
@@ -230,6 +310,45 @@ export default function AppearanceSection() {
       <Switch label="Reduce motion" hint="Stops animated name colors, avatar decorations and transitions." checked={a.reduceMotion} onChange={(v) => setAppearance({ reduceMotion: v })} />
 
       <div className="mt-8">
+        <Label hint="Import a BetterDiscord / Vencord .theme.css (paste or upload). Maps Discord colors onto Nexus, or keeps @import QuickCSS.">
+          Import Discord theme
+        </Label>
+        <textarea
+          value={bdPaste}
+          onChange={(e) => setBdPaste(e.target.value)}
+          spellCheck={false}
+          rows={5}
+          placeholder={`/* Name: My BD Theme */\n:root {\n  --background-primary: #1e1f22;\n  --brand-experiment: #5865f2;\n}\n\nor @import url("https://…/theme.css");`}
+          className="mb-2 w-full rounded-lg bg-rail p-3 font-mono text-sm outline-none focus:ring-2 focus:ring-accent/60"
+        />
+        <div className="mb-6 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={!bdPaste.trim()}
+            onClick={() => applyDiscordTheme(bdPaste)}
+            className="flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+          >
+            <FileCode2 className="size-4" /> Apply import
+          </button>
+          <input
+            ref={themeFile}
+            type="file"
+            accept=".css,text/css,text/plain"
+            hidden
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (!f) return;
+              applyDiscordTheme(await f.text());
+            }}
+          />
+          <button type="button" onClick={() => themeFile.current?.click()} className="rounded-full bg-hover px-4 py-2 text-sm font-semibold hover:bg-active">
+            Upload .theme.css
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4">
         <Label hint="Like Vencord QuickCSS. Paste a theme or @import a BetterDiscord-style theme URL. Applies to this device only.">Custom CSS</Label>
         <textarea
           value={css}

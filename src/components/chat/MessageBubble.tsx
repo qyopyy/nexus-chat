@@ -91,47 +91,58 @@ function Attachment({ m, mine }: { m: Message; mine: boolean }) {
   const media = type.startsWith("image/") || type.startsWith("video/");
   if (loading) {
     return media ? (
-      <div className="grid h-48 w-64 max-w-full animate-pulse place-items-center rounded-xl bg-black/25 text-xs opacity-60">Loading…</div>
+      <div className="grid h-36 w-[min(16rem,72vw)] max-w-full animate-pulse place-items-center rounded-xl bg-black/25 text-xs opacity-60 min-[400px]:h-48 min-[400px]:w-64">Loading…</div>
     ) : (
-      <div className="h-12 w-56 animate-pulse rounded-lg bg-black/20" />
+      <div className="h-12 w-[min(14rem,70vw)] max-w-full animate-pulse rounded-lg bg-black/20" />
     );
   }
   if (failed || !url) {
     return (
-      <div className="flex items-center gap-2 rounded-lg bg-black/20 px-3 py-2 text-xs opacity-80">
-        <Lock className="size-4" /> Private file — only members of this chat can open it
+      <div className="flex max-w-[min(100%,18rem)] items-center gap-2 rounded-lg bg-black/20 px-2.5 py-2 text-[11px] opacity-80 min-[400px]:max-w-none min-[400px]:px-3 min-[400px]:text-xs">
+        <Lock className="size-4 shrink-0" /> Private file — only members of this chat can open it
       </div>
     );
   }
   if (isVoice(m)) return <VoicePlayer url={url} mine={mine} seed={m.id} />;
   if (type.startsWith("image/")) {
     return (
-      <a href={url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-xl" onClick={(e) => e.stopPropagation()}>
-        <img src={url} alt={m.attachment_name ?? ""} className="max-h-[360px] w-auto max-w-full object-cover" loading="lazy" draggable={false} />
+      <a href={url} target="_blank" rel="noreferrer" className="block max-w-full overflow-hidden rounded-xl" onClick={(e) => e.stopPropagation()}>
+        <img
+          src={url}
+          alt={m.attachment_name ?? ""}
+          className="max-h-[min(52vh,280px)] w-auto max-w-full object-cover min-[400px]:max-h-[min(60vh,360px)]"
+          loading="lazy"
+          draggable={false}
+        />
       </a>
     );
   }
   if (type.startsWith("video/")) {
-    return <video src={url} controls playsInline className="max-h-[360px] max-w-full rounded-xl" />;
+    return <video src={url} controls playsInline className="max-h-[min(52vh,280px)] max-w-full rounded-xl min-[400px]:max-h-[min(60vh,360px)]" />;
   }
   if (type.startsWith("audio/")) {
     return (
-      <div className="min-w-[220px] max-w-full">
-        <div className="mb-1 truncate text-xs opacity-70">{m.attachment_name}</div>
-        <audio src={url} controls className="w-full" />
+      <div className="w-full min-w-0 max-w-[min(100%,18rem)] min-[400px]:min-w-[220px] min-[400px]:max-w-full">
+        <div className="mb-1 truncate text-[11px] opacity-70 min-[400px]:text-xs">{m.attachment_name}</div>
+        <audio src={url} controls className="w-full max-w-full" />
       </div>
     );
   }
   return (
-    <a href={url} target="_blank" rel="noreferrer" className="flex min-w-[200px] max-w-full items-center gap-3 rounded-lg bg-black/20 p-2.5 hover:bg-black/30">
-      <div className="grid size-10 place-items-center rounded-full bg-accent text-white">
-        <FileText className="size-5" />
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="flex w-full min-w-0 max-w-[min(100%,18rem)] items-center gap-2 rounded-lg bg-black/20 p-2 hover:bg-black/30 min-[400px]:min-w-[200px] min-[400px]:max-w-full min-[400px]:gap-3 min-[400px]:p-2.5"
+    >
+      <div className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-white min-[400px]:size-10">
+        <FileText className="size-4 min-[400px]:size-5" />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{m.attachment_name}</div>
-        <div className="text-xs opacity-60">Tap to download</div>
+        <div className="truncate text-xs font-medium min-[400px]:text-sm">{m.attachment_name}</div>
+        <div className="text-[10px] opacity-60 min-[400px]:text-xs">Tap to download</div>
       </div>
-      <Download className="size-4 opacity-60" />
+      <Download className="size-4 shrink-0 opacity-60" />
     </a>
   );
 }

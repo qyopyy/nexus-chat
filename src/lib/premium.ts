@@ -129,6 +129,72 @@ export async function grantPremium(userId: string, tier: PremiumTier | null, day
   return !error;
 }
 
+// ------------------------------------------------------------------ Nitro-style gift links
+export type PremiumGift = {
+  id: string;
+  code: string;
+  tier: PremiumTier;
+  days: number;
+  max_claims: number;
+  claims: number;
+  expires_at: string | null;
+  created_by: string | null;
+  note: string | null;
+  created_at: string;
+};
+export type PremiumGiftPreview = {
+  code: string;
+  tier: PremiumTier;
+  days: number;
+  max_claims: number;
+  claims: number;
+  expires_at: string | null;
+  remaining: number;
+  expired: boolean;
+  exhausted: boolean;
+};
+
+export function giftLink(code: string) {
+  if (typeof window !== "undefined") return `${window.location.origin}/gift/${encodeURIComponent(code)}`;
+  return `/gift/${encodeURIComponent(code)}`;
+}
+
+export async function createPremiumGift(opts: { tier: PremiumTier; days: number; maxClaims?: number; expiresDays?: number; note?: string }) {
+  const { data, error } = await supabase.rpc("create_premium_gift", {
+    p_tier: opts.tier,
+    p_days: opts.days,
+    p_max_claims: opts.maxClaims ?? 1,
+    p_expires_days: opts.expiresDays ?? 30,
+    p_note: opts.note ?? null,
+  });
+  if (error) {
+    toast(errorText(error), "error");
+    return null;
+  }
+  return data as { id: string; code: string; path: string };
+}
+
+export async function listPremiumGifts() {
+  const { data, error } = await supabase.rpc("list_premium_gifts");
+  if (error) {
+    toast(errorText(error), "error");
+    return [] as PremiumGift[];
+  }
+  return (data ?? []) as PremiumGift[];
+}
+
+export async function redeemPremiumGift(code: string) {
+  const { data, error } = await supabase.rpc("redeem_premium_gift", { p_code: code });
+  if (error) throw new Error(errorText(error));
+  return data as { ok: boolean; tier: PremiumTier; days: number; until: string };
+}
+
+export async function previewPremiumGift(code: string): Promise<PremiumGiftPreview | null> {
+  const { data, error } = await supabase.rpc("premium_gift_preview", { p_code: code });
+  if (error || !data) return null;
+  return data as PremiumGiftPreview;
+}
+
 // ------------------------------------------------------------------ reviewers
 /** admins, moderators and members holding the Moderator badge can review releases */
 export function canReview() {

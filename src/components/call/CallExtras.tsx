@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 /** Compact quality + recording + layout tools for the call chrome */
 export function CallStatusChips() {
   const quality = useCall((s) => s.callQuality);
+  const ping = useCall((s) => s.callPingMs);
   const recording = useCall((s) => s.recording);
   const started = useCall((s) => s.recordingStartedAt);
   const noise = useCall((s) => s.settings.noiseMode);
@@ -44,15 +45,16 @@ export function CallStatusChips() {
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {quality && (
+      {(quality || ping != null) && (
         <span
           className={cn(
-            "rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase",
-            quality === "good" ? "bg-ok/20 text-ok" : quality === "ok" ? "bg-idle/20 text-idle" : "bg-dnd/25 text-dnd",
+            "rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide tabular-nums",
+            (quality ?? "good") === "good" ? "bg-ok/20 text-ok" : quality === "ok" ? "bg-idle/20 text-idle" : "bg-dnd/25 text-dnd",
           )}
-          title="Connection quality"
+          title="Voice call ping (round-trip) + link quality"
         >
-          {quality === "good" ? "Good link" : quality === "ok" ? "Fair link" : "Weak link"}
+          {ping != null ? `${ping} ms` : "…"}
+          {quality ? ` · ${quality === "good" ? "Good" : quality === "ok" ? "Fair" : "Weak"}` : ""}
         </span>
       )}
       <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/70" title="Noise processing">

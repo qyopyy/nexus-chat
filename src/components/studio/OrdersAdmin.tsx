@@ -5,7 +5,17 @@ import { MessageCircle } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { loadProfiles, openDM } from "@/lib/data";
 import { supabase, errorText } from "@/lib/supabase";
-import { PLANS, allOrders, grantPremium, setOrderStatus, type Order } from "@/lib/premium";
+import {
+  PLANS,
+  allOrders,
+  createPremiumGift,
+  giftLink,
+  grantPremium,
+  listPremiumGifts,
+  setOrderStatus,
+  type Order,
+  type PremiumGift,
+} from "@/lib/premium";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
@@ -126,6 +136,7 @@ export default function OrdersAdmin() {
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <GrantCard />
+        <GiftLinkCard />
         <Card title="Music video distribution requests">
           {mv.length === 0 ? (
             <p className="text-sm text-sub">Requests from the 🎬 plan show up here.</p>
@@ -208,6 +219,82 @@ function GrantCard() {
           Save
         </button>
       </form>
+    </Card>
+  );
+}
+
+/** Discord Nitro-style shareable claim links */
+function GiftLinkCard() {
+  const [tier, setTier] = useState<PremiumTier>("lighting");
+  const [days, setDays] = useState(30);
+  const [maxClaims, setMaxClaims] = useState(1);
+  const [expiresDays, setExpiresDays] = useState(30);
+  const [busy, setBusy] = useState(false);
+  const [gifts, setGifts] = useState<PremiumGift[]>([]);
+  const [lastUrl, setLastUrl] = useState<string | null>(null);
+  const refresh = useCallback(() => void listPremiumGifts().then(setGifts), []);
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+  return (
+    <Card title="🎁 Gift link (like Nitro)">
+      <p className="mb-2 text-sm text-sub">Mint a shareable URL. Anyone signed in can claim it — perfect for giveaways and friends.</p>
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          const g = await createPremiumGift({ tier, days, maxClaims, expiresDays });
+          setBusy(false);
+          if (!g) return;
+          const url = giftLink(g.code);
+          setLastUrl(url);
+          try {
+            await navigator.clipboard.writeText(url);
+            toast("Gift link copied", "success");
+          } catch {
+            toast("Gift link created", "success");
+          }
+          void refresh();
+        }}
+        className="grid gap-2 sm:grid-cols-2"
+      >
+        <select value={tier} onChange={(e) => setTier(e.target.value as PremiumTier)} className="rounded-lg border border-line bg-transparent px-2 py-2 text-sm outline-none">
+          {PLANS.map((p) => (
+            <option key={p.id} value={p.id} className="bg-side">
+              {p.emoji} {p.short}
+            </option>
+          ))}
+        </select>
+        <input type="number" min={1} max={3650} value={days} onChange={(e) => setDays(Number(e.target.value) || 30)} className="rounded-lg border border-line bg-transparent px-2 py-2 text-sm outline-none" title="Days of plan" placeholder="Days" />
+        <input type="number" min={1} max={1000} value={maxClaims} onChange={(e) => setMaxClaims(Number(e.target.value) || 1)} className="rounded-lg border border-line bg-transparent px-2 py-2 text-sm outline-none" title="Max claims" placeholder="Max claims" />
+        <input type="number" min={0} max={365} value={expiresDays} onChange={(e) => setExpiresDays(Number(e.target.value) || 0)} className="rounded-lg border border-line bg-transparent px-2 py-2 text-sm outline-none" title="Link expires in days (0 = never)" placeholder="Link expires (days)" />
+        <button disabled={busy} className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 sm:col-span-2">
+          {busy ? "Creating…" : "Create gift link"}
+        </button>
+      </form>
+      {lastUrl && (
+        <div className="mt-3 break-all rounded-lg bg-black/25 px-3 py-2 font-mono text-xs">
+          {lastUrl}
+          <button type="button" className="ml-2 font-sans font-semibold text-accent" onClick={() => void navigator.clipboard.writeText(lastUrl).then(() => toast("Copied", "success"))}>
+            Copy
+          </button>
+        </div>
+      )}
+      {gifts.length > 0 && (
+        <ul className="mt-3 max-h-48 space-y-1.5 overflow-y-auto text-xs text-sub">
+          {gifts.slice(0, 20).map((g) => (
+            <li key={g.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-line/50 px-2 py-1.5">
+              <span className="font-mono text-txt">{g.code}</span>
+              <span>
+                {PLANS.find((p) => p.id === g.tier)?.short ?? g.tier} · {g.days}d · {g.claims}/{g.max_claims}
+              </span>
+              <button type="button" className="ml-auto font-semibold text-accent" onClick={() => void navigator.clipboard.writeText(giftLink(g.code)).then(() => toast("Copied", "success"))}>
+                Copy
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </Card>
   );
 }

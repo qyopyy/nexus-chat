@@ -1,0 +1,96 @@
+name: Desktop app (.exe / .dmg)
+
+# Builds the Electron shell for Windows (NSIS + portable .exe) and macOS (.dmg).
+# Same live-site pattern as mobile Capacitor — UI updates without rebuilding.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Live site the app opens (leave empty for production)"
+        required: false
+  push:
+    branches: [main]
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    env:
+      NEXUS_URL: ${{ github.event.inputs.url || vars.NEXUS_URL || 'https://nexusproject.cc' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install & build Windows
+        run: |
+          npm install --no-audit --no-fund
+          npm run dist:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nexus-windows
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.yml
+          if-no-files-found: ignore
+      - name: Publish release
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="desktop-win-${GITHUB_RUN_NUMBER}"
+          FILES=$(ls dist/*.exe 2>/dev/null || true)
+          if [ -z "$FILES" ]; then echo "No exe built"; exit 0; fi
+          gh release create "$TAG" $FILES --repo "$GITHUB_REPOSITORY" \
+            --title "Nexus Windows ${GITHUB_RUN_NUMBER}" \
+            --notes "Windows desktop shell (Electron). Opens: ${NEXUS_URL}"
+
+  macos:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: desktop
+    env:
+      NEXUS_URL: ${{ github.event.inputs.url || vars.NEXUS_URL || 'https://nexusproject.cc' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install & build macOS
+        run: |
+          npm install --no-audit --no-fund
+          npm run dist:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nexus-macos
+          path: |
+            desktop/dist/*.dmg
+            desktop/dist/*.zip
+          if-no-files-found: ignore
+      - name: Publish release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="desktop-mac-${GITHUB_RUN_NUMBER}"
+          FILES=$(ls dist/*.dmg dist/*.zip 2>/dev/null || true)
+          if [ -z "$FILES" ]; then echo "No dmg built"; exit 0; fi
+          gh release create "$TAG" $FILES --repo "$GITHUB_REPOSITORY" \
+            --title "Nexus macOS ${GITHUB_RUN_NUMBER}" \
+            --notes "Mac desktop shell (Electron). Opens: ${NEXUS_URL}
+          
+          Unsigned build — right-click → Open the first time (Gatekeeper)."

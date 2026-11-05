@@ -255,24 +255,24 @@ export default function Composer({
               </div>
             )}
             {file && (
-              <div className="flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 items-center gap-1.5 min-[400px]:gap-2">
                 {preview ? (
-                  <img src={preview} alt="" className="size-12 rounded-lg object-cover" />
+                  <img src={preview} alt="" className="size-10 shrink-0 rounded-lg object-cover min-[400px]:size-12" />
                 ) : (
-                  <div className="grid size-12 place-items-center rounded-lg bg-accent text-white">
-                    <FileText className="size-6" />
+                  <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent text-white min-[400px]:size-12">
+                    <FileText className="size-5 min-[400px]:size-6" />
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{file.name}</div>
-                  <div className="text-xs text-sub">{formatBytes(file.size)}</div>
+                  <div className="truncate text-xs font-medium min-[400px]:text-sm">{file.name}</div>
+                  <div className="text-[10px] text-sub min-[400px]:text-xs">{formatBytes(file.size)}</div>
                 </div>
                 {shouldOpenAttachEditor(file) && (
-                  <button onClick={() => setEditOpen(true)} className="grid size-9 place-items-center rounded-full text-accent hover:bg-white/5" aria-label="Edit attachment" title="Edit">
+                  <button onClick={() => setEditOpen(true)} className="grid size-8 shrink-0 place-items-center rounded-full text-accent hover:bg-white/5 min-[400px]:size-9" aria-label="Edit attachment" title="Edit">
                     <Wand2 className="size-4" />
                   </button>
                 )}
-                <button onClick={() => setFile(null)} className="p-1 text-sub" aria-label="Remove file">
+                <button onClick={() => setFile(null)} className="shrink-0 p-1 text-sub" aria-label="Remove file">
                   <X className="size-5" />
                 </button>
               </div>

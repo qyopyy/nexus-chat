@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { APPEARANCE_KEY, DEFAULT_APPEARANCE, FONTS, THEMES, paint, type Appearance } from "@/lib/theme";
+import { APPEARANCE_KEY, BG_ANIMS, DEFAULT_APPEARANCE, FONTS, THEMES, paint, type Appearance } from "@/lib/theme";
 
 function load(): Appearance {
   if (typeof window === "undefined") return DEFAULT_APPEARANCE;
@@ -23,7 +23,7 @@ export function setAppearance(patch: Partial<Appearance>) {
   } catch {
     /* quota (e.g. huge background data URL) — still apply for this session */
   }
-  paint(next, THEMES, FONTS);
+  paint(next, THEMES, FONTS, BG_ANIMS);
 }
 
 export function resetAppearance() {
