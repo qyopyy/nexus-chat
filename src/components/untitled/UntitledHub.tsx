@@ -57,7 +57,9 @@ import {
   untitledFollowList,
   updateProject,
   updateSharePermission,
+  CUTROOM,
   isUntitledAudioFile,
+  snapshotAudioFiles,
   uploadMany,
   untitledBack,
   untitledGo,
@@ -98,7 +100,7 @@ export default function UntitledHub({ mobile }: { mobile?: boolean }) {
           </button>
         )}
         <button onClick={() => untitledHome()} className="font-semibold tracking-wide">
-          Untitled
+          {CUTROOM}
         </button>
         <span className="text-xs text-[#8a8478]">WIP music</span>
         <div className="ml-auto flex gap-1">
@@ -146,19 +148,21 @@ function Home() {
   return (
     <div className="mx-auto max-w-2xl py-6">
       <div className="mb-8">
-        <div className="text-[10px] font-semibold tracking-[0.22em] text-[#c4a574]/80 uppercase">A quiet place for drafts</div>
-        <h1 className="mt-2 text-4xl font-semibold tracking-tight text-[#f3efe6]">Untitled</h1>
-        <p className="mt-2 max-w-md text-sm text-[#8a8478]">Upload WIP tracks (mp3, wav, m4a, mp4…), organize projects, share listen/download links, and grow a public profile.</p>
+        <div className="text-[10px] font-semibold tracking-[0.22em] text-[#c4a574]/80 uppercase">Private cutting room</div>
+        <h1 className="mt-2 text-4xl font-semibold tracking-tight text-[#f3efe6]">{CUTROOM}</h1>
+        <p className="mt-2 max-w-md text-sm text-[#8a8478]">
+          Upload unfinished demos (mp3, wav, m4a, mp4…), version them, share listen or download links, and grow a public profile when you&apos;re ready.
+        </p>
       </div>
 
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold tracking-wide text-[#cfc8ba]">Your projects</h2>
+        <h2 className="text-sm font-semibold tracking-wide text-[#cfc8ba]">Your cuts</h2>
         <button
           disabled={creating}
           onClick={async () => {
             setCreating(true);
             try {
-              const p = await createProject("Untitled");
+              const p = await createProject("New cut");
               load();
               untitledGo({ view: "project", id: p.id });
             } catch (e) {
@@ -169,7 +173,7 @@ function Home() {
           }}
           className="inline-flex items-center gap-1.5 rounded-full bg-[#c4a574] px-3.5 py-1.5 text-xs font-semibold text-black"
         >
-          <Plus className="size-3.5" /> New project
+          <Plus className="size-3.5" /> New cut
         </button>
       </div>
 
@@ -238,14 +242,15 @@ function ProjectView({ id, onTracks }: { id: string; onTracks?: (t: UntitledTrac
   }, [reload]);
 
   const doUpload = async (files: FileList | File[]) => {
-    const all = [...files];
-    const list = all.filter(isUntitledAudioFile);
-    if (!list.length) {
-      const hint = all[0] ? ` (got ${all[0].type || "unknown type"} · ${all[0].name || "unnamed"})` : "";
-      return toast(`Drop mp3, wav, m4a, or mp4 audio${hint}`, "error");
-    }
     setUpPct(0);
     try {
+      const snapped = await snapshotAudioFiles(files);
+      const list = snapped.filter(isUntitledAudioFile);
+      if (!list.length) {
+        const raw = [...files][0];
+        const hint = raw ? ` (got ${raw.type || "unknown type"} · ${raw.name || "unnamed"} · ${raw.size || 0} B)` : "";
+        return toast(`Pick mp3, wav, m4a, or mp4 audio${hint}`, "error");
+      }
       await uploadMany(id, list, folder || null, (done) => setUpPct(done));
       toast(list.length === 1 ? "Track uploaded" : `${list.length} tracks uploaded`, "success");
       await reload();
@@ -348,8 +353,10 @@ function ProjectView({ id, onTracks }: { id: string; onTracks?: (t: UntitledTrac
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files;
-                e.target.value = "";
-                if (f?.length) void doUpload(f);
+                if (f?.length) void doUpload(f).finally(() => {
+                  e.target.value = "";
+                });
+                else e.target.value = "";
               }}
             />
             <input
@@ -520,20 +527,25 @@ function ProjectView({ id, onTracks }: { id: string; onTracks?: (t: UntitledTrac
             accept="audio/*,video/mp4,video/*,audio/mp4,.mp3,.wav,.flac,.m4a,.mp4,.aac,.ogg,.opus,.webm,.caf,application/octet-stream"
             className="hidden"
             onChange={async (e) => {
-              const f = e.target.files?.[0];
+              const raw = e.target.files?.[0];
               const track = replaceRef.current.track;
-              e.target.value = "";
-              if (!f || !track) return;
-              if (!isUntitledAudioFile(f)) {
-                toast(`Pick mp3, wav, m4a, or mp4 audio (got ${f.type || "unknown type"})`, "error");
+              if (!raw || !track) {
+                e.target.value = "";
                 return;
               }
               setUpPct(0);
               try {
+                const [f] = await snapshotAudioFiles([raw]);
+                e.target.value = "";
+                if (!f || !isUntitledAudioFile(f)) {
+                  toast(`Pick mp3, wav, m4a, or mp4 audio (got ${raw.type || "unknown type"})`, "error");
+                  return;
+                }
                 await replaceTrackAudio(track, f, setUpPct);
                 toast(`Updated to v${track.version + 1}`, "success");
                 await reload();
               } catch (err) {
+                e.target.value = "";
                 toast(String((err as Error).message ?? err), "error");
               } finally {
                 setUpPct(null);
@@ -872,7 +884,7 @@ function Explore() {
     <div className="mx-auto max-w-2xl py-6">
       <div className="mb-6 flex items-center gap-2">
         <Users className="size-5 text-[#c4a574]" />
-        <h1 className="text-xl font-semibold">Explore public projects</h1>
+        <h1 className="text-xl font-semibold">Explore public cuts</h1>
       </div>
       {list === null ? (
         <div className="py-16 text-center text-sm text-[#8a8478]">Loading…</div>

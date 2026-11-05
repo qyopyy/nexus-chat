@@ -122,7 +122,7 @@ export default function MobileMe() {
         {row(<Tv className="size-[18px]" />, "#9146ff", "Nexus Live — HD & 4K streams", () => openLiveHub())}
         {row(<Megaphone className="size-[18px]" />, "#1d9bf0", "Pulse — Twitter-style posts", () => openPulse())}
         {row(<Radio className="size-[18px]" />, "#ff2bd6", "Nexus Radio — listen & jam together", () => void openRadio())}
-        {row(<Headphones className="size-[18px]" />, "#c4a574", "Untitled — WIP music projects", () => openUntitled())}
+        {row(<Headphones className="size-[18px]" />, "#c4a574", "Cutroom — WIP music projects", () => openUntitled())}
         {row(<Gamepad2 className="size-[18px]" />, "#ff2bd6", "Games", () => useApp.setState({ mobileTab: "games" }))}
         {row(<AppWindow className="size-[18px]" />, "#00a8fc", "Apps — image studio & docs editor", () => useApp.setState({ mobileTab: "apps" }))}
         {row(<Vault className="size-[18px]" />, "#5865f2", "My Vault — private files & share links", () => {

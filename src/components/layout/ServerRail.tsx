@@ -94,7 +94,7 @@ export default function ServerRail() {
       <RailItem active={hub === "music"} label="Music" onClick={() => useApp.setState({ hub: "music" })} color={hub === "music" ? "#1DB954" : undefined}>
         <Headphones className="size-6" />
       </RailItem>
-      <RailItem active={hub === "untitled"} label="Untitled — WIP music" onClick={() => openUntitled()} color={hub === "untitled" ? "#c4a574" : undefined}>
+      <RailItem active={hub === "cutroom" || hub === "untitled"} label="Cutroom — WIP music" onClick={() => openUntitled()} color={hub === "cutroom" || hub === "untitled" ? "#c4a574" : undefined}>
         <span className="text-lg font-semibold leading-none">♩</span>
       </RailItem>
       <RailItem active={hub === "radio"} label="Nexus Radio — listen & jam together" onClick={() => void openRadio()} color={hub === "radio" ? "#ff2bd6" : undefined}>

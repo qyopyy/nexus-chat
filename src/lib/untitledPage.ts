@@ -83,7 +83,7 @@ a.ghost,button.ghost{background:#ffffff12;color:#f3efe6}
 .swatch{width:44px;height:44px;border-radius:12px;flex-shrink:0}
 .foot{margin-top:18px;text-align:center;color:#8a8478;font-size:12px}.foot a{color:#cfc8ba}
 audio{width:100%;margin-top:8px}
-</style></head><body><div class="wrap">${body}<div class="foot">Shared with <a href="/">Nexus Untitled</a></div></div></body></html>`;
+</style></head><body><div class="wrap">${body}<div class="foot">Shared with <a href="/">Nexus Cutroom</a></div></div></body></html>`;
 
 const REASON: Record<string, string> = {
   missing: "This link doesn't exist or was turned off.",
@@ -95,12 +95,12 @@ const REASON: Record<string, string> = {
 
 export function renderSharePage(token: string, info: ShareInfo, open?: ShareOpen | null, error?: string) {
   if (!info?.ok) {
-    return shell("Link unavailable", `<div class="card"><div class="badge">Untitled</div><h1>Link unavailable</h1><p class="sub">${esc(REASON[info?.reason ?? "missing"])}</p></div>`);
+    return shell("Link unavailable", `<div class="card"><div class="badge">Cutroom</div><h1>Link unavailable</h1><p class="sub">${esc(REASON[info?.reason ?? "missing"])}</p></div>`);
   }
   if (info.password && !open) {
     return shell(
-      info.title ?? "Shared project",
-      `<div class="card"><div class="badge">Untitled · protected</div><h1>${esc(info.title)}</h1>
+      info.title ?? "Shared cut",
+      `<div class="card"><div class="badge">Cutroom · protected</div><h1>${esc(info.title)}</h1>
       <p class="sub">by @${esc(info.owner)}${info.track_count != null ? ` · ${info.track_count} tracks` : ""}</p>
       <form method="POST"><input type="password" name="password" placeholder="Password" required autofocus>
       ${error ? `<div class="err">${esc(REASON[error] ?? error)}</div>` : ""}
@@ -117,12 +117,12 @@ export function renderSharePage(token: string, info: ShareInfo, open?: ShareOpen
     )
     .join("");
   return shell(
-    data.title ?? "Shared project",
-    `<div class="card"><div class="badge">Untitled · ${esc(data.permission ?? "listen")}</div><h1>${esc(data.title)}</h1>
+    data.title ?? "Shared cut",
+    `<div class="card"><div class="badge">Cutroom · ${esc(data.permission ?? "listen")}</div><h1>${esc(data.title)}</h1>
     <p class="sub">by @${esc(data.owner)}${data.note ? ` · ${esc(data.note)}` : ""}</p>
     ${error ? `<div class="err">${esc(REASON[error] ?? error)}</div>` : ""}
-    ${tracks || `<p class="sub" style="margin-top:16px">No tracks in this project yet.</p>`}
-    <a class="btn ghost" href="/m/${esc(data.owner)}">@${esc(data.owner)} on Untitled</a>
+    ${tracks || `<p class="sub" style="margin-top:16px">No tracks in this cut yet.</p>`}
+    <a class="btn ghost" href="/m/${esc(data.owner)}">@${esc(data.owner)} on Cutroom</a>
     <a class="btn ghost" href="/">Open in Nexus</a></div>`,
   );
 }
@@ -134,8 +134,8 @@ export function renderProfilePage(p: NonNullable<Awaited<ReturnType<typeof fetch
     )
     .join("");
   return shell(
-    `${p.display_name} (@${p.username}) · Untitled`,
-    `<div class="card"><div class="badge">Untitled profile</div><h1>${esc(p.display_name)}</h1>
+    `${p.display_name} (@${p.username}) · Cutroom`,
+    `<div class="card"><div class="badge">Cutroom profile</div><h1>${esc(p.display_name)}</h1>
     <p class="sub">@${esc(p.username)}</p>
     ${p.bio ? `<p class="sub" style="margin-top:10px">${esc(p.bio)}</p>` : ""}
     <div class="stats"><div><b>${p.followers}</b><span>Followers</span></div><div><b>${p.following}</b><span>Following</span></div><div><b>${(p.projects ?? []).length}</b><span>Projects</span></div></div>
