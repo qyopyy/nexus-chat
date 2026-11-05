@@ -185,7 +185,8 @@ function SpaceList() {
                   onClick={async () => {
                     const code = sp.vanity_code || sp.invite_code;
                     try {
-                      await navigator.clipboard.writeText(`${location.origin}/i/${code}`);
+                      const { inviteLink } = await import("@/lib/spaceExtras");
+                      await navigator.clipboard.writeText(inviteLink(code));
                       toast("Invite link copied", "success");
                     } catch {
                       toast(code, "info");

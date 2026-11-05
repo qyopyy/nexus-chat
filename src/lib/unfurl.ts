@@ -23,8 +23,14 @@ export function extractUrls(text: string, limit = 3): string[] {
   for (const m of text.matchAll(URL_RE)) {
     const u = m[1];
     if (seen.has(u)) continue;
-    // Nexus video cards & game invites already render their own embeds
-    if (/\/v\/[A-Za-z0-9_-]+/.test(u) || /[?&]play=[A-Z2-9]{6}\b/.test(u)) continue;
+    // Nexus video / game / server invite cards already render their own embeds
+    if (
+      /\/v\/[A-Za-z0-9_-]+/.test(u) ||
+      /[?&]play=[A-Z2-9]{6}\b/.test(u) ||
+      /\/i\/[A-Za-z0-9_-]+/.test(u) ||
+      /[?&]join=[A-Za-z0-9_-]+/.test(u)
+    )
+      continue;
     seen.add(u);
     out.push(u);
     if (out.length >= limit) break;

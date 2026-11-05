@@ -233,6 +233,8 @@ export type Conversation = {
   password_hash?: string | null;
   topic?: string | null;
   nsfw?: boolean;
+  /** Staff-only announcements channel (read-mostly UX) */
+  is_announcement?: boolean;
 };
 
 export type ChatListItem = {

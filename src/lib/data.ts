@@ -275,7 +275,7 @@ export function selectHome() {
 
 export async function selectSpace(spaceId: string) {
   const s = get();
-  // Seed stable empty arrays immediately so sidebar selectors never return a fresh `[]` each render.
+  // Seed stable empty arrays immediately so sidebar selectors never return a fresh `[]` each render (React #185).
   set({
     spaceId,
     conversationId: null,

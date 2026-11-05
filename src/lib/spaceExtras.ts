@@ -199,9 +199,31 @@ export async function deleteChannel(convId: string, spaceId: string) {
   return !error;
 }
 
+/** Canonical share URL — rich OG banner page at /i/<code>, app joins via ?join= */
 export function inviteLink(code: string) {
-  if (typeof window === "undefined") return code;
-  return `${window.location.origin}/?join=${encodeURIComponent(code)}`;
+  const clean = code.trim().split("/").pop() || code;
+  if (typeof window === "undefined") return `https://nexusproject.cc/i/${encodeURIComponent(clean)}`;
+  return `${window.location.origin}/i/${encodeURIComponent(clean)}`;
+}
+
+export function inviteJoinPath(code: string) {
+  const clean = code.trim().split("/").pop() || code;
+  return `/?join=${encodeURIComponent(clean)}`;
+}
+
+export async function setAnnouncementChannel(convId: string, spaceId: string, on: boolean) {
+  const { error } = await supabase.rpc("space_set_announcement", { p_conv: convId, p_on: on });
+  if (ok(error)) {
+    await loadSpace(spaceId);
+    toast(on ? "Marked as announcements" : "Unmarked announcements", "success");
+  }
+  return !error;
+}
+
+export async function fetchInvitePreview(code: string) {
+  const { data, error } = await supabase.rpc("space_invite_preview", { p_code: code });
+  if (error || !data) return null;
+  return data as import("./invitePage").InvitePreview;
 }
 
 export const ROLE_PERMS: { key: string; label: string }[] = [

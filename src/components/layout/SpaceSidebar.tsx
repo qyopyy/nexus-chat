@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BellOff, CalendarDays, CheckCheck, ChevronDown, Gauge, Hash, LayoutDashboard, Lock, Star, Trophy, HeadphoneOff, LogOut, MicOff, MonitorUp, Plus, Trash2, UserPlus, Video, Volume2 } from "lucide-react";
+import { BellOff, CalendarDays, CheckCheck, ChevronDown, Gauge, Hash, LayoutDashboard, Link2, Lock, Megaphone, Star, Trophy, HeadphoneOff, LogOut, MicOff, MonitorUp, Plus, Trash2, UserPlus, Video, Volume2 } from "lucide-react";
 import { useApp, openModal, toast } from "@/store/app";
 import { useCall, joinCall, unlockCallAudio } from "@/lib/call";
 import { deleteSpace, leaveSpace, markSpaceRead, openConversation } from "@/lib/data";
@@ -16,6 +16,7 @@ import {
 import Avatar from "@/components/ui/Avatar";
 import SpaceMusic from "@/components/music/SpaceMusic";
 import ServerHub, { WelcomeGate } from "@/components/space/ServerHub";
+import { inviteLink } from "@/lib/spaceExtras";
 import type { Conversation, SpaceMember } from "@/lib/types";
 
 const EMPTY_C: Conversation[] = [];
@@ -94,6 +95,18 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
         {menu && (
           <div className="absolute inset-x-2 top-14 z-30 animate-pop rounded-lg bg-menu p-1.5 text-sm shadow-2xl">
             <MenuItem icon={<UserPlus className="size-4" />} label="Invite People" accent onClick={() => (setMenu(false), openModal("spaceInvite", spaceId))} />
+            <MenuItem
+              icon={<Link2 className="size-4" />}
+              label="Copy share link"
+              onClick={() => {
+                setMenu(false);
+                const url = inviteLink(space.vanity_code || space.invite_code);
+                void navigator.clipboard.writeText(url).then(
+                  () => toast("Share link copied", "success"),
+                  () => toast(url, "info"),
+                );
+              }}
+            />
             <MenuItem icon={<LayoutDashboard className="size-4" />} label="Server Hub" onClick={() => (setMenu(false), setHub("home"))} />
             {isStaff && <MenuItem icon={<Plus className="size-4" />} label="Server look & invites" onClick={() => (setMenu(false), setHub("look"))} />}
             <MenuItem icon={<CalendarDays className="size-4" />} label="Events" onClick={() => (setMenu(false), setHub("events"))} />
@@ -184,8 +197,15 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
               )}
             >
               {n > 0 && !active && <span className="absolute top-1/2 -left-2 h-2 w-1 -translate-y-1/2 rounded-r-full bg-white" />}
-              {locked ? <Lock className="size-4 shrink-0 opacity-70" /> : <Hash className="size-5 shrink-0 opacity-70" />}
+              {locked ? (
+                <Lock className="size-4 shrink-0 opacity-70" />
+              ) : c.is_announcement ? (
+                <Megaphone className="size-4 shrink-0 text-accent opacity-90" />
+              ) : (
+                <Hash className="size-5 shrink-0 opacity-70" />
+              )}
               <span className={cn("truncate", n > 0 && "font-semibold")}>{c.name}</span>
+              {c.is_announcement && <span className="rounded bg-accent/20 px-1 text-[9px] font-black text-accent">NEWS</span>}
               {c.nsfw && <span className="rounded bg-dnd/80 px-1 text-[9px] font-black text-white">18+</span>}
               {!!c.slowmode && <Gauge className="size-3.5 shrink-0 opacity-60" aria-label="Slow mode" />}
               {n > 0 && !active && !quiet && (

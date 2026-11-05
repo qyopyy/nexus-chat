@@ -5,6 +5,7 @@ import { Check, Copy, Hash, Volume2 } from "lucide-react";
 import { useApp, closeModal } from "@/store/app";
 import { createChannel, createGroup, createSpace, friendIds, joinSpace } from "@/lib/data";
 import { fetchBotBySlug, installBotToSpace, type BotCard, type SystemBotKey } from "@/lib/bots";
+import { inviteLink } from "@/lib/spaceExtras";
 import { cn } from "@/lib/utils";
 import Modal, { Button } from "@/components/ui/Modal";
 import Avatar from "@/components/ui/Avatar";
@@ -294,9 +295,19 @@ function InviteModal({ spaceId }: { spaceId: string }) {
   const [copied, setCopied] = useState(false);
   if (!space) return null;
   const code = space.vanity_code || space.invite_code;
-  const link = typeof window !== "undefined" ? `${window.location.origin}/?join=${encodeURIComponent(code)}` : code;
+  const link = inviteLink(code);
   return (
-    <Modal open onClose={closeModal} title={`Invite friends to ${space.name}`} subtitle="Share the link or code — they can join from Add a Space → Join.">
+    <Modal open onClose={closeModal} title={`Invite friends to ${space.name}`} subtitle="Share the /i/ link — Discord, iMessage & chat show your server banner.">
+      {(space.banner_url || space.icon_url) && (
+        <div
+          className="mb-3 h-28 overflow-hidden rounded-2xl bg-cover bg-center"
+          style={
+            space.banner_url
+              ? { backgroundImage: `linear-gradient(180deg, transparent, rgba(20,22,28,.85)), url(${space.banner_url})` }
+              : { background: `linear-gradient(135deg, ${space.icon_color}, #14161c)` }
+          }
+        />
+      )}
       <div className="mb-3 flex items-center gap-2 rounded-md bg-rail p-1.5 pl-3">
         <code className="flex-1 truncate font-mono text-sm">{link.replace(/^https?:\/\//, "")}</code>
         <button
@@ -314,7 +325,7 @@ function InviteModal({ spaceId }: { spaceId: string }) {
       <div className="rounded-md bg-side px-3 py-2 text-sm text-sub">
         Code: <span className="font-mono font-bold tracking-widest text-txt">{code}</span>
         {space.vanity_code && <span className="mt-1 block text-xs">Vanity alias for {space.invite_code}</span>}
-        <p className="mt-2 text-xs">Need custom invites with expiry or max uses? Open Server Hub → Invites.</p>
+        <p className="mt-2 text-xs">Need custom invites with expiry or max uses? Open Server Hub → Invites. Set a banner in Look for richer embeds.</p>
       </div>
     </Modal>
   );
