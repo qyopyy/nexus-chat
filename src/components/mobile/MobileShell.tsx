@@ -18,6 +18,7 @@ import MusicHub from "@/components/music/MusicHub";
 import VideosHub from "@/components/videos/VideosHub";
 import NexusGram from "@/components/gram/NexusGram";
 import UntitledHub from "@/components/untitled/UntitledHub";
+import RadioHub from "@/components/radio/RadioHub";
 
 /** Phone layout: bottom tabs + push-style chat screen with swipe-from-edge to go back */
 export default function MobileShell() {
@@ -49,7 +50,7 @@ export default function MobileShell() {
           )}
           {tab === "gram" && <NexusGram mobile />}
           {tab === "videos" && <VideosHub mobile />}
-          {tab === "music" && (hub === "untitled" ? <UntitledHub mobile /> : <MusicHub mobile />)}
+          {tab === "music" && (hub === "untitled" ? <UntitledHub mobile /> : hub === "radio" ? <RadioHub mobile /> : <MusicHub mobile />)}
           {tab === "games" && <GamesHub mobile />}
           {tab === "apps" && <AppsHub mobile />}
           {tab === "me" && <MobileMe />}

@@ -35,6 +35,7 @@ import MusicHub from "./music/MusicHub";
 import VideosHub from "./videos/VideosHub";
 import Studio from "./studio/Studio";
 import UntitledHub from "./untitled/UntitledHub";
+import RadioHub from "./radio/RadioHub";
 import { useStudio, videosGo } from "@/store/studio";
 import { releaseByCode } from "@/lib/protect";
 import NexusGram from "./gram/NexusGram";
@@ -180,6 +181,8 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
             <AppsHub />
           ) : hub === "untitled" ? (
             <UntitledHub />
+          ) : hub === "radio" ? (
+            <RadioHub />
           ) : hub === "music" ? (
             <MusicHub />
           ) : hub === "videos" ? (

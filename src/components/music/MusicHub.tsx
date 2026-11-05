@@ -5,6 +5,7 @@ import { Gamepad2, ArrowLeft, Barcode, BellRing, Library as LibraryIcon, Search,
 import { useApp, openModal } from "@/store/app";
 import { activePlan } from "@/lib/premium";
 import { openUntitled } from "@/lib/untitled";
+import { openRadio } from "@/lib/radio";
 import { useMusic, musicBack, musicGo, musicHome } from "@/store/music";
 import { listArtistPages, loadPosts, loadWatchlist, sp, spotifyConfig, fmtNum, type SpAlbum, type SpArtist, type Watch } from "@/lib/music";
 import { myRank } from "@/lib/admin";
@@ -152,6 +153,19 @@ function Home() {
               {isAdmin ? "Add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET as Supabase Edge Function secrets to unlock artist search, releases and the showcase." : "Ask an admin to connect it."} Code lookup (ISRC/UPC) already works.
             </div>
           )}
+
+          <button
+            onClick={() => void openRadio()}
+            className="flex w-full items-center gap-3 rounded-2xl p-4 text-left text-white"
+            style={{ background: "linear-gradient(135deg,#ff2bd6 0%,#2b0b5c 55%,#0b1528 100%)" }}
+          >
+            <span className="grid size-12 place-items-center rounded-xl bg-white/15 text-2xl">📻</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[10px] font-semibold tracking-[0.2em] text-white/80 uppercase">Live</span>
+              <span className="block text-lg font-black">Nexus Radio</span>
+              <span className="block text-sm text-white/80">Add any song — everyone listens together and can jam live</span>
+            </span>
+          </button>
 
           <button
             onClick={() => openUntitled()}
