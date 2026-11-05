@@ -59,9 +59,15 @@ jobs:
 
       - name: Permissions, icon, version
         run: |
-          command -v convert >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick)
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          if ! command -v convert >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq --no-install-recommends imagemagick
+          fi
           MANIFEST=android/app/src/main/AndroidManifest.xml
-          for p in RECORD_AUDIO MODIFY_AUDIO_SETTINGS CAMERA VIBRATE POST_NOTIFICATIONS READ_MEDIA_IMAGES READ_MEDIA_VIDEO READ_MEDIA_AUDIO; do
+          # Bump (Geolocation) needs coarse + fine location; keep camera/mic/media for chat
+          for p in RECORD_AUDIO MODIFY_AUDIO_SETTINGS CAMERA VIBRATE POST_NOTIFICATIONS READ_MEDIA_IMAGES READ_MEDIA_VIDEO READ_MEDIA_AUDIO ACCESS_COARSE_LOCATION ACCESS_FINE_LOCATION; do
             grep -q "android.permission.$p\"" "$MANIFEST" || sed -i "s#<application#<uses-permission android:name=\"android.permission.$p\" />\n    <application#" "$MANIFEST"
           done
           grep -q 'android.hardware.camera"' "$MANIFEST" || sed -i 's#<application#<uses-feature android:name="android.hardware.camera" android:required="false" />\n    <application#' "$MANIFEST"
