@@ -25,6 +25,8 @@ import MessageBanner from "./ui/MessageBanner";
 import Modals from "./modals/Modals";
 import MobileShell from "./mobile/MobileShell";
 import EffectsLayer from "./effects/EffectsLayer";
+import ButtonFxBoot from "./ButtonFxBoot";
+import WelcomeSplash from "./WelcomeSplash";
 import ErrorBoundary from "./ErrorBoundary";
 import { useIsMobile } from "@/lib/useMobile";
 import { startSpotifySync } from "@/lib/spotifyUser";
@@ -204,6 +206,8 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
 
   if (isBanned(me)) return <BannedScreen profile={me!} />;
 
+  const welcomeName = me?.display_name || me?.username || null;
+
   if (hub === "studio") {
     return (
       <>
@@ -214,6 +218,8 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
         <Modals />
         <Toasts />
         <EffectsLayer />
+        <ButtonFxBoot />
+        <WelcomeSplash name={welcomeName} />
       </>
     );
   }
@@ -228,6 +234,8 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
         <Modals />
         <Toasts />
         <EffectsLayer />
+        <ButtonFxBoot />
+        <WelcomeSplash name={welcomeName} />
       </>
     );
   }
@@ -304,6 +312,8 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       <MessageBanner />
       <Toasts />
       <EffectsLayer />
+      <ButtonFxBoot />
+      <WelcomeSplash name={welcomeName} />
     </div>
   );
 }
