@@ -68,9 +68,10 @@ export async function uploadBanner(file: File) {
   const id = get().userId;
   if (!id) return;
   if (file.size > 8 * 1024 * 1024) return toast("Banner must be under 8 MB", "error");
-  const ext = (file.name.split(".").pop() || "png").toLowerCase();
-  const path = `${id}/banner-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from("avatars").upload(path, file, { upsert: true, contentType: file.type });
+  const { compressImage } = await import("./compressMedia");
+  const { blob } = await compressImage(file, 1920, 0.86);
+  const path = `${id}/banner-${Date.now()}.jpg`;
+  const { error } = await supabase.storage.from("avatars").upload(path, blob, { upsert: true, contentType: blob.type || "image/jpeg" });
   if (error) return toast(errorText(error), "error");
   const { data } = supabase.storage.from("avatars").getPublicUrl(path);
   await updateMyProfile({ banner_url: data.publicUrl });
@@ -79,9 +80,10 @@ export async function uploadBanner(file: File) {
 export async function uploadAvatar(file: File) {
   const id = get().userId;
   if (!id) return;
-  const ext = file.name.split(".").pop() || "png";
-  const path = `${id}/avatar-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from("avatars").upload(path, file, { upsert: true, contentType: file.type });
+  const { compressImage } = await import("./compressMedia");
+  const { blob } = await compressImage(file, 720, 0.88);
+  const path = `${id}/avatar-${Date.now()}.jpg`;
+  const { error } = await supabase.storage.from("avatars").upload(path, blob, { upsert: true, contentType: blob.type || "image/jpeg" });
   if (error) return toast(errorText(error), "error");
   const { data } = supabase.storage.from("avatars").getPublicUrl(path);
   await updateMyProfile({ avatar_url: data.publicUrl });
@@ -401,12 +403,34 @@ export async function sendMessage(convId: string, content: string, file?: File |
   useChat.setState((s) => (s.conversationId === convId ? { messages: [...s.messages, optimistic], replyTo: null } : { replyTo: null }));
 
   if (file) {
-    const path = `${convId}/${crypto.randomUUID()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
-    const { error: upErr } = await supabase.storage.from("attachments").upload(path, file, { contentType: file.type });
+    let upload: Blob = file;
+    let contentType = file.type || "application/octet-stream";
+    let name = file.name.replace(/[^\w.\-]+/g, "_");
+    try {
+      if (/^image\//.test(file.type) || /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name)) {
+        const { compressImage } = await import("./compressMedia");
+        const { blob } = await compressImage(file, 1600, 0.85);
+        upload = blob;
+        contentType = blob.type || "image/jpeg";
+        if (!/\.jpe?g$/i.test(name) && contentType.includes("jpeg")) name = name.replace(/\.[^.]+$/, "") + ".jpg";
+      } else if (/^video\//.test(file.type) || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name)) {
+        const { compressVideo } = await import("./compressMedia");
+        const out = await compressVideo(file, { maxEdge: 1080 });
+        upload = out.blob;
+        contentType = out.mime || "video/mp4";
+        name = name.replace(/\.[^.]+$/, "") + "." + out.ext;
+      }
+    } catch {
+      /* fall back to original bytes */
+    }
+    const path = `${convId}/${crypto.randomUUID()}-${name}`;
+    const { error: upErr } = await supabase.storage.from("attachments").upload(path, upload, { contentType });
     if (upErr) {
       dropTemp(tempId);
       return toast(`Upload failed: ${errorText(upErr)}`, "error");
     }
+    attachment.attachment_name = name;
+    attachment.attachment_type = contentType;
     const localUrl = attachment.attachment_url;
     attachment.attachment_url = storageRef("attachments", path);
     if (localUrl) primeSignedUrl(attachment.attachment_url, localUrl);

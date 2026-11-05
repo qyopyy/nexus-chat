@@ -107,7 +107,7 @@ export default function Create() {
               <span className="flex flex-col items-center gap-2">
                 <ImagePlus className="size-12" />
                 <span className="font-semibold">{kind === "short" ? "Choose a video" : multi ? "Choose photos or a video" : "Choose a photo or video"}</span>
-                <span className="text-xs">or drop it here · up to 100 MB</span>
+                <span className="text-xs">or drop it here · compressed on upload · up to 100 MB</span>
               </span>
             </button>
           ) : (

@@ -6,6 +6,7 @@ import { create } from "zustand";
 import { supabase, errorText } from "./supabase";
 import { useApp, toast } from "@/store/app";
 import { loadProfiles } from "./data";
+import { compressImage, compressVideo } from "./compressMedia";
 
 export type Media = { path: string; type: "image" | "video"; w?: number; h?: number; dur?: number; poster?: string | null };
 export type Post = { id: string; author_id: string; kind: "post" | "short"; media: Media[]; caption: string; like_count: number; comment_count: number; view_count: number; created_at: string; liked?: boolean; following?: boolean };
@@ -90,81 +91,6 @@ function mimeFor(file: File, kind: "video" | "image") {
 }
 
 // ------------------------------------------------------------------ media upload
-async function downscale(file: File, max = 1440): Promise<{ blob: Blob; w: number; h: number }> {
-  const bmp = await createImageBitmap(file).catch(() => null);
-  if (!bmp) return { blob: file, w: 0, h: 0 };
-  const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
-  const w = Math.round(bmp.width * k);
-  const h = Math.round(bmp.height * k);
-  if (k === 1 && file.size < 1.5e6 && /jpe?g|webp/.test(file.type || mimeFor(file, "image"))) return { blob: file, w, h };
-  const c = document.createElement("canvas");
-  c.width = w;
-  c.height = h;
-  c.getContext("2d")!.drawImage(bmp, 0, 0, w, h);
-  const blob = await new Promise<Blob>((res) => c.toBlob((b) => res(b ?? file), "image/jpeg", 0.88));
-  return { blob, w, h };
-}
-/** grab a frame from a video for the cover image — never blocks the upload for long */
-async function videoInfo(file: File): Promise<{ w: number; h: number; dur: number; poster: Blob | null }> {
-  const url = URL.createObjectURL(file);
-  try {
-    const v = document.createElement("video");
-    v.muted = true;
-    v.defaultMuted = true;
-    v.playsInline = true;
-    v.setAttribute("playsinline", "");
-    v.setAttribute("webkit-playsinline", "");
-    v.preload = "metadata";
-    v.src = url;
-    await new Promise<void>((res, rej) => {
-      let done = false;
-      const finish = () => {
-        if (done) return;
-        done = true;
-        res();
-      };
-      v.onloadedmetadata = finish;
-      v.onloadeddata = finish;
-      v.onerror = () => {
-        if (done) return;
-        done = true;
-        rej(new Error("Can't read this video"));
-      };
-      setTimeout(finish, 5000);
-    });
-    // seek for a poster frame when we have dimensions; otherwise skip quickly
-    if (v.videoWidth > 0) {
-      try {
-        v.currentTime = Math.min(0.4, Number.isFinite(v.duration) && v.duration > 0 ? v.duration / 4 : 0.1);
-        await new Promise<void>((res) => {
-          v.onseeked = () => res();
-          setTimeout(res, 2000);
-        });
-      } catch {
-        /* some iOS codecs refuse seeks */
-      }
-    }
-    const w = v.videoWidth || 720;
-    const h = v.videoHeight || 1280;
-    let poster: Blob | null = null;
-    if (v.videoWidth > 0) {
-      try {
-        const k = Math.min(1, 720 / Math.max(w, h));
-        const c = document.createElement("canvas");
-        c.width = Math.max(1, Math.round(w * k));
-        c.height = Math.max(1, Math.round(h * k));
-        c.getContext("2d")!.drawImage(v, 0, 0, c.width, c.height);
-        poster = await new Promise<Blob | null>((res) => c.toBlob((b) => res(b), "image/jpeg", 0.82));
-      } catch {
-        poster = null;
-      }
-    }
-    const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
-    return { w, h, dur, poster };
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
 /** XHR upload — fetch-based supabase.storage.upload hangs after CORS OPTIONS on iOS for large .mov/.mp4 */
 async function put(blob: Blob, ext: string, type: string, onProgress?: (p: number) => void) {
   const path = `${me()}/${crypto.randomUUID()}.${ext}`;
@@ -204,28 +130,50 @@ export async function uploadMedia(file: File, onStep?: (s: string) => void): Pro
   const kind = mediaKind(file);
   if (kind === "video") {
     if (file.size > 100 * 1024 * 1024) throw new Error("Videos can be up to 100 MB");
-    onStep?.("Reading video…");
-    const info = await videoInfo(file).catch(() => ({ w: 720, h: 1280, dur: 0, poster: null as Blob | null }));
-    onStep?.("Uploading video…");
-    const ext = (file.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
-    const path = await put(file, ext, mimeFor(file, "video"), (p) => onStep?.(`Uploading video… ${Math.round(p * 100)}%`));
-    let poster: string | null = null;
-    if (info.poster) {
-      onStep?.("Uploading cover…");
-      poster = await put(info.poster, "jpg", "image/jpeg").catch(() => null);
+    // Re-encode HEVC/.mov (and large clips) so stories/posts play on every device
+    const progress = (label: string, ratio?: number) => {
+      if (ratio == null) onStep?.(label);
+      else onStep?.(`${label} ${Math.round(ratio * 100)}%`);
+    };
+    let compressed;
+    try {
+      compressed = await compressVideo(file, { maxEdge: 1080, onProgress: progress });
+    } catch {
+      onStep?.("Compression failed — uploading original…");
+      const ext = (file.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
+      compressed = {
+        blob: file as Blob,
+        w: 720,
+        h: 1280,
+        dur: 0,
+        fps: 30,
+        mime: mimeFor(file, "video"),
+        ext,
+        poster: null as Blob | null,
+        skipped: true,
+      };
     }
-    return { path, type: "video", w: info.w, h: info.h, dur: Math.round(info.dur * 10) / 10, poster };
+    onStep?.("Uploading video…");
+    const path = await put(compressed.blob, compressed.ext, compressed.mime || "video/mp4", (p) => onStep?.(`Uploading video… ${Math.round(p * 100)}%`));
+    let poster: string | null = null;
+    if (compressed.poster) {
+      onStep?.("Uploading cover…");
+      poster = await put(compressed.poster, "jpg", "image/jpeg").catch(() => null);
+    }
+    return { path, type: "video", w: compressed.w, h: compressed.h, dur: Math.round(compressed.dur * 10) / 10, poster };
   }
   if (kind !== "image") throw new Error("Pick a photo or a video");
   if (/heic|heif/i.test(file.type) || /\.heic$/i.test(file.name) || /\.heif$/i.test(file.name)) {
     // most browsers can't display HEIC in <img>; convert via canvas when possible
-    onStep?.("Converting photo…");
+    onStep?.("Compressing photo…");
+  } else {
+    onStep?.("Compressing photo…");
   }
-  onStep?.("Uploading photo…");
-  const { blob, w, h } = await downscale(file);
+  const { blob, w, h } = await compressImage(file);
   if ((blob === file || blob.size === 0) && /heic|heif/i.test(file.type || file.name)) {
     throw new Error("This HEIC photo can't be used here — export it as JPEG first");
   }
+  onStep?.("Uploading photo…");
   const path = await put(blob, blob.type === "image/png" ? "png" : "jpg", blob.type || "image/jpeg", (p) => onStep?.(`Uploading photo… ${Math.round(p * 100)}%`));
   return { path, type: "image", w, h };
 }
