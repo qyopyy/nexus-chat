@@ -1676,7 +1676,7 @@ export async function ringAgain() {
   set({ outgoingRing: cid });
   const { error } = await supabase.from("call_events").insert({ conversation_id: cid, caller_id: me, kind: "ring" });
   if (error) set({ error: "Couldn't send the ring." });
-  else startRing();
+  else startRing(true);
 }
 
 async function sampleCallQuality() {
