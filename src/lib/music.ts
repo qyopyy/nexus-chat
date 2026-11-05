@@ -66,6 +66,22 @@ export async function spotifyConfig() {
   return configCache;
 }
 
+/** Resolve a Spotify track/album URL or ISRC into takedown notice fields (uses server Spotify keys). */
+export type TakedownLookup = {
+  work_title: string;
+  work_artist: string;
+  isrc: string | null;
+  upc: string | null;
+  infringing: string[];
+  description: string;
+  track: SpTrack | null;
+  album: SpAlbum | null;
+};
+
+export function spotifyTakedownLookup(input: { url?: string; isrc?: string }) {
+  return sp<TakedownLookup>("takedown_lookup", input);
+}
+
 export const fmtDate = (d: string | null | undefined) => {
   if (!d) return "";
   const parts = d.split("-");
