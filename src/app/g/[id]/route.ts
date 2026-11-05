@@ -1,4 +1,5 @@
 import { mediaUrl } from "@/lib/gramPageMedia";
+import { absoluteUrl, esc, jsonLd, seoHead, socialPostingLd, truncate } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
@@ -6,16 +7,17 @@ type Post = {
   id: string;
   author_id: string;
   kind: "post" | "short";
-  media: { path: string; type: "image" | "video"; poster?: string | null; w?: number; h?: number }[];
+  media: { path: string; type: "image" | "video"; poster?: string | null; alt?: string | null; w?: number; h?: number }[];
   caption: string;
   like_count: number;
   comment_count: number;
   view_count: number;
   created_at: string;
+  mood?: string | null;
 };
 type Profile = { id: string; username: string; display_name: string; avatar_url: string | null; avatar_color: string | null };
 
-/** Public shareable post page: /g/<id> */
+/** Public shareable post page: /g/<id> — canonical prefers /n/<id> */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const postId = id.replace(/[^a-zA-Z0-9-]/g, "").slice(0, 40);
@@ -45,21 +47,48 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   if (!post || !author) {
     return new Response(
-      `<!doctype html><html><head><meta charset="utf-8"><title>Post not found · NexusGram</title></head><body style="background:#0b0b0f;color:#fff;font-family:system-ui;display:grid;place-items:center;min-height:100vh"><div style="text-align:center"><h1>Post not found</h1><p><a href="${base}" style="color:#9fb3ff">Go to Nexus</a></p></div></body></html>`,
+      `<!doctype html><html lang="en"><head>${seoHead({ title: "Post not found · NexusGram", description: "This NexusGram post was removed or the link is wrong.", url: absoluteUrl(`/g/${postId}`, base), noindex: true })}</head><body style="background:#0b0b0f;color:#fff;font-family:system-ui;display:grid;place-items:center;min-height:100vh"><div style="text-align:center"><h1>Post not found</h1><p><a href="${base}" style="color:#9fb3ff">Go to Nexus</a></p></div></body></html>`,
       { status: 404, headers: html },
     );
   }
 
   const m = post.media[0];
   const cover = mediaUrl(m?.type === "video" ? m.poster : m?.path);
-  const title = `${author.display_name} (@${author.username}) on NexusGram`;
-  const desc = (post.caption || `${post.kind === "short" ? "Short" : "Post"} by @${author.username}`).slice(0, 160);
-  const app = `${base}/gram/p/${post.id}`;
-  const body = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)}</title><meta name="description" content="${esc(desc)}">
-<meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:url" content="${esc(`${base}/g/${post.id}`)}">
-${cover ? `<meta property="og:image" content="${esc(cover)}"><meta name="twitter:image" content="${esc(cover)}">` : ""}
-<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#0b0b0f">
+  const badge = post.kind === "short" ? "Short" : "Post";
+  const title = `${author.display_name} (@${author.username}) · ${badge} on NexusGram`;
+  const desc = truncate(post.caption || `${badge} by @${author.username} on NexusGram`);
+  const canonical = absoluteUrl(`/n/${post.id}`, base);
+  const publicUrl = absoluteUrl(`/g/${post.id}`, base);
+  const app = absoluteUrl(`/gram/c/${post.id}`, base);
+  const profileUrl = absoluteUrl(`/u/${author.username}`, base);
+  const alt = m?.alt || post.caption || `${badge} by @${author.username}`;
+  const tags = [...post.caption.matchAll(/#([\p{L}\p{N}_]+)/gu)].map((x) => x[1].toLowerCase()).slice(0, 8);
+  if (post.mood) tags.unshift(post.mood);
+
+  const ld = socialPostingLd({
+    url: canonical,
+    headline: title,
+    description: desc,
+    image: cover,
+    datePublished: post.created_at,
+    authorName: author.display_name,
+    authorUrl: profileUrl,
+    interactionStats: { likes: post.like_count, comments: post.comment_count, views: post.view_count },
+  });
+
+  const body = `<!doctype html><html lang="en"><head>
+${seoHead({
+  title,
+  description: desc,
+  url: publicUrl,
+  canonical,
+  image: cover,
+  type: "article",
+  keywords: ["NexusGram", author.username, badge, ...tags],
+  publishedTime: post.created_at,
+  authorName: author.display_name,
+})}
+${jsonLd(ld)}
 <style>
 *{box-sizing:border-box;margin:0}body{background:#0b0b0f;color:#f5f5f7;font:15px/1.45 system-ui,-apple-system,sans-serif}
 .wrap{max-width:520px;margin:0 auto;padding:24px 16px 60px}
@@ -81,14 +110,12 @@ ${cover ? `<meta property="og:image" content="${esc(cover)}"><meta name="twitter
   <div class="head">${author.avatar_url ? `<img class="av" src="${esc(author.avatar_url)}" alt="">` : `<div class="av ph" style="background:${esc(author.avatar_color || "#333")}">${esc((author.display_name || author.username).slice(0, 2).toUpperCase())}</div>`}
     <div><div class="name">${esc(author.display_name)}</div><div class="user">@${esc(author.username)}</div></div>
   </div>
-  <div class="media">${m?.type === "video" ? `<video controls playsinline poster="${esc(mediaUrl(m.poster))}" src="${esc(mediaUrl(m.path))}"></video>` : `<img src="${esc(mediaUrl(m?.path))}" alt="">`}</div>
+  <div class="media">${m?.type === "video" ? `<video controls playsinline poster="${esc(mediaUrl(m.poster))}" src="${esc(mediaUrl(m.path))}"></video>` : `<img src="${esc(mediaUrl(m?.path))}" alt="${esc(alt)}">`}</div>
   ${post.caption ? `<div class="cap">${esc(post.caption)}</div>` : ""}
   <div class="meta">${post.like_count} likes · ${post.comment_count} comments · ${post.view_count} views</div>
 </div>
 <a class="cta" href="${app}">Open in NexusGram</a>
 </div></body></html>`;
 
-  return new Response(body, { headers: { ...html, "Cache-Control": "public, max-age=60" } });
+  return new Response(body, { headers: { ...html, "Cache-Control": "public, max-age=60, s-maxage=120" } });
 }
-
-const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);

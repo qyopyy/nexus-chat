@@ -271,10 +271,20 @@ input[type="range"].vol::-moz-range-thumb {
 }
 
 /* ---------------------------------------------------------------- mobile / iOS */
+.pt-safe   { padding-top: env(safe-area-inset-top); }
+.pt-safe-2 { padding-top: max(.5rem, env(safe-area-inset-top)); }
+.pt-safe-3 { padding-top: max(.75rem, env(safe-area-inset-top)); }
+.pt-safe-4 { padding-top: max(1rem, env(safe-area-inset-top)); }
 .pb-safe   { padding-bottom: env(safe-area-inset-bottom); }
 .pb-safe-2 { padding-bottom: max(.5rem, env(safe-area-inset-bottom)); }
-.pt-safe-3 { padding-top: max(.75rem, env(safe-area-inset-top)); }
+.pb-safe-3 { padding-bottom: max(.75rem, env(safe-area-inset-bottom)); }
+.pb-safe-4 { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
 .mb-safe-3 { margin-bottom: max(.75rem, env(safe-area-inset-bottom)); }
+/* Clear the phone tab bar + home indicator */
+.pb-tabbar { padding-bottom: calc(3.75rem + env(safe-area-inset-bottom)); }
+.bottom-tabbar { bottom: calc(3.75rem + env(safe-area-inset-bottom)); }
+/* Minimum comfortable touch target (~44px) */
+.tap-target { min-width: 2.75rem; min-height: 2.75rem; }
 @media (min-width: 640px) { .composer.pb-safe-2 { padding-bottom: .75rem; } }
 
 .no-scrollbar { scrollbar-width: none; }

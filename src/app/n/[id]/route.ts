@@ -1,4 +1,5 @@
 import { mediaUrl } from "@/lib/gramPageMedia";
+import { absoluteUrl, esc, jsonLd, seoHead, socialPostingLd, truncate } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
@@ -6,17 +7,18 @@ type Post = {
   id: string;
   author_id: string;
   kind: "post" | "short";
-  media: { path: string; type: "image" | "video"; poster?: string | null }[];
+  media: { path: string; type: "image" | "video"; poster?: string | null; alt?: string | null }[];
   caption: string;
   like_count: number;
   comment_count: number;
   view_count: number;
   created_at: string;
+  mood?: string | null;
 };
 type Story = {
   id: string;
   author_id: string;
-  media: { path: string; type: "image" | "video"; poster?: string | null };
+  media: { path: string; type: "image" | "video"; poster?: string | null; alt?: string | null };
   caption: string;
   like_count: number;
   view_count: number;
@@ -24,8 +26,6 @@ type Story = {
   expires_at: string;
 };
 type Profile = { id: string; username: string; display_name: string; avatar_url: string | null; avatar_color: string | null };
-
-const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 /** Public shareable NexusGram content: /n/<id> (post or story) */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -74,7 +74,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   if (!kind || !author || (!post && !story)) {
     return new Response(
-      `<!doctype html><html><head><meta charset="utf-8"><title>Not found · NexusGram</title></head><body style="background:#0b0b0f;color:#fff;font-family:system-ui;display:grid;place-items:center;min-height:100vh"><div style="text-align:center"><h1>Content not found</h1><p><a href="${base}" style="color:#9fb3ff">Go to Nexus</a></p></div></body></html>`,
+      `<!doctype html><html lang="en"><head>${seoHead({ title: "Not found · NexusGram", description: "This NexusGram link is missing or expired.", url: absoluteUrl(`/n/${contentId}`, base), noindex: true })}</head><body style="background:#0b0b0f;color:#fff;font-family:system-ui;display:grid;place-items:center;min-height:100vh"><div style="text-align:center"><h1>Content not found</h1><p><a href="${base}" style="color:#9fb3ff">Go to Nexus</a></p></div></body></html>`,
       { status: 404, headers: html },
     );
   }
@@ -82,18 +82,46 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const m = kind === "post" ? post!.media[0] : story!.media;
   const cover = mediaUrl(m?.type === "video" ? m.poster : m?.path);
   const caption = (kind === "post" ? post!.caption : story!.caption) || "";
-  const title = `${author.display_name} (@${author.username}) on NexusGram`;
-  const desc = (caption || (kind === "story" ? "Story" : post!.kind === "short" ? "Short" : "Post") + ` by @${author.username}`).slice(0, 160);
-  const app = `${base}/gram/c/${contentId}`;
+  const badge = kind === "story" ? "Story" : post!.kind === "short" ? "Short" : "Post";
+  const title = `${author.display_name} (@${author.username}) · ${badge} on NexusGram`;
+  const desc = truncate(caption || `${badge} by @${author.username} on NexusGram`);
+  const publicUrl = absoluteUrl(`/n/${contentId}`, base);
+  const app = absoluteUrl(`/gram/c/${contentId}`, base);
+  const profileUrl = absoluteUrl(`/u/${author.username}`, base);
   const likes = kind === "post" ? post!.like_count : story!.like_count;
   const views = kind === "post" ? post!.view_count : story!.view_count;
-  const badge = kind === "story" ? "Story" : post!.kind === "short" ? "Short" : "Post";
+  const created = kind === "post" ? post!.created_at : story!.created_at;
+  const alt = m?.alt || caption || `${badge} by @${author.username}`;
+  const tags = [...caption.matchAll(/#([\p{L}\p{N}_]+)/gu)].map((x) => x[1].toLowerCase()).slice(0, 8);
+  if (post?.mood) tags.unshift(post.mood);
 
-  const body = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)}</title><meta name="description" content="${esc(desc)}">
-<meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:url" content="${esc(app)}">
-${cover ? `<meta property="og:image" content="${esc(cover)}"><meta name="twitter:image" content="${esc(cover)}">` : ""}
-<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#0b0b0f">
+  const ld = socialPostingLd({
+    url: publicUrl,
+    headline: title,
+    description: desc,
+    image: cover,
+    datePublished: created,
+    authorName: author.display_name,
+    authorUrl: profileUrl,
+    interactionStats: {
+      likes,
+      comments: kind === "post" ? post!.comment_count : undefined,
+      views,
+    },
+  });
+
+  const body = `<!doctype html><html lang="en"><head>
+${seoHead({
+  title,
+  description: desc,
+  url: publicUrl,
+  image: cover,
+  type: "article",
+  keywords: ["NexusGram", author.username, badge, ...tags],
+  publishedTime: created,
+  authorName: author.display_name,
+})}
+${jsonLd(ld)}
 <style>
 *{box-sizing:border-box;margin:0}body{background:#0b0b0f;color:#f5f5f7;font:15px/1.45 system-ui,-apple-system,sans-serif}
 .wrap{max-width:520px;margin:0 auto;padding:24px 16px 60px}
@@ -110,19 +138,22 @@ ${cover ? `<meta property="og:image" content="${esc(cover)}"><meta name="twitter
 .media img,.media video{width:100%;height:100%;object-fit:contain;max-height:70vh}
 .cap{padding:14px;white-space:pre-wrap}.meta{padding:0 14px 16px;color:rgba(255,255,255,.45);font-size:13px}
 .cta{display:block;margin-top:18px;text-align:center;background:#fff;color:#000;padding:14px;border-radius:999px;font-weight:800;text-decoration:none}
+.tags{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 14px}
+.tags span{font-size:12px;font-weight:600;color:#9fb3ff;background:rgba(159,179,255,.1);padding:4px 8px;border-radius:999px}
 </style></head><body><div class="wrap">
 <div class="top"><div class="logo"><b>N</b>NexusGram</div><a class="open" href="${app}">Open in Nexus</a></div>
 <div class="card">
   <div class="head">${author.avatar_url ? `<img class="av" src="${esc(author.avatar_url)}" alt="">` : `<div class="av ph" style="background:${esc(author.avatar_color || "#333")}">${esc((author.display_name || author.username).slice(0, 2).toUpperCase())}</div>`}
-    <div><div class="name">${esc(author.display_name)}</div><div class="user">@${esc(author.username)}</div></div>
+    <div><div class="name"><a href="${esc(profileUrl)}" style="color:inherit;text-decoration:none">${esc(author.display_name)}</a></div><div class="user">@${esc(author.username)}</div></div>
     <span class="badge">${esc(badge)}</span>
   </div>
-  <div class="media">${m?.type === "video" ? `<video controls playsinline poster="${esc(mediaUrl(m.poster))}" src="${esc(mediaUrl(m.path))}"></video>` : `<img src="${esc(mediaUrl(m?.path))}" alt="">`}</div>
+  <div class="media">${m?.type === "video" ? `<video controls playsinline poster="${esc(mediaUrl(m.poster))}" src="${esc(mediaUrl(m.path))}"></video>` : `<img src="${esc(mediaUrl(m?.path))}" alt="${esc(alt)}">`}</div>
   ${caption ? `<div class="cap">${esc(caption)}</div>` : ""}
+  ${tags.length ? `<div class="tags">${tags.map((t) => `<span>#${esc(t)}</span>`).join("")}</div>` : ""}
   <div class="meta">${likes} likes · ${views} views${kind === "post" ? ` · ${post!.comment_count} comments` : ""}</div>
 </div>
 <a class="cta" href="${app}">Open in NexusGram</a>
 </div></body></html>`;
 
-  return new Response(body, { headers: { ...html, "Cache-Control": "public, max-age=60" } });
+  return new Response(body, { headers: { ...html, "Cache-Control": "public, max-age=60, s-maxage=120" } });
 }

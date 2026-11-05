@@ -11,6 +11,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase, errorText } from "./supabase";
 import { useApp, toast } from "@/store/app";
 import { loadProfiles } from "./data";
+import { isMobileDevice, startAvatar, type AvatarEngine, type VAvatar } from "./vavatar";
 
 export type LiveQuality = "720p30" | "1080p30" | "1080p60" | "1440p30" | "2160p30" | "source";
 export type LiveSource = "camera" | "screen" | "both";
@@ -70,6 +71,8 @@ type State = {
   micOn: boolean;
   camOn: boolean;
   screenOn: boolean;
+  /** host is sending V-Avatar instead of the real camera */
+  avatarOn: boolean;
   liveList: LiveStream[];
 };
 
@@ -84,6 +87,7 @@ export const useLive = create<State>(() => ({
   micOn: true,
   camOn: true,
   screenOn: false,
+  avatarOn: false,
   liveList: [],
 }));
 
@@ -92,6 +96,11 @@ let meId: string | null = null;
 const peers = new Map<string, Peer>();
 let outbound: MediaStream | null = null;
 let quality: LiveQuality = "1080p30";
+let liveAvatar: AvatarEngine | null = null;
+/** real camera stream kept while V-Avatar is on (restored on toggle off) */
+let camBackup: MediaStream | null = null;
+let liveAnalyser: AnalyserNode | null = null;
+let liveAudioCtx: AudioContext | null = null;
 
 function iceServers(): RTCIceServer[] {
   const servers: RTCIceServer[] = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun.cloudflare.com:3478"] }];
@@ -263,6 +272,144 @@ function stopTracks(s: MediaStream | null) {
   s?.getTracks().forEach((t) => t.stop());
 }
 
+function isScreenTrack(t: MediaStreamTrack) {
+  const s = t.getSettings() as MediaTrackSettings & { displaySurface?: string };
+  return !!s.displaySurface || /screen|window|display|tab|monitor/i.test(t.label);
+}
+
+function camVideoTracks(stream: MediaStream | null) {
+  return (stream?.getVideoTracks() ?? []).filter((t) => !isScreenTrack(t));
+}
+
+function wireLiveAnalyser(stream: MediaStream | null) {
+  liveAnalyser = null;
+  try {
+    liveAudioCtx?.close();
+  } catch {
+    /* */
+  }
+  liveAudioCtx = null;
+  const track = stream?.getAudioTracks()[0];
+  if (!track) return;
+  try {
+    const ctx = new AudioContext();
+    const src = ctx.createMediaStreamSource(new MediaStream([track]));
+    const a = ctx.createAnalyser();
+    a.fftSize = 256;
+    src.connect(a);
+    liveAudioCtx = ctx;
+    liveAnalyser = a;
+  } catch {
+    /* */
+  }
+}
+
+function liveMicLevel() {
+  if (!liveAnalyser || !useLive.getState().micOn) return 0;
+  const buf = new Uint8Array(liveAnalyser.frequencyBinCount);
+  liveAnalyser.getByteTimeDomainData(buf);
+  let sum = 0;
+  for (let i = 0; i < buf.length; i++) {
+    const v = (buf[i]! - 128) / 128;
+    sum += v * v;
+  }
+  return Math.min(1, Math.sqrt(sum / buf.length) * 4);
+}
+
+function replaceCamVideoOnPeers(next: MediaStreamTrack | null, prevId?: string) {
+  for (const p of peers.values()) {
+    const sender = p.pc.getSenders().find((s) => s.track && s.track.kind === "video" && !isScreenTrack(s.track) && (!prevId || s.track.id === prevId));
+    if (sender) {
+      void sender.replaceTrack(next);
+    } else if (next) {
+      p.pc.addTrack(next, ensureOutbound());
+      void tuneSender(p.pc);
+    }
+  }
+}
+
+function stopLiveAvatar(restoreCam = true) {
+  if (!liveAvatar && !useLive.getState().avatarOn) return;
+  const out = ensureOutbound();
+  const avatarTracks = liveAvatar?.stream().getVideoTracks() ?? [];
+  const avatarIds = new Set(avatarTracks.map((t) => t.id));
+  out.getVideoTracks().forEach((t) => {
+    if (avatarIds.has(t.id)) out.removeTrack(t);
+  });
+  liveAvatar?.stop();
+  liveAvatar = null;
+
+  if (restoreCam && camBackup) {
+    const vt = camBackup.getVideoTracks()[0];
+    if (vt) {
+      vt.enabled = true;
+      if (!out.getTracks().some((t) => t.id === vt.id)) out.addTrack(vt);
+      replaceCamVideoOnPeers(vt);
+      useLive.setState({ localCam: camBackup, avatarOn: false, camOn: true });
+    } else {
+      useLive.setState({ avatarOn: false, camOn: false, localCam: camBackup });
+    }
+  } else {
+    replaceCamVideoOnPeers(null);
+    useLive.setState({ avatarOn: false, localCam: restoreCam ? camBackup : null, camOn: false });
+  }
+  if (!restoreCam) {
+    stopTracks(camBackup);
+    camBackup = null;
+  }
+}
+
+/** Host: send animated V-Avatar instead of the camera (face-tracked when possible). */
+export async function toggleLiveAvatar(look: VAvatar) {
+  if (useLive.getState().role !== "host") return;
+  if (useLive.getState().avatarOn) {
+    stopLiveAvatar(true);
+    toast("Camera restored", "info");
+    return;
+  }
+
+  const out = ensureOutbound();
+  // Keep real cam around so we can restore; prefer current localCam
+  const current = useLive.getState().localCam;
+  if (current && !camBackup) camBackup = current;
+  wireLiveAnalyser(out);
+
+  const phone = isMobileDevice();
+  const engine = startAvatar({
+    cfg: look,
+    width: phone ? 854 : 1280,
+    height: phone ? 480 : 720,
+    camera: true,
+    level: liveMicLevel,
+  });
+  const avatarStream = engine.stream();
+  const avatarTrack = avatarStream.getVideoTracks()[0];
+  if (!avatarTrack) {
+    engine.stop();
+    toast("Your browser can't stream the V-Avatar", "error");
+    return;
+  }
+  avatarTrack.contentHint = "motion";
+  liveAvatar = engine;
+
+  const prev = camVideoTracks(out)[0] ?? camVideoTracks(current)[0];
+  const prevId = prev?.id;
+  if (prev) {
+    out.removeTrack(prev);
+    prev.enabled = false;
+  }
+  out.addTrack(avatarTrack);
+  replaceCamVideoOnPeers(avatarTrack, prevId);
+
+  const preview = new MediaStream([avatarTrack, ...(out.getAudioTracks().length ? out.getAudioTracks() : current?.getAudioTracks() ?? [])]);
+  useLive.setState({ localCam: preview, avatarOn: true, camOn: true });
+  toast("V-Avatar is live", "success");
+}
+
+export function setLiveAvatarLook(look: VAvatar) {
+  liveAvatar?.setLook(look);
+}
+
 export async function listLiveStreams() {
   const { data, error } = await supabase.from("live_streams").select("*").eq("status", "live").order("started_at", { ascending: false }).limit(50);
   if (error) throw new Error(errorText(error));
@@ -346,6 +493,9 @@ export async function goLive(opts: { title: string; category: string; quality: L
   }
 
   const stream = data as LiveStream;
+  camBackup = null;
+  liveAvatar = null;
+  wireLiveAnalyser(out);
   useLive.setState({
     stream,
     role: "host",
@@ -357,6 +507,7 @@ export async function goLive(opts: { title: string; category: string; quality: L
     micOn: true,
     camOn: !!cam,
     screenOn: !!screen,
+    avatarOn: false,
   });
   await attachChannel(stream.id);
   useApp.setState({ hub: "live" });
@@ -392,6 +543,7 @@ export async function watchLive(streamId: string) {
     micOn: false,
     camOn: false,
     screenOn: false,
+    avatarOn: false,
   });
   await attachChannel(streamId);
   useApp.setState({ hub: "live" });
@@ -412,10 +564,20 @@ export function leaveLive() {
   peers.clear();
   if (channel) void supabase.removeChannel(channel);
   channel = null;
+  stopLiveAvatar(false);
+  stopTracks(camBackup);
+  camBackup = null;
   stopTracks(useLive.getState().localCam);
   stopTracks(useLive.getState().localScreen);
   outbound?.getTracks().forEach((t) => t.stop());
   outbound = null;
+  try {
+    liveAudioCtx?.close();
+  } catch {
+    /* */
+  }
+  liveAudioCtx = null;
+  liveAnalyser = null;
   useLive.setState({
     stream: null,
     role: null,
@@ -427,6 +589,7 @@ export function leaveLive() {
     micOn: true,
     camOn: true,
     screenOn: false,
+    avatarOn: false,
   });
 }
 
@@ -491,6 +654,10 @@ export function toggleLiveMic() {
 }
 
 export function toggleLiveCam() {
+  if (useLive.getState().avatarOn) {
+    stopLiveAvatar(true);
+    return;
+  }
   const on = !useLive.getState().camOn;
   useLive.getState().localCam?.getVideoTracks().forEach((t) => {
     t.enabled = on;

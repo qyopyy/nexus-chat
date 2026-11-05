@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 import { toast } from "@/store/app";
 import { cn } from "@/lib/utils";
-import { createPost, createStory, gramHome, mediaKind, uploadMedia, useGram, type Media } from "@/lib/gram";
+import { createPost, createStory, GRAM_MOODS, gramHome, mediaKind, uploadMedia, useGram, type GramMood, type Media } from "@/lib/gram";
 
 const TABS = [
   ["post", "Post", "Photos or a video for your profile grid"],
@@ -14,10 +14,13 @@ const TABS = [
 
 export default function Create() {
   const mode = useGram((s) => s.create);
+  const remixOf = useGram((s) => s.remixOf);
   const [kind, setKind] = useState<"post" | "short" | "story">("post");
   const [files, setFiles] = useState<File[]>([]);
   const [urls, setUrls] = useState<string[]>([]);
   const [caption, setCaption] = useState("");
+  const [alt, setAlt] = useState("");
+  const [mood, setMood] = useState<GramMood | null>(null);
   const [hours, setHours] = useState<24 | 48>(24);
   const [busy, setBusy] = useState<string | null>(null);
   const pick = useRef<HTMLInputElement>(null);
@@ -26,9 +29,11 @@ export default function Create() {
     if (mode) {
       setKind(mode);
       setFiles([]);
-      setCaption("");
+      setCaption(remixOf ? "Remix ✨ " : "");
+      setAlt("");
+      setMood(null);
     }
-  }, [mode]);
+  }, [mode, remixOf]);
   useEffect(() => {
     const u = files.map((f) => URL.createObjectURL(f));
     setUrls(u);
@@ -36,9 +41,12 @@ export default function Create() {
   }, [files]);
 
   if (!mode) return null;
-  const close = () => !busy && useGram.setState({ create: null });
+  const close = () => {
+    if (busy) return;
+    useGram.setState({ create: null, remixOf: null });
+  };
   const accept = kind === "short" ? "video/*" : kind === "story" ? "image/*,video/*" : "image/*,video/*";
-  const multi = kind === "post";
+  const multi = kind === "post" && !remixOf;
 
   const choose = (list: FileList | null) => {
     if (!list?.length) return;
@@ -66,10 +74,10 @@ export default function Create() {
         await createStory(media[0], caption, hours);
         toast(`Story shared for ${hours} hours`, "success");
       } else {
-        await createPost(kind, media, caption);
-        toast(kind === "short" ? "Short posted" : "Posted", "success");
+        await createPost(kind, media, caption, { mood, remixOf, alt: alt.trim() || null });
+        toast(remixOf ? "Remix posted" : kind === "short" ? "Short posted" : "Posted", "success");
       }
-      useGram.setState({ create: null });
+      useGram.setState({ create: null, remixOf: null });
       gramHome(kind === "short" ? { view: "shorts" } : { view: "home" });
     } catch (e) {
       toast((e as Error).message, "error");
@@ -81,19 +89,21 @@ export default function Create() {
     <div className="fixed inset-0 z-[88] flex items-end justify-center bg-black/70 sm:items-center" onClick={close}>
       <div className="flex max-h-[94vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-chat sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center border-b border-line/60 px-4 py-3">
-          <div className="flex-1 font-bold">Create</div>
+          <div className="flex-1 font-bold">{remixOf ? "Remix" : "Create"}</div>
           <button onClick={close} className="grid size-8 place-items-center rounded-full hover:bg-hover" aria-label="Close">
             <X className="size-5" />
           </button>
         </div>
-        <div className="flex gap-1 p-3">
-          {TABS.map(([k, l]) => (
-            <button key={k} onClick={() => (setKind(k), setFiles([]))} className={cn("flex-1 rounded-full py-2 text-sm font-bold", kind === k ? "bg-white text-black" : "bg-hover")}>
-              {l}
-            </button>
-          ))}
-        </div>
-        <p className="-mt-1 px-4 pb-2 text-xs text-sub">{TABS.find((t) => t[0] === kind)![2]}</p>
+        {!remixOf && (
+          <div className="flex gap-1 p-2.5 sm:p-3">
+            {TABS.map(([k, l]) => (
+              <button key={k} onClick={() => (setKind(k), setFiles([]))} className={cn("min-h-11 flex-1 rounded-full px-2 py-2 text-sm font-bold", kind === k ? "bg-white text-black" : "bg-hover")}>
+                {l}
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="-mt-1 px-4 pb-2 text-xs text-sub">{remixOf ? "Add your take on this post" : TABS.find((t) => t[0] === kind)![2]}</p>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4">
           <input ref={pick} type="file" accept={accept} multiple={multi} hidden onChange={(e) => (choose(e.target.files), (e.target.value = ""))} />
@@ -139,9 +149,35 @@ export default function Create() {
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
             maxLength={kind === "story" ? 200 : 2200}
-            placeholder={kind === "story" ? "Add text (optional)" : "Write a caption…"}
+            placeholder={kind === "story" ? "Add text (optional)" : "Write a caption… use #tags"}
             className="mt-3 min-h-20 w-full rounded-xl border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent"
           />
+
+          {kind !== "story" && (
+            <>
+              <div className="mt-3">
+                <p className="mb-1.5 text-xs font-semibold text-sub">Mood</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {GRAM_MOODS.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setMood(mood === m.id ? null : m.id)}
+                      className={cn("rounded-full px-3 py-1 text-xs font-semibold", mood === m.id ? "text-black" : "bg-white/5 text-white/70 hover:bg-white/10")}
+                      style={mood === m.id ? { background: m.hue } : undefined}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label className="mt-3 block">
+                <span className="mb-1 block text-xs font-semibold text-sub">Alt text (SEO &amp; accessibility)</span>
+                <input value={alt} onChange={(e) => setAlt(e.target.value)} maxLength={200} placeholder="Describe the image or video" className="w-full rounded-xl border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent" />
+              </label>
+            </>
+          )}
+
           {kind === "story" && (
             <div className="mt-2 flex items-center gap-2 text-sm">
               <span className="text-sub">Visible for</span>
@@ -154,8 +190,8 @@ export default function Create() {
           )}
         </div>
         <div className="p-4 pb-safe-4">
-          <button disabled={!!busy || !files.length} onClick={() => void share()} className="w-full rounded-full bg-gradient-to-r from-[#ff2bd6] via-[#8b5cff] to-[#00c2ff] py-3 font-black text-white disabled:opacity-50">
-            {busy ?? (kind === "story" ? `Share story · ${hours}h` : kind === "short" ? "Post Short" : "Share")}
+          <button disabled={!!busy || !files.length} onClick={() => void share()} className="min-h-12 w-full rounded-full bg-gradient-to-r from-[#ff2bd6] via-[#8b5cff] to-[#00c2ff] py-3 font-black text-white disabled:opacity-50">
+            {busy ?? (kind === "story" ? `Share story · ${hours}h` : kind === "short" ? "Post Short" : remixOf ? "Share remix" : "Share")}
           </button>
         </div>
       </div>

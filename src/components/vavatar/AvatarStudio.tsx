@@ -5,6 +5,7 @@ import { Camera, CameraOff, Dices, RotateCcw, Save, Sparkles } from "lucide-reac
 import { useApp, toast } from "@/store/app";
 import { updateMyProfile } from "@/lib/data";
 import { setAvatarLook, useCall } from "@/lib/call";
+import { setLiveAvatarLook, useLive } from "@/lib/live";
 import { DEFAULT_AVATAR, OPTIONS, SWATCH, cleanShirtText, normalizeAvatar, randomAvatar, startAvatar, isMobileDevice, type AvatarEngine, type VAvatar } from "@/lib/vavatar";
 import { cn } from "@/lib/utils";
 
@@ -193,7 +194,8 @@ const TABS: [Tab, string][] = [
 export default function AvatarStudio() {
   const saved = useMyAvatar();
   const myName = useApp((s) => (s.userId ? s.profiles[s.userId]?.username : "") ?? "");
-  const avatarOn = useCall((s) => s.avatarOn);
+  const callAvatarOn = useCall((s) => s.avatarOn);
+  const liveAvatarOn = useLive((s) => s.avatarOn);
   const [cfg, setCfg] = useState<VAvatar>(saved);
   const [tab, setTab] = useState<Tab>("styles");
   const [cam, setCam] = useState(false);
@@ -217,15 +219,16 @@ export default function AvatarStudio() {
   }, [cam]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     engine.current?.setLook(cfg);
-    if (avatarOn) setAvatarLook(cfg); // people in your call see edits live
-  }, [cfg, avatarOn]);
+    if (callAvatarOn) setAvatarLook(cfg); // people in your call see edits live
+    if (liveAvatarOn) setLiveAvatarLook(cfg); // live viewers see edits live
+  }, [cfg, callAvatarOn, liveAvatarOn]);
 
   const set = <K extends keyof VAvatar>(k: K, v: VAvatar[K]) => setCfg((c) => ({ ...c, [k]: v }));
   const save = async () => {
     setSaving(true);
     await updateMyProfile({ vavatar: cfg as unknown as Record<string, unknown> }, true);
     setSaving(false);
-    toast("V-Avatar saved — use it in any call with the ✨ button", "success");
+    toast("V-Avatar saved — use ✨ in calls or Live", "success");
   };
 
   const choice = <K extends keyof typeof OPTIONS & keyof VAvatar>(k: K, title: string) => (
