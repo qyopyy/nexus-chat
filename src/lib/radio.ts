@@ -291,7 +291,13 @@ export function radioPrev() {
   if (p) void writePlayer({ track_id: p.id, position: 0, is_playing: true });
 }
 
+function isPhone() {
+  return typeof navigator !== "undefined" && /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
+}
+
 async function audioDuration(file: File): Promise<number | null> {
+  // Phones often hang on metadata for WAV/MP4 from Files — don't block the upload.
+  const budget = isPhone() ? 1500 : 4000;
   const url = URL.createObjectURL(file);
   try {
     const a = new Audio();
@@ -300,15 +306,28 @@ async function audioDuration(file: File): Promise<number | null> {
     await new Promise<void>((res) => {
       a.onloadedmetadata = () => res();
       a.onerror = () => res();
-      setTimeout(res, 4000);
+      setTimeout(res, budget);
     });
-    return Number.isFinite(a.duration) ? a.duration : null;
+    return Number.isFinite(a.duration) && a.duration > 0 ? a.duration : null;
+  } catch {
+    return null;
   } finally {
     URL.revokeObjectURL(url);
   }
 }
 
-/** Map extension / odd browser types onto MIME values the nexus-radio bucket accepts. */
+const RADIO_EXT = /\.(mp3|wav|flac|m4a|aac|ogg|opus|webm|mp4|m4b|aiff?|caf)$/i;
+
+/** Phones often send M4A/MP4 as video/mp4 and WAV without a useful type — accept those. */
+export function isRadioAudioFile(f: File): boolean {
+  const t = (f.type || "").toLowerCase().trim();
+  if (t.startsWith("audio/")) return true;
+  if (t === "video/mp4" || t === "video/quicktime" || t === "application/mp4" || t === "audio/mp4") return true;
+  if (t === "application/octet-stream" || t === "binary/octet-stream" || !t) return RADIO_EXT.test(f.name) || !f.name.includes(".");
+  return RADIO_EXT.test(f.name);
+}
+
+/** Map extension / odd browser types onto a stable content-type for upload. */
 function radioContentType(file: File): string {
   const t = (file.type || "").toLowerCase().trim();
   const map: Record<string, string> = {
@@ -321,26 +340,42 @@ function radioContentType(file: File): string {
     "audio/wav": "audio/wav",
     "audio/x-wav": "audio/wav",
     "audio/wave": "audio/wav",
+    "audio/vnd.wave": "audio/wav",
     "audio/flac": "audio/flac",
     "audio/x-flac": "audio/flac",
     "audio/ogg": "audio/ogg",
     "audio/opus": "audio/ogg",
     "audio/webm": "audio/webm",
+    "audio/x-caf": "audio/mp4",
+    "video/mp4": "video/mp4",
+    "video/quicktime": "video/mp4",
+    "application/mp4": "video/mp4",
+    "application/octet-stream": "",
   };
-  if (t && map[t]) return map[t];
+  if (t && map[t]) return map[t] || byExt(file.name) || "application/octet-stream";
   if (t.startsWith("audio/")) return t;
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  const byExt: Record<string, string> = {
+  return byExt(file.name) || t || "application/octet-stream";
+}
+
+function byExt(name: string): string {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  const m: Record<string, string> = {
     mp3: "audio/mpeg",
     m4a: "audio/mp4",
+    m4b: "audio/mp4",
     aac: "audio/aac",
     wav: "audio/wav",
     flac: "audio/flac",
     ogg: "audio/ogg",
     opus: "audio/ogg",
     webm: "audio/webm",
+    mp4: "video/mp4",
+    mov: "video/mp4",
+    caf: "audio/mp4",
+    aiff: "audio/wav",
+    aif: "audio/wav",
   };
-  return byExt[ext] || "audio/mpeg";
+  return m[ext] || "";
 }
 
 function pushTrackLocal(row: RadioTrack) {
@@ -350,22 +385,52 @@ function pushTrackLocal(row: RadioTrack) {
   });
 }
 
+/** Shield decodeAudioData hangs on many phones — skip there; otherwise fail open fast. */
+async function radioShieldOk(file: File) {
+  if (isPhone()) return true;
+  try {
+    const { shieldGate } = await import("./shield");
+    const blocked = await Promise.race([
+      shieldGate(file, "space"),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 2_500)),
+    ]);
+    return !blocked;
+  } catch {
+    return true;
+  }
+}
+
+function radioUploadBody(file: File, safeName: string, contentType: string): Blob {
+  try {
+    if (file.type && file.type.toLowerCase() === contentType) return file;
+    // Safari / iOS: re-wrap with an explicit type so Storage doesn't see an empty MIME
+    return new File([file], safeName, { type: contentType, lastModified: file.lastModified || Date.now() });
+  } catch {
+    return file.slice(0, file.size, contentType);
+  }
+}
+
 export async function radioUpload(file: File) {
   try {
     const me = useApp.getState().userId;
     if (!me) return toast("Sign in to upload", "error");
-    const { shieldGate } = await import("./shield");
-    if (await shieldGate(file, "space")) return;
-    if (!file.type.startsWith("audio/") && !/\.(mp3|wav|flac|m4a|aac|ogg|opus|webm)$/i.test(file.name)) {
-      return toast("Pick an audio file (mp3, m4a, wav…)", "error");
+    if (!isRadioAudioFile(file)) {
+      return toast("Pick an audio file (mp3, wav, m4a, mp4…)", "error");
     }
     if (file.size <= 0) return toast("That file is empty", "error");
     if (file.size > MAX) return toast("Tracks can be up to 100 MB", "error");
-    const safeName = file.name.replace(/[^\w.\-]+/g, "_").slice(-80) || "track.mp3";
+    if (!(await radioShieldOk(file))) return;
+
+    const contentType = radioContentType(file) || "application/octet-stream";
+    const extGuess =
+      byExt(file.name) ? "" : contentType.includes("mpeg") ? ".mp3" : contentType.includes("wav") ? ".wav" : contentType.includes("mp4") ? ".m4a" : ".bin";
+    const rawName = (file.name || "").trim() || `track${extGuess}`;
+    const safeName = (rawName.replace(/[^\w.\-]+/g, "_").slice(-80) || `track${extGuess}`).replace(/^\.+/, "track.");
     const path = `${me}/${crypto.randomUUID()}-${safeName}`;
-    const contentType = radioContentType(file);
+    const body = radioUploadBody(file, safeName, contentType);
+
     const duration = await audioDuration(file);
-    const { error } = await supabase.storage.from("nexus-radio").upload(path, file, {
+    const { error } = await supabase.storage.from("nexus-radio").upload(path, body, {
       contentType,
       upsert: false,
       cacheControl: "3600",
@@ -373,10 +438,13 @@ export async function radioUpload(file: File) {
     if (error) {
       const msg = errorText(error);
       if (/mime|not supported|invalid/i.test(msg)) {
-        return toast(`Upload failed: this audio type isn't allowed (${contentType || file.type || "unknown"}). Try MP3 or M4A.`, "error");
+        return toast(`Upload failed: file type blocked (${contentType || file.type || "unknown"}). Try MP3 or WAV.`, "error");
       }
-      if (/row-level security|policy|authorized|permission/i.test(msg)) {
+      if (/row-level security|policy|authorized|permission|jwt|session/i.test(msg)) {
         return toast("Upload failed: storage permission denied. Re-sign in and try again.", "error");
+      }
+      if (/payload|too large|entity too large|413/i.test(msg)) {
+        return toast("Upload failed: file is too large for the server.", "error");
       }
       return toast(`Upload failed: ${msg}`, "error");
     }
@@ -395,7 +463,6 @@ export async function radioUpload(file: File) {
       .select("*")
       .single();
     if (e2) {
-      // best-effort cleanup so a failed insert doesn't leave an orphan object
       void supabase.storage.from("nexus-radio").remove([path]);
       return toast(errorText(e2), "error");
     }

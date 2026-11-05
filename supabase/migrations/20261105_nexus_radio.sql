@@ -1,18 +1,7 @@
 -- Nexus Radio — global shared queue, synced playback, live jam room
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values (
-  'nexus-radio',
-  'nexus-radio',
-  false,
-  104857600,
-  array[
-    'audio/mpeg','audio/mp3','audio/mp4','audio/x-m4a','audio/m4a',
-    'audio/wav','audio/x-wav','audio/wave','audio/flac','audio/x-flac',
-    'audio/aac','audio/ogg','audio/opus','audio/webm','audio/basic',
-    'application/octet-stream'
-  ]
-)
+values ('nexus-radio', 'nexus-radio', false, 104857600, null)
 on conflict (id) do nothing;
 
 create table if not exists public.radio_tracks (
