@@ -213,8 +213,12 @@ export function prev() {
 }
 
 export async function uploadTrack(spaceId: string, file: File) {
+  const { malwareGate } = await import("./malwareGuard");
+  if (await malwareGate(file, { fileName: file.name, context: "audio" })) return;
   const { shieldGate } = await import("./shield");
   if (await shieldGate(file, "space")) return;
+  const { youtubeCidGate } = await import("./audio");
+  if (await youtubeCidGate(file, "space")) return;
   if (!file.type.startsWith("audio/")) return toast("Pick an audio file (mp3, m4a, wav…)", "error");
   if (file.size > MAX) return toast("Tracks can be up to 50 MB", "error");
   const me = useApp.getState().userId!;

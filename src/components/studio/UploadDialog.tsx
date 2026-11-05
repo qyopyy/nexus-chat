@@ -132,6 +132,12 @@ function Dialog({ editId, onClose }: { editId: string | null; onClose: () => voi
         setPreview(null);
         return;
       }
+      const { youtubeCidGate } = await import("@/lib/audio");
+      if (await youtubeCidGate(f, "video")) {
+        setFile(null);
+        setPreview(null);
+        return;
+      }
       i = await inspectVideo(f);
       setInfo(i);
       v = await startVideoUpload(f, i);
@@ -176,7 +182,11 @@ function Dialog({ editId, onClose }: { editId: string | null; onClose: () => voi
       copyOn
         ? {
             ok: copy?.status === "clean" || copy?.status === "own",
-            label: copyBusy ? "Copyright: listening for copyrighted music…" : copy ? `Copyright: ${CHECK_INFO[copy.status].label.toLowerCase()}` : "Copyright: not checked yet",
+            label: copyBusy
+              ? "Copyright: listening for copyrighted music…"
+              : copy
+                ? `Copyright: ${(CHECK_INFO[copy.status] ?? CHECK_INFO.error).label.toLowerCase()}`
+                : "Copyright: not checked yet",
           }
         : { ok: true, label: "Copyright: only upload videos you own or have rights to" },
     ],

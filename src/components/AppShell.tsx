@@ -226,6 +226,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       <main className={cn("h-full min-w-0 flex-1 md:flex", mobileSidebar ? "hidden" : "flex")}>
         <div className="flex h-full min-w-0 flex-1 flex-col bg-chat">
           <SiteNoticeBanner />
+          <ErrorBoundary label="Main view" onReset={() => useApp.setState({ hub: null, conversationId: null })}>
           {hub === "gram" ? (
             <NexusGram />
           ) : hub === "games" ? (
@@ -256,6 +257,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
           ) : (
             <FriendsView />
           )}
+          </ErrorBoundary>
         </div>
         {showMembers && conversationId && !hub && (
           <div className="hidden h-full w-[260px] shrink-0 border-l border-black/20 bg-side lg:block">

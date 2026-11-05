@@ -48,7 +48,7 @@ export type AudioCheck = {
   target_kind: "track" | "video" | "tool";
   target_id: string | null;
   provider: string;
-  status: "clean" | "match" | "own" | "error";
+  status: "clean" | "match" | "own" | "error" | "blocked";
   matches: CheckMatch[];
   note: string | null;
   created_at: string;
@@ -565,14 +565,34 @@ export async function clipFromFile(file: File, decoded?: AudioBuffer) {
   return clipFromMedia(file);
 }
 
-export type CheckStatus = { configured: boolean; provider: string | null; staff: boolean; shieldBucket?: boolean };
+export type CheckStatus = { configured: boolean; provider: string | null; staff: boolean; shieldBucket?: boolean; youtubeCidBlock?: boolean };
 export async function checkStatus(): Promise<CheckStatus> {
   const { data } = await supabase.functions.invoke("audiocheck", { body: { action: "status" } });
-  return (data as CheckStatus) ?? { configured: false, provider: null, staff: false };
+  const s = (data as CheckStatus) ?? { configured: false, provider: null, staff: false };
+  ytCidCache = { on: !!s.youtubeCidBlock, at: Date.now() };
+  return s;
 }
 export async function saveShieldBucket(token: string, bucket: string) {
   const { error } = await supabase.functions.invoke("audiocheck", { body: { action: "set_bucket", token, bucket } });
   if (error) throw new Error(await fnError(error));
+}
+
+/** Short cache so the live YouTube CID on/off switch feels immediate without hammering status. */
+let ytCidCache: { on: boolean; at: number } | null = null;
+const YT_CID_TTL = 8_000;
+
+export async function youtubeCidEnabled(force = false): Promise<boolean> {
+  if (!force && ytCidCache && Date.now() - ytCidCache.at < YT_CID_TTL) return ytCidCache.on;
+  const s = await checkStatus();
+  return !!s.youtubeCidBlock;
+}
+
+/** Staff toggle — global YouTube Content ID hard-block (live). */
+export async function setYoutubeCidBlock(enabled: boolean) {
+  const { data, error } = await supabase.functions.invoke("audiocheck", { body: { action: "set_youtube_cid_block", enabled } });
+  if (error) throw new Error(await fnError(error));
+  ytCidCache = { on: enabled, at: Date.now() };
+  return !!(data as { youtubeCidBlock?: boolean })?.youtubeCidBlock;
 }
 
 async function fnError(error: unknown) {
@@ -588,6 +608,34 @@ export async function copyrightCheck(clip: Uint8Array, target: { kind: "track" |
   const { data, error } = await supabase.functions.invoke("audiocheck", { body: { action: "check", target_kind: target.kind, target_id: target.id ?? null, sample: b64(clip) } });
   if (error) throw new Error(await fnError(error));
   return data as AudioCheck;
+}
+
+/**
+ * Global YouTube Content ID gate — separate from Nexus Shield Content ID.
+ * When the staff live switch is on, commercial/YouTube catalog matches hard-block the upload.
+ * Returns true when the upload must stop.
+ */
+export async function youtubeCidGate(file: File | Blob, context: "chat" | "video" | "release" | "space") {
+  try {
+    if (!(await youtubeCidEnabled())) return false;
+    const f = file instanceof File ? file : new File([file], "audio", { type: file.type || "application/octet-stream" });
+    const media = /^(audio|video)\//.test(f.type) || /\.(mp3|wav|flac|m4a|aac|ogg|opus|mp4|mov|m4v|webm|mkv)$/i.test(f.name);
+    if (!media) return false;
+    const { toast } = await import("@/store/app");
+    const clip = await clipFromFile(f);
+    const kind = context === "video" ? "video" : context === "release" ? "track" : "tool";
+    const c = await copyrightCheck(clip, { kind });
+    if (c.status !== "blocked") return false;
+    const hit = c.matches.find((m) => m.youtube_id) ?? c.matches[0];
+    toast(
+      c.note ??
+        `Blocked by global YouTube Content ID: “${hit?.title ?? "copyrighted audio"}”${hit?.artists?.[0] ? ` by ${hit.artists[0]}` : ""}. Staff can turn this off in Studio → Content ID.`,
+      "error",
+    );
+    return true;
+  } catch {
+    return false; // fail open on network / decode errors — Shield still covers Nexus-owned refs
+  }
 }
 
 export async function saveCheckConfig(host: string, key: string, secret: string) {

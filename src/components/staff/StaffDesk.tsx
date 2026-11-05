@@ -165,21 +165,77 @@ function Lounge({ rank }: { rank: number }) {
 
 function Tools() {
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <ToolCard
-        title="NexusGram Admin"
-        blurb="Reports, remove posts, stats"
-        onClick={() => openGram({ view: "admin" })}
-      />
-      <ToolCard title="Pulse feed" blurb="Moderate Twitter-style posts" onClick={() => openPulse()} />
-      <ToolCard title="Admin Panel" blurb="Members, bans, badges, vault" onClick={() => openModal("settings", "admin")} />
-      {can.announce() && (
-        <ToolCard title="Site announcement" blurb="Banner for everyone" onClick={() => useStaffDesk.setState({ tab: "announce" })} />
-      )}
-      {can.setRoles() && (
-        <ToolCard title="Promote members" blurb="Grant VIP or Moderator" onClick={() => useStaffDesk.setState({ tab: "members" })} />
-      )}
-      <ToolCard title="Audit log" blurb="Recent staff actions" onClick={() => useStaffDesk.setState({ tab: "audit" })} />
+    <div className="space-y-3">
+      {can.setRoles() && <YoutubeCidToggle />}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <ToolCard
+          title="NexusGram Admin"
+          blurb="Reports, remove posts, stats"
+          onClick={() => openGram({ view: "admin" })}
+        />
+        <ToolCard title="Pulse feed" blurb="Moderate Twitter-style posts" onClick={() => openPulse()} />
+        <ToolCard title="Admin Panel" blurb="Members, bans, badges, vault" onClick={() => openModal("settings", "admin")} />
+        {can.announce() && (
+          <ToolCard title="Site announcement" blurb="Banner for everyone" onClick={() => useStaffDesk.setState({ tab: "announce" })} />
+        )}
+        {can.setRoles() && (
+          <ToolCard title="Promote members" blurb="Grant VIP or Moderator" onClick={() => useStaffDesk.setState({ tab: "members" })} />
+        )}
+        <ToolCard title="Audit log" blurb="Recent staff actions" onClick={() => useStaffDesk.setState({ tab: "audit" })} />
+      </div>
+    </div>
+  );
+}
+
+function YoutubeCidToggle() {
+  const [on, setOn] = useState<boolean | null>(null);
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void import("@/lib/audio").then(({ checkStatus }) =>
+      checkStatus().then((s) => {
+        setOn(!!s.youtubeCidBlock);
+        setReady(!!s.configured && !!s.staff);
+      }),
+    );
+    const t = setInterval(
+      () =>
+        void import("@/lib/audio").then(({ checkStatus }) => checkStatus().then((s) => setOn(!!s.youtubeCidBlock))),
+      8_000,
+    );
+    return () => clearInterval(t);
+  }, []);
+  if (on === null) return null;
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold">Global YouTube Content ID</div>
+          <div className="mt-0.5 text-xs text-white/45">
+            {on ? "Live · blocking commercial / YouTube catalog audio on upload" : "Off — Shield Content ID still protects your own songs"}
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled={busy || !ready}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const { setYoutubeCidBlock } = await import("@/lib/audio");
+              const next = !on;
+              await setYoutubeCidBlock(next);
+              setOn(next);
+              toast(next ? "YouTube Content ID block ON — live" : "YouTube Content ID block OFF", "success");
+            } catch (e) {
+              toast((e as Error).message, "error");
+            }
+            setBusy(false);
+          }}
+          className={cn("rounded-full px-4 py-2 text-xs font-semibold disabled:opacity-40", on ? "bg-[#ed4245] text-white" : "bg-white text-black")}
+        >
+          {busy ? "…" : on ? "Turn off" : "Turn on"}
+        </button>
+      </div>
     </div>
   );
 }

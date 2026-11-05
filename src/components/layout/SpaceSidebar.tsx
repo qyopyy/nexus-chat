@@ -6,7 +6,13 @@ import { useApp, openModal, toast } from "@/store/app";
 import { useCall, joinCall, unlockCallAudio } from "@/lib/call";
 import { deleteSpace, leaveSpace, markSpaceRead, openConversation } from "@/lib/data";
 import { cn } from "@/lib/utils";
-import { toggleCollapsedCategory, toggleFavoriteSpace, toggleMuteSpace, useSpacePrefs } from "@/lib/spacePrefs";
+import {
+  EMPTY_SPACE_LIST,
+  toggleCollapsedCategory,
+  toggleFavoriteSpace,
+  toggleMuteSpace,
+  useSpacePrefs,
+} from "@/lib/spacePrefs";
 import Avatar from "@/components/ui/Avatar";
 import SpaceMusic from "@/components/music/SpaceMusic";
 import ServerHub, { WelcomeGate } from "@/components/space/ServerHub";
@@ -36,8 +42,9 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
   const isStaff = isOwner || members.find((m) => m.user_id === me)?.role === "admin";
   const fav = useSpacePrefs((s) => s.favorites.includes(spaceId));
   const quiet = useSpacePrefs((s) => s.muted.includes(spaceId));
-  const textCollapsed = useSpacePrefs((s) => (s.collapsed[spaceId] ?? []).includes("Text Channels"));
-  const voiceCollapsed = useSpacePrefs((s) => (s.collapsed[spaceId] ?? []).includes("Voice Channels"));
+  const collapsedForSpace = useSpacePrefs((s) => s.collapsed[spaceId] ?? EMPTY_SPACE_LIST);
+  const textCollapsed = collapsedForSpace.includes("Text Channels");
+  const voiceCollapsed = collapsedForSpace.includes("Voice Channels");
 
   useEffect(() => {
     if (!menu) return;

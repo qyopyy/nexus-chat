@@ -275,7 +275,7 @@ export function selectHome() {
 
 export async function selectSpace(spaceId: string) {
   const s = get();
-  // Seed stable empty arrays so sidebar selectors never return a fresh `[]` each render (React #185).
+  // Seed stable empty arrays immediately so sidebar selectors never return a fresh `[]` each render (React #185).
   set({
     spaceId,
     conversationId: null,
@@ -414,10 +414,16 @@ export async function sendMessage(convId: string, content: string, file?: File |
   if (!me) return;
   const text = content.trim();
   if (!text && !file) return;
+  if (file) {
+    const { malwareGate } = await import("./malwareGuard");
+    if (await malwareGate(file, { fileName: file.name, context: "chat" })) return;
+  }
   // Nexus Shield: protected songs can't be sent (audio / video attachments, voice notes)
   if (file && /^(audio|video)\//.test(file.type)) {
     const { shieldGate } = await import("./shield");
     if (await shieldGate(file, "chat")) return;
+    const { youtubeCidGate } = await import("./audio");
+    if (await youtubeCidGate(file, "chat")) return;
   }
   const effect = chosenEffect ?? (text ? effectForText(text) : null);
   if (effect) playEffect(effect);

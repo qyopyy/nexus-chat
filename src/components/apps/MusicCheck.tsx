@@ -128,6 +128,17 @@ export default function MusicCheck({ onBack, mobile }: { onBack: () => void; mob
                   <p className="text-sub">ACRCloud isn&apos;t connected on this server yet.</p>
                 ) : result.acrError ? (
                   <p className="text-[#ff8a8c]">{result.acrError}</p>
+                ) : result.acr?.status === "blocked" ? (
+                  <div className="space-y-1 text-[#ff8a8c]">
+                    <p className="font-semibold">{result.acr.note ?? "Blocked by global YouTube Content ID"}</p>
+                    {result.acr.matches.slice(0, 3).map((m, i) => (
+                      <p key={i}>
+                        “{m.title}” — {m.artists.join(", ") || "unknown artist"}
+                        {m.youtube_id ? " · YouTube" : ""}
+                        {m.score != null ? ` · score ${m.score}` : ""}
+                      </p>
+                    ))}
+                  </div>
                 ) : result.acr?.status === "match" && result.acr.matches[0] ? (
                   <div className="space-y-1">
                     {result.acr.matches.slice(0, 3).map((m, i) => (

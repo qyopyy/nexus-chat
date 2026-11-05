@@ -12,10 +12,18 @@ type SpacePrefs = {
 
 const KEY = "nexus.spaceprefs";
 const EMPTY: SpacePrefs = { favorites: [], muted: [], collapsed: {} };
+/** Shared empty list for selectors — never return a fresh `[]` from a Zustand selector. */
+export const EMPTY_SPACE_LIST: string[] = [];
 
-export const useSpacePrefs = create<SpacePrefs>(() =>
-  typeof window === "undefined" ? EMPTY : loadJSON<SpacePrefs>(KEY, EMPTY),
-);
+export const useSpacePrefs = create<SpacePrefs>(() => {
+  if (typeof window === "undefined") return EMPTY;
+  const loaded = loadJSON<SpacePrefs>(KEY, EMPTY);
+  return {
+    favorites: Array.isArray(loaded.favorites) ? loaded.favorites : [],
+    muted: Array.isArray(loaded.muted) ? loaded.muted : [],
+    collapsed: loaded.collapsed && typeof loaded.collapsed === "object" ? loaded.collapsed : {},
+  };
+});
 
 function persist() {
   saveJSON(KEY, useSpacePrefs.getState());
@@ -45,7 +53,7 @@ export function isSpaceMuted(id: string) {
 
 export function toggleCollapsedCategory(spaceId: string, label: string) {
   useSpacePrefs.setState((s) => {
-    const cur = s.collapsed[spaceId] ?? [];
+    const cur = s.collapsed[spaceId] ?? EMPTY_SPACE_LIST;
     const next = cur.includes(label) ? cur.filter((x) => x !== label) : [...cur, label];
     return { collapsed: { ...s.collapsed, [spaceId]: next } };
   });

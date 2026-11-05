@@ -125,7 +125,21 @@ Deno.serve(async (req: Request) => {
     switch (String(b.action ?? "")) {
       case "status": {
         const cfg = await acrConfig();
-        return json({ configured: !!cfg, provider: cfg ? "ACRCloud" : null, staff, shieldBucket: !!(await bucketConfig()) });
+        const youtubeCidBlock = (await setting("youtube_cid_block")) === "on";
+        return json({
+          configured: !!cfg,
+          provider: cfg ? "ACRCloud" : null,
+          staff,
+          shieldBucket: !!(await bucketConfig()),
+          youtubeCidBlock,
+        });
+      }
+
+      case "set_youtube_cid_block": {
+        if (!staff) throw new HttpError(403, "Admins only");
+        const on = !!b.enabled;
+        await saveSetting("youtube_cid_block", on ? "on" : "off");
+        return json({ ok: true, youtubeCidBlock: on });
       }
 
       case "set_bucket": {
@@ -233,9 +247,10 @@ Deno.serve(async (req: Request) => {
         if (!cfg) throw new HttpError(503, "Copyright check isn't connected yet — an admin adds the ACRCloud keys in Studio → Copyright check.");
 
         const r = await acrIdentify(cfg, sample);
-        let status: "clean" | "match" | "own" | "error" = "clean";
+        let status: "clean" | "match" | "own" | "error" | "blocked" = "clean";
         let note: string | null = null;
         let matches: any[] = [];
+        const youtubeCidBlock = (await setting("youtube_cid_block")) === "on";
         // songs protected with Nexus Shield (ACRCloud custom bucket attached to this project)
         const custom = (r.metadata as any)?.custom_files ?? [];
         const shieldHits: any[] = [];
@@ -283,6 +298,17 @@ Deno.serve(async (req: Request) => {
             matches = [...shieldHits, ...matches].slice(0, 6);
             status = "match";
           }
+          // Global YouTube Content ID block — separate from per-work Shield Content ID.
+          // When live+on, hard-block commercial catalog matches (esp. tracks with a YouTube ID).
+          if (youtubeCidBlock) {
+            const commercial = matches.filter((m) => !m.shield && !isOwn(m));
+            const ytHit = commercial.find((m) => m.youtube_id);
+            if (commercial.length && (ytHit || commercial.some((m) => (m.score ?? 0) >= 70))) {
+              status = "blocked";
+              const hit = ytHit ?? commercial[0];
+              note = `Blocked by global YouTube Content ID: “${hit.title}”${hit.artists?.[0] ? ` by ${hit.artists[0]}` : ""}${ytHit?.youtube_id ? ` (YouTube ${ytHit.youtube_id})` : ""}`.slice(0, 500);
+            }
+          }
         } else if (r.status.code === 1001) {
           status = "clean";
         } else {
@@ -295,7 +321,7 @@ Deno.serve(async (req: Request) => {
           .select()
           .single();
         if (error) throw new HttpError(500, error.message);
-        return json(row);
+        return json({ ...row, youtubeCidBlock });
       }
 
       default:
