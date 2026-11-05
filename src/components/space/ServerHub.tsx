@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CalendarDays, CalendarPlus, Crown, Gauge, Hash, Image as ImageIcon, Link2, MapPin, ScrollText, Shield, Trash2, Trophy, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { createEvent, deleteEvent, events, icsFor, leaderboard, levelOf, rsvp, setInfo, setRole, setSlowmode, xpFor, type Rsvp, type SpaceEvent, type XpRow } from "@/lib/serverHub";
-import { deleteChannel, setChannel } from "@/lib/spaceExtras";
+import { deleteChannel, setAnnouncementChannel, setChannel } from "@/lib/spaceExtras";
 import { download } from "@/lib/dsp";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
@@ -90,8 +90,8 @@ export default function ServerHub({ spaceId, onClose, initial = "home" }: { spac
 
 function Home({ spaceId, staff }: { spaceId: string; staff: boolean }) {
   const space = useApp((s) => s.spaces.find((x) => x.id === spaceId));
-  const members = useApp((s) => s.spaceMembers[spaceId] ?? []);
-  const channels = useApp((s) => s.channels[spaceId] ?? []);
+  const members = useApp((s) => s.spaceMembers[spaceId] ?? EMPTY_M);
+  const channels = useApp((s) => s.channels[spaceId] ?? EMPTY_C);
   const [edit, setEdit] = useState(false);
   const [w, setW] = useState(space?.welcome ?? "");
   const [r, setR] = useState(space?.rules ?? "");
@@ -123,18 +123,64 @@ function Home({ spaceId, staff }: { spaceId: string; staff: boolean }) {
       </div>
     );
   const rules = (space.rules ?? "").split("\n").map((x) => x.trim()).filter(Boolean);
+  const code = space.vanity_code || space.invite_code;
+  const shareUrl =
+    typeof location !== "undefined" ? `${location.origin}/i/${encodeURIComponent(code)}` : `https://nexusproject.cc/i/${encodeURIComponent(code)}`;
   const copyInvite = async () => {
-    const code = space.vanity_code || space.invite_code;
-    const url = `${typeof location !== "undefined" ? location.origin : "https://nexusproject.cc"}/i/${code}`;
     try {
-      await navigator.clipboard.writeText(url);
-      toast("Invite link copied", "success");
+      await navigator.clipboard.writeText(shareUrl);
+      toast("Invite link copied — embeds show your banner", "success");
     } catch {
-      toast(url, "info");
+      toast(shareUrl, "info");
     }
+  };
+  const nativeShare = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: space.name, text: space.description || `Join ${space.name} on Nexus`, url: shareUrl });
+        return;
+      }
+    } catch {
+      /* cancelled */
+    }
+    await copyInvite();
   };
   return (
     <div className="space-y-4">
+      <div className="overflow-hidden rounded-2xl border border-white/10 bg-side">
+        <div
+          className="relative h-28 bg-cover bg-center"
+          style={
+            space.banner_url || space.background_url
+              ? {
+                  backgroundImage: `linear-gradient(180deg, transparent, rgba(20,22,28,.95)), url(${space.banner_url || space.background_url})`,
+                }
+              : { background: `linear-gradient(135deg, ${space.icon_color}99, #14161c)` }
+          }
+        />
+        <div className="relative -mt-8 px-4 pb-4">
+          <div className="mb-2 grid size-14 place-items-center overflow-hidden rounded-2xl border-4 border-side text-sm font-black text-white" style={{ background: space.icon_color }}>
+            {space.icon_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={space.icon_url} alt="" className="size-full object-cover" />
+            ) : (
+              space.name.slice(0, 2).toUpperCase()
+            )}
+          </div>
+          <div className="text-[10px] font-bold tracking-widest text-accent uppercase">Share preview · embeds</div>
+          <div className="text-lg font-black">{space.name}</div>
+          <p className="mt-0.5 line-clamp-2 text-xs text-sub">{space.description || space.welcome || "Join this Nexus server"}</p>
+          <p className="mt-2 truncate font-mono text-[11px] text-faint">{shareUrl.replace(/^https?:\/\//, "")}</p>
+          <div className="mt-3 flex gap-2">
+            <button onClick={() => void copyInvite()} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-accent py-2.5 text-sm font-bold text-white">
+              <Link2 className="size-4" /> Copy link
+            </button>
+            <button onClick={() => void nativeShare()} className="rounded-full bg-hover px-4 py-2.5 text-sm font-semibold">
+              Share
+            </button>
+          </div>
+        </div>
+      </div>
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="rounded-2xl bg-side px-2 py-3">
           <div className="text-lg font-black">{members.length || "—"}</div>
@@ -149,9 +195,6 @@ function Home({ spaceId, staff }: { spaceId: string; staff: boolean }) {
           <div className="text-[10px] font-bold tracking-wide text-sub uppercase">Voice</div>
         </div>
       </div>
-      <button onClick={() => void copyInvite()} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent/15 py-2.5 text-sm font-bold text-accent hover:bg-accent/25">
-        <Link2 className="size-4" /> Copy invite link
-      </button>
       <div className="rounded-2xl bg-side p-4">
         <div className="text-3xl">👋</div>
         <p className="mt-2 whitespace-pre-wrap">{space.welcome || "No welcome message yet."}</p>
@@ -382,7 +425,7 @@ function Channels({ spaceId }: { spaceId: string }) {
   ];
   return (
     <div className="space-y-3">
-      <p className="text-sm text-sub">Slow mode, topics, NSFW flags, private/password rooms, and delete.</p>
+      <p className="text-sm text-sub">Slow mode, topics, announcements, NSFW, private/password rooms, and delete.</p>
       {channels.map((c) => (
         <div key={c.id} className="space-y-2 rounded-2xl bg-side p-3">
           <div className="flex items-center gap-2">
@@ -423,6 +466,12 @@ function Channels({ spaceId }: { spaceId: string }) {
             className="w-full rounded-lg bg-rail px-2 py-1.5 text-xs outline-none"
           />
           <div className="flex flex-wrap items-center gap-3 text-xs">
+            {c.kind === "text" && (
+              <label className="flex items-center gap-1.5 font-semibold text-accent">
+                <input type="checkbox" checked={!!c.is_announcement} onChange={(e) => void setAnnouncementChannel(c.id, spaceId, e.target.checked)} />
+                Announcements
+              </label>
+            )}
             <label className="flex items-center gap-1.5">
               <input type="checkbox" checked={!!c.nsfw} onChange={(e) => void setChannel(c.id, spaceId, { nsfw: e.target.checked })} />
               NSFW

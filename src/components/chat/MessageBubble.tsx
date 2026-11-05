@@ -19,6 +19,7 @@ import Sheet, { SheetGroup, SheetItem } from "@/components/ui/Sheet";
 import VoicePlayer from "./VoicePlayer";
 import VideoEmbed from "@/components/videos/VideoEmbed";
 import GameInvite from "@/components/games/GameInvite";
+import ServerInvite from "@/components/space/ServerInvite";
 import LinkEmbed from "./LinkEmbed";
 import { PollCard } from "./Poll";
 import { POLL_RE } from "@/lib/polls";
@@ -346,6 +347,7 @@ function MessageBubbleImpl({
                 !CAPSULE_RE.test(m.content) && <LinkEmbed text={m.content} mine={mine} />}
               {m.content.includes("/v/") && !deleted && <VideoEmbed text={m.content} />}
               {m.content.includes("play=") && !deleted && <GameInvite text={m.content} />}
+              {(m.content.includes("/i/") || /[?&]join=/.test(m.content)) && !deleted && <ServerInvite text={m.content} />}
             </>
           )}
 

@@ -1,30 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BellOff, CalendarDays, CheckCheck, ChevronDown, Gauge, Hash, LayoutDashboard, Lock, Star, Trophy, HeadphoneOff, LogOut, MicOff, MonitorUp, Plus, Trash2, UserPlus, Video, Volume2 } from "lucide-react";
+import { BellOff, CalendarDays, CheckCheck, ChevronDown, Gauge, Hash, LayoutDashboard, Link2, Lock, Megaphone, Star, Trophy, HeadphoneOff, LogOut, MicOff, MonitorUp, Plus, Trash2, UserPlus, Video, Volume2 } from "lucide-react";
 import { useApp, openModal, toast } from "@/store/app";
 import { useCall, joinCall, unlockCallAudio } from "@/lib/call";
 import { deleteSpace, leaveSpace, markSpaceRead, openConversation } from "@/lib/data";
 import { cn } from "@/lib/utils";
-import {
-  isCategoryCollapsed,
-  isFavoriteSpace,
-  isSpaceMuted,
-  toggleCollapsedCategory,
-  toggleFavoriteSpace,
-  toggleMuteSpace,
-  useSpacePrefs,
-} from "@/lib/spacePrefs";
+import { toggleCollapsedCategory, toggleFavoriteSpace, toggleMuteSpace, useSpacePrefs } from "@/lib/spacePrefs";
 import Avatar from "@/components/ui/Avatar";
 import SpaceMusic from "@/components/music/SpaceMusic";
 import ServerHub, { WelcomeGate } from "@/components/space/ServerHub";
-import type { Conversation } from "@/lib/types";
+import { inviteLink } from "@/lib/spaceExtras";
+import type { Conversation, SpaceMember } from "@/lib/types";
 
-const EMPTY: Conversation[] = [];
+const EMPTY_C: Conversation[] = [];
+const EMPTY_M: SpaceMember[] = [];
 
 export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
   const space = useApp((s) => s.spaces.find((x) => x.id === spaceId));
-  const channels = useApp((s) => s.channels[spaceId] ?? EMPTY);
+  const channels = useApp((s) => s.channels[spaceId] ?? EMPTY_C);
   const conversationId = useApp((s) => s.conversationId);
   const unread = useApp((s) => s.unread);
   const presence = useApp((s) => s.presence);
@@ -36,16 +30,14 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
   const [menu, setMenu] = useState(false);
   const [hub, setHub] = useState<null | "home" | "look" | "invites" | "roles" | "events" | "levels" | "members">(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const members = useApp((s) => s.spaceMembers[spaceId] ?? []);
+  // Stable empty fallbacks — `?? []` in a Zustand selector re-renders forever (React #185).
+  const members = useApp((s) => s.spaceMembers[spaceId] ?? EMPTY_M);
   const isOwner = space?.owner_id === me;
   const isStaff = isOwner || members.find((m) => m.user_id === me)?.role === "admin";
-  const favorites = useSpacePrefs((s) => s.favorites);
-  const mutedSpaces = useSpacePrefs((s) => s.muted);
-  const collapsedMap = useSpacePrefs((s) => s.collapsed);
-  const fav = favorites.includes(spaceId) || isFavoriteSpace(spaceId);
-  const quiet = mutedSpaces.includes(spaceId) || isSpaceMuted(spaceId);
-  const textCollapsed = (collapsedMap[spaceId] ?? []).includes("Text Channels") || isCategoryCollapsed(spaceId, "Text Channels");
-  const voiceCollapsed = (collapsedMap[spaceId] ?? []).includes("Voice Channels") || isCategoryCollapsed(spaceId, "Voice Channels");
+  const fav = useSpacePrefs((s) => s.favorites.includes(spaceId));
+  const quiet = useSpacePrefs((s) => s.muted.includes(spaceId));
+  const textCollapsed = useSpacePrefs((s) => (s.collapsed[spaceId] ?? []).includes("Text Channels"));
+  const voiceCollapsed = useSpacePrefs((s) => (s.collapsed[spaceId] ?? []).includes("Voice Channels"));
 
   useEffect(() => {
     if (!menu) return;
@@ -96,6 +88,18 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
         {menu && (
           <div className="absolute inset-x-2 top-14 z-30 animate-pop rounded-lg bg-menu p-1.5 text-sm shadow-2xl">
             <MenuItem icon={<UserPlus className="size-4" />} label="Invite People" accent onClick={() => (setMenu(false), openModal("spaceInvite", spaceId))} />
+            <MenuItem
+              icon={<Link2 className="size-4" />}
+              label="Copy share link"
+              onClick={() => {
+                setMenu(false);
+                const url = inviteLink(space.vanity_code || space.invite_code);
+                void navigator.clipboard.writeText(url).then(
+                  () => toast("Share link copied", "success"),
+                  () => toast(url, "info"),
+                );
+              }}
+            />
             <MenuItem icon={<LayoutDashboard className="size-4" />} label="Server Hub" onClick={() => (setMenu(false), setHub("home"))} />
             {isStaff && <MenuItem icon={<Plus className="size-4" />} label="Server look & invites" onClick={() => (setMenu(false), setHub("look"))} />}
             <MenuItem icon={<CalendarDays className="size-4" />} label="Events" onClick={() => (setMenu(false), setHub("events"))} />
@@ -186,8 +190,15 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
               )}
             >
               {n > 0 && !active && <span className="absolute top-1/2 -left-2 h-2 w-1 -translate-y-1/2 rounded-r-full bg-white" />}
-              {locked ? <Lock className="size-4 shrink-0 opacity-70" /> : <Hash className="size-5 shrink-0 opacity-70" />}
+              {locked ? (
+                <Lock className="size-4 shrink-0 opacity-70" />
+              ) : c.is_announcement ? (
+                <Megaphone className="size-4 shrink-0 text-accent opacity-90" />
+              ) : (
+                <Hash className="size-5 shrink-0 opacity-70" />
+              )}
               <span className={cn("truncate", n > 0 && "font-semibold")}>{c.name}</span>
+              {c.is_announcement && <span className="rounded bg-accent/20 px-1 text-[9px] font-black text-accent">NEWS</span>}
               {c.nsfw && <span className="rounded bg-dnd/80 px-1 text-[9px] font-black text-white">18+</span>}
               {!!c.slowmode && <Gauge className="size-3.5 shrink-0 opacity-60" aria-label="Slow mode" />}
               {n > 0 && !active && !quiet && (
