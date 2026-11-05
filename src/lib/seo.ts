@@ -12,8 +12,8 @@ export const SITE = {
   /** Full-size app icon */
   icon1024: "/icon-1024.png",
   icon512: "/icon-512.png",
-  credit: "Made with ❤️ by Nexus Project / qyopy",
-  makers: { org: "Nexus Project", handle: "qyopy" },
+  credit: "Made with ❤️ @qyopy",
+  makers: { org: "Nexus Project", handle: "qyopy", url: "https://github.com/qyopyy" },
 } as const;
 
 export const esc = (s: unknown) =>

@@ -26,17 +26,20 @@ export async function copyNexusAppLink() {
   }
 }
 
-/** Compact credit line used in Me / auth / settings */
+/** Compact credit line used on login / welcome / Me / settings */
 export function NexusCredit({ className, compact }: { className?: string; compact?: boolean }) {
   return (
     <p className={cn("text-center text-[12px] leading-relaxed text-sub/80", className)}>
-      {compact ? (
-        <>
-          Made with <span aria-hidden>❤️</span> by {SITE.makers.org} / {SITE.makers.handle}
-        </>
-      ) : (
-        SITE.credit
-      )}
+      Made with <span aria-hidden>❤️</span>{" "}
+      <a
+        href={SITE.makers.url}
+        target="_blank"
+        rel="noreferrer"
+        className="font-semibold text-inherit underline-offset-2 hover:underline"
+      >
+        @{SITE.makers.handle}
+      </a>
+      {!compact && <span className="sr-only"> — {SITE.makers.org}</span>}
     </p>
   );
 }

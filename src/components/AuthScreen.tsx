@@ -353,7 +353,7 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
           >
             <Link2 className="size-4" /> Share Nexus app link
           </button>
-          <NexusCredit className="mt-4 text-white/45" />
+          <NexusCredit className="mt-5 text-[13px] text-white/55" />
         </form>
       </section>
     </div>
