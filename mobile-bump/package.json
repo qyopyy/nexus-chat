@@ -9,6 +9,7 @@
     "open:android": "npx cap open android"
   },
   "dependencies": {
+    "@capacitor-community/apple-sign-in": "^7.0.1",
     "@capacitor/android": "^7.0.0",
     "@capacitor/core": "^7.0.0",
     "@capacitor/geolocation": "^7.0.0",

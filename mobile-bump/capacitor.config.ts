@@ -43,6 +43,7 @@ const config: CapacitorConfig = {
   plugins: {
     Haptics: {},
     Geolocation: {},
+    SignInWithApple: {},
     PushNotifications: { presentationOptions: ["badge", "sound", "alert"] },
     LocalNotifications: { iconColor: "#22c55a", sound: "default" },
     Badge: { persist: true, autoClear: false },

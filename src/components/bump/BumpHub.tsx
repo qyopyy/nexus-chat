@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { useAppearance } from "@/store/appearance";
+import BumpMusicPanel from "@/components/bump/BumpMusicPanel";
 import {
   bumpAttachAppleMaps,
   bumpClear,
@@ -64,26 +65,35 @@ import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import WumpMap from "./WumpMap";
-import WumpMusic from "./WumpMusic";
 import { WUMP, WUMP_TAGLINE } from "@/lib/wumpBrand";
-import { useWumpMusic, wumpSetPlaying } from "@/lib/wumpMusic";
+import { pauseBumpMusic, playBumpTrack, useBumpMusic } from "@/lib/bumpMusic";
 
-type Tab = "nearby" | "friends" | "profile" | "social" | "messages" | "music";
+type Tab = "nearby" | "friends" | "music" | "profile" | "social" | "messages";
 
 export default function BumpHub({
   mobile,
   onBack,
   standalone,
+  initialTab,
+  hideChromeTabs,
 }: {
   mobile?: boolean;
   onBack?: () => void;
   /** Standalone Wump IPA shell — hide back-to-Nexus chrome */
   standalone?: boolean;
+  /** Seed / control tab from parent shell nav */
+  initialTab?: Tab;
+  /** Hide top pill tabs (parent provides bottom nav) */
+  hideChromeTabs?: boolean;
 }) {
   const me = useApp((s) => s.userId);
   const friendships = useApp((s) => s.friendships);
   const profiles = useApp((s) => s.profiles);
-  const [tab, setTab] = useState<Tab>("nearby");
+  const [tab, setTab] = useState<Tab>(initialTab || "nearby");
+
+  useEffect(() => {
+    if (initialTab) setTab(initialTab);
+  }, [initialTab]);
   const [visible, setVisible] = useState<BumpVisible>("friends");
   const [live, setLive] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -95,13 +105,16 @@ export default function BumpHub({
   const [viewUser, setViewUser] = useState<string | null>(null);
   const [threadUser, setThreadUser] = useState<string | null>(null);
   const [liveLabel, setLiveLabel] = useState("");
-  const [shareFriendOpen, setShareFriendOpen] = useState(false);
-  const [shareBusy, setShareBusy] = useState(false);
   const [bgShare, setBgShare] = useState(true);
   const [alerts, setAlerts] = useState(true);
   const [autoStopMin, setAutoStopMin] = useState(0);
   const [flashUntil, setFlashUntil] = useState<number | null>(null);
+  const [shareFriendOpen, setShareFriendOpen] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
   const bumpOnly = standalone || isBumpApp();
+  const musicPlaying = useBumpMusic((s) => s.playing);
+  const musicCurrentId = useBumpMusic((s) => s.currentId);
+  const musicTracks = useBumpMusic((s) => s.tracks);
 
   const friendIds = useMemo(() => {
     if (!me) return [] as string[];
@@ -225,7 +238,7 @@ export default function BumpHub({
       setLive(true);
       await refresh();
       if (bgShare) {
-        toast(isNativeApp() ? "Live — background sharing on" : "Live — keep Bump open for updates", "success");
+        toast(isNativeApp() ? "Live — background sharing on" : `Live — keep ${WUMP} open for updates`, "success");
       }
     }
   }
@@ -259,7 +272,7 @@ export default function BumpHub({
       /* ignore */
     }
     if (navigator.share) {
-      void navigator.share({ title: "Join my Nexus Wump circle", text: "Find me nearby on Wump", url }).catch(() => {});
+      void navigator.share({ title: `Join my Nexus ${WUMP} circle`, text: `Find me nearby on ${WUMP}`, url }).catch(() => {});
     }
   }
 
@@ -274,19 +287,28 @@ export default function BumpHub({
   }
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "nearby", label: "Map" },
+    { id: "nearby", label: "Nearby" },
     { id: "friends", label: "Friends" },
     { id: "music", label: "Music" },
     { id: "profile", label: "Profile" },
     { id: "social", label: "People" },
     { id: "messages", label: "Messages" },
   ];
-  const musicPlaying = useWumpMusic((s) => s.playing);
-  const musicCurrent = useWumpMusic((s) => s.currentId);
-  const musicSongs = useWumpMusic((s) => s.songs);
 
   const flashLeft =
     flashUntil && flashUntil > Date.now() ? Math.max(0, Math.ceil((flashUntil - Date.now()) / 1000)) : 0;
+
+  const liveChip = (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+        live ? "bg-ok/20 text-ok" : "bg-white/10 text-sub",
+      )}
+    >
+      <span className={cn("size-1.5 animate-pulse rounded-full", live ? "bg-ok" : "bg-faint")} />
+      {live ? (bgShare ? "Live · bg" : "Live") : "Off"}
+    </span>
+  );
 
   return (
     <>
@@ -333,76 +355,78 @@ export default function BumpHub({
         </div>
       )}
 
-    <div className={cn("flex h-full flex-col bg-chat", (mobile || bumpOnly) && "pb-safe-2")}>
-      <header
-        className={cn(
-          "relative shrink-0 overflow-hidden border-b border-line",
-          mobile || onBack || bumpOnly ? "pt-safe-3" : "",
-        )}
-      >
-        <div
-          className="pointer-events-none absolute inset-0 opacity-90"
-          style={{
-            background:
-              "radial-gradient(ellipse 80% 120% at 0% 0%, color-mix(in oklab, #22c55a 22%, transparent), transparent 55%), radial-gradient(ellipse 60% 80% at 100% 0%, color-mix(in oklab, var(--color-accent) 16%, transparent), transparent 50%)",
-          }}
-        />
-        <div className={cn("relative flex items-center gap-2 px-3 pb-3", mobile || onBack || bumpOnly ? "pt-1" : "pt-3")}>
-          {!bumpOnly && (mobile || onBack) && (
-            <button
-              type="button"
-              onClick={() => (onBack ? onBack() : useApp.setState({ hub: null, appsTool: null }))}
-              className="grid size-9 place-items-center rounded-full bg-black/20 hover:bg-hover"
-              aria-label="Back to apps"
-            >
-              <ArrowLeft className="size-5" />
-            </button>
+    <div className={cn("flex h-full flex-col bg-chat", (mobile || bumpOnly) && !hideChromeTabs && "pb-safe-2")}>
+      {hideChromeTabs ? (
+        <div className="flex shrink-0 items-center gap-2 border-b border-white/5 px-4 py-2">
+          {liveChip}
+          {flashLeft > 0 && (
+            <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent tabular-nums">
+              Everyone {Math.floor(flashLeft / 60)}:{String(flashLeft % 60).padStart(2, "0")}
+            </span>
           )}
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-base font-extrabold tracking-tight sm:text-lg">{WUMP}</h1>
-              <span
+          <span className="ml-auto text-[11px] text-sub">Realtime nearby</span>
+        </div>
+      ) : (
+        <header
+          className={cn(
+            "relative shrink-0 overflow-hidden border-b border-line",
+            mobile || onBack || bumpOnly ? "pt-safe-3" : "",
+          )}
+        >
+          <div
+            className="pointer-events-none absolute inset-0 opacity-90"
+            style={{
+              background:
+                "radial-gradient(ellipse 80% 120% at 0% 0%, color-mix(in oklab, #22c55a 22%, transparent), transparent 55%), radial-gradient(ellipse 60% 80% at 100% 0%, color-mix(in oklab, var(--color-accent) 16%, transparent), transparent 50%)",
+            }}
+          />
+          <div className={cn("relative flex items-center gap-2 px-3 pb-3", mobile || onBack || bumpOnly ? "pt-1" : "pt-3")}>
+            {!bumpOnly && (mobile || onBack) && (
+              <button
+                type="button"
+                onClick={() => (onBack ? onBack() : useApp.setState({ hub: null, appsTool: null }))}
+                className="grid size-9 place-items-center rounded-full bg-black/20 hover:bg-hover"
+                aria-label="Back to apps"
+              >
+                <ArrowLeft className="size-5" />
+              </button>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-base font-extrabold tracking-tight sm:text-lg">{WUMP}</h1>
+                {liveChip}
+                {flashLeft > 0 && (
+                  <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent tabular-nums">
+                    Everyone {Math.floor(flashLeft / 60)}:{String(flashLeft % 60).padStart(2, "0")}
+                  </span>
+                )}
+              </div>
+              <p className="truncate text-[11px] text-sub">
+                {bumpOnly ? `Standalone ${WUMP} · same Nexus account` : WUMP_TAGLINE}
+              </p>
+            </div>
+            <MapPin className={cn("size-5 shrink-0", live ? "text-ok" : "text-sub")} />
+          </div>
+
+          <nav className="relative flex gap-1 overflow-x-auto px-3 pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
-                  live ? "bg-ok/20 text-ok" : "bg-white/10 text-sub",
+                  "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition",
+                  tab === t.id ? "bg-accent text-white shadow-sm shadow-accent/25" : "bg-black/25 text-sub hover:bg-white/10 hover:text-txt",
                 )}
               >
-                <span className={cn("size-1.5 animate-pulse rounded-full", live ? "bg-ok" : "bg-faint")} />
-                {live ? (bgShare ? "Live · bg" : "Live") : "Off"}
-              </span>
-              {flashLeft > 0 && (
-                <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent tabular-nums">
-                  Everyone {Math.floor(flashLeft / 60)}:{String(flashLeft % 60).padStart(2, "0")}
-                </span>
-              )}
-            </div>
-            <p className="truncate text-[11px] text-sub">
-              {bumpOnly ? `Standalone ${WUMP} · same Nexus account` : WUMP_TAGLINE}
-            </p>
-          </div>
-          <MapPin className={cn("size-5 shrink-0", live ? "text-ok" : "text-sub")} />
-        </div>
-
-        <nav className="relative flex gap-1 overflow-x-auto px-3 pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={cn(
-                "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition",
-                tab === t.id ? "bg-accent text-white shadow-sm shadow-accent/25" : "bg-black/25 text-sub hover:bg-white/10 hover:text-txt",
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
-      </header>
+                {t.label}
+              </button>
+            ))}
+          </nav>
+        </header>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
-        {tab === "music" && <WumpMusic />}
-
         {tab === "nearby" && (
           <div className="mx-auto max-w-xl space-y-4">
             <WumpMap
@@ -413,11 +437,12 @@ export default function BumpHub({
               placesCount={nearby.filter((n) => n.label).length + family.length}
               playing={musicPlaying}
               onTogglePlay={() => {
-                if (musicCurrent) wumpSetPlaying(musicCurrent, !musicPlaying);
-                else if (musicSongs[0]) wumpSetPlaying(musicSongs[0].id, true);
+                if (musicPlaying) pauseBumpMusic();
+                else if (musicCurrentId) void playBumpTrack(musicCurrentId);
+                else if (musicTracks[0]) void playBumpTrack(musicTracks[0].id);
                 else {
                   setTab("music");
-                  toast("Add local songs or link Spotify in Music", "info");
+                  toast("Add tracks in Music", "info");
                 }
               }}
               onOpenPerson={(id) => openPerson(id)}
@@ -437,7 +462,7 @@ export default function BumpHub({
               >
                 <span className="grid size-10 place-items-center rounded-xl bg-black/25 text-lg">📍</span>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold text-white">Get the Bump iOS app</div>
+                  <div className="text-sm font-bold text-white">Get the {WUMP} iOS app</div>
                   <div className="truncate text-[11px] text-white/70">Separate IPA · background Live · Sideloadly</div>
                 </div>
                 <Download className="size-4 shrink-0 text-[#86efac]" />
@@ -603,7 +628,7 @@ export default function BumpHub({
                 <Users className="size-4 text-accent" /> Family circle
               </div>
               {!family.length ? (
-                <p className="mb-3 text-xs text-sub">Invite family so you can find each other when Bump is on.</p>
+                <p className="mb-3 text-xs text-sub">Invite family so you can find each other when Wump is on.</p>
               ) : (
                 <ul className="mb-3 space-y-1">
                   {family.map((id) => (
@@ -670,11 +695,17 @@ export default function BumpHub({
           </div>
         )}
 
+        {tab === "music" && (
+          <div className="mx-auto h-full max-w-xl">
+            <BumpMusicPanel />
+          </div>
+        )}
+
         {tab === "friends" && (
           <div className="mx-auto max-w-xl">
             <PersonList
               title="Friends"
-              empty="No friends yet. Add people from Chats → Friends, then bump with them nearby."
+              empty="No friends yet. Add people from Chats → Friends, then find them nearby on Wump."
               ids={friendIds}
               meta={(id) => {
                 const n = nearbyById.get(id);
@@ -696,14 +727,14 @@ export default function BumpHub({
           </div>
         )}
 
-        {tab === "profile" && me && <WumpProfileEditor userId={me} />}
+        {tab === "profile" && me && <BumpProfileEditor userId={me} />}
 
         {tab === "social" && (
-          <WumpSocialPane me={me} focusUser={viewUser} onFocusUser={setViewUser} onMessage={openMessages} />
+          <BumpSocialPane me={me} focusUser={viewUser} onFocusUser={setViewUser} onMessage={openMessages} />
         )}
 
         {tab === "messages" && me && (
-          <WumpMessagesPane me={me} focusUser={threadUser} onFocusUser={setThreadUser} onOpenProfile={openPerson} friendIds={friendIds} />
+          <BumpMessagesPane me={me} focusUser={threadUser} onFocusUser={setThreadUser} onOpenProfile={openPerson} friendIds={friendIds} />
         )}
       </div>
     </div>
@@ -792,7 +823,7 @@ function PersonList({
   );
 }
 
-function WumpProfileEditor({ userId }: { userId: string }) {
+function BumpProfileEditor({ userId }: { userId: string }) {
   const nexus = useApp((s) => s.profiles[userId]);
   const [prof, setProf] = useState<BumpProfile | null>(null);
   const [bio, setBio] = useState("");
@@ -931,7 +962,7 @@ function WumpProfileEditor({ userId }: { userId: string }) {
   );
 }
 
-function WumpSocialPane({
+function BumpSocialPane({
   me,
   focusUser,
   onFocusUser,
@@ -1070,7 +1101,7 @@ function WumpSocialPane({
   );
 }
 
-function WumpMessagesPane({
+function BumpMessagesPane({
   me,
   focusUser,
   onFocusUser,
@@ -1153,7 +1184,7 @@ function WumpMessagesPane({
           </button>
         </div>
         <div ref={scroller} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3 py-3">
-          {!msgs.length && <p className="py-8 text-center text-xs text-sub">Say hi — first Bump message.</p>}
+          {!msgs.length && <p className="py-8 text-center text-xs text-sub">Say hi — first Wump message.</p>}
           {msgs.map((m, i) => {
             const mine = m.sender_id === me;
             const next = msgs[i + 1];
@@ -1208,7 +1239,7 @@ function WumpMessagesPane({
           </button>
         </div>
         {!inbox.length ? (
-          <p className="px-4 py-5 text-xs text-sub">No Bump messages yet. Open a friend or nearby profile and tap Message.</p>
+          <p className="px-4 py-5 text-xs text-sub">No Wump messages yet. Open a friend or nearby profile and tap Message.</p>
         ) : (
           <ul>
             {inbox.map((row) => (
