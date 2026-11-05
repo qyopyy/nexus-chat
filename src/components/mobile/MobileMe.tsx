@@ -1,11 +1,13 @@
 "use client";
 
 import { useRef } from "react";
-import { AppWindow, Bell, ChevronRight, Copy, Headphones, LayoutDashboard, LogOut, Mic, Moon, Palette, Radio, Shield, Sparkles, UserPen, Users, Gamepad2, Crown, Vault } from "lucide-react";
+import { AppWindow, Bell, ChevronRight, Copy, Headphones, LayoutDashboard, LogOut, Megaphone, Mic, Moon, Palette, Radio, Shield, Sparkles, Tv, UserPen, Users, Gamepad2, Crown, Vault } from "lucide-react";
 import { useApp, openModal, toast } from "@/store/app";
 import { useStudio } from "@/store/studio";
 import { openUntitled } from "@/lib/untitled";
 import { openRadio } from "@/lib/radio";
+import { openLiveHub } from "@/lib/live";
+import { openPulse } from "@/lib/pulse";
 import { leaveCall } from "@/lib/call";
 import { supabase } from "@/lib/supabase";
 import { roleRank } from "@/lib/theme";
@@ -114,6 +116,8 @@ export default function MobileMe() {
       <div className="mx-4 mt-4 overflow-hidden rounded-2xl bg-side [&>button+button]:border-t [&>button+button]:border-white/[.05]">
         {row(<Users className="size-[18px]" />, "#2aabee", "Friends", () => useApp.setState({ mobileTab: "friends" }), pending > 0 ? <span className="rounded-full bg-dnd px-2 text-xs font-bold text-white">{pending}</span> : undefined)}
         {row(<LayoutDashboard className="size-[18px]" />, "#eb459e", "Studio — videos & music releases", () => useApp.setState({ hub: "studio" }))}
+        {row(<Tv className="size-[18px]" />, "#9146ff", "Nexus Live — HD & 4K streams", () => openLiveHub())}
+        {row(<Megaphone className="size-[18px]" />, "#1d9bf0", "Pulse — Twitter-style posts", () => openPulse())}
         {row(<Radio className="size-[18px]" />, "#ff2bd6", "Nexus Radio — listen & jam together", () => void openRadio())}
         {row(<Headphones className="size-[18px]" />, "#c4a574", "Untitled — WIP music projects", () => openUntitled())}
         {row(<Gamepad2 className="size-[18px]" />, "#ff2bd6", "Games", () => useApp.setState({ mobileTab: "games" }))}

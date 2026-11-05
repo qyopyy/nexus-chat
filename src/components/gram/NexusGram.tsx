@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Clapperboard, Compass, Heart, House, Play, SquarePlus, UserRound } from "lucide-react";
+import { ArrowLeft, Clapperboard, Compass, Heart, House, Megaphone, Play, SquarePlus, UserRound } from "lucide-react";
 import { useApp } from "@/store/app";
 import { cn } from "@/lib/utils";
 import { feed, fmt, getPost, gramBack, gramGo, gramHome, mediaUrl, useGram, type Post } from "@/lib/gram";
+import { openPulse } from "@/lib/pulse";
 import Avatar from "@/components/ui/Avatar";
 import PostCard from "./PostCard";
 import Shorts from "./Shorts";
@@ -60,6 +61,9 @@ export default function NexusGram({ mobile }: { mobile?: boolean }) {
               {!mobile && <span className="hidden lg:inline">{n.label}</span>}
             </button>
           ))}
+          <button onClick={() => openPulse()} className="ml-1 grid size-9 place-items-center rounded-full bg-[#1d9bf0]/20 text-[#1d9bf0] hover:bg-[#1d9bf0]/30" aria-label="Pulse" title="Pulse">
+            <Megaphone className="size-5" />
+          </button>
           <button onClick={() => useGram.setState({ create: r.view === "shorts" ? "short" : "post" })} className="ml-1 grid size-9 place-items-center rounded-full bg-gradient-to-br from-[#ff2bd6] via-[#8b5cff] to-[#00c2ff] text-white" aria-label="Create" title="Create">
             <SquarePlus className="size-5" />
           </button>

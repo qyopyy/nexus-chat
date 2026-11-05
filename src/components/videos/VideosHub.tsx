@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Bookmark, Clapperboard, Copy, ExternalLink, MessageCircle, Pin, Scissors, Search, Send, Share2, Sparkles, ThumbsDown, ThumbsUp, Trash2, Upload, X } from "lucide-react";
+import { ArrowLeft, Bookmark, Clapperboard, Copy, ExternalLink, MessageCircle, Pin, Scissors, Search, Send, Share2, Sparkles, ThumbsDown, ThumbsUp, Trash2, Tv, Upload, X } from "lucide-react";
 import { addHistory, clearHistory, history, isLater, toggleLater, watchLater } from "@/lib/videoLists";
 import ClipToShort from "./ClipToShort";
 import VisualizerMaker from "@/components/media/VisualizerMaker";
 import { useApp, openProfileCard, toast } from "@/store/app";
 import { useStudio, videosBack, videosGo, videosHome, type VideosRoute } from "@/store/studio";
+import { openLiveHub } from "@/lib/live";
+import { openPulse } from "@/lib/pulse";
 import {
   comment as addComment,
   comments as loadComments,
@@ -127,6 +129,34 @@ function Home({ q, tab = "all" }: { q?: string; tab?: "all" | "subs" | "later" |
 
   return (
     <div className="mx-auto max-w-[1600px] px-3 pt-3 pb-12 sm:px-5">
+      <div className="mb-4 grid gap-2 sm:grid-cols-2">
+        <button
+          onClick={() => openLiveHub()}
+          className="flex items-center gap-3 rounded-2xl p-4 text-left text-white"
+          style={{ background: "linear-gradient(135deg,#9146ff 0%,#2a0a4a 55%,#0e0e10 100%)" }}
+        >
+          <span className="grid size-11 place-items-center rounded-xl bg-white/15">
+            <Tv className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[10px] font-semibold tracking-[0.2em] text-[#bf94ff] uppercase">Live</span>
+            <span className="block text-lg font-black">Nexus Live</span>
+            <span className="block text-sm text-white/75">Go live in HD or 4K · camera & screen share</span>
+          </span>
+        </button>
+        <button
+          onClick={() => openPulse()}
+          className="flex items-center gap-3 rounded-2xl p-4 text-left text-white"
+          style={{ background: "linear-gradient(135deg,#1d9bf0 0%,#0a2540 55%,#0e0e10 100%)" }}
+        >
+          <span className="grid size-11 place-items-center rounded-xl bg-white/15 text-lg font-black">𝕏</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[10px] font-semibold tracking-[0.2em] text-[#8ecdf8] uppercase">Social</span>
+            <span className="block text-lg font-black">Pulse</span>
+            <span className="block text-sm text-white/75">Twitter-style posts, likes, follows & reposts</span>
+          </span>
+        </button>
+      </div>
       <div className="no-scrollbar mb-4 flex gap-2 overflow-x-auto">
         {(
           [

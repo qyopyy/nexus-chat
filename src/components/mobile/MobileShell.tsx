@@ -19,6 +19,8 @@ import VideosHub from "@/components/videos/VideosHub";
 import NexusGram from "@/components/gram/NexusGram";
 import UntitledHub from "@/components/untitled/UntitledHub";
 import RadioHub from "@/components/radio/RadioHub";
+import LiveHub from "@/components/live/LiveHub";
+import PulseHub from "@/components/pulse/PulseHub";
 
 /** Phone layout: bottom tabs + push-style chat screen with swipe-from-edge to go back */
 export default function MobileShell() {
@@ -48,8 +50,8 @@ export default function MobileShell() {
               <FriendsView />
             </div>
           )}
-          {tab === "gram" && <NexusGram mobile />}
-          {tab === "videos" && <VideosHub mobile />}
+          {tab === "gram" && (hub === "pulse" ? <PulseHub mobile /> : <NexusGram mobile />)}
+          {tab === "videos" && (hub === "live" ? <LiveHub mobile /> : <VideosHub mobile />)}
           {tab === "music" && (hub === "untitled" ? <UntitledHub mobile /> : hub === "radio" ? <RadioHub mobile /> : <MusicHub mobile />)}
           {tab === "games" && <GamesHub mobile />}
           {tab === "apps" && <AppsHub mobile />}
