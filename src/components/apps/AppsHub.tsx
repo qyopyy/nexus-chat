@@ -229,7 +229,7 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl space-y-6 p-3 sm:p-5">
           <p className="text-sm text-sub">
-            Creator utilities that run in this tab. File tools stay on-device; Music ID check uses your Shield 360 catalogue and optional ACRCloud matching.
+            Creator utilities that run in this tab. File tools stay on-device; Music ID and Spotify takedown use your Shield / Spotify server keys when connected.
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {TOOLS.map((item) => (
