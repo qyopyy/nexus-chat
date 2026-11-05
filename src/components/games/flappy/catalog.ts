@@ -25,6 +25,27 @@ export const BIRDS: BirdDef[] = [
   { id: "alien", name: "Alien", color: "#10b981", cost: 260 },
   { id: "emo", name: "Moonlight", color: "#7c3aed", cost: 320, tag: "999" },
   { id: "lucid", name: "Lucid", color: "#c084fc", cost: 380, tag: "999" },
+  { id: "phoenix", name: "Phoenix", color: "#fb923c", cost: 420 },
+  { id: "candy", name: "Candy Pop", color: "#fb7185", cost: 280 },
+  { id: "frost", name: "Frostbite", color: "#a5f3fc", cost: 300 },
+];
+
+/** World index (1-based) → HTML engine environment id */
+export const WORLD_ENV = ["classic", "sunset", "cyberpunk", "snow", "volcano"] as const;
+
+export type Difficulty = "easy" | "normal" | "hard";
+export type PowerId = "slow" | "double" | "magnet";
+
+export const DIFFICULTY_META: Record<Difficulty, { label: string; blurb: string; coinMul: number }> = {
+  easy: { label: "Easy", blurb: "Wider gaps · chill pace", coinMul: 0.75 },
+  normal: { label: "Normal", blurb: "Classic Flappy Happy", coinMul: 1 },
+  hard: { label: "Hard", blurb: "Tight gaps · faster pipes · +coins", coinMul: 1.5 },
+};
+
+export const POWERUPS: { id: PowerId; name: string; emoji: string; cost: number; blurb: string }[] = [
+  { id: "slow", name: "Slow-mo", emoji: "🐢", cost: 45, blurb: "Pipes drift slower for one flight" },
+  { id: "double", name: "Double coins", emoji: "✨", cost: 60, blurb: "2× run coins on the next flight" },
+  { id: "magnet", name: "Coin magnet", emoji: "🧲", cost: 50, blurb: "Bigger coin pickup radius" },
 ];
 
 export const ACCESSORIES: AccDef[] = [
@@ -70,6 +91,12 @@ export const ACCESSORIES: AccDef[] = [
   { id: "rainbow", name: "Rainbow Trail", slot: "trail", cost: 250, emoji: "🌈", blurb: "Taste the rainbow" },
   { id: "notes", name: "Music Notes", slot: "trail", cost: 180, emoji: "🎵", blurb: "Score to the beat" },
   { id: "stars", name: "Star Dust", slot: "trail", cost: 160, emoji: "⭐", blurb: "Wish on every pipe" },
+  { id: "hearts", name: "Heart Trail", slot: "trail", cost: 170, emoji: "💗", blurb: "Spread the love" },
+  { id: "lightning", name: "Lightning Trail", slot: "trail", cost: 220, emoji: "⚡", blurb: "Zap through the sky" },
+
+  { id: "pilot", name: "Pilot Goggles", slot: "face", cost: 95, emoji: "🥽", blurb: "Ready for takeoff" },
+  { id: "flower", name: "Flower Crown", slot: "hat", cost: 110, emoji: "🌸", blurb: "Garden flyer" },
+  { id: "jetpack", name: "Neon Jetpack", slot: "back", cost: 340, emoji: "🔋", blurb: "Questionable FAA approval" },
 ];
 
 export const SLOT_LABEL: Record<AccSlot, string> = {

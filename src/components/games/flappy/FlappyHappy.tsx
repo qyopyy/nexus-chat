@@ -1,19 +1,33 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Gift, Infinity as InfinityIcon, RefreshCw, Settings, Shield, Trophy, Users } from "lucide-react";
+import { ArrowLeft, Gift, Infinity as InfinityIcon, RefreshCw, Settings, Shield, Target, Trophy, Users, Zap } from "lucide-react";
 import { useApp } from "@/store/app";
 import { useGames } from "@/store/games";
 import { myRank } from "@/lib/admin";
 import { cn } from "@/lib/utils";
 import FlappyRace from "./FlappyRace";
-import FlappySolo from "./FlappySolo";
+import FlappySolo, { type SoloResult } from "./FlappySolo";
 import BirdPreview from "./BirdPreview";
-import { ACCESSORIES, BIRDS, SLOT_LABEL, SLOTS, birdById, type AccSlot, type Equipped } from "./catalog";
+import {
+  ACCESSORIES,
+  BIRDS,
+  DIFFICULTY_META,
+  POWERUPS,
+  SLOT_LABEL,
+  SLOTS,
+  WORLD_ENV,
+  birdById,
+  type AccSlot,
+  type Difficulty,
+  type Equipped,
+  type PowerId,
+} from "./catalog";
+import { applyQuestEvent, questsForDay, syncQuestDay, type QuestProgress } from "./quests";
 
-type Tab = "home" | "birds" | "store" | "fit";
+type Tab = "home" | "birds" | "store" | "fit" | "quests";
 type Mode = "lobby" | "solo" | "race";
-type StoreFilter = "all" | "juice" | "packs" | AccSlot;
+type StoreFilter = "all" | "juice" | "packs" | "boosts" | AccSlot;
 
 type Save = {
   coins: number;
@@ -31,19 +45,42 @@ type Save = {
   best: number;
   name: string;
   rank: string;
-  /** admins can toggle — purchases never deduct coins */
   unlimitedCoins: boolean;
+  difficulty: Difficulty;
+  powerups: Record<PowerId, number>;
+  armedPower: PowerId | null;
+  questDay: string | null;
+  quests: QuestProgress[];
+  stats: {
+    flights: number;
+    pipes: number;
+    races: number;
+    wins: number;
+    coinsEarned: number;
+    streak: number;
+    lastPlay: string | null;
+  };
 };
 
 const WORLDS = ["Green Meadow", "Sunset Peaks", "Neon City", "Frozen Lake", "Volcano Rim"];
 const RANKS = ["Rookie", "Flyer", "Ace", "Champion", "Legend"];
-const KEY = "nexus:flappyHappy:v2";
+const KEY = "nexus:flappyHappy:v3";
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function emptyStats(): Save["stats"] {
+  return { flights: 0, pipes: 0, races: 0, wins: 0, coinsEarned: 0, streak: 0, lastPlay: null };
+}
 
 function loadSave(displayName: string): Save {
+  const day = today();
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(KEY) ?? localStorage.getItem("nexus:flappyHappy:v2");
     if (raw) {
-      const s = JSON.parse(raw) as Partial<Save>;
+      const s = JSON.parse(raw) as Partial<Save> & { powerups?: Partial<Record<PowerId, number>> };
+      const synced = syncQuestDay(day, s.quests, s.questDay);
       return {
         coins: s.coins ?? 0,
         gems: s.gems ?? 0,
@@ -61,11 +98,22 @@ function loadSave(displayName: string): Save {
         name: s.name || displayName.slice(0, 12).toUpperCase() || "FLAPPER",
         rank: s.rank ?? "Rookie",
         unlimitedCoins: !!s.unlimitedCoins,
+        difficulty: s.difficulty === "easy" || s.difficulty === "hard" ? s.difficulty : "normal",
+        powerups: {
+          slow: s.powerups?.slow ?? 0,
+          double: s.powerups?.double ?? 0,
+          magnet: s.powerups?.magnet ?? 0,
+        },
+        armedPower: s.armedPower ?? null,
+        questDay: synced.day,
+        quests: synced.quests,
+        stats: { ...emptyStats(), ...(s.stats ?? {}) },
       };
     }
   } catch {
     /* private mode */
   }
+  const synced = syncQuestDay(day, undefined, null);
   return {
     coins: 25,
     gems: 3,
@@ -83,6 +131,12 @@ function loadSave(displayName: string): Save {
     name: displayName.slice(0, 12).toUpperCase() || "FLAPPER",
     rank: "Rookie",
     unlimitedCoins: false,
+    difficulty: "normal",
+    powerups: { slow: 0, double: 0, magnet: 0 },
+    armedPower: null,
+    questDay: synced.day,
+    quests: synced.quests,
+    stats: emptyStats(),
   };
 }
 
@@ -92,10 +146,6 @@ function persist(s: Save) {
   } catch {
     /* ignore */
   }
-}
-
-function today() {
-  return new Date().toISOString().slice(0, 10);
 }
 
 export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mobile?: boolean }) {
@@ -111,6 +161,7 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
   const [toast, setToast] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [adminAmt, setAdminAmt] = useState("10000");
+  const [practice, setPractice] = useState(false);
 
   useEffect(() => {
     if (joinCode && joinFor === "flappy") setMode("race");
@@ -118,10 +169,23 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
 
   useEffect(() => persist(save), [save]);
 
+  useEffect(() => {
+    const day = today();
+    if (save.questDay === day) return;
+    const synced = syncQuestDay(day, undefined, null);
+    setSave((s) => ({ ...s, questDay: synced.day, quests: synced.quests }));
+  }, [save.questDay]);
+
   const bird = useMemo(() => birdById(save.bird), [save.bird]);
   const giftReady = save.lastGift !== today();
   const worldName = WORLDS[Math.min(WORLDS.length, save.world) - 1] ?? WORLDS[0];
   const worldCap = 25;
+  const worldEnv = WORLD_ENV[Math.min(WORLD_ENV.length, save.world) - 1] ?? "classic";
+  const questDefs = useMemo(() => questsForDay(save.questDay ?? today()), [save.questDay]);
+  const questDoneCount = save.quests.filter((q) => {
+    const def = questDefs.find((d) => d.id === q.id);
+    return def && (q.claimed || q.progress >= def.target);
+  }).length;
 
   const bump = (patch: Partial<Save>, msg?: string) => {
     setSave((s) => {
@@ -149,7 +213,6 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
     if (save.chests <= 0) return;
     const coins = 50 + Math.floor(Math.random() * 80);
     const gems = 1 + Math.floor(Math.random() * 2);
-    // chance at a free juice accessory
     const juicePool = ACCESSORIES.filter((a) => a.juice && !save.ownedAcc.includes(a.id));
     const prize = juicePool.length && Math.random() > 0.55 ? juicePool[Math.floor(Math.random() * juicePool.length)] : null;
     bump(
@@ -198,43 +261,145 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
     );
   };
 
+  const buyPower = (id: PowerId) => {
+    const p = POWERUPS.find((x) => x.id === id);
+    if (!p) return;
+    if (!canAfford(p.cost)) {
+      setToast("Not enough coins");
+      setTimeout(() => setToast(null), 1800);
+      return;
+    }
+    bump(
+      {
+        coins: save.coins - spend(p.cost),
+        powerups: { ...save.powerups, [id]: save.powerups[id] + 1 },
+      },
+      `+1 ${p.name}`,
+    );
+  };
+
+  const armPower = (id: PowerId | null) => {
+    if (id && save.powerups[id] <= 0) {
+      setToast("Buy this boost in Store first");
+      setTimeout(() => setToast(null), 1800);
+      return;
+    }
+    bump({ armedPower: save.armedPower === id ? null : id }, id ? `${POWERUPS.find((p) => p.id === id)?.name} armed` : "Boost cleared");
+  };
+
   const unequipSlot = (slot: AccSlot) => bump({ equipped: { ...save.equipped, [slot]: null } });
 
-  const onSoloResult = (score: number, coins: number) => {
+  const claimQuest = (id: string) => {
+    const def = questDefs.find((d) => d.id === id);
+    const q = save.quests.find((x) => x.id === id);
+    if (!def || !q || q.claimed || q.progress < def.target) return;
+    bump(
+      {
+        coins: save.coins + def.rewardCoins,
+        gems: save.gems + def.rewardGems,
+        quests: save.quests.map((x) => (x.id === id ? { ...x, claimed: true } : x)),
+      },
+      `Quest · +${def.rewardCoins} coins${def.rewardGems ? ` · +${def.rewardGems} gem` : ""}`,
+    );
+  };
+
+  const startSolo = (asPractice: boolean) => {
+    if (!asPractice && save.shields <= 0 && !save.unlimitedCoins) {
+      setToast("No shields left — claim your daily gift or practice");
+      setTimeout(() => setToast(null), 2200);
+      return;
+    }
+    setPractice(asPractice);
+    setMode("solo");
+  };
+
+  const onSoloResult = (result: SoloResult) => {
+    const { score, coins, practice: wasPractice } = result;
     setSave((s) => {
-      const best = Math.max(s.best, score);
-      let progress = Math.min(worldCap, s.progress + Math.min(5, Math.floor(score / 3) + 1));
+      const day = today();
+      const streak = s.stats.lastPlay === day ? s.stats.streak : s.stats.lastPlay && dayDiff(s.stats.lastPlay, day) === 1 ? s.stats.streak + 1 : 1;
+      let progress = s.progress;
       let world = s.world;
-      if (progress >= worldCap && world < WORLDS.length) {
-        world += 1;
-        progress = 0;
+      let shields = s.shields;
+      let armedPower = s.armedPower;
+      let powerups = { ...s.powerups };
+      // Engine already applies difficulty / double-coin multipliers
+      const coinGain = wasPractice ? Math.floor(coins * 0.35) : coins;
+
+      if (!wasPractice) {
+        progress = Math.min(worldCap, s.progress + Math.min(5, Math.floor(score / 3) + 1));
+        if (progress >= worldCap && world < WORLDS.length) {
+          world += 1;
+          progress = 0;
+        }
+        shields = Math.max(0, s.shields - (score < 3 ? 1 : 0));
+        if (s.armedPower && powerups[s.armedPower] > 0) {
+          powerups[s.armedPower] -= 1;
+          armedPower = null;
+        }
       }
+
+      const defs = questsForDay(s.questDay ?? day);
+      let quests = applyQuestEvent(s.quests, defs, { kind: "score", amount: score, bestScore: score });
+      quests = applyQuestEvent(quests, defs, { kind: "flights", amount: 1 });
+      quests = applyQuestEvent(quests, defs, { kind: "pipes", amount: score });
+      quests = applyQuestEvent(quests, defs, { kind: "coins", amount: coinGain });
+
       const next: Save = {
         ...s,
-        best,
-        coins: s.coins + coins + score,
+        best: Math.max(s.best, score),
+        coins: s.coins + coinGain,
         progress,
         world,
-        trophies: Math.min(10, s.trophies + (score >= 10 ? 1 : 0)),
-        rank: RANKS[Math.min(RANKS.length - 1, Math.floor(best / 25))],
-        shields: Math.max(0, s.shields - (score < 3 ? 1 : 0)),
+        trophies: Math.min(10, s.trophies + (!wasPractice && score >= 10 ? 1 : 0)),
+        rank: RANKS[Math.min(RANKS.length - 1, Math.floor(Math.max(s.best, score) / 25))],
+        shields,
+        powerups,
+        armedPower,
+        quests,
+        stats: {
+          ...s.stats,
+          flights: s.stats.flights + 1,
+          pipes: s.stats.pipes + score,
+          coinsEarned: s.stats.coinsEarned + coinGain,
+          streak,
+          lastPlay: day,
+        },
       };
       persist(next);
       return next;
     });
     setMode("lobby");
+    setToast(wasPractice ? `Practice · scored ${score}` : `Flight over · +coins`);
+    setTimeout(() => setToast(null), 2000);
   };
 
   const onRaceFinish = (place: number, score: number) => {
     const rewardChests = place > 0 && place <= 3 ? 1 : 0;
     setSave((s) => {
+      const day = today();
+      const defs = questsForDay(s.questDay ?? day);
+      let quests = applyQuestEvent(s.quests, defs, { kind: "race", amount: 1 });
+      quests = applyQuestEvent(quests, defs, { kind: "score", amount: score, bestScore: score });
+      quests = applyQuestEvent(quests, defs, { kind: "pipes", amount: score });
+      const coinGain = score * 2 + (place === 1 ? 40 : place === 2 ? 25 : place === 3 ? 15 : 5);
       const next: Save = {
         ...s,
         best: Math.max(s.best, score),
-        coins: s.coins + score * 2 + (place === 1 ? 40 : place === 2 ? 25 : place === 3 ? 15 : 5),
+        coins: s.coins + coinGain,
         gems: s.gems + (place === 1 ? 2 : place <= 3 ? 1 : 0),
         chests: s.chests + rewardChests,
         trophies: Math.min(10, s.trophies + (place > 0 && place <= 3 ? 1 : 0)),
+        quests,
+        stats: {
+          ...s.stats,
+          races: s.stats.races + 1,
+          wins: s.stats.wins + (place === 1 ? 1 : 0),
+          pipes: s.stats.pipes + score,
+          coinsEarned: s.stats.coinsEarned + coinGain,
+          lastPlay: day,
+          streak: s.stats.lastPlay === day ? s.stats.streak : s.stats.lastPlay && dayDiff(s.stats.lastPlay, day) === 1 ? s.stats.streak + 1 : 1,
+        },
       };
       persist(next);
       return next;
@@ -249,14 +414,26 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
   };
 
   const storeItems = useMemo(() => {
-    if (storeFilter === "packs") return [];
+    if (storeFilter === "packs" || storeFilter === "boosts") return [];
     if (storeFilter === "juice") return ACCESSORIES.filter((a) => a.juice);
     if (storeFilter === "all") return ACCESSORIES;
     return ACCESSORIES.filter((a) => a.slot === storeFilter);
   }, [storeFilter]);
 
   if (mode === "solo") {
-    return <FlappySolo birdId={save.bird} equipped={save.equipped} onBack={() => setMode("lobby")} onResult={onSoloResult} mobile={mobile} />;
+    return (
+      <FlappySolo
+        birdId={save.bird}
+        equipped={save.equipped}
+        env={worldEnv}
+        difficulty={save.difficulty}
+        power={practice ? null : save.armedPower}
+        practice={practice}
+        onBack={() => setMode("lobby")}
+        onResult={onSoloResult}
+        mobile={mobile}
+      />
+    );
   }
   if (mode === "race") {
     return <FlappyRace birdId={save.bird} onBack={() => setMode("lobby")} onFinish={onRaceFinish} mobile={mobile} />;
@@ -285,7 +462,10 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
             <BirdPreview birdId={save.bird} equipped={save.equipped} size="sm" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-black tracking-wide">{save.name}</div>
-              <div className="text-[10px] font-bold tracking-widest text-white/80 uppercase">{save.rank}</div>
+              <div className="text-[10px] font-bold tracking-widest text-white/80 uppercase">
+                {save.rank}
+                {save.stats.streak > 1 ? ` · 🔥${save.stats.streak}` : ""}
+              </div>
             </div>
             <Currency icon="🪙" value={save.unlimitedCoins ? null : save.coins} unlimited={save.unlimitedCoins} />
             <Currency icon="⚪" value={save.gems} />
@@ -317,10 +497,15 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                   <span className="mt-1 text-[10px] font-black tracking-wide">{giftReady ? "FREE" : "DONE"}</span>
                   <span className="text-[10px] font-semibold text-white/80">Daily Gift</span>
                 </button>
-                <button onClick={() => { setTab("store"); setStoreFilter("juice"); }} className="flex flex-1 flex-col items-center rounded-2xl bg-[#4c1d95]/80 px-2 py-3 ring-1 ring-white/20">
-                  <span className="text-2xl">9️⃣</span>
-                  <span className="mt-1 text-[10px] font-black tracking-wide">999</span>
-                  <span className="text-[10px] font-semibold text-white/80">Juice fits</span>
+                <button onClick={() => setTab("quests")} className="relative flex flex-1 flex-col items-center rounded-2xl bg-[#0f766e]/85 px-2 py-3 ring-1 ring-white/20">
+                  <Target className="size-6" />
+                  <span className="mt-1 text-[10px] font-black tracking-wide">
+                    {questDoneCount}/3
+                  </span>
+                  <span className="text-[10px] font-semibold text-white/80">Quests</span>
+                  {questDoneCount > 0 && save.quests.some((q) => !q.claimed && questDefs.find((d) => d.id === q.id && q.progress >= d.target)) && (
+                    <span className="absolute top-2 right-3 size-2 rounded-full bg-[#ef4444]" />
+                  )}
                 </button>
                 <button onClick={() => setMode("race")} className="flex flex-1 flex-col items-center rounded-2xl bg-[#7c3aed]/85 px-2 py-3 ring-1 ring-white/30">
                   <Users className="size-6" />
@@ -329,7 +514,43 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                 </button>
               </div>
 
-              <div className="relative mt-2 flex flex-col items-center">
+              <div className="rounded-2xl bg-black/25 p-3 backdrop-blur">
+                <div className="mb-2 flex items-center gap-2 text-xs font-black tracking-wide uppercase">
+                  <Zap className="size-3.5 text-[#facc15]" /> Difficulty
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(Object.keys(DIFFICULTY_META) as Difficulty[]).map((id) => (
+                    <button
+                      key={id}
+                      onClick={() => bump({ difficulty: id })}
+                      className={cn("rounded-xl px-2 py-2 text-center", save.difficulty === id ? "bg-[#facc15] text-black" : "bg-black/30")}
+                    >
+                      <div className="text-xs font-black">{DIFFICULTY_META[id].label}</div>
+                      <div className="mt-0.5 text-[9px] font-semibold opacity-80">{DIFFICULTY_META[id].blurb}</div>
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3 mb-1.5 text-xs font-black tracking-wide text-white/80 uppercase">Armed boost</div>
+                <div className="flex flex-wrap gap-1.5">
+                  <button onClick={() => armPower(null)} className={cn("rounded-full px-3 py-1.5 text-[11px] font-bold", !save.armedPower ? "bg-[#facc15] text-black" : "bg-black/30")}>
+                    None
+                  </button>
+                  {POWERUPS.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => armPower(p.id)}
+                      className={cn("rounded-full px-3 py-1.5 text-[11px] font-bold", save.armedPower === p.id ? "bg-[#facc15] text-black" : "bg-black/30")}
+                    >
+                      {p.emoji} {save.powerups[p.id]}
+                    </button>
+                  ))}
+                  <button onClick={() => { setTab("store"); setStoreFilter("boosts"); }} className="rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold">
+                    Buy +
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative mt-1 flex flex-col items-center">
                 <BirdPreview birdId={save.bird} equipped={save.equipped} size="lg" />
                 <div className="mt-3 text-sm font-black tracking-widest uppercase">{bird.name}</div>
                 <div className="mt-1 flex flex-wrap justify-center gap-1">
@@ -352,17 +573,13 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                   </button>
                 </div>
                 <button
-                  onClick={() => {
-                    if (save.shields <= 0 && !save.unlimitedCoins) {
-                      setToast("No shields left — claim your daily gift");
-                      setTimeout(() => setToast(null), 2200);
-                      return;
-                    }
-                    setMode("solo");
-                  }}
+                  onClick={() => startSolo(false)}
                   className="mt-4 w-full max-w-xs rounded-2xl bg-[#facc15] py-4 text-xl font-black tracking-widest text-black uppercase shadow-[0_8px_0_#ca8a04] active:translate-y-1 active:shadow-none"
                 >
                   Play
+                </button>
+                <button onClick={() => startSolo(true)} className="mt-2 text-xs font-bold tracking-wide text-white/85 underline-offset-2 hover:underline">
+                  Practice (no shield · 35% coins)
                 </button>
               </div>
 
@@ -388,7 +605,53 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                   })}
                 </div>
               </div>
+
+              <div className="grid grid-cols-4 gap-2 rounded-2xl bg-black/20 p-3 text-center text-[11px] font-bold backdrop-blur">
+                <Stat label="Flights" value={save.stats.flights} />
+                <Stat label="Pipes" value={save.stats.pipes} />
+                <Stat label="Races" value={save.stats.races} />
+                <Stat label="Wins" value={save.stats.wins} />
+              </div>
             </>
+          )}
+
+          {tab === "quests" && (
+            <div className="space-y-2">
+              <p className="text-sm text-white/85">Three daily challenges refresh at midnight UTC. Claim rewards when the bar fills.</p>
+              {questDefs.map((def) => {
+                const q = save.quests.find((x) => x.id === def.id) ?? { id: def.id, progress: 0, claimed: false };
+                const pct = Math.min(100, (q.progress / def.target) * 100);
+                const ready = !q.claimed && q.progress >= def.target;
+                return (
+                  <div key={def.id} className="rounded-2xl bg-black/30 p-3 backdrop-blur">
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-black">{def.title}</div>
+                        <div className="text-xs text-white/75">{def.desc}</div>
+                      </div>
+                      <div className="text-right text-[11px] font-black text-[#facc15]">
+                        +{def.rewardCoins}🪙{def.rewardGems ? ` +${def.rewardGems}⚪` : ""}
+                      </div>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/35">
+                      <div className="h-full rounded-full bg-[#2dd4bf]" style={{ width: `${pct}%` }} />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-xs font-bold">
+                      <span>
+                        {Math.min(q.progress, def.target)}/{def.target}
+                      </span>
+                      {q.claimed ? (
+                        <span className="text-white/60">Claimed</span>
+                      ) : (
+                        <button disabled={!ready} onClick={() => claimQuest(def.id)} className={cn("rounded-full px-3 py-1", ready ? "bg-[#facc15] text-black" : "bg-white/10 text-white/50")}>
+                          Claim
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
 
           {tab === "birds" && (
@@ -453,6 +716,7 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                   [
                     ["all", "All"],
                     ["juice", "999 Juice"],
+                    ["boosts", "Boosts"],
                     ["hat", "Hats"],
                     ["face", "Face"],
                     ["neck", "Neck"],
@@ -471,7 +735,21 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                 ))}
               </div>
 
-              {storeFilter === "packs" ? (
+              {storeFilter === "boosts" ? (
+                <div className="space-y-2">
+                  {POWERUPS.map((p) => (
+                    <button key={p.id} onClick={() => buyPower(p.id)} className="flex w-full items-center gap-3 rounded-2xl bg-black/30 p-3 text-left backdrop-blur">
+                      <span className="text-3xl">{p.emoji}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-bold">{p.name}</span>
+                        <span className="block text-xs text-white/75">{p.blurb}</span>
+                        <span className="mt-1 block text-[11px] text-white/60">Owned · {save.powerups[p.id]}</span>
+                      </span>
+                      <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-black">🪙 {p.cost}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : storeFilter === "packs" ? (
                 <div className="space-y-2">
                   {[
                     {
@@ -490,6 +768,25 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                       apply: () => {
                         if (save.gems < 2) return setToast("Need 2 gems");
                         bump({ gems: save.gems - 2, shields: 2 }, "Shields refilled");
+                      },
+                    },
+                    {
+                      title: "Boost bundle",
+                      desc: "+1 Slow-mo · +1 Double · +1 Magnet",
+                      cost: "3 gems",
+                      apply: () => {
+                        if (save.gems < 3) return setToast("Need 3 gems");
+                        bump(
+                          {
+                            gems: save.gems - 3,
+                            powerups: {
+                              slow: save.powerups.slow + 1,
+                              double: save.powerups.double + 1,
+                              magnet: save.powerups.magnet + 1,
+                            },
+                          },
+                          "Boost bundle claimed",
+                        );
                       },
                     },
                     {
@@ -568,12 +865,13 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
         </div>
       </div>
 
-      <nav className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-around border-t border-black/10 bg-[#0b3a1f]/95 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur">
+      <nav className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-around border-t border-black/10 bg-[#0b3a1f]/95 px-1 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur">
         {(
           [
             ["store", "Store", "🛍️"],
-            ["fit", "Fit", "👗"],
+            ["quests", "Quests", "🎯"],
             ["home", "Home", "🏠"],
+            ["fit", "Fit", "👗"],
             ["birds", "Birds", "🐤"],
           ] as const
         ).map(([id, label, emoji]) => (
@@ -581,12 +879,11 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
             <span className="text-xl">{emoji}</span>
             {label}
             {id === "home" && save.chests > 0 && <span className="absolute top-0 right-1/4 size-2 rounded-full bg-[#ef4444]" />}
+            {id === "quests" && save.quests.some((q) => !q.claimed && questDefs.find((d) => d.id === q.id && q.progress >= d.target)) && (
+              <span className="absolute top-0 right-1/4 size-2 rounded-full bg-[#ef4444]" />
+            )}
           </button>
         ))}
-        <button onClick={() => setMode("race")} className="flex flex-1 flex-col items-center gap-0.5 py-1 text-[10px] font-bold text-white/70">
-          <span className="text-xl">🏁</span>
-          Race
-        </button>
       </nav>
 
       {settingsOpen && (
@@ -602,6 +899,18 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                 onChange={(e) => bump({ name: e.target.value.toUpperCase() })}
               />
             </label>
+
+            <div className="mb-4 rounded-2xl bg-white/5 p-3 text-xs">
+              <div className="mb-2 font-black tracking-wide uppercase">Career</div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>Flights · {save.stats.flights}</div>
+                <div>Pipes · {save.stats.pipes}</div>
+                <div>Races · {save.stats.races}</div>
+                <div>Wins · {save.stats.wins}</div>
+                <div>Coins earned · {save.stats.coinsEarned}</div>
+                <div>Streak · {save.stats.streak}d</div>
+              </div>
+            </div>
 
             {isAdmin && (
               <div className="mb-4 rounded-2xl border border-[#f0b232]/40 bg-[#f0b232]/10 p-3">
@@ -647,16 +956,23 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                 <button
                   onClick={() => {
                     const all = ACCESSORIES.map((a) => a.id);
-                    bump({ ownedAcc: Array.from(new Set([...save.ownedAcc, ...all])), unlocked: BIRDS.map((b) => b.id) }, "Unlocked all birds & accessories");
+                    bump(
+                      {
+                        ownedAcc: Array.from(new Set([...save.ownedAcc, ...all])),
+                        unlocked: BIRDS.map((b) => b.id),
+                        powerups: { slow: 99, double: 99, magnet: 99 },
+                      },
+                      "Unlocked all birds, accessories & boosts",
+                    );
                   }}
                   className="mt-2 w-full rounded-full bg-white/10 py-2 text-xs font-bold"
                 >
-                  Unlock all birds + accessories
+                  Unlock all birds + accessories + boosts
                 </button>
               </div>
             )}
 
-            <p className="text-xs text-white/60">Progress saves on this device. Spend coins in Store for 999 / Juice-style fits and more drip.</p>
+            <p className="text-xs text-white/60">Progress saves on this device. Worlds change the solo sky theme. Hard mode pays more coins.</p>
             <button onClick={() => setSettingsOpen(false)} className="mt-4 w-full rounded-full bg-white py-2.5 font-bold text-black">
               Done
             </button>
@@ -673,12 +989,26 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
   );
 }
 
+function dayDiff(a: string, b: string) {
+  const ms = new Date(b).getTime() - new Date(a).getTime();
+  return Math.round(ms / 86400000);
+}
+
 function Currency({ icon, value, unlimited }: { icon: string; value: number | null; unlimited?: boolean }) {
   return (
     <div className="flex items-center gap-1 rounded-full bg-black/35 py-1 pr-1.5 pl-2 text-xs font-black tabular-nums">
       <span>{icon}</span>
       {unlimited ? "∞" : value}
       <span className="grid size-5 place-items-center rounded-full bg-white/20 text-[10px]">+</span>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <div className="text-lg font-black tabular-nums">{value}</div>
+      <div className="text-[10px] tracking-wide text-white/70 uppercase">{label}</div>
     </div>
   );
 }
