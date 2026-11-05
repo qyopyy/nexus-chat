@@ -165,7 +165,15 @@ export type LMap = {
 export type LeafletNS = {
   map: (el: HTMLElement, o?: Record<string, unknown>) => LMap;
   tileLayer: (url: string, o?: Record<string, unknown>) => { addTo: (m: LMap) => unknown };
-  marker: (c: [number, number], o?: Record<string, unknown>) => { addTo: (m: LMap) => { remove: () => void; bindTooltip?: (t: string, o?: Record<string, unknown>) => unknown }; remove: () => void };
+  marker: (c: [number, number], o?: Record<string, unknown>) => {
+    addTo: (m: LMap) => {
+      remove: () => void;
+      setLatLng: (c: [number, number]) => void;
+      on: (ev: string, fn: () => void) => void;
+      bindTooltip?: (t: string, o?: Record<string, unknown>) => unknown;
+    };
+    remove: () => void;
+  };
   polyline: (c: [number, number][], o?: Record<string, unknown>) => { addTo: (m: LMap) => { remove: () => void } };
   divIcon: (o: Record<string, unknown>) => unknown;
 };
@@ -211,6 +219,23 @@ export function newMap(L: LeafletNS, el: HTMLElement): LMap {
   return m;
 }
 
+/** Wump live map — OSM/CARTO tiles, street-level default, zoom controls hidden (FABs own chrome). */
+export function newWumpMap(L: LeafletNS, el: HTMLElement, center: [number, number] = [47.5, 19.05], zoom = 14): LMap {
+  const m = L.map(el, {
+    worldCopyJump: true,
+    minZoom: 2,
+    maxZoom: 19,
+    zoomControl: false,
+    attributionControl: true,
+  }).setView(center, zoom);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    attribution: "© OpenStreetMap © CARTO",
+    subdomains: "abcd",
+    maxZoom: 19,
+  }).addTo(m);
+  return m;
+}
+
 export const pinIcon = (L: LeafletNS, color: string, label = "") =>
   L.divIcon({
     className: "",
@@ -218,3 +243,24 @@ export const pinIcon = (L: LeafletNS, color: string, label = "") =>
     iconAnchor: [14, 34],
     html: `<div style="position:relative;width:28px;height:36px"><svg viewBox="0 0 28 36" width="28" height="36"><path d="M14 35s12-12.6 12-21A12 12 0 0 0 2 14c0 8.4 12 21 12 21z" fill="${color}" stroke="#fff" stroke-width="2.5"/></svg><span style="position:absolute;top:5px;left:0;width:28px;text-align:center;font:800 11px system-ui;color:#fff">${label}</span></div>`,
   });
+
+/** Round avatar pin for Wump friends on the live map */
+export const wumpAvatarIcon = (L: LeafletNS, opts: { color: string; initial: string; me?: boolean; label?: string }) => {
+  const ring = opts.me ? "#38bdf8" : opts.color || "#22c55a";
+  const sub = opts.label
+    ? `<span style="position:absolute;left:50%;bottom:-14px;transform:translateX(-50%);white-space:nowrap;background:rgba(15,23,42,.85);color:#fff;font:700 9px system-ui;padding:1px 5px;border-radius:999px">${opts.label}</span>`
+    : "";
+  return L.divIcon({
+    className: "",
+    iconSize: [44, 44],
+    iconAnchor: [22, 22],
+    html: `<div style="position:relative;width:44px;height:44px">
+      <div style="width:44px;height:44px;border-radius:999px;background:${ring};box-shadow:0 4px 14px rgba(0,0,0,.35);display:grid;place-items:center;border:3px solid #fff">
+        <span style="font:800 15px system-ui;color:#fff">${opts.initial.slice(0, 1).toUpperCase()}</span>
+      </div>
+      ${opts.me ? `<span style="position:absolute;inset:-4px;border-radius:999px;border:2px solid #38bdf8;opacity:.55;animation:wump-pulse 1.6s ease-out infinite"></span>` : ""}
+      ${sub}
+    </div>
+    <style>@keyframes wump-pulse{0%{transform:scale(.92);opacity:.7}100%{transform:scale(1.35);opacity:0}}</style>`,
+  });
+};

@@ -63,8 +63,9 @@ export type BumpInboxRow = {
  * Standalone Wump IPA already lives on /bump/app.
  */
 export function openBump() {
-  if (typeof window !== "undefined" && /BumpApp/i.test(navigator.userAgent)) {
-    if (!window.location.pathname.startsWith("/bump/app")) {
+  if (typeof window !== "undefined" && /BumpApp|WumpApp/i.test(navigator.userAgent)) {
+    const onShell = window.location.pathname.startsWith("/bump/app") || window.location.pathname.startsWith("/wump/app");
+    if (!onShell) {
       window.location.href = "/bump/app";
       return;
     }
@@ -141,9 +142,9 @@ export function subscribeBumpLive(handlers: {
 
 export function bumpInviteLink(code: string) {
   const clean = code.trim();
-  // /bump/… — not /b/… (that path is reserved for bot profiles)
-  if (typeof window === "undefined") return `https://nexusproject.cc/bump/${encodeURIComponent(clean)}`;
-  return `${window.location.origin}/bump/${encodeURIComponent(clean)}`;
+  // Prefer /wump/… brand; /bump/… still works. Avoid /b/… (bot profiles).
+  if (typeof window === "undefined") return `https://nexusproject.cc/wump/${encodeURIComponent(clean)}`;
+  return `${window.location.origin}/wump/${encodeURIComponent(clean)}`;
 }
 
 export function bumpSpotifyTrackEmbed(url: string | null | undefined) {
@@ -164,13 +165,20 @@ export async function bumpPublish(visible: BumpVisible = "friends", label?: stri
     return null;
   }
   try {
-    const loc = await getDeviceLocation({ highAccuracy: true });
+    const { loadWumpPrivacyLocal } = await import("./wumpPrivacy");
+    const priv = loadWumpPrivacyLocal();
+    if (!priv.wump_share_enabled) {
+      toast("Location sharing is off in Wump privacy settings", "error");
+      return null;
+    }
+    const loc = await getDeviceLocation({ highAccuracy: priv.wump_precision === "exact" });
     const { data, error } = await supabase.rpc("bump_publish", {
       p_lat: loc.lat,
       p_lng: loc.lng,
       p_accuracy: loc.accuracy,
       p_visible: visible,
       p_label: label ?? null,
+      p_precision: priv.wump_precision,
     });
     if (error) {
       toast(errorText(error) || "Couldn't share location", "error");
@@ -237,7 +245,13 @@ export async function bumpRedeemInvite(code: string) {
   }
   const out = data as { ok?: boolean; creator_id?: string; kind?: string };
   if (out.creator_id) await loadProfiles([out.creator_id]);
-  toast(out.kind === "family" ? "Added to family circle" : "Invite accepted", "success");
+  const kindMsg =
+    out.kind === "family"
+      ? "Joined their family circle on Wump"
+      : out.kind === "friend"
+        ? "Friend request sent via Wump invite"
+        : "Wump invite accepted — you're connected";
+  toast(kindMsg, "success");
   return out;
 }
 
@@ -416,6 +430,9 @@ export async function bumpShareLocationWithFriend(friendId: string, note?: strin
 /** Quiet republish for live heartbeat (no toast). */
 export async function bumpHeartbeat(visible: BumpVisible = "friends", label?: string | null) {
   try {
+    const { loadWumpPrivacyLocal } = await import("./wumpPrivacy");
+    const priv = loadWumpPrivacyLocal();
+    if (!priv.wump_share_enabled) return false;
     const loc = await getDeviceLocation({ highAccuracy: false });
     const { error } = await supabase.rpc("bump_publish", {
       p_lat: loc.lat,
@@ -423,6 +440,7 @@ export async function bumpHeartbeat(visible: BumpVisible = "friends", label?: st
       p_accuracy: loc.accuracy,
       p_visible: visible,
       p_label: label?.trim() || null,
+      p_precision: priv.wump_precision,
     });
     return !error;
   } catch {

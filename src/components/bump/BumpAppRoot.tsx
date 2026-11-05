@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { ExternalLink, LogOut, MapPin, MessageCircle, Music2, Radio, Users } from "lucide-react";
+import { ExternalLink, LogOut, MapPin, MessageCircle, Music2, Radio, Shield, Users } from "lucide-react";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { startLiveUpdates } from "@/lib/liveUpdate";
 import { mfaNeedsChallenge } from "@/lib/mfa";
@@ -19,7 +19,7 @@ import Toasts from "@/components/ui/Toasts";
 import EffectsLayer from "@/components/effects/EffectsLayer";
 import { cn } from "@/lib/utils";
 
-type Nav = "nearby" | "friends" | "music" | "messages";
+type Nav = "nearby" | "friends" | "music" | "messages" | "settings";
 
 /** Next-gen standalone Wump IPA shell (`/bump/app` or `/wump/app`). */
 export default function BumpAppRoot() {
@@ -91,10 +91,11 @@ export default function BumpAppRoot() {
   }
 
   const items: { id: Nav; label: string; icon: React.ReactNode }[] = [
-    { id: "nearby", label: "Nearby", icon: <Radio className="size-5" /> },
+    { id: "nearby", label: "Map", icon: <Radio className="size-5" /> },
     { id: "friends", label: "Friends", icon: <Users className="size-5" /> },
     { id: "music", label: "Music", icon: <Music2 className="size-5" /> },
     { id: "messages", label: "Chat", icon: <MessageCircle className="size-5" /> },
+    { id: "settings", label: "Privacy", icon: <Shield className="size-5" /> },
   ];
 
   return (
@@ -126,7 +127,7 @@ export default function BumpAppRoot() {
                 </span>
               )}
             </div>
-            <p className="truncate text-[12px] text-white/55">Nearby · music · live DMs · same Nexus account</p>
+            <p className="truncate text-[12px] text-white/55">OSM map · Live pins · invite links · same Nexus account</p>
           </div>
           <a
             href="https://nexusproject.cc"

@@ -71,8 +71,8 @@ const TOOLS: {
   {
     id: "bump",
     name: "Wump",
-    tag: "Map · places · Spotify · local music",
-    desc: "Friends on a live map — places, Spotify Now Playing, local songs with folders & projects, waves & DMs.",
+    tag: "OSM map · invites · privacy",
+    desc: "Real OpenStreetMap pins, Live sharing, family/friend invite links — also a separate Wump IPA.",
     bg: "linear-gradient(135deg,#ff4d6d,#7c3aed 50%,#2563eb)",
     emoji: "📍",
     Icon: MapPin,
@@ -301,11 +301,11 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
                 </div>
                 <div className="mt-1 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Wump</div>
                 <p className="mt-1 max-w-xl text-sm text-white/75">
-                  Find people nearby, friends, profiles, and DMs — updates live on this phone without a new IPA or APK.
+                  Real OpenStreetMap · Live friend pins · invite links. Built into Nexus here, plus a separate Wump iOS app with the same account.
                 </p>
               </div>
               <span className="inline-flex shrink-0 items-center justify-center rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#14532d] shadow-sm group-hover:bg-[#dcfce7]">
-                Open Wump
+                Open in Nexus
               </span>
             </div>
           </button>
