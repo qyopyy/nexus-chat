@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, Heart, MessageCircle, Plus, Share2, Volume2, VolumeX } from "lucide-react";
+import { Download, Heart, MessageCircle, PlaySquare, Plus, Share2, Volume2, VolumeX } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { myRank } from "@/lib/admin";
 import { haptic } from "@/lib/haptics";
@@ -9,9 +9,11 @@ import { cn } from "@/lib/utils";
 import { countView, feed, fmt, getPost, gramGo, mediaUrl, publicContentUrl, setFollow, setLike, useGram, type Post } from "@/lib/gram";
 import Avatar from "@/components/ui/Avatar";
 import { CommentsSheet } from "./PostCard";
+import YouTubeShorts from "./YouTubeShorts";
 
 /** vertical, full-height, swipe-up Shorts feed (autoplay the one on screen) */
 export default function Shorts({ start, mobile }: { start?: string; mobile?: boolean }) {
+  const [source, setSource] = useState<"nexus" | "youtube">("nexus");
   const [rows, setRows] = useState<Post[] | null>(null);
   const [muted, setMuted] = useState(true);
   const [done, setDone] = useState(false);
@@ -36,30 +38,54 @@ export default function Shorts({ start, mobile }: { start?: string; mobile?: boo
   }, [rows, start]);
   useEffect(() => void more(true), []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (rows === null) return <div className="grid h-full place-items-center bg-black text-white/70">Loading Shorts…</div>;
-  if (!rows.length)
-    return (
-      <div className="grid h-full place-items-center bg-black p-6 text-center text-white">
-        <div>
-          <div className="text-5xl">🎬</div>
-          <p className="mt-2 font-semibold">No Shorts yet</p>
-          <button onClick={() => useGram.setState({ create: "short" })} className="mt-3 rounded-full bg-white px-5 py-2 font-bold text-black">
-            Post the first one
-          </button>
-        </div>
-      </div>
-    );
   return (
-    <div
-      className="h-full snap-y snap-mandatory overflow-y-scroll overscroll-contain bg-black [scrollbar-width:none]"
-      onScroll={(e) => {
-        const el = e.currentTarget;
-        if (!done && el.scrollTop + el.clientHeight * 3 > el.scrollHeight) void more();
-      }}
-    >
-      {rows.map((p) => (
-        <Short key={p.id} p={p} muted={muted} setMuted={setMuted} mobile={mobile} />
-      ))}
+    <div className="relative flex h-full flex-col bg-black">
+      <div className="absolute top-2 left-1/2 z-20 flex -translate-x-1/2 gap-1 rounded-full bg-black/55 p-1 backdrop-blur-md">
+        <button
+          type="button"
+          onClick={() => setSource("nexus")}
+          className={cn("rounded-full px-3 py-1 text-xs font-bold", source === "nexus" ? "bg-white text-black" : "text-white/75")}
+        >
+          Nexus
+        </button>
+        <button
+          type="button"
+          onClick={() => setSource("youtube")}
+          className={cn("inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold", source === "youtube" ? "bg-[#ff0033] text-white" : "text-white/75")}
+        >
+          <PlaySquare className="size-3.5" /> YouTube
+        </button>
+      </div>
+      {source === "youtube" ? (
+        <YouTubeShorts mobile={mobile} />
+      ) : rows === null ? (
+        <div className="grid h-full place-items-center text-white/70">Loading Shorts…</div>
+      ) : !rows.length ? (
+        <div className="grid h-full place-items-center p-6 text-center text-white">
+          <div>
+            <div className="text-5xl">🎬</div>
+            <p className="mt-2 font-semibold">No Shorts yet</p>
+            <button onClick={() => useGram.setState({ create: "short" })} className="mt-3 rounded-full bg-white px-5 py-2 font-bold text-black">
+              Post the first one
+            </button>
+            <button type="button" onClick={() => setSource("youtube")} className="mt-3 block w-full text-sm font-semibold text-[#ff0033]">
+              Or watch from YouTube →
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div
+          className="h-full snap-y snap-mandatory overflow-y-scroll overscroll-contain [scrollbar-width:none]"
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            if (!done && el.scrollTop + el.clientHeight * 3 > el.scrollHeight) void more();
+          }}
+        >
+          {rows.map((p) => (
+            <Short key={p.id} p={p} muted={muted} setMuted={setMuted} mobile={mobile} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

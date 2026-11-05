@@ -1,13 +1,14 @@
 "use client";
 
 import { useRef } from "react";
-import { AppWindow, Bell, ChevronRight, Copy, Crown, Gamepad2, Headphones, LayoutDashboard, LogOut, Megaphone, Mic, Moon, Palette, Radio, Shield, Sparkles, Tv, UserPen, Users, Vault } from "lucide-react";
+import { AppWindow, Bell, ChevronRight, Copy, Crown, Gamepad2, Headphones, LayoutDashboard, LogOut, MapPin, Megaphone, Mic, Moon, Palette, Radio, Shield, Sparkles, Tv, UserPen, Users, Vault } from "lucide-react";
 import { useApp, openModal, toast } from "@/store/app";
 import { useStudio } from "@/store/studio";
 import { openUntitled } from "@/lib/untitled";
 import { openRadio } from "@/lib/radio";
 import { openLiveHub } from "@/lib/live";
 import { openPulse } from "@/lib/pulse";
+import { openBump } from "@/lib/bump";
 import { openStaffDesk } from "@/lib/privileges";
 import { leaveCall } from "@/lib/call";
 import { supabase } from "@/lib/supabase";
@@ -125,6 +126,7 @@ export default function MobileMe() {
         {row(<Headphones className="size-[18px]" />, "#c4a574", "Cutroom — WIP music projects", () => openUntitled())}
         {row(<Gamepad2 className="size-[18px]" />, "#ff2bd6", "Games", () => useApp.setState({ mobileTab: "games" }))}
         {row(<AppWindow className="size-[18px]" />, "#00a8fc", "Apps — image studio & docs editor", () => useApp.setState({ mobileTab: "apps" }))}
+        {row(<MapPin className="size-[18px]" />, "#22c55a", "Bump — find friends & family nearby", () => openBump())}
         {row(<Vault className="size-[18px]" />, "#5865f2", "My Vault — private files & share links", () => {
           useStudio.setState({ section: "vault", releaseId: null });
           useApp.setState({ hub: "studio" });

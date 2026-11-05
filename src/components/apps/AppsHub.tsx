@@ -13,6 +13,7 @@ import {
   Fingerprint,
   ImageUpscale,
   KeyRound,
+  MapPin,
   Pipette,
   QrCode,
   ShieldAlert,
@@ -20,6 +21,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useApp } from "@/store/app";
+import { openBump } from "@/lib/bump";
 import { studioGo } from "@/store/studio";
 import { cn } from "@/lib/utils";
 import ImageStudio from "./ImageStudio";
@@ -232,6 +234,17 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
             Creator utilities that run in this tab. File tools stay on-device; Music ID and Spotify takedown use your Shield / Spotify server keys when connected.
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <button type="button" onClick={() => openBump()} className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5 sm:col-span-2 lg:col-span-1">
+              <div className="relative grid h-36 place-items-center text-6xl" style={{ background: "linear-gradient(135deg,#22c55a,#0b3d24)" }}>
+                <span className="transition group-hover:scale-110">📍</span>
+                <MapPin className="absolute top-3 left-3 size-5 text-white" />
+              </div>
+              <div className="p-4">
+                <div className="text-lg font-bold">Bump</div>
+                <div className="text-xs font-semibold text-sub">Nearby · family · invite link</div>
+                <p className="mt-1 text-sm text-sub">Share approximate location on iPhone to find friends and family, then send a circle invite link.</p>
+              </div>
+            </button>
             {TOOLS.map((item) => (
               <button key={item.id} onClick={() => setTool(item.id)} className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5">
                 <div className="relative grid h-36 place-items-center text-6xl" style={{ background: item.bg }}>

@@ -54,6 +54,8 @@ jobs:
           pb "Add :NSCameraUsageDescription string Nexus uses your camera for video calls."
           pb "Add :NSPhotoLibraryUsageDescription string Choose photos and videos to send in chats."
           pb "Add :NSPhotoLibraryAddUsageDescription string Save photos and videos from chats."
+          pb "Add :NSLocationWhenInUseUsageDescription string Nexus uses your location for Bump so you can find friends and family nearby. Location is rounded and expires after 20 minutes."
+          pb "Add :NSLocationAlwaysAndWhenInUseUsageDescription string Nexus can refresh Bump while you use the app so family can find you nearby."
           pb "Add :UIBackgroundModes array"
           pb "Add :UIBackgroundModes:0 string audio"
           pb "Add :UIBackgroundModes:1 string voip"
