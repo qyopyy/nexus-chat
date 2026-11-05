@@ -2,7 +2,7 @@
 
 import { usePrefs } from "@/lib/prefs";
 import { useEffect, useRef, useState } from "react";
-import { FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Timer, Trash2, X } from "lucide-react";
+import { FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Timer, Trash2, Wand2, X } from "lucide-react";
 import { useApp, conversationTitle, toast } from "@/store/app";
 import { useChat } from "@/store/chat";
 import { TTL_OPTIONS, runBotCommand, sendMessage, setTtl } from "@/lib/data";
@@ -15,6 +15,7 @@ import EmojiPicker from "@/components/ui/EmojiPicker";
 import Sheet from "@/components/ui/Sheet";
 import { isVoice } from "./MessageBubble";
 import { ComposerPlus } from "./Extras";
+import AttachEditor, { shouldOpenAttachEditor } from "./AttachEditor";
 
 const MAX_FREE = 25 * 1024 * 1024;
 const MAX_PREMIUM = 100 * 1024 * 1024;
@@ -63,11 +64,26 @@ export default function Composer({
   const [recording, setRecording] = useState(false);
   const [recSecs, setRecSecs] = useState(0);
   const [levels, setLevels] = useState<number[]>(() => Array(28).fill(0.1));
+  const [editOpen, setEditOpen] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const rec = useRef<Rec | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = useRef(false);
+  const skipAutoEdit = useRef(false);
+
+  // Open Discord-style editor when an image / editable audio is attached (picker, paste, or drop)
+  useEffect(() => {
+    if (!file) {
+      setEditOpen(false);
+      return;
+    }
+    if (skipAutoEdit.current) {
+      skipAutoEdit.current = false;
+      return;
+    }
+    if (shouldOpenAttachEditor(file)) setEditOpen(true);
+  }, [file]);
 
   // focus on desktop only — on phones it would pop the keyboard every time a chat opens
   useEffect(() => {
@@ -117,6 +133,7 @@ export default function Composer({
     setText("");
     if (me) sendLive(me, "");
     setFile(null);
+    setEditOpen(false);
     setEffect(null);
   }
 
@@ -249,6 +266,11 @@ export default function Composer({
                   <div className="truncate text-sm font-medium">{file.name}</div>
                   <div className="text-xs text-sub">{formatBytes(file.size)}</div>
                 </div>
+                {shouldOpenAttachEditor(file) && (
+                  <button onClick={() => setEditOpen(true)} className="grid size-9 place-items-center rounded-full text-accent hover:bg-white/5" aria-label="Edit attachment" title="Edit">
+                    <Wand2 className="size-4" />
+                  </button>
+                )}
                 <button onClick={() => setFile(null)} className="p-1 text-sub" aria-label="Remove file">
                   <X className="size-5" />
                 </button>
@@ -295,6 +317,7 @@ export default function Composer({
             <input
               ref={fileInput}
               type="file"
+              accept="image/*,audio/wav,audio/mpeg,audio/mp3,audio/aac,audio/mp4,audio/x-m4a,.wav,.mp3,.aac,.m4a,video/*,*/*"
               hidden
               onChange={(e) => {
                 const f = e.target.files?.[0];
@@ -302,7 +325,7 @@ export default function Composer({
                 e.target.value = "";
               }}
             />
-            <button onClick={() => fileInput.current?.click()} className="grid size-11 shrink-0 place-items-center rounded-full text-sub transition hover:text-txt active:scale-90" title="Attach a file">
+            <button onClick={() => fileInput.current?.click()} className="grid size-11 shrink-0 place-items-center rounded-full text-sub transition hover:text-txt active:scale-90" title="Attach image, audio, or file">
               <Paperclip className="size-[22px]" />
             </button>
             <ComposerPlus conversationId={conversationId} />
@@ -470,6 +493,19 @@ export default function Composer({
         </div>
         <p className="px-2 pt-2 pb-1 text-center text-xs text-sub">Tip: hold the send button to pick an effect. Words like “congrats” or “happy birthday” trigger one automatically.</p>
       </Sheet>
+
+      {file && editOpen && shouldOpenAttachEditor(file) && (
+        <AttachEditor
+          file={file}
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          onApply={(f) => {
+            skipAutoEdit.current = true;
+            setFile(f);
+            setEditOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
