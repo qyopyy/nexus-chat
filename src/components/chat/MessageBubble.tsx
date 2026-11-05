@@ -17,14 +17,14 @@ import Sheet, { SheetGroup, SheetItem } from "@/components/ui/Sheet";
 import VoicePlayer from "./VoicePlayer";
 import VideoEmbed from "@/components/videos/VideoEmbed";
 import GameInvite from "@/components/games/GameInvite";
+import LinkEmbed from "./LinkEmbed";
 import { PollCard } from "./Poll";
 import { POLL_RE } from "@/lib/polls";
 import { CAPSULE_RE, JAM_RE } from "@/lib/chatExtras";
 import { CapsuleCard, JamCard } from "./Extras";
 import { useSignedUrl } from "@/lib/storage";
+import { URL_RE } from "@/lib/unfurl";
 import type { Message, Reaction } from "@/lib/types";
-
-const URL_RE = /(https?:\/\/[^\s<]+[^\s<.,:;"')\]!?])/g;
 const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|‍|️|\s)+$/u;
 const EMPTY_REACTIONS: Reaction[] = [];
 const SWIPE = 64;
@@ -140,6 +140,7 @@ function MessageBubbleImpl({
   last,
   showNames,
   replied,
+  linkEmbeds = false,
 }: {
   message: Message;
   mine: boolean;
@@ -147,6 +148,8 @@ function MessageBubbleImpl({
   last: boolean;
   showNames: boolean;
   replied: Message | null;
+  /** rich OG/SEO link cards — enabled for private DMs & groups */
+  linkEmbeds?: boolean;
 }) {
   const author = useApp((s) => s.profiles[m.author_id]);
   const repliedAuthor = useApp((s) => (replied ? s.profiles[replied.author_id] : undefined));
@@ -333,6 +336,12 @@ function MessageBubbleImpl({
                   <Linkified text={m.content} />
                 </span>
               )}
+              {linkEmbeds &&
+                m.content &&
+                /https?:\/\//i.test(m.content) &&
+                !POLL_RE.test(m.content) &&
+                !JAM_RE.test(m.content) &&
+                !CAPSULE_RE.test(m.content) && <LinkEmbed text={m.content} mine={mine} />}
               {m.content.includes("/v/") && !deleted && <VideoEmbed text={m.content} />}
               {m.content.includes("play=") && !deleted && <GameInvite text={m.content} />}
             </>

@@ -32,6 +32,7 @@ export default function MessageList({ conversationId, initialUnread }: { convers
   const me = useApp((s) => s.userId);
   const kind = useApp((s) => s.convKinds[conversationId]);
   const showNames = kind !== "dm";
+  const linkEmbeds = kind === "dm" || kind === "group";
 
   const ref = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
@@ -170,6 +171,7 @@ export default function MessageList({ conversationId, initialUnread }: { convers
                   last={!joinsNext}
                   showNames={showNames}
                   replied={m.reply_to_id ? byId[m.reply_to_id] ?? null : null}
+                  linkEmbeds={linkEmbeds}
                 />
                 )}
               </Fragment>
