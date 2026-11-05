@@ -1,0 +1,11 @@
+Bump iOS location strings (injected by .github/workflows/bump-ipa.yml)
+
+NSLocationWhenInUseUsageDescription:
+  Bump uses your location so friends and family can find you nearby. Location is rounded and expires after 20 minutes.
+
+NSLocationAlwaysAndWhenInUseUsageDescription:
+  Bump can refresh your pin in the background while you are Live, so family can keep finding you nearby. Turn Live off anytime to stop sharing.
+
+UIBackgroundModes includes: location, remote-notification, fetch
+
+After `npm i` in mobile-bump/, CI runs `npx cap add ios` + sync so @capacitor/geolocation is linked.

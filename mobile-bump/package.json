@@ -1,0 +1,25 @@
+{
+  "name": "bump-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone Bump iOS/Android shell (Capacitor). Loads the live Bump web app — same Nexus backend, separate home-screen icon.",
+  "scripts": {
+    "sync": "npx cap sync",
+    "open:ios": "npx cap open ios",
+    "open:android": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/geolocation": "^7.0.0",
+    "@capacitor/haptics": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@capacitor/local-notifications": "^7.0.0",
+    "@capacitor/push-notifications": "^7.0.0",
+    "@capawesome/capacitor-badge": "^7.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
+    "typescript": "^5.6.0"
+  }
+}

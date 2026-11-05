@@ -17,7 +17,16 @@ type CapGeo = {
   }) => Promise<{
     coords: { latitude: number; longitude: number; accuracy?: number };
   }>;
+  watchPosition?: (
+    opts: { enableHighAccuracy?: boolean; timeout?: number; maximumAge?: number },
+    cb: (
+      pos: { coords: { latitude: number; longitude: number; accuracy?: number } } | null,
+      err?: { message?: string },
+    ) => void,
+  ) => Promise<string> | string;
+  clearWatch?: (opts: { id: string }) => Promise<void>;
   requestPermissions?: () => Promise<{ location: string; coarseLocation?: string }>;
+  checkPermissions?: () => Promise<{ location: string; coarseLocation?: string }>;
 };
 
 function capGeo(): CapGeo | null {
@@ -83,6 +92,66 @@ export async function getDeviceLocation(opts?: { highAccuracy?: boolean; timeout
       { enableHighAccuracy: high, timeout, maximumAge: 10_000 },
     );
   });
+}
+
+export type LocationWatchHandle = { stop: () => void };
+
+/**
+ * Continuous location updates. On Capacitor + UIBackgroundModes:location this can
+ * keep refreshing while Bump is Live in the background. Falls back to browser watch.
+ */
+export async function watchDeviceLocation(
+  onLoc: (loc: DeviceLocation) => void,
+  onErr?: (msg: string) => void,
+  opts?: { highAccuracy?: boolean },
+): Promise<LocationWatchHandle> {
+  const high = opts?.highAccuracy !== false;
+  const geo = capGeo();
+  if (geo?.watchPosition) {
+    try {
+      await geo.requestPermissions?.();
+      const id = await geo.watchPosition({ enableHighAccuracy: high, timeout: 30_000, maximumAge: 15_000 }, (pos, err) => {
+        if (err || !pos) {
+          onErr?.(err?.message || "Location watch failed");
+          return;
+        }
+        onLoc({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy ?? null,
+          source: "capacitor",
+        });
+      });
+      const watchId = String(id);
+      return {
+        stop: () => {
+          void geo.clearWatch?.({ id: watchId });
+        },
+      };
+    } catch (e) {
+      onErr?.(e instanceof Error ? e.message : "Could not start location watch");
+    }
+  }
+  if (!navigator?.geolocation) {
+    onErr?.("Location isn’t available");
+    return { stop: () => {} };
+  }
+  const wid = navigator.geolocation.watchPosition(
+    (pos) =>
+      onLoc({
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy ?? null,
+        source: "browser",
+      }),
+    (err) => onErr?.(err.message || "Location permission denied"),
+    { enableHighAccuracy: high, maximumAge: 15_000, timeout: 30_000 },
+  );
+  return {
+    stop: () => {
+      navigator.geolocation.clearWatch(wid);
+    },
+  };
 }
 
 export function formatMeters(m: number) {

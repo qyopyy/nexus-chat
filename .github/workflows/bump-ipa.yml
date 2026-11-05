@@ -1,0 +1,134 @@
+name: Bump iOS app (.ipa)
+
+# Standalone Bump.ipa (bundle hu.qyopy.bump) — Sideloadly / AltStore.
+# Opens https://nexusproject.cc/bump/app — same Nexus account & backend.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Bump web entry URL (leave empty for production /bump/app)"
+        required: false
+  push:
+    branches: [main]
+    paths:
+      - "mobile-bump/**"
+      - ".github/workflows/bump-ipa.yml"
+  pull_request:
+    paths:
+      - "mobile-bump/**"
+      - ".github/workflows/bump-ipa.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  bump-ipa:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: mobile-bump
+    env:
+      BUMP_URL: ${{ github.event.inputs.url || vars.BUMP_URL || 'https://nexusproject.cc/bump/app' }}
+      NEXUS_URL: ${{ github.event.inputs.url || vars.BUMP_URL || 'https://nexusproject.cc/bump/app' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Capacitor
+        run: npm install --no-audit --no-fund
+
+      - name: Create iOS project
+        run: |
+          echo "Bump app will open: $BUMP_URL"
+          npx cap add ios
+          npx cap sync ios
+          ls ios/App
+
+      - name: Permissions, icon and app settings
+        run: |
+          PLIST=ios/App/App/Info.plist
+          pb() { /usr/libexec/PlistBuddy -c "$1" "$PLIST" 2>/dev/null || true; }
+          pb "Add :NSLocationWhenInUseUsageDescription string Bump uses your location so friends and family can find you nearby. Location is rounded and expires after 20 minutes."
+          pb "Add :NSLocationAlwaysAndWhenInUseUsageDescription string Bump can refresh your pin in the background while you are Live, so family can keep finding you nearby. Turn Live off anytime to stop sharing."
+          pb "Add :NSPhotoLibraryUsageDescription string Attach a photo to your Bump profile."
+          pb "Add :UIBackgroundModes array"
+          pb "Add :UIBackgroundModes:0 string location"
+          pb "Add :UIBackgroundModes:1 string remote-notification"
+          pb "Add :UIBackgroundModes:2 string fetch"
+          pb "Set :CFBundleDisplayName Bump"
+          pb "Add :CFBundleDisplayName string Bump"
+          pb "Add :ITSAppUsesNonExemptEncryption bool false"
+          pb "Add :UIStatusBarStyle string UIStatusBarStyleLightContent"
+          pb "Add :UIViewControllerBasedStatusBarAppearance bool false"
+          pb "Set :UIUserInterfaceStyle Dark"
+          pb "Add :UIUserInterfaceStyle string Dark"
+          pb "Set :CFBundleShortVersionString 1.${GITHUB_RUN_NUMBER}"
+          pb "Add :CFBundleShortVersionString string 1.${GITHUB_RUN_NUMBER}"
+          pb "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}"
+          pb "Add :CFBundleVersion string ${GITHUB_RUN_NUMBER}"
+
+          test -f resources/icon-1024.png
+          ICONSET=ios/App/App/Assets.xcassets/AppIcon.appiconset
+          mkdir -p "$ICONSET"
+          cp resources/AppIcon.Contents.json "$ICONSET/Contents.json"
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          src = Path("resources/icon-1024.png")
+          iconset = Path("ios/App/App/Assets.xcassets/AppIcon.appiconset")
+          data = json.loads((iconset / "Contents.json").read_text())
+          for img in data["images"]:
+              w, h = img["size"].split("x")
+              scale = int(img["scale"].replace("x", ""))
+              px = int(round(float(w) * scale))
+              out = iconset / img["filename"]
+              subprocess.check_call(["sips", "-z", str(px), str(px), str(src), "--out", str(out)], stdout=subprocess.DEVNULL)
+              print(out.name, px)
+          PY
+          ls -la "$ICONSET"
+          plutil -p "$PLIST" | head -60
+
+      - name: Build (unsigned)
+        run: |
+          cd ios/App
+          if [ -d App.xcworkspace ]; then TARGET="-workspace App.xcworkspace"; else TARGET="-project App.xcodeproj"; fi
+          xcodebuild $TARGET -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/App.xcarchive" archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            PRODUCT_BUNDLE_IDENTIFIER="hu.qyopy.bump" \
+            MARKETING_VERSION="1.${GITHUB_RUN_NUMBER}" CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
+            | tail -40
+          test -d build/App.xcarchive/Products/Applications/App.app
+
+      - name: Package IPA
+        run: |
+          cd ios/App
+          rm -rf Payload && mkdir Payload
+          cp -R build/App.xcarchive/Products/Applications/App.app Payload/
+          zip -qry ../../Bump.ipa Payload
+          ls -lh ../../Bump.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Bump-ipa
+          path: mobile-bump/Bump.ipa
+
+      - name: Publish release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="bump-ios-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" Bump.ipa --repo "$GITHUB_REPOSITORY" \
+            --title "Bump iOS build ${GITHUB_RUN_NUMBER}" \
+            --notes "Standalone **Bump** IPA (bundle \`hu.qyopy.bump\`).
+
+          Install with Sideloadly / AltStore using your Apple ID.
+          Opens: ${BUMP_URL}
+
+          Same Nexus login & backend. Background location while Live.
+          Nexus chat app stays separate — Bump is also available inside Nexus."

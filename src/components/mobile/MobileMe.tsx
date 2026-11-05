@@ -1,14 +1,15 @@
 "use client";
 
 import { useRef } from "react";
-import { AppWindow, Bell, ChevronRight, Copy, Crown, Gamepad2, Headphones, LayoutDashboard, LogOut, MapPin, Megaphone, Mic, Moon, Palette, Radio, Shield, Sparkles, Tv, UserPen, Users, Vault, Volume2, VolumeX } from "lucide-react";
+import { AppWindow, Bell, ChevronRight, Copy, Crown, Download, Gamepad2, Headphones, LayoutDashboard, LogOut, MapPin, Megaphone, Mic, Moon, Palette, Radio, Shield, Sparkles, Tv, UserPen, Users, Vault, Volume2, VolumeX } from "lucide-react";
 import { useApp, openModal, toast } from "@/store/app";
 import { useStudio } from "@/store/studio";
 import { openUntitled } from "@/lib/untitled";
 import { openRadio } from "@/lib/radio";
 import { openLiveHub } from "@/lib/live";
 import { openPulse } from "@/lib/pulse";
-import { openBump } from "@/lib/bump";
+import { bumpIpaReleasesUrl, openBump } from "@/lib/bump";
+import { isBumpApp } from "@/lib/useMobile";
 import { openStaffDesk } from "@/lib/privileges";
 import { leaveCall } from "@/lib/call";
 import { supabase } from "@/lib/supabase";
@@ -157,6 +158,10 @@ export default function MobileMe() {
         {row(<Gamepad2 className="size-[18px]" />, "#ff2bd6", "Games", () => useApp.setState({ mobileTab: "games" }))}
         {row(<AppWindow className="size-[18px]" />, "#00a8fc", "Apps — image studio & docs", () => useApp.setState({ mobileTab: "apps", hub: "apps", appsTool: null }))}
         {row(<MapPin className="size-[18px]" />, "#22c55a", "Bump — nearby, friends & messages", () => openBump())}
+        {!isBumpApp() &&
+          row(<Download className="size-[18px]" />, "#166534", "Download Bump iOS app (IPA)", () => {
+            window.open(bumpIpaReleasesUrl(), "_blank", "noopener,noreferrer");
+          })}
         {row(<Vault className="size-[18px]" />, "#5865f2", "My Vault — private files & share links", () => {
           useStudio.setState({ section: "vault", releaseId: null });
           useApp.setState({ hub: "studio" });

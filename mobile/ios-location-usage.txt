@@ -1,9 +1,12 @@
-Add these keys to the iOS Info.plist when syncing Capacitor (Bump / nearby):
+Nexus iOS location strings (injected by .github/workflows/ipa.yml)
 
-NSLocationWhenInUseUsageDescription
-  Nexus uses your location to find friends and family nearby with Bump. Location is rounded and expires after 20 minutes.
+NSLocationWhenInUseUsageDescription:
+  Nexus uses your location for Bump so you can find friends and family nearby. Location is rounded and expires after 20 minutes.
 
-NSLocationAlwaysAndWhenInUseUsageDescription
-  Nexus can keep Bump updated while you use the app so family can find you nearby.
+NSLocationAlwaysAndWhenInUseUsageDescription:
+  Nexus can refresh your Bump pin in the background while you are Live, so family can keep finding you nearby. Turn Live off anytime to stop sharing.
+
+UIBackgroundModes includes: audio, voip, remote-notification, fetch, location
 
 After `npm i` in mobile/, run `npx cap sync ios` so @capacitor/geolocation is linked.
+A standalone Bump IPA also exists under mobile-bump/ (hu.qyopy.bump).

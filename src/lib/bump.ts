@@ -60,14 +60,31 @@ export type BumpInboxRow = {
 /**
  * Opens Bump as its own live hub (desktop rail + phone Apps tab).
  * Capacitor loads https://nexusproject.cc — web deploys update without a new IPA/APK.
+ * Standalone Bump IPA already lives on /bump/app.
  */
 export function openBump() {
+  if (typeof window !== "undefined" && /BumpApp/i.test(navigator.userAgent)) {
+    if (!window.location.pathname.startsWith("/bump/app")) {
+      window.location.href = "/bump/app";
+      return;
+    }
+  }
   const mobile = typeof window !== "undefined" && window.innerWidth < 768;
   useApp.setState(
     mobile
       ? { mobileTab: "apps", hub: "bump", appsTool: null, mobileSidebar: true }
       : { hub: "bump", appsTool: null },
   );
+}
+
+/** Latest standalone Bump IPA releases (Sideloadly / AltStore). */
+export function bumpIpaReleasesUrl() {
+  return "https://github.com/qyopyy/nexus-chat/releases?q=Bump+iOS&expanded=true";
+}
+
+/** Friendly wave DM (no extra tables). */
+export async function bumpWave(to: string) {
+  return bumpSendMessage(to, "👋 Wave — spotted you on Bump");
 }
 
 export type BumpPresenceRow = {
@@ -348,7 +365,7 @@ export async function bumpInbox() {
 }
 
 /** Quiet republish for live heartbeat (no toast). */
-export async function bumpHeartbeat(visible: BumpVisible = "friends") {
+export async function bumpHeartbeat(visible: BumpVisible = "friends", label?: string | null) {
   try {
     const loc = await getDeviceLocation({ highAccuracy: false });
     const { error } = await supabase.rpc("bump_publish", {
@@ -356,7 +373,7 @@ export async function bumpHeartbeat(visible: BumpVisible = "friends") {
       p_lng: loc.lng,
       p_accuracy: loc.accuracy,
       p_visible: visible,
-      p_label: null,
+      p_label: label?.trim() || null,
     });
     return !error;
   } catch {
