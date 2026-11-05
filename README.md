@@ -52,7 +52,7 @@ npm run dev
 
 Open http://localhost:3000 → **Create account**. The first account becomes the 👑 Owner — that's you, so register first. Then open **Settings → Admin Panel** to give friends VIP / Moderator / badges.
 
-If registration says a site password is required, redeploy `supabase/functions/signup`. That check is gone from the function in this repo, but an already-deployed copy still enforces it until you redeploy.
+Registration no longer needs the old site password. The live `signup` function was redeployed without that gate (and with a soft rate limit + honeypot).
 
 Before sharing a deployed URL: Supabase → Authentication → URL Configuration → set **Site URL** to it (used by password-reset emails).
 

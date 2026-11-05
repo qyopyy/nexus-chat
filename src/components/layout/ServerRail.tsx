@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Aperture, Clapperboard, Gamepad2, Headphones, LayoutDashboard, MessageCircle, Plus } from "lucide-react";
+import { Aperture, AppWindow, Clapperboard, Gamepad2, Headphones, LayoutDashboard, MessageCircle, Plus } from "lucide-react";
 import { useApp, openModal } from "@/store/app";
 import { selectHome, selectSpace } from "@/lib/data";
 import { cn, initials } from "@/lib/utils";
@@ -85,6 +85,9 @@ export default function ServerRail() {
       </RailItem>
       <RailItem active={hub === "games"} label="Games" onClick={() => useApp.setState({ hub: "games" })} color={hub === "games" ? "#ff2bd6" : undefined}>
         <Gamepad2 className="size-6" />
+      </RailItem>
+      <RailItem active={hub === "apps"} label="Apps" onClick={() => useApp.setState({ hub: "apps" })} color={hub === "apps" ? "#00a8fc" : undefined}>
+        <AppWindow className="size-6" />
       </RailItem>
       <RailItem active={false} label="Studio — upload videos & distribute music" onClick={() => useApp.setState({ hub: "studio" })}>
         <LayoutDashboard className="size-6" />

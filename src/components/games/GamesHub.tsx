@@ -46,11 +46,13 @@ const WEB_GAMES: { name: string; url: string; tag: string; color: string }[] = [
 export default function GamesHub({ mobile }: { mobile?: boolean }) {
   const [open, setOpen] = useState<GameId | null>(null);
   const [frame, setFrame] = useState<(typeof WEB_GAMES)[number] | null>(null);
+  const [flappy, setFlappy] = useState(false);
   const joinCode = useGames((s) => s.joinCode);
   const joinFor = useGames((s) => s.joinGame);
   useEffect(() => {
     if (joinCode) setOpen(joinFor);
   }, [joinCode, joinFor]);
+  if (flappy) return <LocalFrame title="Flappy Happy" src="/games/flappy-happy.html" onBack={() => setFlappy(false)} mobile={mobile} />;
   if (frame) return <WebFrame game={frame} onBack={() => setFrame(null)} mobile={mobile} />;
   if (open === "streets") return <StreetsLauncher onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "bay") return <SunsetBay onBack={() => setOpen(null)} mobile={mobile} />;
@@ -113,6 +115,16 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
           <section>
             <h2 className="mb-3 text-lg font-bold">Nexus games</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              <button onClick={() => setFlappy(true)} className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5">
+                <div className="relative grid aspect-[4/3] place-items-center text-5xl" style={{ background: "linear-gradient(135deg,#38bdf8,#facc15)" }}>
+                  <span className="transition group-hover:scale-110">🐤</span>
+                  <span className="absolute top-2 left-2 rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-black">NEW</span>
+                </div>
+                <div className="p-2.5">
+                  <div className="truncate font-semibold">Flappy Happy</div>
+                  <div className="truncate text-xs text-sub">Arcade · birds & coins</div>
+                </div>
+              </button>
               {GAMES.map((g) => (
                 <button key={g.id} onClick={() => setOpen(g.id)} className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5">
                   <div className="relative grid aspect-[4/3] place-items-center text-5xl" style={{ background: g.bg }}>
@@ -287,6 +299,27 @@ function GameScreen({ id, onBack, mobile }: { id: GameId; onBack: () => void; mo
             ))}
           </div>
         </aside>
+      </div>
+    </div>
+  );
+}
+
+/** The original Flappy Happy page, unchanged, inside the games pane. */
+function LocalFrame({ title, src, onBack, mobile }: { title: string; src: string; onBack: () => void; mobile?: boolean }) {
+  const box = useRef<HTMLDivElement>(null);
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-black text-white">
+      <header className={cn("flex shrink-0 items-center gap-2 border-b border-white/10 px-3", mobile ? "pt-safe-3 pb-2" : "h-12")}>
+        <button onClick={onBack} className="grid size-9 place-items-center rounded-full hover:bg-white/10" aria-label="Back to games">
+          <ArrowLeft className="size-5" />
+        </button>
+        <span className="min-w-0 flex-1 truncate font-bold">{title}</span>
+        <button onClick={() => void box.current?.requestFullscreen?.().catch(() => {})} className="grid size-9 place-items-center rounded-full hover:bg-white/10" aria-label="Full screen">
+          <Maximize className="size-4" />
+        </button>
+      </header>
+      <div ref={box} className="relative min-h-0 flex-1 bg-[#090d16]">
+        <iframe src={src} title={title} allow="fullscreen; autoplay" allowFullScreen className="absolute inset-0 size-full border-0" />
       </div>
     </div>
   );

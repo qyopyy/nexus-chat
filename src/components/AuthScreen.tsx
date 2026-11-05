@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ArrowLeft, AtSign, Eye, EyeOff, Lock, Mail, MessageCircle, MonitorUp, Palette, ShieldCheck, User, Video } from "lucide-react";
 import { supabase, errorText } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -57,6 +57,7 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const honeypot = useRef<HTMLInputElement>(null);
 
   const setMode = (m: AuthMode) => {
     setModeState(m);
@@ -88,7 +89,13 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
         if (password !== confirm) throw new Error("Passwords don't match.");
         if (!agree) throw new Error("Please accept the community rules.");
         const { error } = await supabase.functions.invoke("signup", {
-          body: { email: email.trim(), password, username: cleanUser, display_name: displayName.trim() || cleanUser },
+          body: {
+            email: email.trim(),
+            password,
+            username: cleanUser,
+            display_name: displayName.trim() || cleanUser,
+            website: honeypot.current?.value ?? "",
+          },
         });
         if (error) {
           let msg = errorText(error);
@@ -160,7 +167,7 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
 
       {/* form */}
       <section className="relative flex w-full items-center justify-center p-4 lg:w-[520px] lg:p-10">
-        <form onSubmit={submit} className="w-full max-w-md animate-pop rounded-3xl border border-white/10 bg-black/45 p-8 shadow-2xl backdrop-blur-2xl">
+        <form onSubmit={submit} className="relative w-full max-w-md animate-pop rounded-3xl border border-white/10 bg-black/45 p-8 shadow-2xl backdrop-blur-2xl">
           <div className="mb-6 flex items-center gap-3 lg:hidden">
             <div className="grid size-10 place-items-center rounded-xl bg-linear-to-br from-accent to-blurple">
               <MessageCircle className="size-5 text-white" />
@@ -244,6 +251,13 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
             {mode === "register" && (
               <>
                 <Field icon={<Lock className="size-5" />} label="Confirm password" type={show ? "text" : "password"} required value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
+                {/* Honeypot for bots — keep visually hidden and unused by real users */}
+                <div aria-hidden className="absolute -left-[9999px] h-0 w-0 overflow-hidden opacity-0" tabIndex={-1}>
+                  <label>
+                    Website
+                    <input ref={honeypot} type="text" name="website" autoComplete="off" tabIndex={-1} defaultValue="" />
+                  </label>
+                </div>
                 <label className="flex cursor-pointer items-start gap-3 text-sm text-white/60">
                   <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 size-4 accent-accent" />
                   I&apos;ll be respectful and follow the community rules. Staff can time out or ban accounts.
