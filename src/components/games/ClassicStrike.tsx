@@ -4,10 +4,12 @@
  * Classic Strike — browser FPS homage to Counter-Strike 1.6.
  * Original map art & code (not Valve assets). Fan recreation of classic
  * bomb-defuse flow: buy menu, economy, sites, bots, pointer-lock aim.
+ * Solo vs bots, or online peers via classicstrike/net (host round sync).
  */
 
 import { useEffect, useRef, useState } from "react";
 import { type GameProps } from "./common";
+import { peerPose, type CsNet } from "./classicstrike/net";
 
 type Team = "T" | "CT";
 type WepId = "knife" | "glock" | "usp" | "deagle" | "ak47" | "m4a1" | "awp" | "he";
@@ -68,11 +70,22 @@ type Bot = {
   wep: WepId;
   cool: number;
   alive: boolean;
+  id?: string; // peer id when online remote
+  name?: string;
+  isPeer?: boolean;
 };
 
 type Phase = "buy" | "live" | "planted" | "over";
 
-export default function ClassicStrike({ onOver, onScore }: GameProps) {
+export type ClassicStrikeProps = GameProps & {
+  mode?: "solo" | "online";
+  net?: CsNet | null;
+  playerName?: string;
+  initialTeam?: Team;
+};
+
+export default function ClassicStrike({ onOver, onScore, mode = "solo", net = null, playerName = "You", initialTeam = "T" }: ClassicStrikeProps) {
+  const online = mode === "online" && !!net;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hud, setHud] = useState({
     hp: 100,
@@ -83,10 +96,10 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
     round: 1,
     time: 15,
     phase: "buy" as Phase,
-    wep: "glock" as WepId,
-    ammo: 20,
-    reserve: 120,
-    team: "T" as Team,
+    wep: (initialTeam === "CT" ? "usp" : "glock") as WepId,
+    ammo: initialTeam === "CT" ? 12 : 20,
+    reserve: initialTeam === "CT" ? 100 : 120,
+    team: initialTeam,
     buyOpen: true,
     bomb: false,
     planted: false,
@@ -94,6 +107,7 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
   });
   const hudRef = useRef(hud);
   hudRef.current = hud;
+  const [roster, setRoster] = useState<{ id: string; name: string; team: Team }[]>([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -106,6 +120,9 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
     let raf = 0;
     let alive = true;
     let ended = false;
+    const onlineMode = mode === "online" && !!net;
+    let lastRoundBroadcast = 0;
+    let roundSeed = Math.floor(Math.random() * 1e9);
 
     const player = {
       x: 1.5,
@@ -114,10 +131,10 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
       hp: 100,
       armor: 0,
       money: 800,
-      team: "T" as Team,
-      wep: "glock" as WepId,
-      mag: 20,
-      reserve: 120,
+      team: initialTeam as Team,
+      wep: (initialTeam === "CT" ? "usp" : "glock") as WepId,
+      mag: initialTeam === "CT" ? 12 : 20,
+      reserve: initialTeam === "CT" ? 100 : 120,
       cool: 0,
       kills: 0,
       deaths: 0,
@@ -186,9 +203,22 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
       phaseT = 15;
       buyOpen = true;
       bots.length = 0;
+      // Keep peer placeholders; refill AI bots for empty slots
+      const peerIds = onlineMode && net ? [...net.peers.keys()] : [];
+      let enemyPeers = 0;
+      let allyPeers = 0;
+      if (onlineMode && net) {
+        for (const id of peerIds) {
+          const p = net.peers.get(id);
+          if (!p) continue;
+          if (p.team !== player.team) enemyPeers++;
+          else allyPeers++;
+        }
+      }
       const enemyTeam: Team = player.team === "T" ? "CT" : "T";
-      const n = 4;
-      for (let i = 0; i < n; i++) {
+      const nEnemy = onlineMode ? Math.max(0, 4 - enemyPeers) : 4;
+      const nAlly = onlineMode ? Math.max(0, 3 - allyPeers) : 3;
+      for (let i = 0; i < nEnemy; i++) {
         const c = spawnCell(enemyTeam === "T" ? 4 : 5);
         bots.push({
           x: c.x + (Math.random() - 0.5) * 0.4,
@@ -201,8 +231,7 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
           alive: true,
         });
       }
-      // teammate bots
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < nAlly; i++) {
         const c = spawnCell(player.team === "T" ? 4 : 5);
         bots.push({
           x: c.x + (Math.random() - 0.5) * 0.3,
@@ -215,6 +244,25 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
           alive: true,
         });
       }
+      if (onlineMode && net?.isHost()) {
+        lastRoundBroadcast = 0;
+        broadcastRound();
+      }
+    };
+
+    const broadcastRound = () => {
+      if (!onlineMode || !net || !net.isHost()) return;
+      net.round({
+        round,
+        phase,
+        phaseT,
+        bombPlanted,
+        bombX,
+        bombY,
+        bombT,
+        seed: roundSeed,
+      });
+      lastRoundBroadcast = performance.now();
     };
 
     const solid = (x: number, y: number) => {
@@ -231,16 +279,20 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
 
     const wepOf = (id: WepId) => ARSENAL.find((w) => w.id === id)!;
 
-    const shoot = (from: "p" | "b", x: number, y: number, a: number, team: Team, wid: WepId) => {
+    const shoot = (from: "p" | "b", x: number, y: number, a: number, team: Team, wid: WepId, opts?: { silent?: boolean }) => {
       const wp = wepOf(wid);
       const spread = (Math.random() - 0.5) * wp.spread * 2;
-      bullets.push({ x, y, a: a + spread, life: wid === "awp" ? 80 : 45, dmg: wp.dmg, from, team });
+      const ang = a + spread;
+      bullets.push({ x, y, a: ang, life: wid === "awp" ? 80 : 45, dmg: wp.dmg, from, team });
+      if (onlineMode && net && from === "p" && !opts?.silent) {
+        net.shot({ x, y, a: ang, team, wep: wid, dmg: wp.dmg });
+      }
       for (let i = 0; i < 4; i++) {
         particles.push({
-          x: x + Math.cos(a) * 0.2,
-          y: y + Math.sin(a) * 0.2,
-          vx: Math.cos(a + (Math.random() - 0.5)) * 0.05,
-          vy: Math.sin(a + (Math.random() - 0.5)) * 0.05,
+          x: x + Math.cos(ang) * 0.2,
+          y: y + Math.sin(ang) * 0.2,
+          vx: Math.cos(ang + (Math.random() - 0.5)) * 0.05,
+          vy: Math.sin(ang + (Math.random() - 0.5)) * 0.05,
           life: 8,
           c: "#fbbf24",
         });
@@ -311,6 +363,10 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
               player.score += 300;
               msg = "BOMB PLANTED";
               msgT = 2;
+              if (onlineMode && net) {
+                net.plant(bombX, bombY, bombT);
+                broadcastRound();
+              }
             }
           }
         }
@@ -330,6 +386,7 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
         }
         if (e.code === "KeyT") {
           player.team = "T";
+          if (onlineMode && net) net.setTeam("T");
           giveDefault();
           resetRound();
           msg = "Joined Terrorists";
@@ -337,6 +394,7 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
         }
         if (e.code === "KeyC") {
           player.team = "CT";
+          if (onlineMode && net) net.setTeam("CT");
           giveDefault();
           resetRound();
           msg = "Joined Counter-Terrorists";
@@ -388,6 +446,89 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
     };
     canvas.addEventListener("touchmove", onTouchMove, { passive: false });
     canvas.addEventListener("touchstart", onTouchStart);
+
+    // Sync team from lobby presence once online
+    if (onlineMode && net) {
+      // Prefer CT if more T peers already (simple balance) — keep launcher choice via presence
+      net.on({
+        shot: (s) => {
+          if (s.id === net.me) return;
+          bullets.push({
+            x: s.x,
+            y: s.y,
+            a: s.a,
+            life: s.wep === "awp" ? 80 : 45,
+            dmg: s.dmg,
+            from: "b",
+            team: s.team,
+          });
+        },
+        hit: (h) => {
+          if (h.to !== net.me || player.hp <= 0) return;
+          let dmg = h.dmg;
+          if (player.armor > 0) {
+            const absorb = Math.min(player.armor, dmg * 0.5);
+            player.armor -= absorb;
+            dmg -= absorb;
+          }
+          player.hp -= dmg;
+          flash = 0.15;
+          if (player.hp <= 0) {
+            player.deaths++;
+            msg = "YOU DIED";
+            msgT = 2;
+            setTimeout(() => {
+              if (!ended) resetRound(player.team === "T" ? "CT" : "T");
+            }, 1800);
+          }
+        },
+        plant: (p) => {
+          if (bombPlanted) return;
+          bombPlanted = true;
+          bombX = p.x;
+          bombY = p.y;
+          bombT = p.t;
+          phase = "planted";
+          phaseT = p.t;
+          msg = "BOMB PLANTED";
+          msgT = 2;
+        },
+        defuse: () => {
+          if (!bombPlanted) return;
+          msg = "BOMB DEFUSED";
+          msgT = 2;
+          resetRound("CT");
+        },
+        round: (r) => {
+          if (net.isHost()) return;
+          round = r.round;
+          phase = r.phase;
+          phaseT = r.phaseT;
+          bombPlanted = r.bombPlanted;
+          bombX = r.bombX;
+          bombY = r.bombY;
+          bombT = r.bombT;
+          roundSeed = r.seed;
+          buyOpen = r.phase === "buy";
+          if (r.phase === "buy") {
+            const sp = spawnCell(player.team === "T" ? 4 : 5);
+            player.x = sp.x;
+            player.y = sp.y;
+            player.hp = 100;
+            giveDefault();
+            defuse = 0;
+          }
+        },
+        peers: () => {
+          const list = [...net.peers.values()].map((p) => ({ id: p.id, name: p.name, team: p.team as Team }));
+          setRoster(list);
+        },
+        team: () => {
+          const list = [...net.peers.values()].map((p) => ({ id: p.id, name: p.name, team: p.team as Team }));
+          setRoster(list);
+        },
+      });
+    }
 
     resetRound();
 
@@ -444,6 +585,7 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
           msg = "BOMB DEFUSED";
           msgT = 2;
           player.score += 300;
+          if (onlineMode && net) net.defuse();
           resetRound("CT");
         } else if (bombT <= 0) {
           flash = 0.8;
@@ -478,9 +620,44 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
         tryMove(player.x + (mx / len) * sp * dt, player.y + (my / len) * sp * dt);
       }
 
+      // online: sync peer sprites into bots list + broadcast pose
+      if (onlineMode && net) {
+        net.send({
+          x: player.x,
+          y: player.y,
+          a: player.a,
+          hp: player.hp,
+          armor: player.armor,
+          team: player.team,
+          wep: player.wep,
+          alive: player.hp > 0,
+        });
+        // refresh peer bots
+        for (let i = bots.length - 1; i >= 0; i--) if (bots[i].isPeer) bots.splice(i, 1);
+        const nowP = performance.now();
+        for (const p of net.peers.values()) {
+          const pose = peerPose(p, nowP);
+          if (!pose || pose.stale || !pose.alive) continue;
+          bots.push({
+            id: p.id,
+            name: p.name,
+            isPeer: true,
+            x: pose.x,
+            y: pose.y,
+            a: pose.a,
+            hp: pose.hp,
+            team: pose.team as Team,
+            wep: (pose.wep as WepId) || "glock",
+            cool: 0,
+            alive: true,
+          });
+        }
+        if (net.isHost() && nowP - lastRoundBroadcast > 2000) broadcastRound();
+      }
+
       // bots AI
       for (const b of bots) {
-        if (!b.alive) continue;
+        if (!b.alive || b.isPeer) continue;
         b.cool = Math.max(0, b.cool - dt);
         const enemy = b.team !== player.team && player.hp > 0;
         let tx = player.x;
@@ -558,21 +735,28 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
           for (const b of bots) {
             if (!b.alive || b.team === player.team) continue;
             if (Math.hypot(bl.x - b.x, bl.y - b.y) < 0.32) {
-              b.hp -= bl.dmg;
               bullets.splice(i, 1);
               particles.push({ x: b.x, y: b.y, vx: 0, vy: 0, life: 12, c: "#ef4444" });
-              if (b.hp <= 0) {
-                b.alive = false;
-                player.kills++;
-                player.money = Math.min(16000, player.money + 300);
-                player.score += 100;
-                msg = "ENEMY DOWN +$300";
-                msgT = 1.2;
-                // check round wipe
-                if (!bots.some((x) => x.alive && x.team !== player.team)) {
-                  msg = "ENEMY ELIMINATED";
-                  msgT = 2;
-                  setTimeout(() => resetRound(player.team), 1500);
+              if (b.isPeer && b.id && onlineMode && net) {
+                net.hit(b.id, bl.dmg);
+                // optimistic FX; peer applies real HP
+                msg = "HIT";
+                msgT = 0.4;
+              } else {
+                b.hp -= bl.dmg;
+                if (b.hp <= 0) {
+                  b.alive = false;
+                  player.kills++;
+                  player.money = Math.min(16000, player.money + 300);
+                  player.score += 100;
+                  msg = "ENEMY DOWN +$300";
+                  msgT = 1.2;
+                  if (!bots.some((x) => x.alive && x.team !== player.team && !x.isPeer) &&
+                      !(onlineMode && net && [...net.peers.values()].some((p) => p.team !== player.team && p.last?.alive))) {
+                    msg = "ENEMY ELIMINATED";
+                    msgT = 2;
+                    setTimeout(() => resetRound(player.team), 1500);
+                  }
                 }
               }
               break;
@@ -660,6 +844,12 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
             ctx.beginPath();
             ctx.arc(sx + size / 2, sy + size * 0.2, size * 0.18, 0, Math.PI * 2);
             ctx.fill();
+            if (b.name) {
+              ctx.fillStyle = "#fff";
+              ctx.font = `bold ${Math.max(10, size * 0.12)}px sans-serif`;
+              ctx.textAlign = "center";
+              ctx.fillText(b.name.slice(0, 12), sx + size / 2, sy - 4);
+            }
             // HP bar
             ctx.fillStyle = "#000";
             ctx.fillRect(sx + size * 0.2, sy, size * 0.6, 4);
@@ -806,7 +996,7 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
       canvas.removeEventListener("touchstart", onTouchStart);
       if (document.pointerLockElement === canvas) document.exitPointerLock();
     };
-  }, [onOver, onScore]);
+  }, [onOver, onScore, mode, net, playerName, initialTeam]);
 
   return (
     <div className="relative size-full min-h-[360px] bg-black select-none">
@@ -844,6 +1034,15 @@ export default function ClassicStrike({ onOver, onScore }: GameProps) {
       </div>
       <div className="pointer-events-none absolute top-2 right-2 rounded bg-black/50 px-2 py-1 text-[10px] text-white/70">
         Fan homage · not affiliated with Valve
+        {online && roster.length > 0 && (
+          <div className="mt-1 space-y-0.5 text-left font-mono text-[10px] text-lime-300/90">
+            {roster.map((p) => (
+              <div key={p.id}>
+                {p.team} {p.name}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

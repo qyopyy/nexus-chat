@@ -3,7 +3,7 @@
 import { joinGame, type RoomGame } from "@/store/games";
 import { GAME_NAMES } from "@/lib/gameInvites";
 
-const RE = /[?&]play=([A-Z2-9]{6})(?:&g=(geo|four|streets|flappy))?\b/;
+const RE = /[?&]play=([A-Z2-9]{6})(?:&g=(geo|four|streets|flappy|classicstrike))?\b/;
 
 /** chat card for "?play=CODE" invite links → joins the room in the app */
 export default function GameInvite({ text }: { text: string }) {
