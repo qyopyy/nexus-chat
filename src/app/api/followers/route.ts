@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { detectPlatform, spotifyArtistId } from "@/lib/links";
 import { parseAudienceText, platformHandle } from "@/lib/followers";
+import { rateLimit } from "@/lib/apiGuard";
+import { cacheGet, cacheSet } from "@/lib/serverCache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const TIMEOUT_MS = 10_000;
 const CACHE_TTL_MS = 10 * 60_000;
+const CACHE = "followers";
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 
@@ -16,8 +19,6 @@ type Result = {
   handle: string | null;
   source?: string;
 };
-
-const cache = new Map<string, { at: number; body: Result }>();
 
 function json(body: Result, status = 200) {
   return NextResponse.json(body, {
@@ -208,6 +209,9 @@ async function resolve(type: string, url: string): Promise<Result> {
 }
 
 export async function GET(req: NextRequest) {
+  const limited = rateLimit(req, "followers", 60, 60_000);
+  if (limited) return limited;
+
   const urlParam = req.nextUrl.searchParams.get("url")?.trim() ?? "";
   const typeParam = req.nextUrl.searchParams.get("type")?.trim() ?? "";
   if (!urlParam || !/^https?:\/\//i.test(urlParam)) {
@@ -223,12 +227,12 @@ export async function GET(req: NextRequest) {
 
   const type = typeParam || detectPlatform(parsed.toString()).id;
   const key = `${type}:${platformHandle(type, urlParam) ?? urlParam}`;
-  const cached = cache.get(key);
-  if (cached && Date.now() - cached.at < CACHE_TTL_MS) return json(cached.body);
+  const cached = cacheGet<Result>(CACHE, key, CACHE_TTL_MS);
+  if (cached) return json(cached);
 
   try {
     const body = await resolve(type, urlParam);
-    cache.set(key, { at: Date.now(), body });
+    cacheSet(CACHE, key, body);
     return json(body);
   } catch {
     return json({ followers: null, platform: type, handle: platformHandle(type, urlParam) }, 200);

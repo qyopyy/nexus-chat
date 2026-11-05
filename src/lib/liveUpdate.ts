@@ -8,7 +8,9 @@
 import { isNativeApp } from "./useMobile";
 
 const KEY = "nexus.liveBuild";
+const CACHE_HOUR_KEY = "nexus.clientCacheHour";
 const POLL_MS = 45_000;
+const HOUR_MS = 60 * 60_000;
 
 type Version = { build: string; short?: string };
 
@@ -89,11 +91,34 @@ export function startLiveUpdates() {
     }
   };
 
+  /** Soft client cache reset every hour — drops link-preview / follower memo and nudges freshness. */
+  const clearClientCaches = () => {
+    try {
+      const mark = Number(localStorage.getItem(CACHE_HOUR_KEY) || 0);
+      if (Date.now() - mark < HOUR_MS) return;
+      localStorage.setItem(CACHE_HOUR_KEY, String(Date.now()));
+      // Drop ephemeral preview caches kept in sessionStorage by hubs
+      const doomed: string[] = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const k = sessionStorage.key(i);
+        if (k && /^(nexus\.(unfurl|followers|preview|cache))/i.test(k)) doomed.push(k);
+      }
+      for (const k of doomed) sessionStorage.removeItem(k);
+    } catch {
+      /* private mode */
+    }
+  };
+
   void check();
+  clearClientCaches();
   timer = setInterval(() => void check(), POLL_MS);
+  const hourTimer = setInterval(() => clearClientCaches(), HOUR_MS);
 
   const onVis = () => {
-    if (document.visibilityState === "visible") void check();
+    if (document.visibilityState === "visible") {
+      void check();
+      clearClientCaches();
+    }
   };
   document.addEventListener("visibilitychange", onVis);
   window.addEventListener("focus", onVis);
@@ -105,6 +130,7 @@ export function startLiveUpdates() {
   return () => {
     stopped = true;
     if (timer) clearInterval(timer);
+    clearInterval(hourTimer);
     document.removeEventListener("visibilitychange", onVis);
     window.removeEventListener("focus", onVis);
     document.removeEventListener("resume", onResume);

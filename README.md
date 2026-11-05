@@ -56,6 +56,13 @@ Registration no longer needs the old site password. The live `signup` function w
 
 Before sharing a deployed URL: Supabase → Authentication → URL Configuration → set **Site URL** to it (used by password-reset emails).
 
+### Stability, cache purge & anti-malware
+
+- **`GET /api/health`** — liveness + Supabase reachability for uptime monitors.
+- **`GET|POST /api/cache/purge`** — clears in-memory API caches (followers/unfurl). Vercel Cron runs it **every hour** (`vercel.json`). Set `CRON_SECRET` for manual calls (`Authorization: Bearer …`).
+- **Anti-malware upload gate** (`src/lib/malwareGuard.ts`) blocks executables, scripts, SVG/HTML, dangerous extensions, and mismatched image magic bytes before chat/radio/music/Gram/Cutroom uploads. Complements Nexus Shield (copyright), not a full AV engine.
+- App Router `error.tsx` / `global-error.tsx` + ErrorBoundaries keep one broken panel from blanking the whole app.
+
 ## Setup from scratch (another Supabase project)
 
 1. **Create a Supabase project** at [supabase.com](https://supabase.com) (free tier is fine).

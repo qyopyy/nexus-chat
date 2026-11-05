@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit } from "@/lib/apiGuard";
+import { cacheGet, cacheSet } from "@/lib/serverCache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,10 +15,12 @@ type Preview = {
   favicon: string | null;
 };
 
+type CacheBody = { body: Preview | null; status: number };
+
 const TIMEOUT_MS = 8000;
 const MAX_BYTES = 1_200_000;
 const CACHE_TTL_MS = 30 * 60_000;
-const cache = new Map<string, { at: number; body: Preview | null; status: number }>();
+const CACHE = "unfurl";
 
 function blockedHost(hostname: string): boolean {
   const h = hostname.toLowerCase().replace(/\.$/, "");
@@ -106,6 +110,9 @@ function parseHtml(url: string, finalUrl: string, html: string): Preview {
 }
 
 export async function GET(req: NextRequest) {
+  const limited = rateLimit(req, "unfurl", 40, 60_000);
+  if (limited) return limited;
+
   const raw = req.nextUrl.searchParams.get("url")?.trim() ?? "";
   if (!raw) return NextResponse.json({ error: "url required" }, { status: 400 });
 
@@ -123,8 +130,8 @@ export async function GET(req: NextRequest) {
   }
 
   const key = target.toString();
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
+  const hit = cacheGet<CacheBody>(CACHE, key, CACHE_TTL_MS);
+  if (hit) {
     return NextResponse.json(hit.body, { status: hit.status, headers: { "Cache-Control": "private, max-age=300" } });
   }
 
@@ -144,7 +151,7 @@ export async function GET(req: NextRequest) {
     try {
       const finalHost = new URL(finalUrl).hostname;
       if (blockedHost(finalHost)) {
-        cache.set(key, { at: Date.now(), body: null, status: 400 });
+        cacheSet(CACHE, key, { body: null, status: 400 } satisfies CacheBody);
         return NextResponse.json({ error: "blocked redirect" }, { status: 400 });
       }
     } catch {
@@ -169,13 +176,13 @@ export async function GET(req: NextRequest) {
         siteName: new URL(finalUrl).hostname.replace(/^www\./, ""),
         favicon: absUrl(finalUrl, "/favicon.ico"),
       };
-      cache.set(key, { at: Date.now(), body, status: 200 });
+      cacheSet(CACHE, key, { body, status: 200 } satisfies CacheBody);
       return NextResponse.json(body, { headers: { "Cache-Control": "private, max-age=300" } });
     }
 
     const reader = res.body?.getReader();
     if (!reader) {
-      cache.set(key, { at: Date.now(), body: null, status: 502 });
+      cacheSet(CACHE, key, { body: null, status: 502 } satisfies CacheBody);
       return NextResponse.json({ error: "empty body" }, { status: 502 });
     }
     const chunks: Uint8Array[] = [];
@@ -193,13 +200,13 @@ export async function GET(req: NextRequest) {
     const html = new TextDecoder("utf-8").decode(Buffer.concat(chunks.map((c) => Buffer.from(c))));
     const body = parseHtml(key, finalUrl, html);
     if (!body.title && !body.description && !body.image) {
-      cache.set(key, { at: Date.now(), body: null, status: 404 });
+      cacheSet(CACHE, key, { body: null, status: 404 } satisfies CacheBody);
       return NextResponse.json({ error: "no preview" }, { status: 404 });
     }
-    cache.set(key, { at: Date.now(), body, status: 200 });
+    cacheSet(CACHE, key, { body, status: 200 } satisfies CacheBody);
     return NextResponse.json(body, { headers: { "Cache-Control": "private, max-age=300" } });
   } catch {
-    cache.set(key, { at: Date.now(), body: null, status: 502 });
+    cacheSet(CACHE, key, { body: null, status: 502 } satisfies CacheBody);
     return NextResponse.json({ error: "fetch failed" }, { status: 502 });
   } finally {
     clearTimeout(timer);

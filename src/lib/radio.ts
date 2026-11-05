@@ -419,6 +419,8 @@ export async function radioUpload(file: File) {
     }
     if (file.size <= 0) return toast("That file is empty", "error");
     if (file.size > MAX) return toast("Tracks can be up to 100 MB", "error");
+    const { malwareGate } = await import("./malwareGuard");
+    if (await malwareGate(file, { fileName: file.name, context: "audio" })) return;
     if (!(await radioShieldOk(file))) return;
 
     const contentType = radioContentType(file) || "application/octet-stream";
