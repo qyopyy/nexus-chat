@@ -435,6 +435,61 @@ const BIRDS = [
         beak: '#a7f3d0',
         belly: '#064e3b',
         type: 'alien'
+    },
+    {
+        id: 'emo',
+        name: 'Moonlight',
+        primary: '#7c3aed',
+        secondary: '#5b21b6',
+        wing: '#c4b5fd',
+        eye: '#ffffff',
+        beak: '#a78bfa',
+        belly: '#ddd6fe',
+        type: 'bird'
+    },
+    {
+        id: 'lucid',
+        name: 'Lucid',
+        primary: '#c084fc',
+        secondary: '#a855f7',
+        wing: '#f5d0fe',
+        eye: '#ffffff',
+        beak: '#e879f9',
+        belly: '#fae8ff',
+        type: 'bird'
+    },
+    {
+        id: 'phoenix',
+        name: 'Phoenix',
+        primary: '#fb923c',
+        secondary: '#ea580c',
+        wing: '#fdba74',
+        eye: '#ffffff',
+        beak: '#facc15',
+        belly: '#ffedd5',
+        type: 'bird'
+    },
+    {
+        id: 'candy',
+        name: 'Candy Pop',
+        primary: '#fb7185',
+        secondary: '#e11d48',
+        wing: '#fecdd3',
+        eye: '#ffffff',
+        beak: '#f472b6',
+        belly: '#ffe4e6',
+        type: 'bird'
+    },
+    {
+        id: 'frost',
+        name: 'Frostbite',
+        primary: '#a5f3fc',
+        secondary: '#22d3ee',
+        wing: '#ecfeff',
+        eye: '#0e7490',
+        beak: '#67e8f9',
+        belly: '#cffafe',
+        type: 'bird'
     }
 ];
 
@@ -542,6 +597,10 @@ const envListEl = document.getElementById('envList');
 let selectedBird = BIRDS[0];
 let selectedEnv = ENVIRONMENTS[0];
 let gameState = 'MENU'; // 'MENU' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'
+let runDifficulty = 'normal'; // easy | normal | hard
+let runPower = null; // slow | double | magnet | null
+let runPractice = false;
+let coinMul = 1;
 
 let width = 0;
 let height = 0;
@@ -553,6 +612,26 @@ menuBestScore.innerText = `Best: ${bestScore}`;
 let frameCount = 0;
 let screenShakeTimer = 0;
 const GROUND_HEIGHT = 80;
+
+function applyRunModifiers() {
+    // Base world feel, then difficulty + power-ups from Nexus lobby query
+    if (runDifficulty === 'easy') {
+        world.pipeGap = 230;
+        world.speed = 2.2;
+        coinMul = 0.75;
+    } else if (runDifficulty === 'hard') {
+        world.pipeGap = 150;
+        world.speed = 3.5;
+        coinMul = 1.5;
+    } else {
+        world.pipeGap = 195;
+        world.speed = 2.8;
+        coinMul = 1;
+    }
+    if (runPower === 'slow') world.speed *= 0.7;
+    if (runPower === 'double') coinMul *= 2;
+    world.magnetBonus = runPower === 'magnet' ? 18 : 0;
+}
 
 // Dynamic responsive viewport
 function resize() {
@@ -905,6 +984,7 @@ class WorldManager {
         this.pipeGap = 195; // generous height space for enjoyable gameplay
         this.speed = 2.8;
         this.groundOffset = 0;
+        this.magnetBonus = 0;
     }
 
     reset() {
@@ -996,9 +1076,9 @@ class WorldManager {
             c.y = c.parentPipe.topHeight + this.pipeGap / 2 + Math.sin(c.oscPhase) * 10;
             c.oscPhase += 0.05;
 
-            // Check coin collision with bird
+            // Check coin collision with bird (magnet widens pickup)
             const dist = Math.hypot(bird.x - c.x, bird.y - c.y);
-            if (dist < bird.radius + c.radius && !c.collected) {
+            if (dist < bird.radius + c.radius + this.magnetBonus && !c.collected) {
                 c.collected = true;
                 coinsCollected++;
                 score += 2; // bonus points for risk
@@ -1193,6 +1273,7 @@ function startNewGame() {
 
     bird.reset();
     world.reset();
+    applyRunModifiers();
 
     menuScreen.classList.add('hidden');
     pauseScreen.classList.add('hidden');
@@ -1200,6 +1281,21 @@ function startNewGame() {
     hud.classList.remove('hidden');
 
     bird.flap();
+}
+
+function awardCoins() {
+    return Math.max(0, Math.round((coinsCollected + score) * coinMul));
+}
+
+function embedPayload() {
+    return {
+        type: 'flappy-happy-over',
+        score,
+        coins: awardCoins(),
+        practice: runPractice,
+        difficulty: runDifficulty,
+        power: runPower,
+    };
 }
 
 function triggerGameOver() {
@@ -1213,14 +1309,15 @@ function triggerGameOver() {
         bestScore = score;
         localStorage.setItem('flappyHappyBestScore', bestScore.toString());
     }
+    const payout = awardCoins();
     try {
         const bank = parseInt(localStorage.getItem('flappyHappyCoins') || '0', 10) || 0;
-        localStorage.setItem('flappyHappyCoins', String(bank + coinsCollected + score));
+        localStorage.setItem('flappyHappyCoins', String(bank + payout));
     } catch (_) { /* ignore */ }
 
     finalScore.innerText = score;
     finalBest.innerText = bestScore;
-    finalCoins.innerText = coinsCollected;
+    finalCoins.innerText = payout;
     menuBestScore.innerText = `Best: ${bestScore}`;
 
     hud.classList.add('hidden');
@@ -1229,7 +1326,7 @@ function triggerGameOver() {
     // Notify Nexus embed host (FlappySolo) so lobby can award coins / progress
     try {
         if (window.parent && window.parent !== window) {
-            window.parent.postMessage({ type: 'flappy-happy-over', score, coins: coinsCollected + score }, window.location.origin);
+            window.parent.postMessage(embedPayload(), window.location.origin);
         }
     } catch (_) { /* ignore */ }
 }
@@ -1318,6 +1415,7 @@ BIRDS.forEach((b, index) => {
 ENVIRONMENTS.forEach((env, index) => {
     const btn = document.createElement('button');
     btn.className = `chip-btn rounded-xl py-2 px-1 text-xs font-bold text-slate-200 bg-slate-800/60 ${index === 0 ? 'active' : ''}`;
+    btn.setAttribute('data-env', env.id);
     btn.innerText = env.name;
     btn.onclick = (e) => {
         e.stopPropagation();
@@ -1373,7 +1471,7 @@ document.getElementById('overMenuBtn').addEventListener('click', (e) => {
     try {
         const q = new URLSearchParams(location.search);
         if (q.get('embed') === '1' && window.parent && window.parent !== window) {
-            window.parent.postMessage({ type: 'flappy-happy-over', score, coins: coinsCollected + score }, window.location.origin);
+            window.parent.postMessage(embedPayload(), window.location.origin);
             return;
         }
     } catch (_) { /* ignore */ }
@@ -1395,6 +1493,22 @@ document.getElementById('overMenuBtn').addEventListener('click', (e) => {
                 });
             }
         }
+        const envId = q.get('env');
+        if (envId) {
+            const env = ENVIRONMENTS.find((x) => x.id === envId);
+            if (env) {
+                selectedEnv = env;
+                particles.initAmbient(selectedEnv.particleType);
+                document.querySelectorAll('#envList .chip-btn').forEach((el) => {
+                    el.classList.toggle('active', el.getAttribute('data-env') === envId);
+                });
+            }
+        }
+        const diff = q.get('difficulty');
+        if (diff === 'easy' || diff === 'normal' || diff === 'hard') runDifficulty = diff;
+        const power = q.get('power');
+        if (power === 'slow' || power === 'double' || power === 'magnet') runPower = power;
+        runPractice = q.get('practice') === '1';
         if (q.get('embed') === '1' && q.get('autostart') === '1') {
             setTimeout(() => startNewGame(), 120);
         }

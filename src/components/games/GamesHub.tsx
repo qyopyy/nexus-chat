@@ -32,7 +32,7 @@ const GAMES: { id: GameId; name: string; tag: string; desc: string; bg: string; 
   { id: "streets", name: "Neon Streets", tag: "Open-city driving", desc: "Open-world island city. Jobs, cash, cops — and play live with friends using an invite code.", bg: "linear-gradient(135deg,#ff2bd6,#2b0b5c)", emoji: "🚗", C: null },
   { id: "bay", name: "Sunset Bay", tag: "3D open world · 80s neon", desc: "Drive a neon coastal city in 3D — drifts, stunt jumps, hidden tapes and a ranked checkpoint rush.", bg: "linear-gradient(180deg,#2b1055,#ff4f9a 70%,#ffb347)", emoji: "🌴", C: null },
   { id: "geo", name: "GeoGuess", tag: "Real places · multiplayer", desc: "Real photos from around the world — pin where you think you are.", bg: "linear-gradient(135deg,#00c96b,#0b2a5c)", emoji: "🌍", C: null },
-  { id: "flappy", name: "Flappy Happy", tag: "Arcade · multiplayer race", desc: "Worlds, birds, daily gifts, chests — and live pipe races with friends.", bg: "linear-gradient(135deg,#38bdf8,#4ade80)", emoji: "🐤", C: null },
+  { id: "flappy", name: "Flappy Happy", tag: "Arcade · quests · race", desc: "Daily quests, difficulty modes, boosts, worlds, and live pipe races.", bg: "linear-gradient(135deg,#38bdf8,#4ade80)", emoji: "🐤", C: null },
   { id: "runner", name: "Neon Runner", tag: "Endless · jump", desc: "Sprint the neon strip — tap to jump the blocks before they hit you.", bg: "linear-gradient(135deg,#ff2bd6,#0b0b2a)", emoji: "🏃", C: Runner, isNew: true },
   { id: "whack", name: "Whack Dash", tag: "Arcade · 30s", desc: "Tap the moles before the clock runs out.", bg: "linear-gradient(135deg,#facc15,#5c0b3a)", emoji: "🐹", C: Whack, isNew: true },
   { id: "reaction", name: "Reaction Rush", tag: "Reflex · 5 rounds", desc: "Wait for green, tap as fast as you can. Don't jump the gun.", bg: "linear-gradient(135deg,#22c55e,#0b2a1a)", emoji: "⚡", C: Reaction, isNew: true },
@@ -137,9 +137,9 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
           {/* featured Flappy Happy */}
           <button onClick={() => setOpen("flappy")} className="group relative block w-full overflow-hidden rounded-3xl text-left" style={{ background: "linear-gradient(180deg,#7dd3fc 0%,#4ade80 55%,#15803d 100%)" }}>
             <div className="relative z-10 p-5 sm:p-8">
-              <div className="text-xs font-bold tracking-widest text-white/90 uppercase">Updated · worlds · multiplayer race</div>
+              <div className="text-xs font-bold tracking-widest text-white/90 uppercase">Updated · quests · boosts · race</div>
               <div className="mt-1 text-3xl font-black text-white sm:text-5xl">Flappy Happy</div>
-              <p className="mt-2 max-w-md text-sm text-white/90">Collect birds, claim daily gifts, open Top-3 chests, and race friends on a shared pipe seed.</p>
+              <p className="mt-2 max-w-md text-sm text-white/90">Daily quests, Easy/Hard modes, power-ups, world themes, and live pipe races with friends.</p>
               <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#facc15] px-5 py-2.5 font-black text-black transition group-hover:scale-105">
                 <Play className="size-4 fill-current" /> Play now
               </span>

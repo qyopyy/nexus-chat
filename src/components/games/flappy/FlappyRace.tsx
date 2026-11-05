@@ -21,6 +21,11 @@ const BIRD_COLORS: Record<string, string> = {
   ghost: "#e2e8f0",
   ninja: "#1e293b",
   alien: "#10b981",
+  emo: "#7c3aed",
+  lucid: "#c084fc",
+  phoenix: "#fb923c",
+  candy: "#fb7185",
+  frost: "#a5f3fc",
 };
 
 function mulberry32(a: number) {
