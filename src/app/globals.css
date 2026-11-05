@@ -170,6 +170,15 @@ html.compact .msg-gap-first { margin-top: .25rem !important; }
   background: radial-gradient(circle at 0 0, transparent 9px, var(--color-bubble, #2b2d31) 9.5px);
 }
 
+/* Flat messages (Appearance → Message bubbles off) */
+html.msg-flat .bubble-tail-me::after,
+html.msg-flat .bubble-tail::after {
+  display: none;
+}
+html.msg-flat .msg-bubble {
+  border-radius: 0.65rem !important;
+}
+
 .speaking-ring { box-shadow: 0 0 0 2px #23a55a, 0 0 0 4px rgb(35 165 90 / .25); }
 
 input[type="range"].vol {

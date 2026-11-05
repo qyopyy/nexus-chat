@@ -345,7 +345,7 @@ function MessageBubbleImpl({
       >
         <div
           className={cn(
-            "relative text-[15px] leading-snug shadow-sm",
+            "msg-bubble relative text-[15px] leading-snug shadow-sm msg-text",
             bigEmoji ? "bg-transparent px-1 shadow-none" : onlyMedia ? "overflow-hidden rounded-2xl p-0.5" : "px-3 py-1.5",
             !bigEmoji && (mine ? "bg-bubble-me text-white" : "bg-bubble text-txt"),
             !bigEmoji && !onlyMedia && "rounded-[20px]",

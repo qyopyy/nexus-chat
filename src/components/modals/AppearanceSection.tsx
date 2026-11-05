@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, FileCode2, ImagePlus, RotateCcw, Sparkles, Trash2, Upload } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { useAppearance, setAppearance, resetAppearance } from "@/store/appearance";
-import { BG_ANIMS, FONTS, THEMES, parseDiscordThemeCss, type ThemeColors } from "@/lib/theme";
+import { BG_ANIMS, FONT_GROUPS, FONTS, THEMES, parseDiscordThemeCss, type ThemeColors } from "@/lib/theme";
 import { supabase, errorText } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
@@ -282,18 +282,30 @@ export default function AppearanceSection() {
       {!(a.bgImage || a.bgVideo || a.bgAnim) && <div className="mb-8" />}
 
       <H>Text</H>
-      <Label>Font</Label>
-      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {Object.entries(FONTS).map(([id, f]) => (
-          <button
-            key={id}
-            onClick={() => setAppearance({ font: id })}
-            className={cn("rounded-lg border-2 px-3 py-2.5 text-left transition", a.font === id ? "border-accent bg-accent/10" : "border-line hover:border-sub")}
-            style={{ fontFamily: f.stack }}
-          >
-            <div className="truncate text-[15px]">{f.name}</div>
-            <div className="truncate text-xs text-sub">The quick brown fox 0123</div>
-          </button>
+      <Label hint="Applies across chat, Bump, and the whole app.">Font</Label>
+      <div className="mb-6 space-y-5">
+        {FONT_GROUPS.map((group) => (
+          <div key={group.id}>
+            <div className="mb-2 text-[11px] font-bold tracking-wide text-faint uppercase">{group.label}</div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {group.fonts.map((id) => {
+                const f = FONTS[id];
+                if (!f) return null;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setAppearance({ font: id })}
+                    className={cn("rounded-lg border-2 px-3 py-2.5 text-left transition", a.font === id ? "border-accent bg-accent/10" : "border-line hover:border-sub")}
+                    style={{ fontFamily: f.stack }}
+                  >
+                    <div className="truncate text-[15px] font-semibold">{f.name}</div>
+                    <div className="truncate text-xs text-sub">The quick brown fox 0123</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         ))}
       </div>
       <div className="mb-6 grid gap-6 sm:grid-cols-2">
@@ -302,10 +314,11 @@ export default function AppearanceSection() {
           <Range value={a.uiScale} min={13} max={19} step={1} onChange={(v) => setAppearance({ uiScale: v })} fmt={(v) => `${Math.round((v / 16) * 100)}%`} />
         </div>
         <div>
-          <Label hint="Chat message text only.">Message text size</Label>
+          <Label hint="Chat & Bump message text.">Message text size</Label>
           <Range value={a.messageSize} min={12} max={22} step={1} onChange={(v) => setAppearance({ messageSize: v })} fmt={(v) => `${v}px`} />
         </div>
       </div>
+      <Switch label="Message bubbles" hint="Rounded chat bubbles with tails (Discord / Telegram style). Off = flatter rows." checked={a.messageBubbles !== false} onChange={(v) => setAppearance({ messageBubbles: v })} />
       <Switch label="Compact mode" hint="Tighter spacing between message groups." checked={a.compact} onChange={(v) => setAppearance({ compact: v })} />
       <Switch label="Reduce motion" hint="Stops animated name colors, avatar decorations and transitions." checked={a.reduceMotion} onChange={(v) => setAppearance({ reduceMotion: v })} />
 
