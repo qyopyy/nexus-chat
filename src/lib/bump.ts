@@ -447,3 +447,66 @@ export async function bumpHeartbeat(visible: BumpVisible = "friends", label?: st
     return false;
   }
 }
+
+// ------------------------------------------------------------------ Wump groups
+
+export type WumpGroup = {
+  id: string;
+  name: string;
+  owner_id: string;
+  invite_code: string;
+  created_at: string;
+  member_count: number;
+  my_role: string;
+};
+
+export function bumpGroupInviteLink(code: string) {
+  const clean = code.trim();
+  if (typeof window === "undefined") return `https://nexusproject.cc/wump/g/${encodeURIComponent(clean)}`;
+  return `${window.location.origin}/wump/g/${encodeURIComponent(clean)}`;
+}
+
+export async function bumpCreateGroup(name: string, members: string[] = []) {
+  const { data, error } = await supabase.rpc("bump_create_group", { p_name: name.trim(), p_members: members });
+  if (error || !data) {
+    toast(errorText(error) || "Couldn't create group", "error");
+    return null;
+  }
+  toast("Group created", "success");
+  return data as { id: string; invite_code: string; name: string };
+}
+
+export async function bumpJoinGroup(code: string) {
+  const { data, error } = await supabase.rpc("bump_join_group", { p_code: code.trim() });
+  if (error || !data) {
+    toast(errorText(error) || "Couldn't join group", "error");
+    return null;
+  }
+  toast(`Joined ${(data as { name?: string }).name || "group"}`, "success");
+  return data as { id: string; name: string; invite_code: string };
+}
+
+export async function bumpListGroups() {
+  const { data, error } = await supabase.rpc("bump_list_groups");
+  if (error) return [] as WumpGroup[];
+  return (data ?? []) as WumpGroup[];
+}
+
+export async function bumpGroupMembers(groupId: string) {
+  const { data, error } = await supabase.rpc("bump_group_members_list", { p_group: groupId });
+  if (error || !data) return [] as { user_id: string; role: string; joined_at: string }[];
+  const rows = data as { user_id: string; role: string; joined_at: string }[];
+  if (rows.length) await loadProfiles(rows.map((r) => r.user_id));
+  return rows;
+}
+
+export async function bumpLeaveGroup(groupId: string) {
+  const { error } = await supabase.rpc("bump_leave_group", { p_group: groupId });
+  if (error) {
+    toast(errorText(error) || "Couldn't leave group", "error");
+    return false;
+  }
+  toast("Left group", "info");
+  return true;
+}
+

@@ -24,6 +24,7 @@ import {
 import { useApp, toast } from "@/store/app";
 import { useAppearance } from "@/store/appearance";
 import BumpMusicPanel from "@/components/bump/BumpMusicPanel";
+import BumpMiniPlayer from "@/components/bump/BumpMiniPlayer";
 import {
   bumpAttachAppleMaps,
   bumpClear,
@@ -34,6 +35,7 @@ import {
   bumpInbox,
   bumpInviteLink,
   bumpIpaReleasesUrl,
+  bumpJoinGroup,
   bumpListFamily,
   bumpMyPresence,
   bumpNearby,
@@ -55,22 +57,27 @@ import {
   type BumpProfile,
   type BumpVisible,
 } from "@/lib/bump";
-import { startBumpBackground, stopBumpBackground, updateBumpBackgroundOptions } from "@/lib/bumpBackground";
+import { startBumpBackground, stopBumpBackground, updateBumpBackgroundOptions, WUMP_REFRESH_MS } from "@/lib/bumpBackground";
 import { appleMapsLink } from "@/lib/appleMaps";
 import { formatMeters } from "@/lib/location";
 import { fmtClock } from "@/lib/prefs";
 import { haptic } from "@/lib/haptics";
 import { isBumpApp, isNativeApp } from "@/lib/useMobile";
 import { cn } from "@/lib/utils";
+import { updateMyProfile, uploadAvatar } from "@/lib/data";
+import { changeUsername } from "@/lib/gram";
+import { connectSpotify, startSpotifySync, useSpotifyUser } from "@/lib/spotifyUser";
+import { NowPlayingCard, liveNow } from "@/components/profile/NowPlaying";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import WumpMap from "./WumpMap";
 import WumpSettings from "./WumpSettings";
+import WumpGroups from "./WumpGroups";
 import { WUMP, WUMP_TAGLINE } from "@/lib/wumpBrand";
 import { pauseBumpMusic, playBumpTrack, useBumpMusic } from "@/lib/bumpMusic";
 import { fetchWumpPrivacy, loadWumpPrivacyLocal } from "@/lib/wumpPrivacy";
 
-type Tab = "nearby" | "friends" | "music" | "profile" | "social" | "messages" | "settings";
+type Tab = "nearby" | "friends" | "music" | "profile" | "social" | "messages" | "settings" | "groups";
 
 export default function BumpHub({
   mobile,
@@ -170,12 +177,12 @@ export default function BumpHub({
     }
   }, [me, radius]);
 
-  // Restore Live + initial nearby, then keep a slow safety poll while live
+  // Restore Live + nearby; poll often for realtime pin movement + 5-min location floor
   useEffect(() => {
     void refresh();
     const t = setInterval(() => {
       if (live) void refresh();
-    }, 45_000);
+    }, 15_000);
     return () => clearInterval(t);
   }, [refresh, live]);
 
@@ -203,7 +210,13 @@ export default function BumpHub({
     }
     if (!bgShare) {
       void stopBumpBackground({ clearServer: false });
-      const t = setInterval(() => void bumpHeartbeat(visible, liveLabel.trim() || undefined), 50_000);
+      // 5-minute scheduled refresh when background share is off (foreground poll still moves pins)
+      const t = setInterval(() => {
+        void bumpHeartbeat(visible, liveLabel.trim() || undefined).then((ok) => {
+          if (ok) void refresh();
+        });
+      }, WUMP_REFRESH_MS);
+      void bumpHeartbeat(visible, liveLabel.trim() || undefined);
       return () => clearInterval(t);
     }
     void startBumpBackground({
@@ -212,6 +225,10 @@ export default function BumpHub({
       alerts,
       autoStopMinutes: autoStopMin,
       onNearby: setNearby,
+      onLocation: (lat, lng) => {
+        setMyLat(lat);
+        setMyLng(lng);
+      },
     });
     return () => {
       void stopBumpBackground({ clearServer: false });
@@ -238,9 +255,20 @@ export default function BumpHub({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const q = new URLSearchParams(window.location.search).get("bump");
-    const pathCode = window.location.pathname.match(/^\/bump\/([a-z0-9]+)/i)?.[1];
-    const code = q || (pathCode && pathCode.toLowerCase() !== "app" ? pathCode : null);
+    const u0 = new URL(window.location.href);
+    const groupCode = u0.searchParams.get("wumpGroup");
+    if (groupCode) {
+      void bumpJoinGroup(groupCode).then(() => {
+        u0.searchParams.delete("wumpGroup");
+        window.history.replaceState(null, "", u0.pathname + u0.search);
+        setTab("groups");
+        void refresh();
+      });
+      return;
+    }
+    const q = u0.searchParams.get("bump");
+    const pathCode = window.location.pathname.match(/^\/(?:bump|wump)\/([a-z0-9]+)/i)?.[1];
+    const code = q || (pathCode && !["app", "g"].includes(pathCode.toLowerCase()) ? pathCode : null);
     if (code) {
       setRedeem(code);
       void bumpRedeemInvite(code).then(() => {
@@ -326,6 +354,7 @@ export default function BumpHub({
   const tabs: { id: Tab; label: string }[] = [
     { id: "nearby", label: "Nearby" },
     { id: "friends", label: "Friends" },
+    { id: "groups", label: "Groups" },
     { id: "music", label: "Music" },
     { id: "profile", label: "Profile" },
     { id: "social", label: "People" },
@@ -516,8 +545,8 @@ export default function BumpHub({
                   <Radio className="size-4 text-accent" /> Share location
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-sub">
-                  Real OpenStreetMap pins. Precision &amp; audience come from Privacy settings. Pins expire after 20 minutes unless Background Live keeps them fresh
-                  {isNativeApp() ? " (Allow Location → Always)." : "."}
+                  Realtime OpenStreetMap pins that move as you do. Location republishes at least every 5 minutes while Live. Precision &amp; audience come from Privacy.
+                  {isNativeApp() ? " Background Live needs Location → Always." : ""}
                 </p>
               </div>
               <div className="space-y-3 p-4">
@@ -760,6 +789,8 @@ export default function BumpHub({
 
         {tab === "settings" && me && <WumpSettings userId={me} />}
 
+        {tab === "groups" && <WumpGroups friendIds={friendIds} />}
+
         {tab === "music" && (
           <div className="mx-auto h-full max-w-xl">
             <BumpMusicPanel />
@@ -802,6 +833,7 @@ export default function BumpHub({
           <BumpMessagesPane me={me} focusUser={threadUser} onFocusUser={setThreadUser} onOpenProfile={openPerson} friendIds={friendIds} />
         )}
       </div>
+      {!hideChromeTabs && <BumpMiniPlayer onOpen={() => setTab("music")} />}
     </div>
     </>
   );
@@ -892,6 +924,8 @@ function BumpProfileEditor({ userId }: { userId: string }) {
   const nexus = useApp((s) => s.profiles[userId]);
   const [prof, setProf] = useState<BumpProfile | null>(null);
   const [bio, setBio] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
   const [spotify, setSpotify] = useState("");
   const [mapsUrl, setMapsUrl] = useState("");
   const [placeName, setPlaceName] = useState("");
@@ -900,6 +934,13 @@ function BumpProfileEditor({ userId }: { userId: string }) {
   const [placeLng, setPlaceLng] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [scraping, setScraping] = useState(false);
+  const avatarRef = useRef<HTMLInputElement>(null);
+  const sp = useSpotifyUser();
+  const liveNp = liveNow(nexus?.now_playing);
+
+  useEffect(() => {
+    startSpotifySync();
+  }, []);
 
   useEffect(() => {
     void bumpGetProfile(userId).then((p) => {
@@ -914,6 +955,11 @@ function BumpProfileEditor({ userId }: { userId: string }) {
       setPlaceLng(p.place_lng);
     });
   }, [userId]);
+
+  useEffect(() => {
+    setDisplayName(nexus?.display_name || "");
+    setUsername(nexus?.username || "");
+  }, [nexus?.display_name, nexus?.username]);
 
   const embed = bumpSpotifyTrackEmbed(spotify);
 
@@ -936,6 +982,12 @@ function BumpProfileEditor({ userId }: { userId: string }) {
       return;
     }
     setBusy(true);
+    if (displayName.trim() && displayName.trim() !== nexus?.display_name) {
+      await updateMyProfile({ display_name: displayName.trim() }, true);
+    }
+    if (username.trim() && username.trim().toLowerCase() !== nexus?.username?.toLowerCase()) {
+      await changeUsername(username.trim());
+    }
     const saved = await bumpSaveProfile({
       bio: bio.trim() || null,
       spotify_track: spotify.trim() || null,
@@ -959,16 +1011,46 @@ function BumpProfileEditor({ userId }: { userId: string }) {
           }}
         />
         <div className="-mt-10 flex items-end gap-3 px-4 pb-4">
-          <Avatar userId={userId} size={72} className="ring-[4px] ring-side" />
+          <button type="button" onClick={() => avatarRef.current?.click()} className="relative shrink-0" aria-label="Change profile picture">
+            <Avatar userId={userId} size={72} className="ring-[4px] ring-side" />
+            <span className="absolute inset-x-0 bottom-0 rounded-b-full bg-black/55 py-0.5 text-center text-[9px] font-bold text-white">Edit</span>
+          </button>
+          <input
+            ref={avatarRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void uploadAvatar(f);
+              e.target.value = "";
+            }}
+          />
           <div className="min-w-0 flex-1 pb-1">
-            <div className="truncate text-lg font-extrabold">{nexus?.display_name || "You"}</div>
-            <div className="truncate text-sm text-sub">@{nexus?.username || "…"}</div>
+            <div className="truncate text-lg font-extrabold">{displayName || nexus?.display_name || "You"}</div>
+            <div className="truncate text-sm text-sub">@{username || nexus?.username || "…"}</div>
             <div className="mt-1 text-[11px] text-sub">{prof ? `${prof.followers} followers · ${prof.following} following` : "Loading…"}</div>
           </div>
         </div>
       </section>
 
       <section className="space-y-4 rounded-2xl bg-side p-4 ring-1 ring-white/5">
+        <label className="block text-xs font-bold tracking-wide text-sub uppercase">
+          Display name
+          <input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value.slice(0, 40))}
+            className="mt-1.5 w-full rounded-xl bg-black/30 px-3 py-2.5 text-sm normal-case tracking-normal outline-none ring-1 ring-transparent focus:ring-accent"
+          />
+        </label>
+        <label className="block text-xs font-bold tracking-wide text-sub uppercase">
+          Username
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 24))}
+            className="mt-1.5 w-full rounded-xl bg-black/30 px-3 py-2.5 text-sm normal-case tracking-normal outline-none ring-1 ring-transparent focus:ring-accent"
+          />
+        </label>
         <label className="block text-xs font-bold tracking-wide text-sub uppercase">
           Bio
           <textarea
@@ -981,15 +1063,25 @@ function BumpProfileEditor({ userId }: { userId: string }) {
           <span className="mt-0.5 block text-right text-[10px] font-medium normal-case tracking-normal opacity-60">{bio.length}/280</span>
         </label>
 
-        <label className="block text-xs font-bold tracking-wide text-sub uppercase">
-          Spotify track
-          <input
-            value={spotify}
-            onChange={(e) => setSpotify(e.target.value)}
-            placeholder="https://open.spotify.com/track/…"
-            className="mt-1.5 w-full rounded-xl bg-black/30 px-3 py-2.5 text-sm normal-case tracking-normal outline-none ring-1 ring-transparent focus:ring-accent"
-          />
-        </label>
+        <div>
+          <div className="mb-1.5 text-xs font-bold tracking-wide text-sub uppercase">Spotify</div>
+          {sp.connected ? (
+            liveNp ? <NowPlayingCard np={liveNp} /> : <p className="mb-2 text-[11px] text-sub">Connected — play a song to show Now Playing.</p>
+          ) : (
+            <button type="button" onClick={() => void connectSpotify()} className="mb-2 rounded-full bg-[#1DB954] px-3 py-1.5 text-xs font-bold text-black">
+              Connect Spotify
+            </button>
+          )}
+          <label className="block text-[11px] font-semibold text-sub">
+            Pinned track link
+            <input
+              value={spotify}
+              onChange={(e) => setSpotify(e.target.value)}
+              placeholder="https://open.spotify.com/track/…"
+              className="mt-1 w-full rounded-xl bg-black/30 px-3 py-2.5 text-sm font-normal text-txt outline-none ring-1 ring-transparent focus:ring-accent"
+            />
+          </label>
+        </div>
         {embed && <iframe src={embed} title="Wump Spotify track" loading="lazy" allow="encrypted-media; clipboard-write" className="h-[80px] w-full rounded-xl border-0" />}
 
         <div>

@@ -169,6 +169,7 @@ export type LeafletNS = {
     addTo: (m: LMap) => {
       remove: () => void;
       setLatLng: (c: [number, number]) => void;
+      getLatLng: () => { lat: number; lng: number };
       on: (ev: string, fn: () => void) => void;
       bindTooltip?: (t: string, o?: Record<string, unknown>) => unknown;
     };

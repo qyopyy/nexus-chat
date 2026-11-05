@@ -44,6 +44,10 @@ type BumpMusicState = {
   volume: number;
   loop: boolean;
   shuffle: boolean;
+  /** playback position seconds */
+  currentTime: number;
+  /** track duration seconds (0 until known) */
+  duration: number;
 };
 
 const META_KEY = "nexus.bumpMusic.v1";
@@ -64,6 +68,8 @@ const EMPTY: BumpMusicState = {
   volume: 0.7,
   loop: true,
   shuffle: false,
+  currentTime: 0,
+  duration: 0,
 };
 
 function openDb(): Promise<IDBDatabase> {
@@ -168,12 +174,31 @@ export const useBumpMusic = create<BumpMusicState>(() => {
     volume: typeof loaded.volume === "number" ? Math.min(1, Math.max(0, loaded.volume)) : 0.7,
     loop: loaded.loop !== false,
     shuffle: !!loaded.shuffle,
+    currentTime: 0,
+    duration: 0,
   };
   return ensureDefaultProject(base);
 });
 
 let audio: HTMLAudioElement | null = null;
 let objectUrl: string | null = null;
+
+function syncMediaSession() {
+  if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+  const track = bumpMusicCurrent();
+  try {
+    navigator.mediaSession.metadata = track
+      ? new MediaMetadata({
+          title: track.name,
+          artist: "Wump Music",
+          album: "On this device",
+        })
+      : null;
+    navigator.mediaSession.playbackState = useBumpMusic.getState().playing ? "playing" : "paused";
+  } catch {
+    /* unsupported */
+  }
+}
 
 function el() {
   if (typeof window === "undefined") return null;
@@ -190,8 +215,33 @@ function el() {
     });
     audio.addEventListener("pause", () => {
       if (!audio?.ended) useBumpMusic.setState({ playing: false });
+      syncMediaSession();
     });
-    audio.addEventListener("play", () => useBumpMusic.setState({ playing: true }));
+    audio.addEventListener("play", () => {
+      useBumpMusic.setState({ playing: true });
+      syncMediaSession();
+    });
+    audio.addEventListener("timeupdate", () => {
+      if (!audio) return;
+      useBumpMusic.setState({ currentTime: audio.currentTime, duration: Number.isFinite(audio.duration) ? audio.duration : 0 });
+    });
+    audio.addEventListener("loadedmetadata", () => {
+      if (!audio) return;
+      useBumpMusic.setState({ duration: Number.isFinite(audio.duration) ? audio.duration : 0 });
+    });
+    if ("mediaSession" in navigator) {
+      try {
+        navigator.mediaSession.setActionHandler("play", () => void playBumpTrack());
+        navigator.mediaSession.setActionHandler("pause", () => pauseBumpMusic());
+        navigator.mediaSession.setActionHandler("previoustrack", () => void playPrevBumpTrack());
+        navigator.mediaSession.setActionHandler("nexttrack", () => void playNextBumpTrack());
+        navigator.mediaSession.setActionHandler("seekto", (d) => {
+          if (typeof d.seekTime === "number") seekBumpMusic(d.seekTime);
+        });
+      } catch {
+        /* ignore */
+      }
+    }
   }
   return audio;
 }
@@ -401,7 +451,8 @@ export async function playBumpTrack(id?: string) {
     a.volume = state.volume;
     a.loop = false; // we handle next/loop ourselves
     await a.play();
-    useBumpMusic.setState({ playing: true });
+    useBumpMusic.setState({ playing: true, currentTime: a.currentTime || 0 });
+    syncMediaSession();
     return true;
   } catch {
     useBumpMusic.setState({ playing: false });
@@ -412,6 +463,22 @@ export async function playBumpTrack(id?: string) {
 export function pauseBumpMusic() {
   el()?.pause();
   useBumpMusic.setState({ playing: false });
+  syncMediaSession();
+}
+
+export function seekBumpMusic(seconds: number) {
+  const a = el();
+  if (!a || !Number.isFinite(seconds)) return;
+  const dur = Number.isFinite(a.duration) ? a.duration : useBumpMusic.getState().duration;
+  const t = Math.max(0, Math.min(dur || seconds, seconds));
+  a.currentTime = t;
+  useBumpMusic.setState({ currentTime: t });
+}
+
+export function formatBumpTime(sec: number) {
+  if (!Number.isFinite(sec) || sec < 0) return "0:00";
+  const s = Math.floor(sec);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
 export function toggleBumpMusic() {

@@ -99,7 +99,23 @@ export default function WumpMap({
       want.add(id);
       const existing = markersRef.current.get(id);
       if (existing?.setLatLng) {
-        existing.setLatLng([lat, lng]);
+        // smooth hop toward new coords for realtime movement
+        const marker = existing as MarkerHandle & { getLatLng?: () => { lat: number; lng: number }; setLatLng: (c: [number, number]) => void };
+        const cur = marker.getLatLng?.();
+        if (cur) {
+          const steps = 8;
+          let i = 0;
+          const from = { lat: cur.lat, lng: cur.lng };
+          const tick = () => {
+            i++;
+            const k = i / steps;
+            marker.setLatLng([from.lat + (lat - from.lat) * k, from.lng + (lng - from.lng) * k]);
+            if (i < steps) requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        } else {
+          existing.setLatLng([lat, lng]);
+        }
         return;
       }
       existing?.remove();
