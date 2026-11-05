@@ -13,6 +13,7 @@ export const GAME_NAMES: Record<RoomGame, { name: string; emoji: string; bg: str
   streets: { name: "Neon Streets", emoji: "🚗", bg: "linear-gradient(135deg,#ff2bd6,#2b0b5c)" },
   geo: { name: "GeoGuess", emoji: "🌍", bg: "linear-gradient(135deg,#00c96b,#0b2a5c)" },
   four: { name: "Four in a Row", emoji: "🔴", bg: "linear-gradient(135deg,#ff4d6d,#5c0b2b)" },
+  classicstrike: { name: "Classic Strike", emoji: "🔫", bg: "linear-gradient(135deg,#365314,#7c2d12)" },
 };
 
 /** accepted friends, online ones first */
