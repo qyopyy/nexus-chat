@@ -27,9 +27,9 @@ export function Thumb({ v, className, rounded = "rounded-xl" }: { v: Video; clas
 }
 
 /** Grid card: thumbnail, avatar, title, channel, views · age */
-export default function VideoCard({ v, compact }: { v: Video; compact?: boolean }) {
+export default function VideoCard({ v, compact, onOpen }: { v: Video; compact?: boolean; onOpen?: () => void }) {
   const owner = useApp((s) => s.profiles[v.owner_id]);
-  const open = () => videosGo({ view: "watch", key: v.slug ?? v.id });
+  const open = () => (onOpen ? onOpen() : videosGo({ view: "watch", key: v.slug ?? v.id }));
   if (compact) {
     return (
       <button onClick={open} className="group flex w-full gap-2.5 rounded-xl p-1 text-left hover:bg-white/5">

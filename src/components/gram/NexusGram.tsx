@@ -1,22 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Clapperboard, Compass, Heart, House, Megaphone, Play, SquarePlus, UserRound } from "lucide-react";
+import { ArrowLeft, Bookmark, Clapperboard, Compass, Heart, House, Megaphone, Play, Shield, SquarePlus, UserRound } from "lucide-react";
 import { useApp } from "@/store/app";
+import { myRank } from "@/lib/admin";
 import { cn } from "@/lib/utils";
-import { feed, fmt, getPost, gramBack, gramGo, gramHome, mediaUrl, useGram, type Post } from "@/lib/gram";
+import { feed, fmt, getPost, gramBack, gramGo, gramHome, mediaUrl, savedFeed, useGram, type Post } from "@/lib/gram";
 import { openPulse } from "@/lib/pulse";
 import Avatar from "@/components/ui/Avatar";
 import PostCard from "./PostCard";
 import Shorts from "./Shorts";
 import Profile from "./Profile";
 import Create from "./Create";
+import GramAdmin from "./GramAdmin";
 import { StoryTray, StoryViewer } from "./Stories";
 
 export default function NexusGram({ mobile }: { mobile?: boolean }) {
   const stack = useGram((s) => s.stack);
   const meId = useApp((s) => s.userId);
   const me = useApp((s) => (meId ? s.profiles[meId] : undefined));
+  const staff = myRank() >= 2;
   const r = stack[stack.length - 1];
   const scroller = useRef<HTMLDivElement>(null);
 
@@ -33,6 +36,7 @@ export default function NexusGram({ mobile }: { mobile?: boolean }) {
     { id: "home", label: "Home", icon: <House className="size-5" />, on: r.view === "home", go: () => gramHome() },
     { id: "shorts", label: "Shorts", icon: <Clapperboard className="size-5" />, on: r.view === "shorts", go: () => gramHome({ view: "shorts" }) },
     { id: "explore", label: "Explore", icon: <Compass className="size-5" />, on: r.view === "explore", go: () => gramHome({ view: "explore" }) },
+    { id: "saved", label: "Saved", icon: <Bookmark className="size-5" />, on: r.view === "saved", go: () => gramHome({ view: "saved" }) },
     {
       id: "me",
       label: "Profile",
@@ -43,28 +47,33 @@ export default function NexusGram({ mobile }: { mobile?: boolean }) {
   ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-chat">
-      <header className={cn("z-20 flex shrink-0 items-center gap-2 border-b border-line/50 bg-chat/90 px-3 backdrop-blur-xl", mobile ? "pt-safe h-auto min-h-14 py-2" : "h-14")}>
+    <div className="flex h-full min-h-0 flex-col bg-[#0b0b0f] text-[#f5f5f7]">
+      <header className={cn("z-20 flex shrink-0 items-center gap-2 border-b border-white/8 bg-[#0b0b0f]/92 px-3 backdrop-blur-xl", mobile ? "pt-safe h-auto min-h-14 py-2" : "h-14")}>
         {stack.length > 1 ? (
-          <button onClick={gramBack} className="grid size-9 place-items-center rounded-full hover:bg-hover" aria-label="Back">
+          <button onClick={gramBack} className="grid size-9 place-items-center rounded-full hover:bg-white/5" aria-label="Back">
             <ArrowLeft className="size-5" />
           </button>
         ) : null}
-        <button onClick={() => gramHome()} className="flex items-center gap-1.5">
-          <span className="grid size-8 place-items-center rounded-xl bg-gradient-to-br from-[#ff2bd6] via-[#8b5cff] to-[#00c2ff] text-sm font-black text-white">N</span>
-          <span className="bg-gradient-to-r from-[#ff7ae6] to-[#7cc8ff] bg-clip-text text-lg font-black tracking-tight text-transparent">NexusGram</span>
+        <button onClick={() => gramHome()} className="flex items-center gap-2">
+          <span className="grid size-8 place-items-center rounded-lg bg-white text-sm font-black text-black">N</span>
+          <span className="text-[17px] font-semibold tracking-tight">NexusGram</span>
         </button>
-        <nav className={cn("ml-auto flex items-center gap-1", mobile && "gap-0")}>
+        <nav className={cn("ml-auto flex items-center gap-0.5", mobile && "gap-0")}>
           {nav.map((n) => (
-            <button key={n.id} onClick={n.go} className={cn("flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-semibold", n.on ? "bg-white/10 text-txt" : "text-sub hover:bg-hover hover:text-txt")} aria-label={n.label} title={n.label}>
+            <button key={n.id} onClick={n.go} className={cn("flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium", n.on ? "bg-white/10 text-white" : "text-white/45 hover:bg-white/5 hover:text-white")} aria-label={n.label} title={n.label}>
               {n.icon}
               {!mobile && <span className="hidden lg:inline">{n.label}</span>}
             </button>
           ))}
-          <button onClick={() => openPulse()} className="ml-1 grid size-9 place-items-center rounded-full bg-[#1d9bf0]/20 text-[#1d9bf0] hover:bg-[#1d9bf0]/30" aria-label="Pulse" title="Pulse">
+          {staff && (
+            <button onClick={() => gramHome({ view: "admin" })} className={cn("ml-0.5 grid size-9 place-items-center rounded-lg", r.view === "admin" ? "bg-white/10 text-white" : "text-white/45 hover:bg-white/5")} aria-label="Admin" title="Admin">
+              <Shield className="size-5" />
+            </button>
+          )}
+          <button onClick={() => openPulse()} className="ml-0.5 grid size-9 place-items-center rounded-lg text-white/45 hover:bg-white/5 hover:text-white" aria-label="Pulse" title="Pulse">
             <Megaphone className="size-5" />
           </button>
-          <button onClick={() => useGram.setState({ create: r.view === "shorts" ? "short" : "post" })} className="ml-1 grid size-9 place-items-center rounded-full bg-gradient-to-br from-[#ff2bd6] via-[#8b5cff] to-[#00c2ff] text-white" aria-label="Create" title="Create">
+          <button onClick={() => useGram.setState({ create: r.view === "shorts" ? "short" : "post" })} className="ml-1 grid size-9 place-items-center rounded-lg bg-white text-black" aria-label="Create" title="Create">
             <SquarePlus className="size-5" />
           </button>
         </nav>
@@ -79,6 +88,8 @@ export default function NexusGram({ mobile }: { mobile?: boolean }) {
           <div className="mx-auto w-full max-w-[640px]">
             {r.view === "home" && <Home />}
             {r.view === "explore" && <Explore />}
+            {r.view === "saved" && <Saved />}
+            {r.view === "admin" && <GramAdmin />}
             {r.view === "profile" && <Profile key={r.username} username={r.username} />}
             {r.view === "post" && <OnePost key={r.id} id={r.id} />}
           </div>
@@ -119,7 +130,6 @@ function useFeed(scope: "following" | "discover", kind: "post" | "short" | null)
   return { rows, setRows, done, more: () => void load(false) };
 }
 
-/** loads more when the sentinel scrolls into view */
 function Sentinel({ onHit }: { onHit: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const cb = useRef(onHit);
@@ -140,14 +150,14 @@ function Home() {
   return (
     <div className="pb-10">
       <StoryTray />
-      <div className="mx-3 mb-3 flex rounded-full bg-hover p-1 text-sm font-bold">
+      <div className="mx-3 mb-3 flex rounded-xl bg-white/5 p-1 text-sm font-semibold">
         {(
           [
             ["discover", "For you"],
             ["following", "Following"],
           ] as const
         ).map(([k, l]) => (
-          <button key={k} onClick={() => setScope(k)} className={cn("flex-1 rounded-full py-1.5", scope === k ? "bg-white text-black" : "text-sub")}>
+          <button key={k} onClick={() => setScope(k)} className={cn("flex-1 rounded-lg py-1.5", scope === k ? "bg-white text-black" : "text-white/50")}>
             {l}
           </button>
         ))}
@@ -155,7 +165,7 @@ function Home() {
       {rows === null ? (
         <div className="space-y-4 px-3">
           {[0, 1].map((k) => (
-            <div key={k} className="h-[420px] animate-pulse rounded-2xl bg-hover" />
+            <div key={k} className="h-[420px] animate-pulse rounded-2xl bg-white/5" />
           ))}
         </div>
       ) : rows.length === 0 ? (
@@ -170,9 +180,36 @@ function Home() {
             ),
           )}
           {!done && <Sentinel onHit={more} />}
-          {done && <p className="py-6 text-center text-xs text-sub">You&apos;re all caught up ✨</p>}
+          {done && <p className="py-6 text-center text-xs text-white/35">You&apos;re all caught up</p>}
         </div>
       )}
+    </div>
+  );
+}
+
+function Saved() {
+  const [rows, setRows] = useState<Post[] | null>(null);
+  useEffect(() => {
+    void savedFeed().then(setRows);
+  }, []);
+  if (rows === null) return <div className="grid h-48 place-items-center text-sm text-white/40">Loading saved…</div>;
+  if (!rows.length)
+    return (
+      <div className="px-6 py-16 text-center">
+        <Bookmark className="mx-auto size-10 text-white/30" />
+        <p className="mt-3 font-semibold">No saved posts yet</p>
+        <p className="mt-1 text-sm text-white/45">Tap the bookmark on any post to keep it here.</p>
+      </div>
+    );
+  return (
+    <div className="space-y-2 pb-10 sm:space-y-4 sm:px-3">
+      <div className="px-4 pt-4">
+        <h2 className="text-lg font-semibold">Saved</h2>
+        <p className="text-sm text-white/45">{rows.length} posts</p>
+      </div>
+      {rows.map((p) => (
+        <PostCard key={p.id} post={p} onRemoved={() => setRows((r) => (r ?? []).filter((x) => x.id !== p.id))} />
+      ))}
     </div>
   );
 }
@@ -180,17 +217,16 @@ function Home() {
 function Empty({ following }: { following: boolean }) {
   return (
     <div className="px-6 py-16 text-center">
-      <div className="text-5xl">📸</div>
-      <p className="mt-3 font-bold">{following ? "Nothing from people you follow yet" : "No posts yet"}</p>
-      <p className="mt-1 text-sm text-sub">{following ? "Follow people from Explore or Shorts to fill your feed." : "Be the first to share a photo, a Short or a story."}</p>
-      <button onClick={() => useGram.setState({ create: "post" })} className="mt-4 rounded-full bg-accent px-5 py-2 font-bold text-white">
+      <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-white/5 text-xl font-black">N</div>
+      <p className="mt-3 font-semibold">{following ? "Nothing from people you follow yet" : "No posts yet"}</p>
+      <p className="mt-1 text-sm text-white/45">{following ? "Follow people from Explore or Shorts to fill your feed." : "Share a photo, Short, or story to get started."}</p>
+      <button onClick={() => useGram.setState({ create: "post" })} className="mt-4 rounded-full bg-white px-5 py-2 font-semibold text-black">
         Create a post
       </button>
     </div>
   );
 }
 
-/** a Short inside the home feed: tap to open the Shorts player */
 function ShortTeaser({ p }: { p: Post }) {
   const author = useApp((s) => s.profiles[p.author_id]);
   const m = p.media[0];
@@ -198,18 +234,18 @@ function ShortTeaser({ p }: { p: Post }) {
     <button onClick={() => gramGo({ view: "shorts", start: p.id })} className="relative mx-auto block aspect-[9/14] w-full max-w-[380px] overflow-hidden bg-black sm:rounded-2xl">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={mediaUrl(m.type === "video" ? m.poster : m.path)} alt="" loading="lazy" className="h-full w-full object-cover" />
-      <span className="absolute top-3 left-3 flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-xs font-bold text-white">
+      <span className="absolute top-3 left-3 flex items-center gap-1 rounded-md bg-black/55 px-2.5 py-1 text-xs font-semibold text-white">
         <Clapperboard className="size-3.5" /> Short
       </span>
       <span className="absolute inset-0 grid place-items-center">
-        <span className="grid size-16 place-items-center rounded-full bg-black/45 backdrop-blur">
-          <Play className="size-8 fill-white text-white" />
+        <span className="grid size-14 place-items-center rounded-full bg-black/45 backdrop-blur">
+          <Play className="size-7 fill-white text-white" />
         </span>
       </span>
       <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3 pt-12 text-left text-white">
-        <span className="block text-sm font-bold">@{author?.username}</span>
-        {p.caption && <span className="line-clamp-2 text-sm">{p.caption}</span>}
-        <span className="mt-1 flex items-center gap-3 text-xs text-white/80">
+        <span className="block text-sm font-semibold">@{author?.username}</span>
+        {p.caption && <span className="line-clamp-2 text-sm text-white/85">{p.caption}</span>}
+        <span className="mt-1 flex items-center gap-3 text-xs text-white/70">
           <span className="flex items-center gap-1">
             <Heart className="size-3.5" /> {fmt(p.like_count)}
           </span>
@@ -224,7 +260,7 @@ function ShortTeaser({ p }: { p: Post }) {
 
 function Explore() {
   const { rows, done, more } = useFeed("discover", null);
-  if (rows === null) return <div className="grid grid-cols-3 gap-0.5">{Array.from({ length: 12 }, (_, k) => <div key={k} className="aspect-square animate-pulse bg-hover" />)}</div>;
+  if (rows === null) return <div className="grid grid-cols-3 gap-0.5">{Array.from({ length: 12 }, (_, k) => <div key={k} className="aspect-square animate-pulse bg-white/5" />)}</div>;
   if (!rows.length) return <Empty following={false} />;
   return (
     <div className="pb-10">
@@ -253,8 +289,8 @@ function Explore() {
 function OnePost({ id }: { id: string }) {
   const [p, setP] = useState<Post | null | undefined>(undefined);
   useEffect(() => void getPost(id).then(setP), [id]);
-  if (p === undefined) return <div className="m-3 h-[420px] animate-pulse rounded-2xl bg-hover" />;
-  if (p === null) return <p className="py-16 text-center text-sub">This post was deleted.</p>;
+  if (p === undefined) return <div className="m-3 h-[420px] animate-pulse rounded-2xl bg-white/5" />;
+  if (p === null) return <p className="py-16 text-center text-white/45">This post was deleted.</p>;
   return (
     <div className="py-3 sm:px-3">
       <PostCard post={p} onRemoved={gramBack} />

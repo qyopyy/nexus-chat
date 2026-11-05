@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Heart, MessageCircle, Ellipsis, Send, Share2, Trash2, X } from "lucide-react";
+import { Bookmark, ChevronLeft, ChevronRight, Flag, Heart, Link2, MessageCircle, Ellipsis, Send, Share2, Trash2, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
-import { addComment, ago, comments, fmt, gramGo, mediaUrl, publicProfileUrl, removeComment, removePost, setLike, type Comment, type Post } from "@/lib/gram";
+import { addComment, ago, comments, fmt, gramGo, isSaved, mediaUrl, publicPostUrl, publicProfileUrl, removeComment, removePost, reportPost, setLike, setSave, type Comment, type Post } from "@/lib/gram";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 
@@ -38,6 +38,7 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
   const meId = useApp((s) => s.userId);
   const author = useApp((s) => s.profiles[post.author_id]);
   const [liked, setLiked] = useState(!!post.liked);
+  const [saved, setSaved] = useState(false);
   const [likes, setLikes] = useState(post.like_count);
   const [i, setI] = useState(0);
   const [burst, setBurst] = useState(0);
@@ -46,6 +47,10 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
   const [more, setMore] = useState(false);
   const lastTap = useRef(0);
   const m = post.media[i];
+
+  useEffect(() => {
+    void isSaved(post.id).then(setSaved);
+  }, [post.id]);
 
   const toggle = (force?: boolean) => {
     const on = force ?? !liked;
@@ -75,7 +80,17 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
             <Ellipsis className="size-5" />
           </button>
           {menu && (
-            <div className="absolute top-9 right-0 z-20 w-48 rounded-xl bg-menu p-1 shadow-2xl" onMouseLeave={() => setMenu(false)}>
+            <div className="absolute top-9 right-0 z-20 w-52 rounded-xl bg-menu p-1 shadow-2xl" onMouseLeave={() => setMenu(false)}>
+              <button
+                onClick={() => {
+                  void navigator.clipboard.writeText(publicPostUrl(post.id));
+                  toast("Post link copied", "success");
+                  setMenu(false);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-hover"
+              >
+                <Link2 className="size-4" /> Copy post link
+              </button>
               {author && (
                 <button
                   onClick={() => {
@@ -86,6 +101,18 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-hover"
                 >
                   <Share2 className="size-4" /> Copy profile link
+                </button>
+              )}
+              {post.author_id !== meId && (
+                <button
+                  onClick={async () => {
+                    setMenu(false);
+                    const reason = prompt("Why are you reporting this post?");
+                    if (reason?.trim()) await reportPost(post.id, reason);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-hover"
+                >
+                  <Flag className="size-4" /> Report
                 </button>
               )}
               {(post.author_id === meId || (useApp.getState().profiles[meId ?? ""]?.site_role ?? "member") !== "member") && (
@@ -141,8 +168,31 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
           <button onClick={() => setShowComments(true)} className="grid size-10 place-items-center rounded-full active:scale-90" aria-label="Comments">
             <MessageCircle className="size-7 -scale-x-100" />
           </button>
-          <span className="ml-auto text-xs text-sub">{fmt(post.view_count)} views</span>
+          <button
+            onClick={() => {
+              void navigator.clipboard.writeText(publicPostUrl(post.id));
+              toast("Post link copied", "success");
+            }}
+            className="grid size-10 place-items-center rounded-full active:scale-90"
+            aria-label="Share"
+          >
+            <Share2 className="size-6" />
+          </button>
+          <button
+            onClick={async () => {
+              const on = !saved;
+              if (await setSave(post.id, on)) {
+                setSaved(on);
+                haptic.light();
+              }
+            }}
+            className="ml-auto grid size-10 place-items-center rounded-full active:scale-90"
+            aria-label={saved ? "Unsave" : "Save"}
+          >
+            <Bookmark className={cn("size-6", saved && "fill-current")} />
+          </button>
         </div>
+        <div className="px-1 text-[11px] text-sub">{fmt(post.view_count)} views</div>
         <div className="px-1 text-sm font-semibold">{fmt(likes)} likes</div>
         {post.caption && (
           <p className={cn("px-1 text-sm whitespace-pre-wrap", !more && "line-clamp-2")} onClick={() => setMore(true)}>
