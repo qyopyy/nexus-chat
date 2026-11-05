@@ -20,10 +20,7 @@ alter table public.user_privacy add column if not exists show_online boolean not
 alter table public.user_privacy add column if not exists read_receipts boolean not null default true;
 alter table public.user_privacy add column if not exists profile_discoverable boolean not null default true;
 
--- Migrate legacy label: old "everyone" meant friends+servers
-update public.user_privacy set dm_from = 'servers' where dm_from = 'everyone';
-
--- Drop old check if present and re-add with servers
+-- Drop old dm_from check before remapping (legacy may not allow 'servers')
 do $$ begin
   alter table public.user_privacy drop constraint if exists user_privacy_dm_from_check;
 exception when undefined_object then null;
@@ -31,6 +28,9 @@ end $$;
 
 alter table public.user_privacy
   drop constraint if exists user_privacy_dm_from_check;
+
+-- Migrate legacy label: old "everyone" meant friends+servers
+update public.user_privacy set dm_from = 'servers' where dm_from = 'everyone';
 
 alter table public.user_privacy
   add constraint user_privacy_dm_from_check
