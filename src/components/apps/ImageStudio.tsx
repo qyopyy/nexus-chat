@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Crop,
   Download,
+  FlipHorizontal2,
+  FlipVertical2,
   ImagePlus,
   ImageUpscale,
   Lock,
@@ -18,13 +20,15 @@ import {
   DEFAULT_FILTERS,
   downloadBlob,
   drawImage,
+  exportUpscaled,
   extFor,
   filterCss,
   loadImageFromFile,
+  scaleForLongEdge,
+  upscaleImage,
   type CropRect,
   type FilterAdjust,
   type ImageFormat,
-  upscaleImage,
 } from "@/lib/imageEdit";
 import { sanitizeDownloadName, sniffImage } from "@/lib/fileSafety";
 import { cn } from "@/lib/utils";
@@ -73,6 +77,13 @@ export default function ImageStudio({ onBack, mobile }: { onBack: () => void; mo
   const [crop, setCrop] = useState<CropRect | null>(null);
   const [scale, setScale] = useState(2);
   const [sharpen, setSharpen] = useState(0.55);
+  const [denoise, setDenoise] = useState(0.15);
+  const [edgeEnhance, setEdgeEnhance] = useState(0.2);
+  const [flipH, setFlipH] = useState(false);
+  const [flipV, setFlipV] = useState(false);
+  const [preserveAlpha, setPreserveAlpha] = useState(true);
+  const [jpegBg, setJpegBg] = useState("#ffffff");
+  const [showOriginal, setShowOriginal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -99,13 +110,35 @@ export default function ImageStudio({ onBack, mobile }: { onBack: () => void; mo
     if (!canvas || !img || !source) return;
     try {
       if (tab === "upscale") {
+        if (showOriginal) {
+          drawImage(canvas, img, { width: source.w, height: source.h, jpegFill: !preserveAlpha, fillColor: jpegBg, flipH, flipV });
+          return;
+        }
         const tmp = document.createElement("canvas");
-        drawImage(tmp, img, { width: source.w, height: source.h, jpegFill: format === "image/jpeg" });
+        drawImage(tmp, img, {
+          width: source.w,
+          height: source.h,
+          jpegFill: !preserveAlpha || format === "image/jpeg",
+          fillColor: jpegBg,
+          filters,
+        });
         const previewScale = Math.min(scale, 2);
-        const up = upscaleImage(tmp, previewScale, sharpen * 0.35);
+        const up = upscaleImage(tmp, previewScale, {
+          sharpen: sharpen * 0.35,
+          denoise,
+          edgeEnhance: edgeEnhance * 0.5,
+          flipH,
+          flipV,
+          preserveAlpha: preserveAlpha && format !== "image/jpeg",
+          jpegBg,
+        });
         canvas.width = up.width;
         canvas.height = up.height;
         const ctx = canvas.getContext("2d")!;
+        if (format === "image/jpeg") {
+          ctx.fillStyle = jpegBg;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
         ctx.drawImage(up, 0, 0);
         return;
       }
@@ -133,7 +166,7 @@ export default function ImageStudio({ onBack, mobile }: { onBack: () => void; mo
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't draw preview.");
     }
-  }, [source, width, height, format, rotation, filters, crop, tab, scale, sharpen]);
+  }, [source, width, height, format, rotation, filters, crop, tab, scale, sharpen, denoise, edgeEnhance, flipH, flipV, preserveAlpha, jpegBg, showOriginal]);
 
   function clearSession() {
     setSource(null);
@@ -145,6 +178,13 @@ export default function ImageStudio({ onBack, mobile }: { onBack: () => void; mo
     setFilters({ ...DEFAULT_FILTERS });
     setCrop(null);
     setScale(2);
+    setDenoise(0.15);
+    setEdgeEnhance(0.2);
+    setFlipH(false);
+    setFlipV(false);
+    setPreserveAlpha(true);
+    setJpegBg("#ffffff");
+    setShowOriginal(false);
   }
 
   async function openFile(file: File) {
@@ -197,29 +237,54 @@ export default function ImageStudio({ onBack, mobile }: { onBack: () => void; mo
     }
   }
 
-  async function download() {
+  function buildUpscaled(src: NonNullable<typeof source>) {
+    const base = document.createElement("canvas");
+    drawImage(base, src.img, {
+      width: src.w,
+      height: src.h,
+      filters,
+      jpegFill: false,
+    });
+    return upscaleImage(base, scale, {
+      sharpen,
+      denoise,
+      edgeEnhance,
+      flipH,
+      flipV,
+      preserveAlpha: true,
+      jpegBg,
+    });
+  }
+
+  async function download(formats?: ImageFormat[]) {
     if (!source) return;
     setBusy(true);
     setError(null);
     try {
-      const canvas = document.createElement("canvas");
       if (tab === "upscale") {
-        const base = document.createElement("canvas");
-        drawImage(base, source.img, { width: source.w, height: source.h, filters, jpegFill: format === "image/jpeg" });
-        const up = upscaleImage(base, scale, sharpen);
-        canvas.width = up.width;
-        canvas.height = up.height;
-        canvas.getContext("2d")!.drawImage(up, 0, 0);
-      } else {
-        drawImage(canvas, source.img, {
-          width: tab === "crop" && crop ? clamp(crop.w) : width,
-          height: tab === "crop" && crop ? clamp(crop.h) : height,
-          rotation: tab === "crop" ? 0 : rotation,
-          crop: tab === "crop" ? crop : null,
-          filters,
-          jpegFill: format === "image/jpeg",
-        });
+        const up = buildUpscaled(source);
+        if (up.width > MAX_OUT || up.height > MAX_OUT) {
+          throw new Error(`Output edges must be ${MAX_OUT}px or smaller.`);
+        }
+        const list = formats?.length ? formats : [format];
+        const exports = await exportUpscaled(up, list, quality, jpegBg);
+        for (const item of exports) {
+          downloadBlob(item.blob, `${fileName}-upscale-${up.width}x${up.height}.${item.ext}`);
+        }
+        return;
       }
+      const canvas = document.createElement("canvas");
+      drawImage(canvas, source.img, {
+        width: tab === "crop" && crop ? clamp(crop.w) : width,
+        height: tab === "crop" && crop ? clamp(crop.h) : height,
+        rotation: tab === "crop" ? 0 : rotation,
+        crop: tab === "crop" ? crop : null,
+        filters,
+        jpegFill: format === "image/jpeg",
+        fillColor: jpegBg,
+        flipH,
+        flipV,
+      });
       if (canvas.width > MAX_OUT || canvas.height > MAX_OUT) {
         throw new Error(`Output edges must be ${MAX_OUT}px or smaller.`);
       }
@@ -287,7 +352,7 @@ export default function ImageStudio({ onBack, mobile }: { onBack: () => void; mo
       <div className="flex items-start gap-2 rounded-2xl bg-side/80 px-3 py-2 text-xs text-sub">
         <ShieldCheck className="mt-0.5 size-4 shrink-0 text-ok" />
         <span>
-          Resize, crop, filters, and a local upscaler (stepped high-quality scale + sharpen). Files stay in this tab — EXIF is stripped on export. Max {Math.round(MAX_BYTES / 1024 / 1024)} MB in · {MAX_OUT}px out.
+          Resize, crop, filters, and a local upscaler with PNG transparency + JPEG export, denoise, edge enhance, and flips. Files stay in this tab — EXIF is stripped. Max {Math.round(MAX_BYTES / 1024 / 1024)} MB in · {MAX_OUT}px out.
         </span>
       </div>
 
@@ -351,7 +416,7 @@ export default function ImageStudio({ onBack, mobile }: { onBack: () => void; mo
               <span>
                 <ImagePlus className="mx-auto mb-3 size-10 text-sub" />
                 <span className="block font-semibold">Drop an image, or click to choose one</span>
-                <span className="mt-1 block text-sm text-sub">PNG, JPEG, WebP, or GIF. Editing stays on this device.</span>
+                <span className="mt-1 block text-sm text-sub">PNG &amp; JPEG preferred for upscaling — also WebP or GIF. Editing stays on this device.</span>
               </span>
             </label>
           )}
@@ -493,7 +558,7 @@ export default function ImageStudio({ onBack, mobile }: { onBack: () => void; mo
 
           {tab === "upscale" && (
             <>
-              <p className="text-xs text-sub">Local enhance: multi-step high-quality scale plus unsharp mask. Not generative AI — best for sharpening soft photos and art.</p>
+              <p className="text-xs text-sub">Local enhance for PNG &amp; JPEG — multi-step scale, denoise, edge enhance, sharpen. Not generative AI.</p>
               <label className="block">
                 <span className="mb-1 flex justify-between text-xs font-bold tracking-wide text-sub uppercase">
                   Scale <span>{scale.toFixed(1)}×</span>
@@ -507,37 +572,107 @@ export default function ImageStudio({ onBack, mobile }: { onBack: () => void; mo
                   </button>
                 ))}
               </div>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { label: "HD 1920", edge: 1920 },
+                  { label: "2K", edge: 2048 },
+                  { label: "4K", edge: 3840 },
+                ].map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    disabled={!source}
+                    onClick={() => source && setScale(+scaleForLongEdge(source.w, source.h, p.edge, MAX_OUT).toFixed(2))}
+                    className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-semibold hover:bg-white/10 disabled:opacity-40"
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
               <label className="block">
                 <span className="mb-1 flex justify-between text-xs font-bold tracking-wide text-sub uppercase">
                   Sharpen <span>{Math.round(sharpen * 100)}%</span>
                 </span>
                 <input type="range" min={0} max={1.2} step={0.05} disabled={!source} value={sharpen} onChange={(e) => setSharpen(Number(e.target.value))} className="w-full accent-accent disabled:opacity-50" />
               </label>
+              <label className="block">
+                <span className="mb-1 flex justify-between text-xs font-bold tracking-wide text-sub uppercase">
+                  Denoise <span>{Math.round(denoise * 100)}%</span>
+                </span>
+                <input type="range" min={0} max={1} step={0.05} disabled={!source} value={denoise} onChange={(e) => setDenoise(Number(e.target.value))} className="w-full accent-accent disabled:opacity-50" />
+              </label>
+              <label className="block">
+                <span className="mb-1 flex justify-between text-xs font-bold tracking-wide text-sub uppercase">
+                  Edge enhance <span>{Math.round(edgeEnhance * 100)}%</span>
+                </span>
+                <input type="range" min={0} max={1} step={0.05} disabled={!source} value={edgeEnhance} onChange={(e) => setEdgeEnhance(Number(e.target.value))} className="w-full accent-accent disabled:opacity-50" />
+              </label>
+              <div className="flex gap-1.5">
+                <button type="button" disabled={!source} onClick={() => setFlipH((v) => !v)} className={cn("flex flex-1 items-center justify-center gap-1 rounded-xl py-2 text-xs font-semibold", flipH ? "bg-accent text-white" : "bg-white/5 hover:bg-white/10 disabled:opacity-50")} aria-pressed={flipH}>
+                  <FlipHorizontal2 className="size-3.5" /> Flip H
+                </button>
+                <button type="button" disabled={!source} onClick={() => setFlipV((v) => !v)} className={cn("flex flex-1 items-center justify-center gap-1 rounded-xl py-2 text-xs font-semibold", flipV ? "bg-accent text-white" : "bg-white/5 hover:bg-white/10 disabled:opacity-50")} aria-pressed={flipV}>
+                  <FlipVertical2 className="size-3.5" /> Flip V
+                </button>
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={preserveAlpha} onChange={(e) => setPreserveAlpha(e.target.checked)} className="accent-accent" disabled={!source} />
+                Keep PNG transparency
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold tracking-wide text-sub uppercase">JPEG background</span>
+                <input type="color" value={jpegBg} disabled={!source} onChange={(e) => setJpegBg(e.target.value)} className="h-10 w-full rounded-xl border border-white/10 bg-input px-2 disabled:opacity-50" aria-label="JPEG background" />
+              </label>
+              <label className="block">
+                <span className="mb-1 flex justify-between text-xs font-bold tracking-wide text-sub uppercase">
+                  JPEG quality <span>{Math.round(quality * 100)}%</span>
+                </span>
+                <input type="range" min={0.5} max={1} step={0.01} disabled={!source} value={quality} onChange={(e) => setQuality(Number(e.target.value))} className="w-full accent-accent disabled:opacity-50" />
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={showOriginal} onChange={(e) => setShowOriginal(e.target.checked)} className="accent-accent" disabled={!source} />
+                Compare original
+              </label>
               {source && outSize && (outSize.w > MAX_OUT || outSize.h > MAX_OUT) && (
                 <p className="text-xs text-dnd">That scale would exceed {MAX_OUT}px — lower the factor.</p>
               )}
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" disabled={!source || busy} onClick={() => void download(["image/png"])} className="rounded-xl bg-white/5 py-2.5 text-xs font-semibold hover:bg-white/10 disabled:opacity-50">
+                  Download PNG
+                </button>
+                <button type="button" disabled={!source || busy} onClick={() => void download(["image/jpeg"])} className="rounded-xl bg-white/5 py-2.5 text-xs font-semibold hover:bg-white/10 disabled:opacity-50">
+                  Download JPEG
+                </button>
+              </div>
+              <button type="button" disabled={!source || busy} onClick={() => void download(["image/png", "image/jpeg"])} className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 text-sm font-semibold text-white disabled:opacity-50">
+                <Download className="size-4" /> {busy ? "Working…" : "Download PNG + JPEG"}
+              </button>
             </>
           )}
 
-          <label className="block">
-            <span className="mb-1 block text-xs font-bold tracking-wide text-sub uppercase">Format</span>
-            <select value={format} aria-label="Format" onChange={(e) => setFormat(e.target.value as ImageFormat)} className="w-full rounded-xl border border-white/10 bg-input px-3 py-2.5 outline-none focus:border-accent">
-              <option value="image/png">PNG</option>
-              <option value="image/jpeg">JPEG</option>
-              <option value="image/webp">WebP</option>
-            </select>
-          </label>
-          {format !== "image/png" && (
-            <label className="block">
-              <span className="mb-1 flex justify-between text-xs font-bold tracking-wide text-sub uppercase">
-                Quality <span>{Math.round(quality * 100)}%</span>
-              </span>
-              <input type="range" min={0.4} max={1} step={0.01} value={quality} onChange={(e) => setQuality(Number(e.target.value))} className="w-full accent-accent" />
-            </label>
+          {tab !== "upscale" && (
+            <>
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold tracking-wide text-sub uppercase">Format</span>
+                <select value={format} aria-label="Format" onChange={(e) => setFormat(e.target.value as ImageFormat)} className="w-full rounded-xl border border-white/10 bg-input px-3 py-2.5 outline-none focus:border-accent">
+                  <option value="image/png">PNG</option>
+                  <option value="image/jpeg">JPEG</option>
+                  <option value="image/webp">WebP</option>
+                </select>
+              </label>
+              {format !== "image/png" && (
+                <label className="block">
+                  <span className="mb-1 flex justify-between text-xs font-bold tracking-wide text-sub uppercase">
+                    Quality <span>{Math.round(quality * 100)}%</span>
+                  </span>
+                  <input type="range" min={0.4} max={1} step={0.01} value={quality} onChange={(e) => setQuality(Number(e.target.value))} className="w-full accent-accent" />
+                </label>
+              )}
+              <button onClick={() => void download()} disabled={!source || busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-white disabled:opacity-50">
+                <Download className="size-4" /> {busy ? "Working…" : "Download edited image"}
+              </button>
+            </>
           )}
-          <button onClick={() => void download()} disabled={!source || busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-white disabled:opacity-50">
-            <Download className="size-4" /> {busy ? "Working…" : `Download ${tab === "upscale" ? "upscaled" : "edited"} image`}
-          </button>
         </aside>
       </div>
     </AppFrame>
