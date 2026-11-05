@@ -77,7 +77,7 @@ export function renderPage(d: PageData, base: string) {
 <title>${esc(titleLine)}</title><meta name="description" content="${esc(desc)}">
 <meta property="og:title" content="${esc(titleLine)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:type" content="music.album">
 ${d.artwork ? `<meta property="og:image" content="${esc(d.artwork)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${esc(d.artwork)}">` : ""}
-<meta name="theme-color" content="#0b0b0f"><link rel="icon" href="/icon-512.png">
+<meta name="theme-color" content="#0b0b0f"><link rel="icon" href="/icon.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#0b0b0f;color:#f2f3f5;font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 .bg{position:fixed;inset:-40px;background:${d.artwork ? `url("${esc(d.artwork)}") center/cover` : accent};filter:blur(48px) saturate(1.3) brightness(.45);transform:scale(1.15);z-index:0}
