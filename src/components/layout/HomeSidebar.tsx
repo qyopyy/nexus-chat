@@ -9,6 +9,7 @@ import { haptic } from "@/lib/haptics";
 import { moveChatInList, sortChats, useSpacePrefs } from "@/lib/spacePrefs";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
+import NotificationPanel, { NotificationBellButton } from "@/components/chat/NotificationPanel";
 import type { ChatListItem } from "@/lib/types";
 
 const FILTERS = [
@@ -81,7 +82,8 @@ export default function HomeSidebar() {
     : [];
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="relative flex h-full flex-col">
+      <NotificationPanel />
       {/* search header */}
       <div className="flex items-center gap-2 px-3 pt-3 pb-2">
         <div className="relative flex-1">
@@ -93,6 +95,7 @@ export default function HomeSidebar() {
             className="w-full rounded-full bg-rail py-2 pr-3 pl-9 text-sm outline-none ring-accent/60 placeholder:text-sub focus:ring-2"
           />
         </div>
+        <NotificationBellButton className="size-9 text-sub hover:text-txt" />
         {visible.length > 1 && (
           <button
             type="button"

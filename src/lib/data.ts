@@ -453,6 +453,7 @@ export async function sendMessage(convId: string, content: string, file?: File |
     pending: true,
   };
   useChat.setState((s) => (s.conversationId === convId ? { messages: [...s.messages, optimistic], replyTo: null } : { replyTo: null }));
+  void import("./sounds").then(({ sfx }) => sfx.send());
 
   if (file) {
     let upload: Blob = file;

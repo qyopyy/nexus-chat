@@ -167,6 +167,7 @@ function Tools() {
   return (
     <div className="space-y-3">
       {can.setRoles() && <YoutubeCidToggle />}
+      <PushHealthCard />
       <div className="grid gap-3 sm:grid-cols-2">
         <ToolCard
           title="NexusGram Admin"
@@ -174,7 +175,25 @@ function Tools() {
           onClick={() => openGram({ view: "admin" })}
         />
         <ToolCard title="Pulse feed" blurb="Moderate Twitter-style posts" onClick={() => openPulse()} />
-        <ToolCard title="Admin Panel" blurb="Members, bans, badges, vault" onClick={() => openModal("settings", "admin")} />
+        <ToolCard title="Admin Panel" blurb="Members, bans, badges, vault, push" onClick={() => openModal("settings", "admin")} />
+        <ToolCard
+          title="Games hub"
+          blurb="Jump to arcade / AAA titles"
+          onClick={() => useApp.setState({ hub: "games" })}
+        />
+        <ToolCard
+          title="Live streams"
+          blurb="Open Nexus Live moderation"
+          onClick={() => void import("@/lib/live").then(({ openLiveHub }) => openLiveHub())}
+        />
+        <ToolCard
+          title="Premium gifts"
+          blurb="Studio gift links & grants"
+          onClick={() => {
+            useApp.setState({ hub: "studio" });
+            void import("@/store/studio").then(({ useStudio }) => useStudio.setState({ section: "orders" }));
+          }}
+        />
         {can.announce() && (
           <ToolCard title="Site announcement" blurb="Banner for everyone" onClick={() => useStaffDesk.setState({ tab: "announce" })} />
         )}
@@ -182,7 +201,32 @@ function Tools() {
           <ToolCard title="Promote members" blurb="Grant VIP or Moderator" onClick={() => useStaffDesk.setState({ tab: "members" })} />
         )}
         <ToolCard title="Audit log" blurb="Recent staff actions" onClick={() => useStaffDesk.setState({ tab: "audit" })} />
+        <ToolCard
+          title="Message inbox store"
+          blurb="Realtime notification_inbox + FCM"
+          onClick={() => toast("Inbox rows are written on every message · FCM delivers when the app is closed", "info")}
+        />
       </div>
+    </div>
+  );
+}
+
+function PushHealthCard() {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    void import("@/lib/supabase").then(({ supabase }) =>
+      supabase.from("push_subscriptions").select("id", { count: "exact", head: true }).then(({ count: c }) => setCount(c ?? 0)),
+    );
+  }, []);
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="font-semibold">Push / Firebase health</div>
+      <div className="mt-1 text-xs text-white/45">
+        {count === null ? "Checking device tokens…" : `${count} registered device endpoint${count === 1 ? "" : "s"} (Web Push + FCM)`}
+      </div>
+      <p className="mt-2 text-[11px] text-white/35">
+        Message notifications are stored in <code className="text-white/55">notification_inbox</code> and delivered via Firebase Cloud Messaging when configured in Settings → Notifications.
+      </p>
     </div>
   );
 }

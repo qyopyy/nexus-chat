@@ -74,6 +74,15 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
 
   useRealtime(bootstrapped ? userId : null);
 
+  useEffect(() => {
+    if (!bootstrapped || !userId) return;
+    let stop: (() => void) | undefined;
+    void import("@/lib/notifications").then(({ subscribeNotificationInbox }) => {
+      stop = subscribeNotificationInbox(userId);
+    });
+    return () => stop?.();
+  }, [bootstrapped, userId]);
+
   // opening any chat leaves the music hub; Spotify "now playing" sync
   useEffect(() => {
     if (conversationId && useApp.getState().hub !== "studio") useApp.setState({ hub: null });

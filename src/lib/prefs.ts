@@ -3,6 +3,20 @@ import { persist } from "zustand/middleware";
 
 // Device-level user preferences (accessibility, chat behaviour, time format, sounds, advanced).
 
+export type MessageSoundId =
+  | "ping"
+  | "pop"
+  | "chime"
+  | "crystal"
+  | "soft"
+  | "wood"
+  | "glass"
+  | "arcade"
+  | "buzz"
+  | "wave"
+  | "knock"
+  | "none";
+
 export type Prefs = {
   // accessibility
   reduceMotion: boolean;
@@ -26,6 +40,14 @@ export type Prefs = {
   buttonFx: boolean;
   /** Discord-style welcome splash + chime on launch */
   welcomeSplash: boolean;
+  /** Play a sound when a message arrives */
+  messageSounds: boolean;
+  /** Play a sound when you send a message */
+  sendSounds: boolean;
+  /** Incoming message sound pack */
+  messageSound: MessageSoundId;
+  /** Outgoing send sound pack */
+  sendSound: MessageSoundId;
   // advanced
   devMode: boolean;
 };
@@ -48,13 +70,17 @@ export const PREF_DEFAULTS: Prefs = {
   ringtone: true,
   buttonFx: true,
   welcomeSplash: true,
+  messageSounds: true,
+  sendSounds: true,
+  messageSound: "ping",
+  sendSound: "pop",
   devMode: false,
 };
 
 export const usePrefs = create<Prefs>()(
   persist(() => ({ ...PREF_DEFAULTS }), {
     name: "nexus.prefs",
-    version: 3,
+    version: 4,
     migrate: (persisted) => ({ ...PREF_DEFAULTS, ...((persisted as object) ?? {}) }),
   }),
 );

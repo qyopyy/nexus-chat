@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, Award, Ban, ChevronRight, Clock, Lock, MessageSquare, Mic, RotateCcw, Search, Shield, Trash2, Users } from "lucide-react";
+import { Activity, Award, Ban, Bell, ChevronRight, Clock, Lock, MessageSquare, Mic, RotateCcw, Search, Shield, Trash2, Users } from "lucide-react";
 import { ClaimsTab, VaultTab } from "@/components/admin/AdminExtras";
 import { ModerationControls } from "@/components/admin/ModTools";
 import { useApp } from "@/store/app";
@@ -263,6 +263,20 @@ function MemberDetail({ userId, rank, onChanged }: { userId: string; rank: numbe
             className="mt-3 flex items-center gap-1.5 text-sm text-sub hover:text-txt"
           >
             <RotateCcw className="size-4" /> Reset profile (avatar, status, bio)
+          </button>
+          <button
+            disabled={busy}
+            onClick={() =>
+              confirm("Clear all push / FCM device tokens for this member? They'll need to re-enable notifications.") &&
+              void run(async () => {
+                const { supabase } = await import("@/lib/supabase");
+                const { error } = await supabase.rpc("admin_clear_push", { p_user: userId });
+                if (error) throw error;
+              })
+            }
+            className="mt-2 flex items-center gap-1.5 text-sm text-sub hover:text-txt"
+          >
+            <Bell className="size-4" /> Clear push devices (FCM / Web Push)
           </button>
         </section>
       )}

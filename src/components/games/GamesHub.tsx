@@ -27,12 +27,16 @@ import Reaction from "./Reaction";
 import Whack from "./Whack";
 import Runner from "./Runner";
 import Mines from "./Mines";
+import OrbitStrike from "./OrbitStrike";
+import DriftRush from "./DriftRush";
 
 const GAMES: { id: GameId; name: string; tag: string; desc: string; bg: string; emoji: string; C: typeof Blocks | null; isNew?: boolean }[] = [
   { id: "streets", name: "Neon Streets", tag: "Open-city driving", desc: "Open-world island city. Jobs, cash, cops — and play live with friends using an invite code.", bg: "linear-gradient(135deg,#ff2bd6,#2b0b5c)", emoji: "🚗", C: null },
   { id: "bay", name: "Sunset Bay", tag: "3D open world · 80s neon", desc: "Drive a neon coastal city in 3D — drifts, stunt jumps, hidden tapes and a ranked checkpoint rush.", bg: "linear-gradient(180deg,#2b1055,#ff4f9a 70%,#ffb347)", emoji: "🌴", C: null },
   { id: "geo", name: "GeoGuess", tag: "Real places · multiplayer", desc: "Real photos from around the world — pin where you think you are.", bg: "linear-gradient(135deg,#00c96b,#0b2a5c)", emoji: "🌍", C: null },
   { id: "flappy", name: "Flappy Happy", tag: "Arcade · classic", desc: "Tap to fly through pipes — solo, race friends, unlock birds and fits.", bg: "linear-gradient(135deg,#0ea5e9,#1e293b)", emoji: "🐤", C: null },
+  { id: "orbit", name: "Orbit Strike", tag: "AAA arcade · space", desc: "Pilot a neon interceptor — aim with your finger, hold to unleash a particle cannon across endless waves.", bg: "linear-gradient(135deg,#0ea5e9,#312e81 55%,#020617)", emoji: "🚀", C: OrbitStrike, isNew: true },
+  { id: "drift", name: "Drift Rush", tag: "AAA arcade · racing", desc: "Three-lane night freeway. Tap left/right to weave traffic, bank near-misses, chase distance records.", bg: "linear-gradient(135deg,#22c55a,#0f172a)", emoji: "🏎️", C: DriftRush, isNew: true },
   { id: "runner", name: "Neon Runner", tag: "Endless · jump", desc: "Sprint the neon strip — tap to jump the blocks before they hit you.", bg: "linear-gradient(135deg,#ff2bd6,#0b0b2a)", emoji: "🏃", C: Runner, isNew: true },
   { id: "whack", name: "Whack Dash", tag: "Arcade · 30s", desc: "Tap the moles before the clock runs out.", bg: "linear-gradient(135deg,#facc15,#5c0b3a)", emoji: "🐹", C: Whack, isNew: true },
   { id: "reaction", name: "Reaction Rush", tag: "Reflex · 5 rounds", desc: "Wait for green, tap as fast as you can. Don't jump the gun.", bg: "linear-gradient(135deg,#22c55e,#0b2a1a)", emoji: "⚡", C: Reaction, isNew: true },

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useApp, toast } from "@/store/app";
 import { supabase } from "@/lib/supabase";
-import { setPref, usePrefs, PREF_DEFAULTS, fmtClock, fmtDateShort } from "@/lib/prefs";
+import { setPref, usePrefs, PREF_DEFAULTS, fmtClock, fmtDateShort, type MessageSoundId } from "@/lib/prefs";
 import { connectSpotify, disconnectSpotify, setShare, startSpotifySync, syncNow, refreshLink, useSpotifyUser } from "@/lib/spotifyUser";
 import { NowPlayingCard, SpotifyMark, liveNow } from "@/components/profile/NowPlaying";
 import { download } from "@/lib/dsp";
@@ -14,6 +14,7 @@ import { H, Label, Select, Slider, Toggle } from "./settingsUi";
 import { claimUsername, loadAliases, makePrimary, releaseUsername, useAliases } from "@/lib/usernames";
 import { NexusCredit, copyNexusAppLink } from "@/components/ui/NexusCredit";
 import { shareAppUrl } from "@/lib/seo";
+import { MESSAGE_SOUNDS, sfx } from "@/lib/sounds";
 
 const Hr = () => <div className="my-8 h-px bg-line" />;
 
@@ -127,8 +128,24 @@ export function ConnectionsSection() {
 
 /* ───────────────────────── Privacy & Safety ───────────────────────── */
 
-type Privacy = { dm_from: "everyone" | "friends" | "nobody"; friend_requests: "everyone" | "mutuals" | "nobody"; game_invites: boolean; show_stats: boolean };
-const PRIV_DEF: Privacy = { dm_from: "everyone", friend_requests: "everyone", game_invites: true, show_stats: true };
+type Privacy = {
+  dm_from: "everyone" | "servers" | "friends" | "nobody";
+  friend_requests: "everyone" | "mutuals" | "nobody";
+  game_invites: boolean;
+  show_stats: boolean;
+  show_online: boolean;
+  read_receipts: boolean;
+  profile_discoverable: boolean;
+};
+const PRIV_DEF: Privacy = {
+  dm_from: "servers",
+  friend_requests: "everyone",
+  game_invites: true,
+  show_stats: true,
+  show_online: true,
+  read_receipts: true,
+  profile_discoverable: true,
+};
 
 export function PrivacySection() {
   const me = useApp((s) => s.userId);
@@ -139,10 +156,18 @@ export function PrivacySection() {
     if (!me) return;
     void supabase
       .from("user_privacy")
-      .select("dm_from,friend_requests,game_invites,show_stats")
+      .select("dm_from,friend_requests,game_invites,show_stats,show_online,read_receipts,profile_discoverable")
       .eq("user_id", me)
       .maybeSingle()
-      .then(({ data }) => setP({ ...PRIV_DEF, ...((data as Privacy) ?? {}) }));
+      .then(({ data }) => {
+        const raw = (data as Privacy | null) ?? null;
+        // Legacy: "everyone" used to mean friends+servers before true Everyone existed
+        const dm =
+          raw?.dm_from === "everyone" || raw?.dm_from === "servers" || raw?.dm_from === "friends" || raw?.dm_from === "nobody"
+            ? raw.dm_from
+            : PRIV_DEF.dm_from;
+        setP({ ...PRIV_DEF, ...raw, dm_from: dm });
+      });
     startSpotifySync();
   }, [me]);
 
@@ -164,13 +189,14 @@ export function PrivacySection() {
         <div className="h-40 animate-pulse rounded-xl bg-side" />
       ) : (
         <>
-          <Label>Direct messages</Label>
-          <p className="mb-2 text-sm text-sub">Who can start a new DM with you. Existing chats stay open.</p>
+          <Label>Who can start a DM with you</Label>
+          <p className="mb-2 text-sm text-sub">Applies to new chats only — existing conversations stay open.</p>
           <Select
             value={p.dm_from}
             onChange={(v) => void save({ dm_from: v as Privacy["dm_from"] })}
             options={[
-              { value: "everyone", label: "Friends and people in my servers" },
+              { value: "everyone", label: "Everyone on Nexus" },
+              { value: "servers", label: "Friends and people in my servers" },
               { value: "friends", label: "Friends only" },
               { value: "nobody", label: "Nobody (no new DMs)" },
             ]}
@@ -189,6 +215,9 @@ export function PrivacySection() {
           <div className="h-4" />
           <Toggle label="Allow game invites" hint="Friends can send you a “join my game” popup." checked={p.game_invites} onChange={(v) => void save({ game_invites: v })} />
           <Toggle label="Show my profile views and likes" hint="When off, other people can still like your profile but won't see the numbers." checked={p.show_stats} onChange={(v) => void save({ show_stats: v })} />
+          <Toggle label="Show when I'm online" hint="Off hides your green/idle/busy status from other people." checked={p.show_online} onChange={(v) => void save({ show_online: v })} />
+          <Toggle label="Send read receipts" hint="When off, others won't see that you've read their DMs." checked={p.read_receipts} onChange={(v) => void save({ read_receipts: v })} />
+          <Toggle label="Discoverable in search" hint="When off, your profile is harder to find from People search." checked={p.profile_discoverable} onChange={(v) => void save({ profile_discoverable: v })} />
         </>
       )}
 
@@ -301,11 +330,76 @@ export function ChatPrefsBlock() {
         onChange={(v) => setPref("welcomeSplash", v)}
       />
       <Toggle label="Call ringtone" checked={p.ringtone} onChange={(v) => setPref("ringtone", v)} />
+      <Toggle
+        label="Incoming message sound"
+        hint="Plays when someone messages you (respects Do Not Disturb and mute)."
+        checked={p.messageSounds !== false}
+        onChange={(v) => setPref("messageSounds", v)}
+      />
+      <Toggle
+        label="Send sound"
+        hint="Short click when you send a message."
+        checked={p.sendSounds !== false}
+        onChange={(v) => setPref("sendSounds", v)}
+      />
+      <div className={cn("space-y-4 py-2", !p.uiSounds && "pointer-events-none opacity-50")}>
+        <SoundPicker
+          label="Incoming sound"
+          value={p.messageSound ?? "ping"}
+          onChange={(v) => {
+            setPref("messageSound", v);
+            sfx.previewMessage(v, "recv");
+          }}
+          onPreview={() => sfx.previewMessage(p.messageSound ?? "ping", "recv")}
+        />
+        <SoundPicker
+          label="Send sound"
+          value={p.sendSound ?? "pop"}
+          onChange={(v) => {
+            setPref("sendSound", v);
+            sfx.previewMessage(v, "send");
+          }}
+          onPreview={() => sfx.previewMessage(p.sendSound ?? "pop", "send")}
+        />
+      </div>
       <div className={cn("py-3", !p.uiSounds && p.buttonFx === false && p.welcomeSplash === false && "pointer-events-none opacity-50")}>
         <div className="mb-1 font-medium">Sound volume</div>
         <Slider value={p.uiVolume} max={1} onChange={(v) => setPref("uiVolume", v)} format={(v) => `${Math.round(v * 100)}%`} />
       </div>
     </>
+  );
+}
+
+function SoundPicker({
+  label,
+  value,
+  onChange,
+  onPreview,
+}: {
+  label: string;
+  value: MessageSoundId;
+  onChange: (v: MessageSoundId) => void;
+  onPreview: () => void;
+}) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="text-sm text-sub">{label}</div>
+        <button
+          type="button"
+          onClick={onPreview}
+          className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-semibold hover:bg-white/10"
+        >
+          Preview
+        </button>
+      </div>
+      <Select
+        value={value}
+        onChange={(v) => onChange(v as MessageSoundId)}
+        options={MESSAGE_SOUNDS.map((s) => ({ value: s.id, label: s.label }))}
+      />
+      <p className="mt-1 text-[11px] text-faint">{MESSAGE_SOUNDS.find((s) => s.id === value)?.hint}</p>
+    </div>
   );
 }
 

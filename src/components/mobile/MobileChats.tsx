@@ -13,6 +13,7 @@ import StoriesStrip from "./StoriesStrip";
 import PushPrompt from "./PushPrompt";
 import SwipeRow from "./SwipeRow";
 import LargeTitle from "./LargeTitle";
+import NotificationPanel, { NotificationBellButton } from "@/components/chat/NotificationPanel";
 import type { ChatListItem } from "@/lib/types";
 
 const FILTERS = [
@@ -89,6 +90,7 @@ export default function MobileChats() {
           scroller={scroller}
           right={
             <div className="flex items-center">
+              <NotificationBellButton />
               <button onClick={() => useApp.setState({ mobileTab: "friends" })} className="relative grid size-10 place-items-center rounded-full text-accent active:bg-white/10" aria-label="Friends">
                 <Users className="size-[22px]" />
                 {pendingFriends > 0 && <span className="absolute top-1 right-1 size-2.5 rounded-full bg-dnd ring-2 ring-rail" />}
@@ -99,6 +101,9 @@ export default function MobileChats() {
             </div>
           }
         />
+        <div className="relative">
+          <NotificationPanel mobile />
+        </div>
 
         {/* search */}
         <div className="flex items-center gap-2 px-4 pb-3">
