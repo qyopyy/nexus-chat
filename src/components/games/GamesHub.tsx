@@ -32,7 +32,7 @@ const GAMES: { id: GameId; name: string; tag: string; desc: string; bg: string; 
   { id: "streets", name: "Neon Streets", tag: "Open-city driving", desc: "Open-world island city. Jobs, cash, cops — and play live with friends using an invite code.", bg: "linear-gradient(135deg,#ff2bd6,#2b0b5c)", emoji: "🚗", C: null },
   { id: "bay", name: "Sunset Bay", tag: "3D open world · 80s neon", desc: "Drive a neon coastal city in 3D — drifts, stunt jumps, hidden tapes and a ranked checkpoint rush.", bg: "linear-gradient(180deg,#2b1055,#ff4f9a 70%,#ffb347)", emoji: "🌴", C: null },
   { id: "geo", name: "GeoGuess", tag: "Real places · multiplayer", desc: "Real photos from around the world — pin where you think you are.", bg: "linear-gradient(135deg,#00c96b,#0b2a5c)", emoji: "🌍", C: null },
-  { id: "flappy", name: "Flappy Happy", tag: "Arcade · quests · race", desc: "Daily quests, difficulty modes, boosts, worlds, and live pipe races.", bg: "linear-gradient(135deg,#38bdf8,#4ade80)", emoji: "🐤", C: null },
+  { id: "flappy", name: "Flappy Happy", tag: "Arcade · classic", desc: "Tap to fly through pipes — solo, race friends, unlock birds and fits.", bg: "linear-gradient(135deg,#0ea5e9,#1e293b)", emoji: "🐤", C: null },
   { id: "runner", name: "Neon Runner", tag: "Endless · jump", desc: "Sprint the neon strip — tap to jump the blocks before they hit you.", bg: "linear-gradient(135deg,#ff2bd6,#0b0b2a)", emoji: "🏃", C: Runner, isNew: true },
   { id: "whack", name: "Whack Dash", tag: "Arcade · 30s", desc: "Tap the moles before the clock runs out.", bg: "linear-gradient(135deg,#facc15,#5c0b3a)", emoji: "🐹", C: Whack, isNew: true },
   { id: "reaction", name: "Reaction Rush", tag: "Reflex · 5 rounds", desc: "Wait for green, tap as fast as you can. Don't jump the gun.", bg: "linear-gradient(135deg,#22c55e,#0b2a1a)", emoji: "⚡", C: Reaction, isNew: true },
@@ -135,16 +135,17 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
           </button>
 
           {/* featured Flappy Happy */}
-          <button onClick={() => setOpen("flappy")} className="group relative block w-full overflow-hidden rounded-3xl text-left" style={{ background: "linear-gradient(180deg,#7dd3fc 0%,#4ade80 55%,#15803d 100%)" }}>
+          <button onClick={() => setOpen("flappy")} className="group relative block w-full overflow-hidden rounded-3xl text-left" style={{ background: "linear-gradient(160deg,#0b1220 0%,#0f172a 45%,#164e63 100%)" }}>
+            <div className="pointer-events-none absolute inset-0 opacity-50" style={{ background: "radial-gradient(ellipse at 70% 20%,rgba(56,189,248,0.25),transparent 50%)" }} />
             <div className="relative z-10 p-5 sm:p-8">
-              <div className="text-xs font-bold tracking-widest text-white/90 uppercase">Updated · quests · boosts · race</div>
-              <div className="mt-1 text-3xl font-black text-white sm:text-5xl">Flappy Happy</div>
-              <p className="mt-2 max-w-md text-sm text-white/90">Daily quests, Easy/Hard modes, power-ups, world themes, and live pipe races with friends.</p>
-              <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#facc15] px-5 py-2.5 font-black text-black transition group-hover:scale-105">
-                <Play className="size-4 fill-current" /> Play now
+              <div className="text-[10px] font-semibold tracking-[0.2em] text-cyan-300/80 uppercase">Classic arcade</div>
+              <div className="mt-1 bg-gradient-to-r from-cyan-300 via-sky-200 to-indigo-300 bg-clip-text text-3xl font-black tracking-tight text-transparent sm:text-5xl">FLAPPY</div>
+              <div className="bg-gradient-to-r from-amber-300 via-yellow-300 to-orange-400 bg-clip-text text-2xl font-black tracking-wider text-transparent sm:text-4xl">HAPPY</div>
+              <p className="mt-2 max-w-md text-sm text-slate-300">Tap to fly. Avoid the pipes. Race friends when you&apos;re ready.</p>
+              <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500 px-5 py-2.5 font-bold text-white transition group-hover:scale-105">
+                <Play className="size-4 fill-current" /> Start flying
               </span>
             </div>
-            <div className="absolute -right-4 -bottom-6 text-[120px] sm:text-[170px]">🐤</div>
           </button>
 
           <section>

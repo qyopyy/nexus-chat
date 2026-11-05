@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Gift, Infinity as InfinityIcon, RefreshCw, Settings, Shield, Target, Trophy, Users, Zap } from "lucide-react";
+import { ArrowLeft, Gift, Infinity as InfinityIcon, Settings, Shield, Target, Trophy, Zap } from "lucide-react";
 import { useApp } from "@/store/app";
 import { useGames } from "@/store/games";
 import { myRank } from "@/lib/admin";
@@ -439,211 +439,202 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
     return <FlappyRace birdId={save.bird} onBack={() => setMode("lobby")} onFinish={onRaceFinish} mobile={mobile} />;
   }
 
+  const questReady = save.quests.some((q) => !q.claimed && questDefs.find((d) => d.id === q.id && q.progress >= d.target));
+
   return (
-    <div className="relative flex h-full min-h-0 flex-col overflow-hidden text-white" style={{ background: "linear-gradient(180deg,#7dd3fc 0%,#86efac 42%,#4ade80 70%,#15803d 100%)" }}>
-      <header className={cn("relative z-20 flex shrink-0 items-center gap-2 px-3", mobile ? "pt-safe-3 pb-2" : "h-12")}>
-        <button onClick={onBack} className="grid size-9 place-items-center rounded-full bg-black/25 hover:bg-black/40" aria-label="Back to games">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden text-slate-100" style={{ background: "linear-gradient(180deg,#0b1220 0%,#111827 42%,#0f172a 100%)" }}>
+      <div className="pointer-events-none absolute inset-0 opacity-40" style={{ background: "radial-gradient(ellipse at 50% 0%,rgba(56,189,248,0.18),transparent 55%)" }} />
+
+      <header className={cn("relative z-20 flex shrink-0 items-center gap-2 border-b border-white/5 px-3", mobile ? "pt-safe-3 pb-2" : "h-12")}>
+        <button onClick={onBack} className="grid size-9 place-items-center rounded-full hover:bg-white/5" aria-label="Back to games">
           <ArrowLeft className="size-5" />
         </button>
-        <span className="min-w-0 flex-1 truncate font-black tracking-wide">Flappy Happy</span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold tracking-wide">Flappy Happy</div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Currency icon="🪙" value={save.unlimitedCoins ? null : save.coins} unlimited={save.unlimitedCoins} />
+          <Currency icon="◇" value={save.gems} />
+        </div>
         {isAdmin && (
-          <button onClick={() => setSettingsOpen(true)} className="rounded-full bg-[#f0b232]/90 px-2.5 py-1 text-[10px] font-black tracking-wide text-black uppercase" title="Admin coins">
+          <button onClick={() => setSettingsOpen(true)} className="rounded-full bg-amber-400/90 px-2 py-1 text-[10px] font-bold text-black uppercase">
             Admin
           </button>
         )}
-        <button onClick={() => setSettingsOpen((v) => !v)} className="grid size-9 place-items-center rounded-full bg-black/25 hover:bg-black/40" aria-label="Settings">
-          <Settings className="size-4" />
+        <button onClick={() => setSettingsOpen((v) => !v)} className="grid size-9 place-items-center rounded-full hover:bg-white/5" aria-label="Settings">
+          <Settings className="size-4 text-slate-300" />
         </button>
       </header>
 
-      <div className="relative z-10 min-h-0 flex-1 overflow-y-auto px-3 pb-24">
-        <div className="mx-auto flex max-w-md flex-col gap-3">
-          <div className="flex items-center gap-2 rounded-2xl bg-black/25 p-2.5 backdrop-blur-md">
-            <BirdPreview birdId={save.bird} equipped={save.equipped} size="sm" />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-black tracking-wide">{save.name}</div>
-              <div className="text-[10px] font-bold tracking-widest text-white/80 uppercase">
-                {save.rank}
-                {save.stats.streak > 1 ? ` · 🔥${save.stats.streak}` : ""}
-              </div>
-            </div>
-            <Currency icon="🪙" value={save.unlimitedCoins ? null : save.coins} unlimited={save.unlimitedCoins} />
-            <Currency icon="⚪" value={save.gems} />
-          </div>
-
-          <div className="rounded-2xl bg-[#16a34a]/95 px-3 py-2 shadow-lg ring-1 ring-white/20">
-            <div className="flex items-center gap-2 text-xs font-black tracking-wide uppercase">
-              <span className="rounded bg-white/20 px-1.5 py-0.5">🌍</span>
-              World {save.world}: {worldName}
-              <span className="ml-auto tabular-nums">
-                {save.progress}/{worldCap}
-              </span>
-            </div>
-            <div className="mt-1.5 flex gap-3 text-[11px] font-bold text-white/90">
-              <span>🛡 {save.shields}/2</span>
-              <span>🏆 {save.trophies}/10</span>
-              <span className="ml-auto">Best {save.best}</span>
-            </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/25">
-              <div className="h-full rounded-full bg-[#facc15]" style={{ width: `${(save.progress / worldCap) * 100}%` }} />
-            </div>
-          </div>
-
+      <div className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 pb-24">
+        <div className="mx-auto flex max-w-md flex-col gap-4">
           {tab === "home" && (
             <>
-              <div className="flex gap-2">
-                <button onClick={claimGift} disabled={!giftReady} className={cn("flex flex-1 flex-col items-center rounded-2xl bg-black/20 px-2 py-3 backdrop-blur", !giftReady && "opacity-50")}>
-                  <Gift className="size-6 text-[#ff6b6b]" />
-                  <span className="mt-1 text-[10px] font-black tracking-wide">{giftReady ? "FREE" : "DONE"}</span>
-                  <span className="text-[10px] font-semibold text-white/80">Daily Gift</span>
-                </button>
-                <button onClick={() => setTab("quests")} className="relative flex flex-1 flex-col items-center rounded-2xl bg-[#0f766e]/85 px-2 py-3 ring-1 ring-white/20">
-                  <Target className="size-6" />
-                  <span className="mt-1 text-[10px] font-black tracking-wide">
-                    {questDoneCount}/3
-                  </span>
-                  <span className="text-[10px] font-semibold text-white/80">Quests</span>
-                  {questDoneCount > 0 && save.quests.some((q) => !q.claimed && questDefs.find((d) => d.id === q.id && q.progress >= d.target)) && (
-                    <span className="absolute top-2 right-3 size-2 rounded-full bg-[#ef4444]" />
-                  )}
-                </button>
-                <button onClick={() => setMode("race")} className="flex flex-1 flex-col items-center rounded-2xl bg-[#7c3aed]/85 px-2 py-3 ring-1 ring-white/30">
-                  <Users className="size-6" />
-                  <span className="mt-1 text-[10px] font-black tracking-wide">LIVE</span>
-                  <span className="text-[10px] font-semibold">Multiplayer</span>
-                </button>
+              <div className="pt-4 text-center">
+                <div className="text-[10px] font-semibold tracking-[0.22em] text-cyan-300/80 uppercase">Nexus arcade</div>
+                <h1 className="mt-1 bg-gradient-to-r from-cyan-300 via-sky-200 to-indigo-300 bg-clip-text text-5xl font-black tracking-tight text-transparent">FLAPPY</h1>
+                <h2 className="bg-gradient-to-r from-amber-300 via-yellow-300 to-orange-400 bg-clip-text text-4xl font-black tracking-wider text-transparent">HAPPY</h2>
+                <p className="mt-2 text-xs text-slate-400">
+                  Best {save.best} · {worldName} · {save.rank}
+                </p>
               </div>
 
-              <div className="rounded-2xl bg-black/25 p-3 backdrop-blur">
-                <div className="mb-2 flex items-center gap-2 text-xs font-black tracking-wide uppercase">
-                  <Zap className="size-3.5 text-[#facc15]" /> Difficulty
-                </div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {(Object.keys(DIFFICULTY_META) as Difficulty[]).map((id) => (
-                    <button
-                      key={id}
-                      onClick={() => bump({ difficulty: id })}
-                      className={cn("rounded-xl px-2 py-2 text-center", save.difficulty === id ? "bg-[#facc15] text-black" : "bg-black/30")}
-                    >
-                      <div className="text-xs font-black">{DIFFICULTY_META[id].label}</div>
-                      <div className="mt-0.5 text-[9px] font-semibold opacity-80">{DIFFICULTY_META[id].blurb}</div>
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-3 mb-1.5 text-xs font-black tracking-wide text-white/80 uppercase">Armed boost</div>
-                <div className="flex flex-wrap gap-1.5">
-                  <button onClick={() => armPower(null)} className={cn("rounded-full px-3 py-1.5 text-[11px] font-bold", !save.armedPower ? "bg-[#facc15] text-black" : "bg-black/30")}>
-                    None
-                  </button>
-                  {POWERUPS.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => armPower(p.id)}
-                      className={cn("rounded-full px-3 py-1.5 text-[11px] font-bold", save.armedPower === p.id ? "bg-[#facc15] text-black" : "bg-black/30")}
-                    >
-                      {p.emoji} {save.powerups[p.id]}
-                    </button>
-                  ))}
-                  <button onClick={() => { setTab("store"); setStoreFilter("boosts"); }} className="rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold">
-                    Buy +
-                  </button>
-                </div>
-              </div>
-
-              <div className="relative mt-1 flex flex-col items-center">
+              <div className="flex flex-col items-center py-2">
                 <BirdPreview birdId={save.bird} equipped={save.equipped} size="lg" />
-                <div className="mt-3 text-sm font-black tracking-widest uppercase">{bird.name}</div>
-                <div className="mt-1 flex flex-wrap justify-center gap-1">
-                  {SLOTS.map((slot) => {
-                    const id = save.equipped[slot];
-                    const a = ACCESSORIES.find((x) => x.id === id);
-                    return a ? (
-                      <button key={slot} onClick={() => unequipSlot(slot)} className="rounded-full bg-black/35 px-2 py-0.5 text-[10px] font-bold" title="Tap to unequip">
-                        {a.emoji} {a.name}
-                      </button>
-                    ) : null;
-                  })}
-                </div>
-                <div className="mt-2 flex gap-2">
-                  <button onClick={() => setTab("birds")} className="flex items-center gap-1.5 rounded-full bg-black/35 px-4 py-2 text-xs font-black tracking-wide uppercase backdrop-blur hover:bg-black/50">
-                    <RefreshCw className="size-3.5" /> Bird
+                <div className="mt-3 text-sm font-semibold tracking-wide text-amber-300">{bird.name}</div>
+                <div className="mt-3 flex gap-2">
+                  <button onClick={() => setTab("birds")} className="rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10">
+                    Character
                   </button>
-                  <button onClick={() => setTab("fit")} className="flex items-center gap-1.5 rounded-full bg-black/35 px-4 py-2 text-xs font-black tracking-wide uppercase backdrop-blur hover:bg-black/50">
-                    Fit
+                  <button onClick={() => setTab("fit")} className="rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10">
+                    Style
                   </button>
                 </div>
+              </div>
+
+              <div className="mx-auto w-full max-w-sm space-y-2">
                 <button
                   onClick={() => startSolo(false)}
-                  className="mt-4 w-full max-w-xs rounded-2xl bg-[#facc15] py-4 text-xl font-black tracking-widest text-black uppercase shadow-[0_8px_0_#ca8a04] active:translate-y-1 active:shadow-none"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 py-4 text-lg font-black tracking-wider text-white uppercase shadow-[0_10px_30px_rgba(16,185,129,0.35)] active:scale-[0.99]"
                 >
-                  Play
+                  Start flying
                 </button>
-                <button onClick={() => startSolo(true)} className="mt-2 text-xs font-bold tracking-wide text-white/85 underline-offset-2 hover:underline">
-                  Practice (no shield · 35% coins)
-                </button>
-              </div>
-
-              <div className="mt-2 rounded-2xl bg-white/90 p-3 text-[#0f172a] shadow-lg">
-                <div className="mb-2 flex items-center gap-2 text-xs font-black tracking-wide uppercase">
-                  <Trophy className="size-3.5 text-[#ca8a04]" /> Reward chests
-                  <span className="ml-auto text-[10px] font-semibold text-slate-500">Win Top 3 · juice drip drops</span>
-                </div>
-                <div className="grid grid-cols-4 gap-2">
-                  {[0, 1, 2, 3].map((i) => {
-                    const filled = i < save.chests;
-                    return (
-                      <button
-                        key={i}
-                        disabled={!filled}
-                        onClick={openChest}
-                        className={cn("flex aspect-square flex-col items-center justify-center rounded-xl border-2 border-dashed", filled ? "border-[#ca8a04] bg-[#fef3c7]" : "border-slate-300 bg-slate-100")}
-                      >
-                        <span className="text-2xl">{filled ? "📦" : "·"}</span>
-                        <span className="text-[9px] font-black tracking-wide">{filled ? "OPEN" : "WIN TOP 3"}</span>
-                      </button>
-                    );
-                  })}
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => setMode("race")} className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-semibold text-slate-200 hover:bg-white/10">
+                    Race friends
+                  </button>
+                  <button onClick={() => startSolo(true)} className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-semibold text-slate-200 hover:bg-white/10">
+                    Practice
+                  </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-2 rounded-2xl bg-black/20 p-3 text-center text-[11px] font-bold backdrop-blur">
-                <Stat label="Flights" value={save.stats.flights} />
-                <Stat label="Pipes" value={save.stats.pipes} />
-                <Stat label="Races" value={save.stats.races} />
-                <Stat label="Wins" value={save.stats.wins} />
+              <div className="mx-auto grid w-full max-w-sm grid-cols-3 gap-2">
+                {(Object.keys(DIFFICULTY_META) as Difficulty[]).map((id) => (
+                  <button
+                    key={id}
+                    onClick={() => bump({ difficulty: id })}
+                    className={cn(
+                      "rounded-xl border px-2 py-2 text-center text-xs font-semibold",
+                      save.difficulty === id ? "border-cyan-400/60 bg-cyan-400/15 text-cyan-200" : "border-white/10 bg-white/[0.03] text-slate-400",
+                    )}
+                  >
+                    {DIFFICULTY_META[id].label}
+                  </button>
+                ))}
               </div>
+
+              <div className="mx-auto flex w-full max-w-sm flex-wrap items-center justify-center gap-1.5">
+                <span className="mr-1 text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Boost</span>
+                <button onClick={() => armPower(null)} className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", !save.armedPower ? "bg-amber-300 text-black" : "bg-white/5 text-slate-400")}>
+                  Off
+                </button>
+                {POWERUPS.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => armPower(p.id)}
+                    className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", save.armedPower === p.id ? "bg-amber-300 text-black" : "bg-white/5 text-slate-400")}
+                  >
+                    {p.name} · {save.powerups[p.id]}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mx-auto grid w-full max-w-sm grid-cols-3 gap-2">
+                <button onClick={claimGift} disabled={!giftReady} className={cn("rounded-xl border border-white/10 bg-white/[0.03] px-2 py-3 text-center", !giftReady && "opacity-40")}>
+                  <Gift className="mx-auto size-4 text-rose-300" />
+                  <div className="mt-1 text-[11px] font-semibold">{giftReady ? "Daily gift" : "Claimed"}</div>
+                </button>
+                <button onClick={() => setTab("quests")} className="relative rounded-xl border border-white/10 bg-white/[0.03] px-2 py-3 text-center">
+                  <Target className="mx-auto size-4 text-cyan-300" />
+                  <div className="mt-1 text-[11px] font-semibold">Quests {questDoneCount}/3</div>
+                  {questReady && <span className="absolute top-2 right-2 size-1.5 rounded-full bg-rose-400" />}
+                </button>
+                <button onClick={() => setTab("store")} className="rounded-xl border border-white/10 bg-white/[0.03] px-2 py-3 text-center">
+                  <Zap className="mx-auto size-4 text-amber-300" />
+                  <div className="mt-1 text-[11px] font-semibold">Store</div>
+                </button>
+              </div>
+
+              {(save.chests > 0 || save.stats.flights > 0) && (
+                <div className="mx-auto w-full max-w-sm space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    <span className="inline-flex items-center gap-1.5 font-semibold text-slate-300">
+                      <Trophy className="size-3.5 text-amber-300" /> Chests
+                    </span>
+                    <span>
+                      Shields {save.shields}/2 · Progress {save.progress}/{worldCap}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[0, 1, 2, 3].map((i) => {
+                      const filled = i < save.chests;
+                      return (
+                        <button
+                          key={i}
+                          disabled={!filled}
+                          onClick={openChest}
+                          className={cn(
+                            "rounded-xl border py-3 text-center text-[10px] font-semibold",
+                            filled ? "border-amber-300/40 bg-amber-300/10 text-amber-200" : "border-white/5 bg-black/20 text-slate-600",
+                          )}
+                        >
+                          {filled ? "Open" : "—"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="grid grid-cols-4 gap-2 text-center text-[11px] text-slate-400">
+                    <Stat label="Flights" value={save.stats.flights} />
+                    <Stat label="Pipes" value={save.stats.pipes} />
+                    <Stat label="Races" value={save.stats.races} />
+                    <Stat label="Wins" value={save.stats.wins} />
+                  </div>
+                </div>
+              )}
             </>
+          )}
+
+          {tab !== "home" && (
+            <div className="pt-3">
+              <h2 className="text-lg font-semibold tracking-wide capitalize">{tab === "birds" ? "Characters" : tab === "fit" ? "Style" : tab}</h2>
+              <p className="mt-0.5 text-xs text-slate-400">
+                {tab === "quests" && "Daily challenges refresh at midnight UTC."}
+                {tab === "birds" && "Pick a bird for solo flights and races."}
+                {tab === "fit" && "Equip owned accessories."}
+                {tab === "store" && "Spend coins and gems on gear and boosts."}
+              </p>
+            </div>
           )}
 
           {tab === "quests" && (
             <div className="space-y-2">
-              <p className="text-sm text-white/85">Three daily challenges refresh at midnight UTC. Claim rewards when the bar fills.</p>
               {questDefs.map((def) => {
                 const q = save.quests.find((x) => x.id === def.id) ?? { id: def.id, progress: 0, claimed: false };
                 const pct = Math.min(100, (q.progress / def.target) * 100);
                 const ready = !q.claimed && q.progress >= def.target;
                 return (
-                  <div key={def.id} className="rounded-2xl bg-black/30 p-3 backdrop-blur">
+                  <div key={def.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
                     <div className="flex items-start gap-2">
                       <div className="min-w-0 flex-1">
-                        <div className="font-black">{def.title}</div>
-                        <div className="text-xs text-white/75">{def.desc}</div>
+                        <div className="font-semibold">{def.title}</div>
+                        <div className="text-xs text-slate-400">{def.desc}</div>
                       </div>
-                      <div className="text-right text-[11px] font-black text-[#facc15]">
-                        +{def.rewardCoins}🪙{def.rewardGems ? ` +${def.rewardGems}⚪` : ""}
+                      <div className="text-right text-[11px] font-semibold text-amber-300">
+                        +{def.rewardCoins}{def.rewardGems ? ` · +${def.rewardGems}◇` : ""}
                       </div>
                     </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/35">
-                      <div className="h-full rounded-full bg-[#2dd4bf]" style={{ width: `${pct}%` }} />
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div className="h-full rounded-full bg-cyan-400" style={{ width: `${pct}%` }} />
                     </div>
-                    <div className="mt-2 flex items-center justify-between text-xs font-bold">
-                      <span>
+                    <div className="mt-2 flex items-center justify-between text-xs font-semibold">
+                      <span className="text-slate-400">
                         {Math.min(q.progress, def.target)}/{def.target}
                       </span>
                       {q.claimed ? (
-                        <span className="text-white/60">Claimed</span>
+                        <span className="text-slate-500">Claimed</span>
                       ) : (
-                        <button disabled={!ready} onClick={() => claimQuest(def.id)} className={cn("rounded-full px-3 py-1", ready ? "bg-[#facc15] text-black" : "bg-white/10 text-white/50")}>
+                        <button disabled={!ready} onClick={() => claimQuest(def.id)} className={cn("rounded-full px-3 py-1", ready ? "bg-amber-300 text-black" : "bg-white/5 text-slate-500")}>
                           Claim
                         </button>
                       )}
@@ -660,15 +651,22 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                 const owned = save.unlocked.includes(b.id);
                 const selected = save.bird === b.id;
                 return (
-                  <button key={b.id} onClick={() => buyBird(b.id, b.cost)} className={cn("rounded-2xl p-3 text-left ring-2", selected ? "ring-[#facc15] bg-black/40" : "ring-white/20 bg-black/25")}>
+                  <button
+                    key={b.id}
+                    onClick={() => buyBird(b.id, b.cost)}
+                    className={cn(
+                      "rounded-2xl border p-3 text-left transition",
+                      selected ? "border-amber-300/50 bg-amber-300/10" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.05]",
+                    )}
+                  >
                     <div className="mb-2 flex items-center gap-2">
-                      <div className="grid size-12 place-items-center rounded-xl text-2xl" style={{ background: b.color }}>
-                        🐤
+                      <div className="grid size-11 place-items-center rounded-full" style={{ background: b.color }}>
+                        <span className="text-lg">◆</span>
                       </div>
-                      {b.tag && <span className="rounded-full bg-[#7c3aed] px-2 py-0.5 text-[10px] font-black">{b.tag}</span>}
+                      {b.tag && <span className="rounded-full bg-violet-500/30 px-2 py-0.5 text-[10px] font-semibold text-violet-200">{b.tag}</span>}
                     </div>
-                    <div className="text-sm font-bold">{b.name}</div>
-                    <div className="text-[11px] text-white/80">{owned ? (selected ? "Equipped" : "Owned") : `🪙 ${b.cost}`}</div>
+                    <div className="text-sm font-semibold">{b.name}</div>
+                    <div className="text-[11px] text-slate-400">{owned ? (selected ? "Selected" : "Owned") : `${b.cost} coins`}</div>
                   </button>
                 );
               })}
@@ -677,32 +675,31 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
 
           {tab === "fit" && (
             <div className="space-y-3">
-              <div className="flex flex-col items-center rounded-2xl bg-black/25 p-4">
+              <div className="flex flex-col items-center rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                 <BirdPreview birdId={save.bird} equipped={save.equipped} size="lg" />
-                <p className="mt-2 text-center text-xs text-white/75">Equip gear you own. Buy more in the Store with coins.</p>
+                <p className="mt-2 text-center text-xs text-slate-400">Equip gear you own. Buy more in the Store.</p>
               </div>
               {SLOTS.map((slot) => (
                 <div key={slot}>
-                  <div className="mb-1.5 text-xs font-black tracking-wide text-white/80 uppercase">{SLOT_LABEL[slot]}</div>
+                  <div className="mb-1.5 text-[11px] font-semibold tracking-wide text-slate-400 uppercase">{SLOT_LABEL[slot]}</div>
                   <div className="flex gap-2 overflow-x-auto pb-1">
                     <button
                       onClick={() => unequipSlot(slot)}
-                      className={cn("flex shrink-0 flex-col items-center rounded-xl px-3 py-2 ring-2", !save.equipped[slot] ? "ring-[#facc15] bg-black/40" : "ring-white/15 bg-black/20")}
+                      className={cn("flex shrink-0 flex-col items-center rounded-xl border px-3 py-2", !save.equipped[slot] ? "border-amber-300/50 bg-amber-300/10" : "border-white/10 bg-white/[0.03]")}
                     >
-                      <span className="text-xl">∅</span>
-                      <span className="text-[10px] font-bold">None</span>
+                      <span className="text-sm font-semibold text-slate-400">None</span>
                     </button>
                     {ACCESSORIES.filter((a) => a.slot === slot && save.ownedAcc.includes(a.id)).map((a) => (
                       <button
                         key={a.id}
                         onClick={() => bump({ equipped: { ...save.equipped, [slot]: a.id } })}
-                        className={cn("flex shrink-0 flex-col items-center rounded-xl px-3 py-2 ring-2", save.equipped[slot] === a.id ? "ring-[#facc15] bg-black/40" : "ring-white/15 bg-black/20")}
+                        className={cn("flex shrink-0 flex-col items-center rounded-xl border px-3 py-2", save.equipped[slot] === a.id ? "border-amber-300/50 bg-amber-300/10" : "border-white/10 bg-white/[0.03]")}
                       >
-                        <span className="text-xl">{a.emoji}</span>
-                        <span className="max-w-[4.5rem] truncate text-[10px] font-bold">{a.name}</span>
+                        <span className="text-lg">{a.emoji}</span>
+                        <span className="max-w-[4.5rem] truncate text-[10px] font-semibold">{a.name}</span>
                       </button>
                     ))}
-                    {!ACCESSORIES.some((a) => a.slot === slot && save.ownedAcc.includes(a.id)) && <span className="self-center text-xs text-white/60">Nothing owned — visit Store</span>}
+                    {!ACCESSORIES.some((a) => a.slot === slot && save.ownedAcc.includes(a.id)) && <span className="self-center text-xs text-slate-500">Nothing owned yet</span>}
                   </div>
                 </div>
               ))}
@@ -715,7 +712,7 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                 {(
                   [
                     ["all", "All"],
-                    ["juice", "999 Juice"],
+                    ["juice", "999"],
                     ["boosts", "Boosts"],
                     ["hat", "Hats"],
                     ["face", "Face"],
@@ -728,7 +725,7 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                   <button
                     key={id}
                     onClick={() => setStoreFilter(id)}
-                    className={cn("shrink-0 rounded-full px-3 py-1.5 text-xs font-black", storeFilter === id ? "bg-[#facc15] text-black" : "bg-black/30")}
+                    className={cn("shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold", storeFilter === id ? "bg-amber-300 text-black" : "bg-white/5 text-slate-300")}
                   >
                     {label}
                   </button>
@@ -738,14 +735,14 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
               {storeFilter === "boosts" ? (
                 <div className="space-y-2">
                   {POWERUPS.map((p) => (
-                    <button key={p.id} onClick={() => buyPower(p.id)} className="flex w-full items-center gap-3 rounded-2xl bg-black/30 p-3 text-left backdrop-blur">
-                      <span className="text-3xl">{p.emoji}</span>
+                    <button key={p.id} onClick={() => buyPower(p.id)} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left">
+                      <span className="text-2xl">{p.emoji}</span>
                       <span className="min-w-0 flex-1">
-                        <span className="block font-bold">{p.name}</span>
-                        <span className="block text-xs text-white/75">{p.blurb}</span>
-                        <span className="mt-1 block text-[11px] text-white/60">Owned · {save.powerups[p.id]}</span>
+                        <span className="block font-semibold">{p.name}</span>
+                        <span className="block text-xs text-slate-400">{p.blurb}</span>
+                        <span className="mt-1 block text-[11px] text-slate-500">Owned · {save.powerups[p.id]}</span>
                       </span>
-                      <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-black">🪙 {p.cost}</span>
+                      <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">{p.cost}</span>
                     </button>
                   ))}
                 </div>
@@ -826,13 +823,12 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                       },
                     },
                   ].map((item) => (
-                    <button key={item.title} onClick={item.apply} className="flex w-full items-center gap-3 rounded-2xl bg-black/30 p-3 text-left backdrop-blur">
-                      <span className="text-3xl">🛒</span>
+                    <button key={item.title} onClick={item.apply} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left">
                       <span className="min-w-0 flex-1">
-                        <span className="block font-bold">{item.title}</span>
-                        <span className="block text-xs text-white/75">{item.desc}</span>
+                        <span className="block font-semibold">{item.title}</span>
+                        <span className="block text-xs text-slate-400">{item.desc}</span>
                       </span>
-                      <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-black">{item.cost}</span>
+                      <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">{item.cost}</span>
                     </button>
                   ))}
                 </div>
@@ -845,63 +841,63 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                       <button
                         key={a.id}
                         onClick={() => buyAcc(a.id)}
-                        className={cn("rounded-2xl p-3 text-left ring-2", on ? "ring-[#facc15] bg-black/45" : owned ? "ring-white/30 bg-black/30" : "ring-white/15 bg-black/20")}
+                        className={cn(
+                          "rounded-2xl border p-3 text-left",
+                          on ? "border-amber-300/50 bg-amber-300/10" : owned ? "border-white/15 bg-white/[0.04]" : "border-white/10 bg-white/[0.03]",
+                        )}
                       >
                         <div className="mb-1 flex items-center gap-2">
-                          <span className="text-3xl">{a.emoji}</span>
-                          {a.juice && <span className="rounded-full bg-[#7c3aed] px-1.5 py-0.5 text-[9px] font-black">999</span>}
+                          <span className="text-2xl">{a.emoji}</span>
+                          {a.juice && <span className="rounded-full bg-violet-500/25 px-1.5 py-0.5 text-[9px] font-semibold text-violet-200">999</span>}
                         </div>
-                        <div className="text-sm font-bold leading-tight">{a.name}</div>
-                        <div className="mt-0.5 text-[10px] text-white/70">{a.blurb}</div>
-                        <div className="mt-1.5 text-[11px] font-black text-[#facc15]">{owned ? (on ? "Equipped" : "Own · tap to wear") : `🪙 ${a.cost}`}</div>
+                        <div className="text-sm font-semibold leading-tight">{a.name}</div>
+                        <div className="mt-0.5 text-[10px] text-slate-400">{a.blurb}</div>
+                        <div className="mt-1.5 text-[11px] font-semibold text-amber-300">{owned ? (on ? "Equipped" : "Owned") : `${a.cost} coins`}</div>
                       </button>
                     );
                   })}
                 </div>
               )}
-              {!me && <p className="text-xs text-white/80">Sign in on Nexus to invite friends to multiplayer races.</p>}
+              {!me && <p className="text-xs text-slate-400">Sign in on Nexus to invite friends to multiplayer races.</p>}
             </div>
           )}
         </div>
       </div>
 
-      <nav className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-around border-t border-black/10 bg-[#0b3a1f]/95 px-1 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur">
+      <nav className="absolute inset-x-0 bottom-0 z-20 flex items-stretch justify-around border-t border-white/5 bg-[#0b1220]/95 px-1 pt-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))] backdrop-blur-md">
         {(
           [
-            ["store", "Store", "🛍️"],
-            ["quests", "Quests", "🎯"],
-            ["home", "Home", "🏠"],
-            ["fit", "Fit", "👗"],
-            ["birds", "Birds", "🐤"],
+            ["home", "Home"],
+            ["birds", "Birds"],
+            ["fit", "Style"],
+            ["store", "Store"],
+            ["quests", "Quests"],
           ] as const
-        ).map(([id, label, emoji]) => (
-          <button key={id} onClick={() => setTab(id)} className={cn("relative flex flex-1 flex-col items-center gap-0.5 py-1 text-[10px] font-bold", tab === id ? "text-[#facc15]" : "text-white/70")}>
-            <span className="text-xl">{emoji}</span>
+        ).map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} className={cn("relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-semibold", tab === id ? "text-amber-300" : "text-slate-500")}>
             {label}
-            {id === "home" && save.chests > 0 && <span className="absolute top-0 right-1/4 size-2 rounded-full bg-[#ef4444]" />}
-            {id === "quests" && save.quests.some((q) => !q.claimed && questDefs.find((d) => d.id === q.id && q.progress >= d.target)) && (
-              <span className="absolute top-0 right-1/4 size-2 rounded-full bg-[#ef4444]" />
-            )}
+            {id === "home" && save.chests > 0 && <span className="absolute top-1.5 right-[28%] size-1.5 rounded-full bg-rose-400" />}
+            {id === "quests" && questReady && <span className="absolute top-1.5 right-[28%] size-1.5 rounded-full bg-rose-400" />}
           </button>
         ))}
       </nav>
 
       {settingsOpen && (
-        <div className="absolute inset-0 z-40 grid place-items-center bg-black/50 p-6" onClick={() => setSettingsOpen(false)}>
-          <div className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-[#0f172a] p-4" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 font-bold">Settings</div>
-            <label className="mb-3 block text-sm">
+        <div className="absolute inset-0 z-40 grid place-items-center bg-black/60 p-6 backdrop-blur-sm" onClick={() => setSettingsOpen(false)}>
+          <div className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-white/10 bg-[#0b1220] p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 text-sm font-semibold tracking-wide">Settings</div>
+            <label className="mb-3 block text-xs text-slate-400">
               Display name
               <input
-                className="mt-1 w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 outline-none"
+                className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400/40"
                 value={save.name}
                 maxLength={12}
                 onChange={(e) => bump({ name: e.target.value.toUpperCase() })}
               />
             </label>
 
-            <div className="mb-4 rounded-2xl bg-white/5 p-3 text-xs">
-              <div className="mb-2 font-black tracking-wide uppercase">Career</div>
+            <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300">
+              <div className="mb-2 text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Career</div>
               <div className="grid grid-cols-2 gap-2">
                 <div>Flights · {save.stats.flights}</div>
                 <div>Pipes · {save.stats.pipes}</div>
@@ -913,19 +909,19 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
             </div>
 
             {isAdmin && (
-              <div className="mb-4 rounded-2xl border border-[#f0b232]/40 bg-[#f0b232]/10 p-3">
-                <div className="mb-2 flex items-center gap-2 text-sm font-black text-[#f0b232]">
-                  <Shield className="size-4" /> Admin · unlimited coins
+              <div className="mb-4 rounded-2xl border border-amber-300/30 bg-amber-300/5 p-3">
+                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-300">
+                  <Shield className="size-4" /> Admin
                 </div>
-                <p className="mb-3 text-xs text-white/70">Staff only. Grants coins on this device and can unlock free shopping.</p>
+                <p className="mb-3 text-xs text-slate-400">Staff only. Grant coins on this device or unlock free shopping.</p>
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={() => adminGrant(1_000)} className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold">
+                  <button onClick={() => adminGrant(1_000)} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold">
                     +1,000
                   </button>
-                  <button onClick={() => adminGrant(10_000)} className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold">
+                  <button onClick={() => adminGrant(10_000)} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold">
                     +10,000
                   </button>
-                  <button onClick={() => adminGrant(100_000)} className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold">
+                  <button onClick={() => adminGrant(100_000)} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold">
                     +100,000
                   </button>
                 </div>
@@ -933,7 +929,7 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                   <input
                     value={adminAmt}
                     onChange={(e) => setAdminAmt(e.target.value.replace(/\D/g, "").slice(0, 9))}
-                    className="min-w-0 flex-1 rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm outline-none"
+                    className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none"
                     placeholder="Custom amount"
                   />
                   <button
@@ -941,14 +937,14 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                       const n = Number(adminAmt) || 0;
                       if (n > 0) adminGrant(n);
                     }}
-                    className="rounded-xl bg-[#f0b232] px-3 font-black text-black"
+                    className="rounded-xl bg-amber-300 px-3 font-semibold text-black"
                   >
                     Add
                   </button>
                 </div>
                 <button
                   onClick={() => bump({ unlimitedCoins: !save.unlimitedCoins }, save.unlimitedCoins ? "Unlimited coins off" : "Unlimited coins ON")}
-                  className={cn("mt-3 flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-black", save.unlimitedCoins ? "bg-[#22c55e] text-black" : "bg-white/15")}
+                  className={cn("mt-3 flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-semibold", save.unlimitedCoins ? "bg-cyan-400 text-black" : "border border-white/10 bg-white/5")}
                 >
                   <InfinityIcon className="size-4" />
                   {save.unlimitedCoins ? "Unlimited ON — tap to disable" : "Enable unlimited coins"}
@@ -965,15 +961,15 @@ export default function FlappyHappy({ onBack, mobile }: { onBack: () => void; mo
                       "Unlocked all birds, accessories & boosts",
                     );
                   }}
-                  className="mt-2 w-full rounded-full bg-white/10 py-2 text-xs font-bold"
+                  className="mt-2 w-full rounded-full border border-white/10 bg-white/5 py-2 text-xs font-semibold"
                 >
                   Unlock all birds + accessories + boosts
                 </button>
               </div>
             )}
 
-            <p className="text-xs text-white/60">Progress saves on this device. Worlds change the solo sky theme. Hard mode pays more coins.</p>
-            <button onClick={() => setSettingsOpen(false)} className="mt-4 w-full rounded-full bg-white py-2.5 font-bold text-black">
+            <p className="text-xs text-slate-500">Progress saves on this device. Worlds change the solo sky theme. Hard mode pays more coins.</p>
+            <button onClick={() => setSettingsOpen(false)} className="mt-4 w-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500 py-2.5 font-semibold text-white">
               Done
             </button>
           </div>
@@ -996,10 +992,9 @@ function dayDiff(a: string, b: string) {
 
 function Currency({ icon, value, unlimited }: { icon: string; value: number | null; unlimited?: boolean }) {
   return (
-    <div className="flex items-center gap-1 rounded-full bg-black/35 py-1 pr-1.5 pl-2 text-xs font-black tabular-nums">
-      <span>{icon}</span>
+    <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs font-semibold tabular-nums text-slate-200">
+      <span className="text-amber-300">{icon}</span>
       {unlimited ? "∞" : value}
-      <span className="grid size-5 place-items-center rounded-full bg-white/20 text-[10px]">+</span>
     </div>
   );
 }
@@ -1007,8 +1002,8 @@ function Currency({ icon, value, unlimited }: { icon: string; value: number | nu
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div>
-      <div className="text-lg font-black tabular-nums">{value}</div>
-      <div className="text-[10px] tracking-wide text-white/70 uppercase">{label}</div>
+      <div className="text-sm font-semibold tabular-nums text-slate-200">{value}</div>
+      <div className="text-[10px] tracking-wide text-slate-500 uppercase">{label}</div>
     </div>
   );
 }
