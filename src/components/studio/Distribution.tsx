@@ -40,6 +40,7 @@ import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import { Card, H, StatusPill } from "./Studio";
 import { DefaultsDialog, PitchCard, PitchSummary, ReadinessCard, SmartLinkCard, Timeline } from "./ReleaseExtras";
+import LiveDeliveryCard from "./LiveDeliveryCard";
 import { duplicateRelease, getDefaults, getPitch, getSmartLink, readiness, remoteImageSize, savePitch, statusLog, type Pitch, type SmartLink, type StatusLog } from "@/lib/distExtras";
 import { CheckPill, CheckView, Chips, ReportView, SplitEditor, printSplitSheet } from "@/components/music/AudioBits";
 import { analyzeAudio, checkStatus, clearCheckConfig, saveShieldBucket, clipFromBuffer, copyrightCheck, decodeFile, latestChecks, lyricsLookExplicit, saveCheckConfig, type AudioCheck, type AudioReport } from "@/lib/audio";
@@ -70,13 +71,32 @@ function Artwork({ path, className }: { path: string | null; className?: string 
   );
 }
 
+const LIST_FILTERS: { id: "all" | DistStatus | "active"; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "live", label: "Live" },
+  { id: "active", label: "In progress" },
+  { id: "draft", label: "Drafts" },
+  { id: "changes_requested", label: "Changes" },
+  { id: "rejected", label: "Rejected" },
+];
+
 function ReleaseList() {
   const [rows, setRows] = useState<DistRelease[] | null>(null);
   const [defaultsOpen, setDefaultsOpen] = useState(false);
+  const [filter, setFilter] = useState<(typeof LIST_FILTERS)[number]["id"]>("all");
+  const [q, setQ] = useState("");
   useEffect(() => {
     void listReleases().then(setRows);
     void tunearo("sync").catch(() => null).then(() => listReleases().then(setRows));
   }, []);
+  const filtered = useMemo(() => {
+    let list = rows ?? [];
+    if (filter === "active") list = list.filter((r) => ["in_review", "sending", "pending", "approved"].includes(r.status));
+    else if (filter !== "all") list = list.filter((r) => r.status === filter);
+    const qq = q.trim().toLowerCase();
+    if (qq) list = list.filter((r) => `${r.title} ${r.primary_artist_name} ${r.upc ?? ""}`.toLowerCase().includes(qq));
+    return list;
+  }, [rows, filter, q]);
   return (
     <>
       <H
@@ -94,7 +114,19 @@ function ReleaseList() {
         Music releases
       </H>
       {defaultsOpen && <DefaultsDialog onClose={() => setDefaultsOpen(false)} />}
-      <p className="-mt-3 mb-5 text-sm text-sub">Distribute to Spotify, Apple Music, TikTok, YouTube Music, Amazon, Deezer and 150+ stores via Tunearo. An admin reviews every release before it&apos;s sent.</p>
+      <p className="-mt-3 mb-4 text-sm text-sub">Distribute to Spotify, Apple Music, TikTok, YouTube Music, Amazon, Deezer and 150+ stores via Tunearo. An admin reviews every release before it&apos;s sent.</p>
+      {rows && rows.length > 0 && (
+        <div className="mb-4 space-y-2">
+          <div className="flex gap-1.5 overflow-x-auto pb-1">
+            {LIST_FILTERS.map((f) => (
+              <button key={f.id} onClick={() => setFilter(f.id)} className={cn("shrink-0 rounded-full px-3 py-1.5 text-xs font-bold", filter === f.id ? "bg-accent text-white" : "bg-hover")}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title, artist, UPC…" className="w-full rounded-xl border border-line bg-side px-3 py-2 text-sm outline-none focus:border-accent" />
+        </div>
+      )}
       {rows === null ? (
         <p className="text-sub">Loading…</p>
       ) : rows.length === 0 ? (
@@ -105,9 +137,11 @@ function ReleaseList() {
             Create your first release
           </button>
         </Card>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-sub">No releases match that filter.</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {rows.map((r) => (
+          {filtered.map((r) => (
             <button key={r.id} onClick={() => useStudio.setState({ releaseId: r.id })} className="flex gap-3 rounded-2xl border border-line/70 bg-side p-3 text-left transition hover:border-sub">
               <Artwork path={r.artwork_path} className="w-20" />
               <div className="min-w-0 flex-1">
@@ -118,6 +152,7 @@ function ReleaseList() {
                 </div>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <StatusPill status={r.status} />
+                  {r.status === "live" && <span className="size-1.5 animate-pulse rounded-full bg-[#23a55a]" />}
                   {r.upc && <span className="font-mono text-[11px] text-sub">UPC {r.upc}</span>}
                 </div>
               </div>
@@ -434,6 +469,9 @@ function ReleaseEditor({ id }: { id: string }) {
           </div>
         )}
       </Card>
+      {["live", "pending", "approved", "sending", "takedown_requested"].includes(r.status) && (
+        <LiveDeliveryCard release={r} onRefresh={() => void load(r.id)} />
+      )}
       {r.status === "live" && <ReleaseRoyalties id={r.id} />}
     </div>
   );
