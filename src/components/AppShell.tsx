@@ -5,7 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { useApp, toast } from "@/store/app";
 import { initCallEngine } from "@/lib/call";
 import { useRealtime } from "@/lib/realtime";
-import { loadProfiles, refreshChatList, refreshFriends, refreshSpaces, refreshUnread } from "@/lib/data";
+import { joinSpace, loadProfiles, refreshChatList, refreshFriends, refreshSpaces, refreshUnread } from "@/lib/data";
+import ChannelLockGate from "@/components/space/ChannelLockGate";
 import { isBanned, refreshBadges } from "@/lib/admin";
 import BannedScreen from "./BannedScreen";
 import ProfileCard from "./ui/ProfileCard";
@@ -135,9 +136,16 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
     const q = new URLSearchParams(window.location.search);
     const play = q.get("play");
     const g = q.get("g");
+    const join = q.get("join");
     if (play && /^[A-Za-z2-9]{6}$/.test(play)) {
       joinGame(play, g === "geo" || g === "four" || g === "flappy" ? g : "streets");
       window.history.replaceState(null, "", "/");
+    } else if (join) {
+      window.history.replaceState(null, "", "/");
+      void joinSpace(join).then((err) => {
+        if (err) toast(err, "error");
+        else toast("Joined the server", "success");
+      });
     }
   }, [bootstrapped]);
 
@@ -226,7 +234,10 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
           ) : hub === "videos" ? (
             <VideosHub />
           ) : conversationId ? (
-            <ChatView key={conversationId} conversationId={conversationId} />
+            <div className="relative flex h-full min-h-0 flex-1 flex-col">
+              <ChatView key={conversationId} conversationId={conversationId} />
+              {spaceId && <ChannelLockGate spaceId={spaceId} />}
+            </div>
           ) : spaceId ? (
             <div className="chat-wallpaper grid flex-1 place-items-center text-sub">Pick a channel to start chatting</div>
           ) : (

@@ -179,6 +179,11 @@ export type Space = {
   music_enabled?: boolean;
   welcome?: string | null;
   rules?: string | null;
+  icon_url?: string | null;
+  banner_url?: string | null;
+  background_url?: string | null;
+  vanity_code?: string | null;
+  description?: string | null;
 };
 
 export type SpaceMember = {
@@ -186,6 +191,29 @@ export type SpaceMember = {
   user_id: string;
   role: "owner" | "admin" | "member";
   joined_at: string;
+};
+
+export type SpaceInvite = {
+  id: string;
+  space_id: string;
+  code: string;
+  label: string | null;
+  created_by: string | null;
+  max_uses: number | null;
+  uses: number;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+};
+
+export type SpaceRole = {
+  id: string;
+  space_id: string;
+  name: string;
+  color: string;
+  position: number;
+  perms: Record<string, boolean>;
+  created_at: string;
 };
 
 export type ConversationKind = "dm" | "group" | "text" | "voice";
@@ -200,6 +228,11 @@ export type Conversation = {
   last_message_at: string | null;
   /** seconds between messages for regular members (0 = off) */
   slowmode?: number;
+  is_private?: boolean;
+  /** present when a password is set — never the raw password */
+  password_hash?: string | null;
+  topic?: string | null;
+  nsfw?: boolean;
 };
 
 export type ChatListItem = {

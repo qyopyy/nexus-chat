@@ -70,18 +70,32 @@ function SpaceList() {
                 void loadSpace(sp.id);
               }}
               className="group relative overflow-hidden rounded-3xl p-4 text-left active:scale-[.98]"
-              style={{ background: `linear-gradient(135deg, ${sp.icon_color}55, ${sp.icon_color}14 60%), var(--color-side)` }}
+              style={
+                sp.banner_url || sp.background_url
+                  ? {
+                      backgroundImage: `linear-gradient(120deg, rgba(10,10,14,.75), rgba(10,10,14,.45)), url(${sp.banner_url || sp.background_url})`,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                    }
+                  : { background: `linear-gradient(135deg, ${sp.icon_color}55, ${sp.icon_color}14 60%), var(--color-side)` }
+              }
             >
               <div className="pointer-events-none absolute -top-10 -right-10 size-40 rounded-full opacity-40 blur-2xl" style={{ background: sp.icon_color }} />
               <div className="relative flex items-center gap-3.5">
-                <div className="grid size-14 shrink-0 place-items-center rounded-2xl text-lg font-bold text-white shadow-lg" style={{ background: sp.icon_color }}>
-                  {initials(sp.name)}
+                <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-2xl text-lg font-bold text-white shadow-lg" style={{ background: sp.icon_color }}>
+                  {sp.icon_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={sp.icon_url} alt="" className="size-full object-cover" />
+                  ) : (
+                    initials(sp.name)
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-[17px] font-bold">{sp.name}</span>
                     {hasUnread && <span className="size-2.5 shrink-0 rounded-full bg-dnd" />}
                   </div>
+                  {sp.description && <div className="mt-0.5 line-clamp-1 text-[12px] text-sub">{sp.description}</div>}
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-sub">
                     <span className="flex items-center gap-1">
                       <Hash className="size-3.5" />

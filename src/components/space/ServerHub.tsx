@@ -1,20 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarDays, CalendarPlus, Crown, Gauge, Hash, MapPin, ScrollText, Shield, Trash2, Trophy, X } from "lucide-react";
+import { CalendarDays, CalendarPlus, Crown, Gauge, Hash, Image as ImageIcon, Link2, MapPin, ScrollText, Shield, Trash2, Trophy, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { createEvent, deleteEvent, events, icsFor, leaderboard, levelOf, rsvp, setInfo, setRole, setSlowmode, xpFor, type Rsvp, type SpaceEvent, type XpRow } from "@/lib/serverHub";
+import { deleteChannel, setChannel } from "@/lib/spaceExtras";
 import { download } from "@/lib/dsp";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
+import { InvitesPanel, LookPanel, RolesPanel } from "./ServerStudio";
 import type { Conversation, SpaceMember } from "@/lib/types";
 
-type Tab = "home" | "events" | "levels" | "members" | "channels";
+type Tab = "home" | "look" | "invites" | "roles" | "events" | "levels" | "members" | "channels";
 const EMPTY_M: SpaceMember[] = [];
 const EMPTY_C: Conversation[] = [];
 
-/** server hub: welcome & rules, events with RSVPs, XP levels, roles, slow mode */
+/** server hub: welcome, look, invites, roles, events, XP, members, channel tools */
 export default function ServerHub({ spaceId, onClose, initial = "home" }: { spaceId: string; onClose: () => void; initial?: Tab }) {
   const space = useApp((s) => s.spaces.find((x) => x.id === spaceId));
   const me = useApp((s) => s.userId);
@@ -25,30 +27,57 @@ export default function ServerHub({ spaceId, onClose, initial = "home" }: { spac
   if (!space) return null;
   const tabs: [Tab, string, React.ReactNode][] = [
     ["home", "Welcome", <ScrollText key="h" className="size-4" />],
+    ["look", "Look", <ImageIcon key="lk" className="size-4" />],
+    ["invites", "Invites", <Link2 key="i" className="size-4" />],
+    ["roles", "Roles", <Shield key="r" className="size-4" />],
     ["events", "Events", <CalendarDays key="e" className="size-4" />],
     ["levels", "Levels", <Trophy key="l" className="size-4" />],
-    ["members", "Members", <Shield key="m" className="size-4" />],
-    ...(staff ? ([["channels", "Slow mode", <Gauge key="c" className="size-4" />]] as [Tab, string, React.ReactNode][]) : []),
+    ["members", "Members", <Crown key="m" className="size-4" />],
+    ...(staff ? ([["channels", "Channels", <Gauge key="c" className="size-4" />]] as [Tab, string, React.ReactNode][]) : []),
   ];
+  const headerBg = space.banner_url
+    ? undefined
+    : `linear-gradient(135deg, ${space.icon_color}88, transparent)`;
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 sm:items-center" onClick={onClose}>
       <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl bg-chat sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
-        <div className="relative shrink-0 px-5 pt-5 pb-3" style={{ background: `linear-gradient(135deg, ${space.icon_color}55, transparent)` }}>
-          <button onClick={onClose} className="absolute top-3 right-3 grid size-8 place-items-center rounded-full bg-black/30 hover:bg-black/50" aria-label="Close">
-            <X className="size-5" />
-          </button>
-          <div className="text-xs font-bold tracking-widest text-sub uppercase">Server hub</div>
-          <div className="text-2xl font-black">{space.name}</div>
-          <div className="mt-3 flex gap-1 overflow-x-auto no-scrollbar">
-            {tabs.map(([id, label, icon]) => (
-              <button key={id} onClick={() => setTab(id)} className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold", tab === id ? "bg-white text-black" : "bg-black/20 hover:bg-black/30")}>
-                {icon} {label}
-              </button>
-            ))}
+        <div className="relative shrink-0 overflow-hidden px-5 pt-5 pb-3" style={{ background: headerBg }}>
+          {space.banner_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={space.banner_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-50" />
+          )}
+          <div className="relative">
+            <button onClick={onClose} className="absolute top-0 right-0 grid size-8 place-items-center rounded-full bg-black/30 hover:bg-black/50" aria-label="Close">
+              <X className="size-5" />
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="grid size-12 place-items-center overflow-hidden rounded-2xl text-sm font-black text-white" style={{ background: space.icon_color }}>
+                {space.icon_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={space.icon_url} alt="" className="size-full object-cover" />
+                ) : (
+                  space.name.slice(0, 2).toUpperCase()
+                )}
+              </div>
+              <div>
+                <div className="text-xs font-bold tracking-widest text-sub uppercase">Server hub</div>
+                <div className="text-2xl font-black">{space.name}</div>
+              </div>
+            </div>
+            <div className="mt-3 flex gap-1 overflow-x-auto no-scrollbar">
+              {tabs.map(([id, label, icon]) => (
+                <button key={id} onClick={() => setTab(id)} className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold", tab === id ? "bg-white text-black" : "bg-black/20 hover:bg-black/30")}>
+                  {icon} {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-5 pb-safe-4">
           {tab === "home" && <Home spaceId={spaceId} staff={staff} />}
+          {tab === "look" && <LookPanel spaceId={spaceId} staff={staff} />}
+          {tab === "invites" && <InvitesPanel spaceId={spaceId} staff={staff} owner={myRole === "owner"} />}
+          {tab === "roles" && <RolesPanel spaceId={spaceId} staff={staff} />}
           {tab === "events" && <Events spaceId={spaceId} staff={staff} />}
           {tab === "levels" && <Levels spaceId={spaceId} />}
           {tab === "members" && <Members spaceId={spaceId} owner={myRole === "owner"} />}
@@ -317,23 +346,76 @@ function Channels({ spaceId }: { spaceId: string }) {
     [3600, "1h"],
   ];
   return (
-    <div className="space-y-2">
-      <p className="text-sm text-sub">Slow mode limits how often regular members can post in a channel. Owner and admins are never slowed down.</p>
-      {channels
-        .filter((c) => c.kind === "text")
-        .map((c) => (
-          <div key={c.id} className="flex items-center gap-2 rounded-xl bg-side px-3 py-2">
+    <div className="space-y-3">
+      <p className="text-sm text-sub">Slow mode, topics, NSFW flags, private/password rooms, and delete.</p>
+      {channels.map((c) => (
+        <div key={c.id} className="space-y-2 rounded-2xl bg-side p-3">
+          <div className="flex items-center gap-2">
             <Hash className="size-4 text-sub" />
-            <span className="min-w-0 flex-1 truncate font-semibold">{c.name}</span>
-            <select value={c.slowmode ?? 0} onChange={(e) => void setSlowmode(c.id, Number(e.target.value), spaceId)} className="rounded-lg bg-hover px-2 py-1 text-sm">
-              {opts.map(([v, l]) => (
-                <option key={v} value={v}>
-                  {l}
-                </option>
-              ))}
-            </select>
+            <input
+              defaultValue={c.name ?? ""}
+              onBlur={(e) => {
+                const v = e.target.value.trim();
+                if (v && v !== c.name) void setChannel(c.id, spaceId, { name: v });
+              }}
+              className="min-w-0 flex-1 rounded-lg bg-rail px-2 py-1 text-sm font-semibold outline-none"
+            />
+            {c.kind === "text" && (
+              <select value={c.slowmode ?? 0} onChange={(e) => void setSlowmode(c.id, Number(e.target.value), spaceId)} className="rounded-lg bg-hover px-2 py-1 text-xs">
+                {opts.map(([v, l]) => (
+                  <option key={v} value={v}>
+                    Slow {l}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={() => {
+                if (confirm(`Delete #${c.name}?`)) void deleteChannel(c.id, spaceId);
+              }}
+              className="rounded-lg p-1.5 text-dnd hover:bg-dnd/15"
+              aria-label="Delete channel"
+            >
+              <Trash2 className="size-4" />
+            </button>
           </div>
-        ))}
+          <input
+            defaultValue={c.topic ?? ""}
+            placeholder="Topic / description"
+            onBlur={(e) => {
+              if ((e.target.value.trim() || null) !== (c.topic ?? null)) void setChannel(c.id, spaceId, { topic: e.target.value });
+            }}
+            className="w-full rounded-lg bg-rail px-2 py-1.5 text-xs outline-none"
+          />
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={!!c.nsfw} onChange={(e) => void setChannel(c.id, spaceId, { nsfw: e.target.checked })} />
+              NSFW
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={!!c.is_private || !!c.password_hash}
+                onChange={(e) => void setChannel(c.id, spaceId, { is_private: e.target.checked, clearPassword: !e.target.checked })}
+              />
+              Private room
+            </label>
+            {(c.is_private || c.password_hash) && (
+              <input
+                type="password"
+                placeholder={c.password_hash ? "Set new password…" : "Set password…"}
+                onBlur={(e) => {
+                  if (e.target.value.trim()) {
+                    void setChannel(c.id, spaceId, { password: e.target.value.trim(), is_private: true });
+                    e.target.value = "";
+                  }
+                }}
+                className="rounded-lg bg-rail px-2 py-1 outline-none"
+              />
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

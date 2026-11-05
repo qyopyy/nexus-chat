@@ -199,7 +199,11 @@ export async function loadSpace(spaceId: string) {
     supabase.from("conversations").select("*").eq("space_id", spaceId).order("position"),
     supabase.from("space_members").select("*").eq("space_id", spaceId),
   ]);
-  const channels = (ch ?? []) as Conversation[];
+  const channels = ((ch ?? []) as Conversation[]).map((c) => ({
+    ...c,
+    // keep a boolean signal without shipping the raw hash to every client store consumer
+    password_hash: c.password_hash ? "1" : null,
+  }));
   const members = (mem ?? []) as SpaceMember[];
   set((s) => {
     const convKinds = { ...s.convKinds };
@@ -245,8 +249,21 @@ export async function deleteSpace(spaceId: string) {
   selectHome();
 }
 
-export async function createChannel(spaceId: string, name: string, kind: "text" | "voice") {
-  const { data, error } = await supabase.rpc("create_channel", { p_space: spaceId, p_name: name, p_kind: kind });
+export async function createChannel(
+  spaceId: string,
+  name: string,
+  kind: "text" | "voice",
+  opts: { isPrivate?: boolean; password?: string; topic?: string; nsfw?: boolean } = {},
+) {
+  const { data, error } = await supabase.rpc("create_channel", {
+    p_space: spaceId,
+    p_name: name,
+    p_kind: kind,
+    p_private: !!opts.isPrivate || !!opts.password,
+    p_password: opts.password || null,
+    p_topic: opts.topic || null,
+    p_nsfw: !!opts.nsfw,
+  });
   if (error) return toast(errorText(error), "error");
   await loadSpace(spaceId);
   if (kind === "text") openConversation(data as string, spaceId);
