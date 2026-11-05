@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo } from "react";
-import { Aperture, AppWindow, Clapperboard, Gamepad2, Headphones, LayoutDashboard, Megaphone, MessageCircle, Plus, Radio, Tv } from "lucide-react";
+import { Aperture, AppWindow, Clapperboard, Crown, Gamepad2, Headphones, LayoutDashboard, Megaphone, MessageCircle, Plus, Radio, Tv } from "lucide-react";
 import { useApp, openModal } from "@/store/app";
 import { selectHome, selectSpace } from "@/lib/data";
 import { openUntitled } from "@/lib/untitled";
 import { openRadio } from "@/lib/radio";
 import { openLiveHub } from "@/lib/live";
 import { openPulse } from "@/lib/pulse";
+import { can, openStaffDesk } from "@/lib/privileges";
 import { cn, initials } from "@/lib/utils";
 
 function RailItem({
@@ -108,6 +109,11 @@ export default function ServerRail() {
       <RailItem active={false} label="Studio — upload videos & distribute music" onClick={() => useApp.setState({ hub: "studio" })}>
         <LayoutDashboard className="size-6" />
       </RailItem>
+      {can.staffDesk() && (
+        <RailItem active={hub === "staff"} label="Staff Desk — VIP & staff perks" onClick={() => openStaffDesk()} color={hub === "staff" ? "#eb459e" : undefined}>
+          <Crown className="size-5" />
+        </RailItem>
+      )}
       <div className="mx-auto h-0.5 w-8 rounded bg-line" />
       {spaces.map((sp) => {
         const spaceUnread = (channels[sp.id] ?? []).some((c) => (unread[c.id] ?? 0) > 0);

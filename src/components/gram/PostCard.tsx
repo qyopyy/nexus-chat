@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, ChevronLeft, ChevronRight, Download, Flag, Heart, Link2, MessageCircle, Ellipsis, Repeat2, Send, Share2, Trash2, X } from "lucide-react";
+import { Bookmark, ChevronLeft, ChevronRight, Download, Flag, Heart, Link2, MessageCircle, Ellipsis, Repeat2, Rocket, Send, Share2, Trash2, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { myRank } from "@/lib/admin";
+import { boostGramPost, can, isBoosted } from "@/lib/privileges";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 import { addComment, ago, comments, extractHashtags, fmt, GRAM_GENRES, GRAM_MOODS, gramGo, isSaved, mediaUrl, publicContentUrl, publicProfileUrl, removeComment, removePost, reportPost, resolvePostGenre, setLike, setSave, useGram, type Comment, type Post } from "@/lib/gram";
@@ -46,11 +47,16 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
   const [menu, setMenu] = useState(false);
   const [more, setMore] = useState(false);
   const [saved, setSaved] = useState(!!post.saved);
+  const [boosted, setBoosted] = useState(false);
   const lastTap = useRef(0);
   const m = post.media[i];
+  const mine = post.author_id === meId;
 
   useEffect(() => {
     void isSaved(post.id).then(setSaved);
+  }, [post.id]);
+  useEffect(() => {
+    setBoosted(isBoosted(post.id));
   }, [post.id]);
 
   const toggle = (force?: boolean) => {
@@ -113,6 +119,18 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
               >
                 <Repeat2 className="size-4" /> Remix
               </button>
+              {mine && can.boostGram() && (
+                <button
+                  onClick={() => {
+                    setMenu(false);
+                    if (boostGramPost(post.id)) setBoosted(true);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-hover"
+                  disabled={boosted}
+                >
+                  <Rocket className={cn("size-4", boosted && "text-[#eb459e]")} /> {boosted ? "Boosted (24h)" : "Boost (VIP)"}
+                </button>
+              )}
               {post.author_id !== meId && (
                 <button
                   onClick={async () => {
@@ -244,6 +262,18 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
           >
             <Share2 className="size-6" />
           </button>
+          {mine && can.boostGram() && (
+            <button
+              onClick={() => {
+                if (boostGramPost(post.id)) setBoosted(true);
+              }}
+              className={cn("tap-target grid place-items-center rounded-full active:scale-90", boosted && "text-[#eb459e]")}
+              aria-label="Boost post"
+              title={boosted ? "Boosted for 24h" : "Boost (VIP)"}
+            >
+              <Rocket className={cn("size-6", boosted && "fill-current")} />
+            </button>
+          )}
           <button
             onClick={async () => {
               const on = !saved;

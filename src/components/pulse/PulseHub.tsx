@@ -27,6 +27,7 @@ import {
   usePulse,
   type PulsePost,
 } from "@/lib/pulse";
+import { can, pulseMaxChars } from "@/lib/privileges";
 
 type ProfileView = Awaited<ReturnType<typeof pulseProfile>>;
 type FeedMode = "foryou" | "following";
@@ -267,9 +268,9 @@ export default function PulseHub({ mobile }: { mobile?: boolean }) {
               )}
               <textarea
                 value={draft}
-                onChange={(e) => setDraft(e.target.value.slice(0, 280))}
+                onChange={(e) => setDraft(e.target.value.slice(0, pulseMaxChars()))}
                 rows={4}
-                placeholder={replyTo ? "Post your reply" : "What’s happening? Use #hashtags"}
+                placeholder={replyTo ? "Post your reply" : can.longPulse() ? "What’s happening? VIP · 400 chars · #hashtags" : "What’s happening? Use #hashtags"}
                 className="w-full resize-none bg-transparent text-lg outline-none placeholder:text-white/35"
                 autoFocus={tab === "compose" || !!replyTo}
               />
@@ -283,7 +284,10 @@ export default function PulseHub({ mobile }: { mobile?: boolean }) {
                 </div>
               )}
               <div className="mt-2 flex items-center justify-between">
-                <span className={cn("text-xs", draft.length > 260 ? "text-amber-400" : "text-white/40")}>{draft.length}/280</span>
+                <span className={cn("text-xs", draft.length > pulseMaxChars() - 20 ? "text-amber-400" : "text-white/40")}>
+                  {draft.length}/{pulseMaxChars()}
+                  {can.longPulse() && <span className="ml-1 text-[#eb459e]">VIP</span>}
+                </span>
                 <button type="submit" disabled={busy || !draft.trim()} className="inline-flex items-center gap-2 rounded-full bg-[#1d9bf0] px-4 py-2 text-sm font-bold disabled:opacity-40">
                   <Send className="size-4" /> {replyTo ? "Reply" : "Post"}
                 </button>
@@ -388,9 +392,9 @@ export default function PulseHub({ mobile }: { mobile?: boolean }) {
                     bumpPost(p.id, (x) => ({ ...x, bookmarked: on }));
                   }}
                   onDelete={
-                    me === p.author_id
+                    me === p.author_id || can.pulseMod()
                       ? async () => {
-                          if (!confirm("Delete?") || !(await pulseDelete(p.id))) return;
+                          if (!confirm(me === p.author_id ? "Delete?" : "Remove this reply as staff?") || !(await pulseDelete(p.id))) return;
                           setThread((t) => (t ? { ...t, replies: t.replies.filter((r) => r.id !== p.id) } : t));
                         }
                       : undefined
@@ -438,9 +442,9 @@ export default function PulseHub({ mobile }: { mobile?: boolean }) {
                     toast(on ? "Saved" : "Removed", "success");
                   }}
                   onDelete={
-                    me === p.author_id
+                    me === p.author_id || can.pulseMod()
                       ? async () => {
-                          if (!confirm("Delete this post?") || !(await pulseDelete(p.id))) return;
+                          if (!confirm(me === p.author_id ? "Delete this post?" : "Remove this post as staff?") || !(await pulseDelete(p.id))) return;
                           setFeed((f) => f.filter((x) => x.id !== p.id));
                           setTagRows((f) => (f ? f.filter((x) => x.id !== p.id) : f));
                           if (profile) setProfile({ ...profile, posts: profile.posts.filter((x) => x.id !== p.id) });
@@ -522,11 +526,11 @@ function PulseCard({
                 {following ? "Following" : "Follow"}
               </button>
             )}
-            {me === post.author_id && onDelete && (
+            {onDelete && (me === post.author_id || can.pulseMod()) && (
               <button
                 onClick={(e) => (e.stopPropagation(), void onDelete())}
                 className="ml-auto grid size-7 place-items-center rounded-full text-white/35 hover:bg-red-500/15 hover:text-red-400"
-                title="Delete"
+                title={me === post.author_id ? "Delete" : "Remove (mod)"}
               >
                 <Trash2 className="size-3.5" />
               </button>

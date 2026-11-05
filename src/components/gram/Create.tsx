@@ -5,6 +5,7 @@ import { ImagePlus, X } from "lucide-react";
 import { toast } from "@/store/app";
 import { cn } from "@/lib/utils";
 import { createPost, createStory, GRAM_GENRES, GRAM_MOODS, gramHome, mediaKind, uploadMedia, useGram, type GramGenre, type GramMood, type Media } from "@/lib/gram";
+import { can } from "@/lib/privileges";
 
 const TABS = [
   ["post", "Post", "Photos or a video for your profile grid"],
@@ -22,7 +23,7 @@ export default function Create() {
   const [alt, setAlt] = useState("");
   const [mood, setMood] = useState<GramMood | null>(null);
   const [genre, setGenre] = useState<GramGenre | null>(null);
-  const [hours, setHours] = useState<24 | 48>(24);
+  const [hours, setHours] = useState<24 | 48>(can.longStories() ? 48 : 24);
   const [busy, setBusy] = useState<string | null>(null);
   const pick = useRef<HTMLInputElement>(null);
 
@@ -34,6 +35,7 @@ export default function Create() {
       setAlt("");
       setMood(null);
       setGenre(null);
+      setHours(can.longStories() ? 48 : 24);
     }
   }, [mode, remixOf]);
   useEffect(() => {
@@ -199,13 +201,14 @@ export default function Create() {
           )}
 
           {kind === "story" && (
-            <div className="mt-2 flex items-center gap-2 text-sm">
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
               <span className="text-sub">Visible for</span>
               {([24, 48] as const).map((h) => (
                 <button key={h} onClick={() => setHours(h)} className={cn("rounded-full px-4 py-1.5 font-bold", hours === h ? "bg-accent text-white" : "bg-hover")}>
                   {h} hours
                 </button>
               ))}
+              {can.longStories() && <span className="text-[11px] font-semibold text-[#eb459e]">VIP · 48h unlocked</span>}
             </div>
           )}
         </div>
