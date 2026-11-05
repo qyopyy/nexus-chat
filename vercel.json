@@ -4,5 +4,13 @@
       "path": "/api/cache/purge",
       "schedule": "0 4 * * *"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "main": true
+    }
+  },
+  "github": {
+    "silent": true
+  }
 }
