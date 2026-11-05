@@ -21,6 +21,8 @@ import UntitledHub from "@/components/untitled/UntitledHub";
 import RadioHub from "@/components/radio/RadioHub";
 import LiveHub from "@/components/live/LiveHub";
 import PulseHub from "@/components/pulse/PulseHub";
+import StaffDesk from "@/components/staff/StaffDesk";
+import SiteNoticeBanner from "@/components/staff/SiteNoticeBanner";
 
 /** Phone layout: bottom tabs + push-style chat screen with swipe-from-edge to go back */
 export default function MobileShell() {
@@ -40,6 +42,7 @@ export default function MobileShell() {
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-rail">
+      <SiteNoticeBanner />
       <div className="relative min-h-0 flex-1">
         {/* tab content stays mounted so scroll position survives opening a chat */}
         <div className={cn("absolute inset-0 transition-transform duration-300", inChat && !dx && "-translate-x-[22%]")} style={dx ? { transform: `translateX(${-22 + (dx / window.innerWidth) * 22}%)` } : undefined} aria-hidden={inChat}>
@@ -55,7 +58,7 @@ export default function MobileShell() {
           {tab === "music" && (hub === "untitled" ? <UntitledHub mobile /> : hub === "radio" ? <RadioHub mobile /> : <MusicHub mobile />)}
           {tab === "games" && <GamesHub mobile />}
           {tab === "apps" && <AppsHub mobile />}
-          {tab === "me" && <MobileMe />}
+          {tab === "me" && (hub === "staff" ? <StaffDesk mobile /> : <MobileMe />)}
           {inChat && <div className="absolute inset-0 bg-black/40" style={{ opacity: dx ? 1 - dx / window.innerWidth : 1 }} />}
         </div>
 

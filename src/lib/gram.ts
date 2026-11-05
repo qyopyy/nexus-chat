@@ -7,6 +7,7 @@ import { supabase, errorText } from "./supabase";
 import { useApp, toast } from "@/store/app";
 import { loadProfiles } from "./data";
 import { compressImage, compressVideo } from "./compressMedia";
+import { genrePinLimit, isBoosted } from "./privileges";
 
 export type Media = {
   path: string;
@@ -91,12 +92,13 @@ export function getGenrePrefs(): GramGenre[] {
 
 export function setGenrePrefs(prefs: GramGenre[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(GENRE_PREF_KEY, JSON.stringify([...new Set(prefs)].slice(0, 8)));
+  localStorage.setItem(GENRE_PREF_KEY, JSON.stringify([...new Set(prefs)].slice(0, genrePinLimit())));
 }
 
 export function toggleGenrePref(genre: GramGenre) {
   const cur = getGenrePrefs();
-  const next = cur.includes(genre) ? cur.filter((g) => g !== genre) : [...cur, genre].slice(0, 8);
+  const limit = genrePinLimit();
+  const next = cur.includes(genre) ? cur.filter((g) => g !== genre) : [...cur, genre].slice(0, limit);
   setGenrePrefs(next);
   return next;
 }
@@ -124,7 +126,8 @@ export function scorePost(p: Post, prefs: GramGenre[] = getGenrePrefs()): number
   const genre = resolvePostGenre(p);
   const genreBoost = genre && prefs.includes(genre) ? 1.65 : genre ? 1.1 : 1;
   const shortBoost = p.kind === "short" ? 1.06 : 1;
-  return (1 + engagement) * recency * genreBoost * shortBoost;
+  const vipBoost = isBoosted(p.id) ? 2.2 : 1;
+  return (1 + engagement) * recency * genreBoost * shortBoost * vipBoost;
 }
 
 export function rankPosts(rows: Post[], prefs?: GramGenre[]): Post[] {
@@ -389,7 +392,7 @@ export async function createPost(
   if (error) throw new Error(errorText(error));
   if (genre) {
     const prefs = getGenrePrefs();
-    if (!prefs.includes(genre)) setGenrePrefs([...prefs, genre].slice(0, 8));
+    if (!prefs.includes(genre)) setGenrePrefs([...prefs, genre].slice(0, genrePinLimit()));
   }
   return data as Post;
 }

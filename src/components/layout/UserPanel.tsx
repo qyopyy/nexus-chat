@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Headphones, HeadphoneOff, Link2, LogOut, Mic, MicOff, MonitorOff, MonitorUp, PhoneOff, Settings, Signal, UserPen, Video, VideoOff } from "lucide-react";
+import { Crown, Headphones, HeadphoneOff, Link2, LogOut, Mic, MicOff, MonitorOff, MonitorUp, PhoneOff, Settings, Signal, UserPen, Video, VideoOff } from "lucide-react";
 import { useApp, openModal, conversationTitle, findChannel } from "@/store/app";
 import { useCall, canScreenShare, leaveCall, toggleDeafen, toggleMute, toggleScreen, toggleVideo } from "@/lib/call";
 import { openConversation } from "@/lib/data";
+import { can, openStaffDesk } from "@/lib/privileges";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import Avatar, { statusLabel } from "@/components/ui/Avatar";
@@ -138,6 +139,17 @@ function MeRow() {
             >
               <UserPen className="size-4" /> Edit Profile
             </button>
+            {can.staffDesk() && (
+              <button
+                onClick={() => {
+                  setMenu(false);
+                  openStaffDesk();
+                }}
+                className="flex w-full items-center gap-3 rounded px-2 py-1.5 hover:bg-accent hover:text-white"
+              >
+                <Crown className="size-4 text-[#eb459e]" /> Staff Desk
+              </button>
+            )}
             <button
               onClick={() => {
                 setMenu(false);

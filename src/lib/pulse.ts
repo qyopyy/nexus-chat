@@ -6,6 +6,7 @@ import { create } from "zustand";
 import { supabase, errorText } from "./supabase";
 import { useApp, toast } from "@/store/app";
 import { loadProfiles } from "./data";
+import { pulseMaxChars } from "./privileges";
 
 export type PulsePost = {
   id: string;
@@ -156,7 +157,8 @@ export async function pulseGet(id: string) {
 }
 
 export async function pulseCreate(body: string, replyTo?: string | null) {
-  const text = body.trim().slice(0, 280);
+  // VIP+ get 400 chars — client gate; DB allows up to 500
+  const text = body.trim().slice(0, pulseMaxChars());
   if (!text) throw new Error("Write something first");
   const { data, error } = await supabase
     .from("pulse_posts")
