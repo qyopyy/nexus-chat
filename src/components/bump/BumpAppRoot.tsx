@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 
 type Nav = "nearby" | "friends" | "music" | "messages";
 
-/** Next-gen standalone Bump IPA shell (`/bump/app`). */
+/** Next-gen standalone Wump IPA shell (`/bump/app` or `/wump/app`). */
 export default function BumpAppRoot() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [recovering, setRecovering] = useState(false);
@@ -116,7 +116,7 @@ export default function BumpAppRoot() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-extrabold tracking-tight text-white">Bump</h1>
+              <h1 className="text-lg font-extrabold tracking-tight text-white">Wump</h1>
               <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold tracking-wide text-[#86efac] uppercase">
                 Next
               </span>

@@ -13,6 +13,7 @@ import {
   Fingerprint,
   ImageUpscale,
   KeyRound,
+  Globe,
   MapPin,
   Pipette,
   QrCode,
@@ -37,10 +38,13 @@ import TokenGen from "./TokenGen";
 import Base64Lab from "./Base64Lab";
 import SpotifyTakedown from "@/components/music/SpotifyTakedown";
 import BumpHub from "@/components/bump/BumpHub";
+import BrowserHub from "@/components/browser/BrowserHub";
 import { openBump } from "@/lib/bump";
+import { openBrowser } from "@/lib/browser";
 
 type ToolId =
   | "bump"
+  | "browser"
   | "image"
   | "pdf"
   | "music"
@@ -66,12 +70,21 @@ const TOOLS: {
 }[] = [
   {
     id: "bump",
-    name: "Bump",
-    tag: "Nearby · profiles · follows · messages",
-    desc: "Find people nearby, follow bump profiles with bio + Spotify track, pin an Apple Maps place, and message.",
-    bg: "linear-gradient(135deg,#22c55a,#0b3d24)",
+    name: "Wump",
+    tag: "Map · places · Spotify · local music",
+    desc: "Friends on a live map — places, Spotify Now Playing, local songs with folders & projects, waves & DMs.",
+    bg: "linear-gradient(135deg,#ff4d6d,#7c3aed 50%,#2563eb)",
     emoji: "📍",
     Icon: MapPin,
+  },
+  {
+    id: "browser",
+    name: "Browser",
+    tag: "Google search · fetch pages · IPA",
+    desc: "Built-in search browser — queries google.com on Nexus servers, opens results, bookmarks, and a standalone IPA.",
+    bg: "linear-gradient(135deg,#60a5fa,#7c3aed 55%,#0b1220)",
+    emoji: "🌐",
+    Icon: Globe,
   },
   {
     id: "image",
@@ -216,6 +229,13 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
       </div>
     );
   }
+  if (tool === "browser") {
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-[#0b1220]">
+        <BrowserHub mobile={mobile} onBack={backToGrid} />
+      </div>
+    );
+  }
   if (tool === "image") return <ImageStudio mobile={mobile} onBack={backToGrid} />;
   if (tool === "pdf") return <PdfEditor mobile={mobile} onBack={backToGrid} />;
   if (tool === "music") return <MusicCheck mobile={mobile} onBack={backToGrid} />;
@@ -279,13 +299,13 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
                   <MapPin className="size-4 text-[#86efac]" />
                   <span className="text-[11px] font-bold tracking-[0.14em] text-[#86efac] uppercase">Live · realtime</span>
                 </div>
-                <div className="mt-1 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Bump</div>
+                <div className="mt-1 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Wump</div>
                 <p className="mt-1 max-w-xl text-sm text-white/75">
                   Find people nearby, friends, profiles, and DMs — updates live on this phone without a new IPA or APK.
                 </p>
               </div>
               <span className="inline-flex shrink-0 items-center justify-center rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#14532d] shadow-sm group-hover:bg-[#dcfce7]">
-                Open Bump
+                Open Wump
               </span>
             </div>
           </button>
@@ -297,6 +317,11 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
                 key={item.id}
                 type="button"
                 onClick={() => {
+                  if (item.id === "browser") {
+                    openBrowser();
+                    setTool("browser");
+                    return;
+                  }
                   setTool(item.id);
                   useApp.setState({ appsTool: item.id, hub: "apps" });
                 }}

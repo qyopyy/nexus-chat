@@ -29,8 +29,19 @@ import Runner from "./Runner";
 import Mines from "./Mines";
 import OrbitStrike from "./OrbitStrike";
 import DriftRush from "./DriftRush";
+import ClassicStrike from "./ClassicStrike";
 
 const GAMES: { id: GameId; name: string; tag: string; desc: string; bg: string; emoji: string; C: typeof Blocks | null; isNew?: boolean }[] = [
+  {
+    id: "classicstrike",
+    name: "Classic Strike",
+    tag: "CS 1.6-style · bomb defuse",
+    desc: "Browser FPS homage — buy menu, economy, bombsites, bots, AWP & AK. Dust-style map. Fan recreation (not Valve).",
+    bg: "linear-gradient(135deg,#4d7c0f,#1c1917 55%,#b45309)",
+    emoji: "🔫",
+    C: ClassicStrike,
+    isNew: true,
+  },
   { id: "streets", name: "Neon Streets", tag: "Open-city driving", desc: "Open-world island city. Jobs, cash, cops — and play live with friends using an invite code.", bg: "linear-gradient(135deg,#ff2bd6,#2b0b5c)", emoji: "🚗", C: null },
   { id: "bay", name: "Sunset Bay", tag: "3D open world · 80s neon", desc: "Drive a neon coastal city in 3D — drifts, stunt jumps, hidden tapes and a ranked checkpoint rush.", bg: "linear-gradient(180deg,#2b1055,#ff4f9a 70%,#ffb347)", emoji: "🌴", C: null },
   { id: "geo", name: "GeoGuess", tag: "Real places · multiplayer", desc: "Real photos from around the world — pin where you think you are.", bg: "linear-gradient(135deg,#00c96b,#0b2a5c)", emoji: "🌍", C: null },
@@ -98,6 +109,23 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto max-w-5xl space-y-6 p-3 sm:p-5">
+          {/* Classic Strike — CS 1.6 style */}
+          <button onClick={() => setOpen("classicstrike")} className="group relative block w-full overflow-hidden rounded-3xl text-left" style={{ background: "linear-gradient(135deg,#365314 0%,#1c1917 45%,#7c2d12 100%)" }}>
+            <div className="pointer-events-none absolute inset-0 opacity-40" style={{ background: "repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.15) 3px,rgba(0,0,0,.15) 4px)" }} />
+            <div className="relative z-10 p-5 sm:p-8">
+              <div className="text-xs font-bold tracking-widest text-lime-300/90 uppercase">New · CS 1.6-style browser FPS</div>
+              <div className="mt-1 font-mono text-3xl font-black tracking-tight text-white sm:text-5xl">CLASSIC STRIKE</div>
+              <p className="mt-2 max-w-lg text-sm text-white/85">
+                Bomb defuse rounds, buy menu, AK / M4 / AWP, bots on a dust-style map. Click to lock mouse — WASD, B to buy, G to plant, E to defuse.
+              </p>
+              <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#fbbf24] px-5 py-2.5 font-bold text-black transition group-hover:scale-105">
+                <Play className="size-4 fill-current" /> Enter server
+              </span>
+              <p className="mt-3 text-[10px] text-white/50">Fan homage — not affiliated with Valve or Counter-Strike.</p>
+            </div>
+            <div className="absolute -right-4 -bottom-6 text-[120px] sm:text-[160px]">🔫</div>
+          </button>
+
           {/* new: Sunset Bay */}
           <button onClick={() => setOpen("bay")} className="group relative block w-full overflow-hidden rounded-3xl text-left" style={{ background: "linear-gradient(180deg,#2b1055 0%,#ff4f9a 55%,#ffb347 72%,#1a0b2e 73%)" }}>
             <div className="pointer-events-none absolute right-[8%] bottom-[27%] size-40 rounded-full sm:size-56" style={{ background: "linear-gradient(#ffe45e,#ff2bd6)", maskImage: "repeating-linear-gradient(180deg,#000 0 12px,transparent 12px 17px)" }} />

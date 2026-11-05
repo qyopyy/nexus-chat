@@ -410,3 +410,8 @@ html.desat body {
 }
 @keyframes welcomeBar { from { width: 0% } to { width: 100% } }
 @keyframes welcomeBarEgg { from { width: 0% } to { width: 100% } }
+
+@keyframes nexus-rainbow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}

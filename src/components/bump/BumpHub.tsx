@@ -43,6 +43,7 @@ import {
   bumpSaveProfile,
   bumpSendMessage,
   bumpSetFollow,
+  bumpShareLocationWithFriend,
   bumpSpotifyTrackEmbed,
   bumpSpotifyTrackOk,
   bumpThread,
@@ -63,6 +64,9 @@ import { isBumpApp, isNativeApp } from "@/lib/useMobile";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
+import WumpMap from "./WumpMap";
+import { WUMP, WUMP_TAGLINE } from "@/lib/wumpBrand";
+import { pauseBumpMusic, playBumpTrack, useBumpMusic } from "@/lib/bumpMusic";
 
 type Tab = "nearby" | "friends" | "music" | "profile" | "social" | "messages";
 
@@ -75,7 +79,7 @@ export default function BumpHub({
 }: {
   mobile?: boolean;
   onBack?: () => void;
-  /** Standalone Bump IPA shell — hide back-to-Nexus chrome */
+  /** Standalone Wump IPA shell — hide back-to-Nexus chrome */
   standalone?: boolean;
   /** Seed / control tab from parent shell nav */
   initialTab?: Tab;
@@ -84,6 +88,7 @@ export default function BumpHub({
 }) {
   const me = useApp((s) => s.userId);
   const friendships = useApp((s) => s.friendships);
+  const profiles = useApp((s) => s.profiles);
   const [tab, setTab] = useState<Tab>(initialTab || "nearby");
 
   useEffect(() => {
@@ -104,7 +109,12 @@ export default function BumpHub({
   const [alerts, setAlerts] = useState(true);
   const [autoStopMin, setAutoStopMin] = useState(0);
   const [flashUntil, setFlashUntil] = useState<number | null>(null);
+  const [shareFriendOpen, setShareFriendOpen] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
   const bumpOnly = standalone || isBumpApp();
+  const musicPlaying = useBumpMusic((s) => s.playing);
+  const musicCurrentId = useBumpMusic((s) => s.currentId);
+  const musicTracks = useBumpMusic((s) => s.tracks);
 
   const friendIds = useMemo(() => {
     if (!me) return [] as string[];
@@ -228,7 +238,7 @@ export default function BumpHub({
       setLive(true);
       await refresh();
       if (bgShare) {
-        toast(isNativeApp() ? "Live — background sharing on" : "Live — keep Bump open for updates", "success");
+        toast(isNativeApp() ? "Live — background sharing on" : `Live — keep ${WUMP} open for updates`, "success");
       }
     }
   }
@@ -262,7 +272,7 @@ export default function BumpHub({
       /* ignore */
     }
     if (navigator.share) {
-      void navigator.share({ title: "Join my Nexus Bump circle", text: "Find me nearby on Nexus", url }).catch(() => {});
+      void navigator.share({ title: `Join my Nexus ${WUMP} circle`, text: `Find me nearby on ${WUMP}`, url }).catch(() => {});
     }
   }
 
@@ -301,6 +311,50 @@ export default function BumpHub({
   );
 
   return (
+    <>
+      {shareFriendOpen && (
+        <div className="fixed inset-0 z-[95] flex items-end justify-center bg-black/60 sm:items-center" onClick={() => setShareFriendOpen(false)}>
+          <div className="w-full max-w-md rounded-t-3xl bg-chat p-5 pb-safe-4 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center gap-2">
+              <MapPin className="size-5 text-accent" />
+              <span className="flex-1 text-lg font-bold">Share {WUMP} with a friend</span>
+              <button type="button" onClick={() => setShareFriendOpen(false)} className="grid size-8 place-items-center rounded-full hover:bg-hover" aria-label="Close">
+                <X className="size-5" />
+              </button>
+            </div>
+            <p className="mb-3 text-sm text-sub">Opens a Nexus DM with your live pin so they can find you on the map.</p>
+            {!friendIds.length ? (
+              <p className="py-8 text-center text-sm text-sub">Add Nexus friends first, then share your {WUMP} pin.</p>
+            ) : (
+              <ul className="max-h-[50vh] space-y-1 overflow-y-auto">
+                {friendIds.map((id) => (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      disabled={shareBusy}
+                      onClick={() => {
+                        setShareBusy(true);
+                        void bumpShareLocationWithFriend(id, liveLabel.trim() || undefined).finally(() => {
+                          setShareBusy(false);
+                          setShareFriendOpen(false);
+                        });
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-hover disabled:opacity-50"
+                    >
+                      <span className="grid size-9 place-items-center rounded-full bg-accent/20 text-sm font-bold text-accent">
+                        {(profiles[id]?.display_name || profiles[id]?.username || "?").slice(0, 1).toUpperCase()}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate font-semibold">{profiles[id]?.display_name || profiles[id]?.username || "Friend"}</span>
+                      <Share2 className="size-4 text-accent" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
     <div className={cn("flex h-full flex-col bg-chat", (mobile || bumpOnly) && !hideChromeTabs && "pb-safe-2")}>
       {hideChromeTabs ? (
         <div className="flex shrink-0 items-center gap-2 border-b border-white/5 px-4 py-2">
@@ -339,7 +393,7 @@ export default function BumpHub({
             )}
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-base font-extrabold tracking-tight sm:text-lg">Bump</h1>
+                <h1 className="text-base font-extrabold tracking-tight sm:text-lg">{WUMP}</h1>
                 {liveChip}
                 {flashLeft > 0 && (
                   <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent tabular-nums">
@@ -348,7 +402,7 @@ export default function BumpHub({
                 )}
               </div>
               <p className="truncate text-[11px] text-sub">
-                {bumpOnly ? "Standalone Bump app · same Nexus account" : "Nearby · friends · live DMs · also a separate IPA"}
+                {bumpOnly ? `Standalone ${WUMP} · same Nexus account` : WUMP_TAGLINE}
               </p>
             </div>
             <MapPin className={cn("size-5 shrink-0", live ? "text-ok" : "text-sub")} />
@@ -375,6 +429,30 @@ export default function BumpHub({
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
         {tab === "nearby" && (
           <div className="mx-auto max-w-xl space-y-4">
+            <WumpMap
+              me={me}
+              nearby={nearby}
+              live={live}
+              viewsToday={friendIds.length + nearby.length + (live ? 1 : 0)}
+              placesCount={nearby.filter((n) => n.label).length + family.length}
+              playing={musicPlaying}
+              onTogglePlay={() => {
+                if (musicPlaying) pauseBumpMusic();
+                else if (musicCurrentId) void playBumpTrack(musicCurrentId);
+                else if (musicTracks[0]) void playBumpTrack(musicTracks[0].id);
+                else {
+                  setTab("music");
+                  toast("Add tracks in Music", "info");
+                }
+              }}
+              onOpenPerson={(id) => openPerson(id)}
+              onSearch={() => setTab("social")}
+              onScratch={() => setTab("messages")}
+              onPlaces={() => {
+                if (!live) void goLive();
+                else toast(`${nearby.length} places nearby on ${WUMP}`, "info");
+              }}
+            />
             {!bumpOnly && (
               <a
                 href={bumpIpaReleasesUrl()}
@@ -384,7 +462,7 @@ export default function BumpHub({
               >
                 <span className="grid size-10 place-items-center rounded-xl bg-black/25 text-lg">📍</span>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold text-white">Get the Bump iOS app</div>
+                  <div className="text-sm font-bold text-white">Get the {WUMP} iOS app</div>
                   <div className="truncate text-[11px] text-white/70">Separate IPA · background Live · Sideloadly</div>
                 </div>
                 <Download className="size-4 shrink-0 text-[#86efac]" />
@@ -444,7 +522,16 @@ export default function BumpHub({
                     onClick={() => void goLive()}
                     className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-accent/20 disabled:opacity-50 min-[420px]:flex-none"
                   >
-                    <Navigation className="size-4" /> {live ? "Refresh pin" : "Bump now"}
+                    <Navigation className="size-4" /> {live ? "Refresh pin" : "Wump now"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || shareBusy}
+                    onClick={() => setShareFriendOpen(true)}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold hover:bg-white/15"
+                    title="Share live pin with a Nexus friend"
+                  >
+                    <Share2 className="size-4" /> Share with friend
                   </button>
                   {live && (
                     <button type="button" disabled={busy} onClick={() => void stop()} className="rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold hover:bg-white/15">
@@ -541,7 +628,7 @@ export default function BumpHub({
                 <Users className="size-4 text-accent" /> Family circle
               </div>
               {!family.length ? (
-                <p className="mb-3 text-xs text-sub">Invite family so you can find each other when Bump is on.</p>
+                <p className="mb-3 text-xs text-sub">Invite family so you can find each other when Wump is on.</p>
               ) : (
                 <ul className="mb-3 space-y-1">
                   {family.map((id) => (
@@ -618,7 +705,7 @@ export default function BumpHub({
           <div className="mx-auto max-w-xl">
             <PersonList
               title="Friends"
-              empty="No friends yet. Add people from Chats → Friends, then bump with them nearby."
+              empty="No friends yet. Add people from Chats → Friends, then find them nearby on Wump."
               ids={friendIds}
               meta={(id) => {
                 const n = nearbyById.get(id);
@@ -651,6 +738,7 @@ export default function BumpHub({
         )}
       </div>
     </div>
+    </>
   );
 }
 
@@ -837,7 +925,7 @@ function BumpProfileEditor({ userId }: { userId: string }) {
             className="mt-1.5 w-full rounded-xl bg-black/30 px-3 py-2.5 text-sm normal-case tracking-normal outline-none ring-1 ring-transparent focus:ring-accent"
           />
         </label>
-        {embed && <iframe src={embed} title="Bump Spotify track" loading="lazy" allow="encrypted-media; clipboard-write" className="h-[80px] w-full rounded-xl border-0" />}
+        {embed && <iframe src={embed} title="Wump Spotify track" loading="lazy" allow="encrypted-media; clipboard-write" className="h-[80px] w-full rounded-xl border-0" />}
 
         <div>
           <div className="mb-1 text-xs font-bold tracking-wide text-sub uppercase">Apple Maps hangout</div>
@@ -867,7 +955,7 @@ function BumpProfileEditor({ userId }: { userId: string }) {
         </div>
 
         <button type="button" disabled={busy} onClick={() => void save()} className="w-full rounded-xl bg-accent py-2.5 text-sm font-bold text-white shadow-sm shadow-accent/20 disabled:opacity-50">
-          Save Bump profile
+          Save Wump profile
         </button>
       </section>
     </div>
@@ -897,7 +985,7 @@ function BumpSocialPane({
     void bumpFollowList(target, which).then(setList);
   }, [target, which]);
 
-  if (!target) return <p className="text-sm text-sub">Sign in to browse Bump profiles.</p>;
+  if (!target) return <p className="text-sm text-sub">Sign in to browse Wump profiles.</p>;
 
   async function toggleFollow() {
     if (!prof || prof.is_me) return;
@@ -971,7 +1059,7 @@ function BumpSocialPane({
           {bumpSpotifyTrackEmbed(prof.spotify_track) && (
             <div className="border-t border-white/5 px-3 pb-3 pt-2">
               <div className="mb-1 text-[10px] font-bold tracking-wide text-sub uppercase">Bio track</div>
-              <iframe src={bumpSpotifyTrackEmbed(prof.spotify_track)!} title="Bump Spotify track" loading="lazy" allow="encrypted-media; clipboard-write" className="h-[80px] w-full rounded-xl border-0" />
+              <iframe src={bumpSpotifyTrackEmbed(prof.spotify_track)!} title="Wump Spotify track" loading="lazy" allow="encrypted-media; clipboard-write" className="h-[80px] w-full rounded-xl border-0" />
             </div>
           )}
         </section>
@@ -1096,7 +1184,7 @@ function BumpMessagesPane({
           </button>
         </div>
         <div ref={scroller} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3 py-3">
-          {!msgs.length && <p className="py-8 text-center text-xs text-sub">Say hi — first Bump message.</p>}
+          {!msgs.length && <p className="py-8 text-center text-xs text-sub">Say hi — first Wump message.</p>}
           {msgs.map((m, i) => {
             const mine = m.sender_id === me;
             const next = msgs[i + 1];
@@ -1151,7 +1239,7 @@ function BumpMessagesPane({
           </button>
         </div>
         {!inbox.length ? (
-          <p className="px-4 py-5 text-xs text-sub">No Bump messages yet. Open a friend or nearby profile and tap Message.</p>
+          <p className="px-4 py-5 text-xs text-sub">No Wump messages yet. Open a friend or nearby profile and tap Message.</p>
         ) : (
           <ul>
             {inbox.map((row) => (

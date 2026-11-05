@@ -24,12 +24,24 @@ export function isNativeApp() {
   return !!cap?.isNativePlatform?.();
 }
 
-/** Standalone Bump IPA/APK (`hu.qyopy.bump`, UA includes BumpApp). */
+/** Standalone Wump IPA/APK (`hu.qyopy.bump`, UA includes BumpApp / WumpApp). */
 export function isBumpApp() {
   if (typeof window === "undefined") return false;
-  if (/BumpApp/i.test(navigator.userAgent)) return true;
+  if (/BumpApp|WumpApp/i.test(navigator.userAgent)) return true;
   try {
-    return window.location.pathname.startsWith("/bump/app");
+    const p = window.location.pathname;
+    return p.startsWith("/bump/app") || p.startsWith("/wump/app");
+  } catch {
+    return false;
+  }
+}
+
+/** Standalone Nexus Browser IPA (`hu.qyopy.browser`). */
+export function isBrowserApp() {
+  if (typeof window === "undefined") return false;
+  if (/BrowserApp|NexusBrowser/i.test(navigator.userAgent)) return true;
+  try {
+    return window.location.pathname.startsWith("/browser/app");
   } catch {
     return false;
   }

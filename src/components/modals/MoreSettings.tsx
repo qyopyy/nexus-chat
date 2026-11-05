@@ -411,7 +411,11 @@ const KEYS: [string, string][] = [
   ["Ctrl/⌘ + Enter", "Send (when Enter makes a new line)"],
   ["↑ in an empty box", "Edit your last message"],
   ["Esc", "Cancel reply / close a window"],
-  ["||text||", "Spoiler"],
+  ["**bold** / __underline__ / ~~strike~~", "Discord-style formatting"],
+  ["||spoiler||", "Spoiler (click to reveal)"],
+  ["{c:blue}text{/c}", "Colored text"],
+  ["{v:30s}secret{/v}", "Vanish selection after duration"],
+  ["{rainbow}wow{/rainbow}", "Rainbow text"],
 ];
 
 export function AdvancedSection() {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { AppWindow, Bell, ChevronRight, Copy, Crown, Download, Gamepad2, Headphones, LayoutDashboard, LogOut, MapPin, Megaphone, Mic, Moon, Palette, Radio, Shield, Sparkles, Tv, UserPen, Users, Vault, Volume2, VolumeX } from "lucide-react";
+import { AppWindow, Bell, ChevronRight, Copy, Crown, Download, Gamepad2, Globe, Headphones, LayoutDashboard, LogOut, MapPin, Megaphone, Mic, Moon, Palette, Radio, Shield, Sparkles, Tv, UserPen, Users, Vault, Volume2, VolumeX } from "lucide-react";
 import { useApp, openModal, toast } from "@/store/app";
 import { useStudio } from "@/store/studio";
 import { openUntitled } from "@/lib/untitled";
@@ -9,7 +9,8 @@ import { openRadio } from "@/lib/radio";
 import { openLiveHub } from "@/lib/live";
 import { openPulse } from "@/lib/pulse";
 import { bumpIpaReleasesUrl, openBump } from "@/lib/bump";
-import { isBumpApp } from "@/lib/useMobile";
+import { browserIpaReleasesUrl, openBrowser } from "@/lib/browser";
+import { isBrowserApp, isBumpApp } from "@/lib/useMobile";
 import { openStaffDesk } from "@/lib/privileges";
 import { leaveCall } from "@/lib/call";
 import { supabase } from "@/lib/supabase";
@@ -104,7 +105,7 @@ export default function MobileMe() {
         </div>
       </div>
 
-      {/* Bump — first-class entry (web OTA, no new IPA/APK) */}
+      {/* Wump — first-class entry (web OTA, no new IPA/APK) */}
       <button
         type="button"
         onClick={() => {
@@ -123,7 +124,7 @@ export default function MobileMe() {
                 <span className="text-[11px] font-bold tracking-[0.12em] text-[#86efac] uppercase">Live</span>
                 <span className="size-1.5 rounded-full bg-[#86efac]" />
               </div>
-              <div className="text-[20px] font-extrabold text-white">Bump</div>
+              <div className="text-[20px] font-extrabold text-white">Wump</div>
               <div className="truncate text-[13px] text-white/70">Nearby · friends · realtime DMs</div>
             </div>
             <MapPin className="size-5 shrink-0 text-[#86efac]" />
@@ -157,9 +158,14 @@ export default function MobileMe() {
         {row(<Headphones className="size-[18px]" />, "#c4a574", "Cutroom — WIP music projects", () => openUntitled())}
         {row(<Gamepad2 className="size-[18px]" />, "#ff2bd6", "Games", () => useApp.setState({ mobileTab: "games" }))}
         {row(<AppWindow className="size-[18px]" />, "#00a8fc", "Apps — image studio & docs", () => useApp.setState({ mobileTab: "apps", hub: "apps", appsTool: null }))}
-        {row(<MapPin className="size-[18px]" />, "#22c55a", "Bump — nearby, friends & messages", () => openBump())}
+        {row(<Globe className="size-[18px]" />, "#60a5fa", "Browser — Google search", () => openBrowser())}
+        {!isBrowserApp() &&
+          row(<Download className="size-[18px]" />, "#2563eb", "Download Browser iOS app (IPA)", () => {
+            window.open(browserIpaReleasesUrl(), "_blank", "noopener,noreferrer");
+          })}
+        {row(<MapPin className="size-[18px]" />, "#7c3aed", "Wump — map, places, music & friends", () => openBump())}
         {!isBumpApp() &&
-          row(<Download className="size-[18px]" />, "#166534", "Download Bump iOS app (IPA)", () => {
+          row(<Download className="size-[18px]" />, "#7c3aed", "Download Wump iOS app (IPA)", () => {
             window.open(bumpIpaReleasesUrl(), "_blank", "noopener,noreferrer");
           })}
         {row(<Vault className="size-[18px]" />, "#5865f2", "My Vault — private files & share links", () => {
