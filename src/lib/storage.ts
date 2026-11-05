@@ -7,7 +7,7 @@ import { supabase } from "./supabase";
 // gets a short-lived signed URL (RLS only signs files from conversations you're a member of).
 // Raw storage links therefore don't open for anyone — admins can still open any file through the vault.
 
-const PRIVATE_BUCKETS = new Set(["attachments", "space-music"]);
+const PRIVATE_BUCKETS = new Set(["attachments", "space-music", "nexus-radio"]);
 const TTL = 60 * 60; // seconds
 const cache = new Map<string, { url: string; exp: number }>();
 const inflight = new Map<string, Promise<string | null>>();

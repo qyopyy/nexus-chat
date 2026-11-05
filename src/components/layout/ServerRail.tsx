@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import { Aperture, AppWindow, Clapperboard, Gamepad2, Headphones, LayoutDashboard, MessageCircle, Plus } from "lucide-react";
+import { Aperture, AppWindow, Clapperboard, Gamepad2, Headphones, LayoutDashboard, MessageCircle, Plus, Radio } from "lucide-react";
 import { useApp, openModal } from "@/store/app";
 import { selectHome, selectSpace } from "@/lib/data";
 import { openUntitled } from "@/lib/untitled";
+import { openRadio } from "@/lib/radio";
 import { cn, initials } from "@/lib/utils";
 
 function RailItem({
@@ -86,6 +87,9 @@ export default function ServerRail() {
       </RailItem>
       <RailItem active={hub === "untitled"} label="Untitled — WIP music" onClick={() => openUntitled()} color={hub === "untitled" ? "#c4a574" : undefined}>
         <span className="text-lg font-semibold leading-none">♩</span>
+      </RailItem>
+      <RailItem active={hub === "radio"} label="Nexus Radio — listen & jam together" onClick={() => void openRadio()} color={hub === "radio" ? "#ff2bd6" : undefined}>
+        <Radio className="size-5" />
       </RailItem>
       <RailItem active={hub === "games"} label="Games" onClick={() => useApp.setState({ hub: "games" })} color={hub === "games" ? "#ff2bd6" : undefined}>
         <Gamepad2 className="size-6" />
