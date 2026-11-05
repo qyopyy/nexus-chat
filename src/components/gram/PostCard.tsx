@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, ChevronLeft, ChevronRight, Flag, Heart, Link2, MessageCircle, Ellipsis, Repeat2, Send, Share2, Trash2, X } from "lucide-react";
+import { Bookmark, ChevronLeft, ChevronRight, Download, Flag, Heart, Link2, MessageCircle, Ellipsis, Repeat2, Send, Share2, Trash2, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
+import { myRank } from "@/lib/admin";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
-import { addComment, ago, comments, extractHashtags, fmt, GRAM_MOODS, gramGo, isSaved, mediaUrl, publicContentUrl, publicProfileUrl, removeComment, removePost, reportPost, setLike, setSave, useGram, type Comment, type Post } from "@/lib/gram";
+import { addComment, ago, comments, extractHashtags, fmt, GRAM_GENRES, GRAM_MOODS, gramGo, isSaved, mediaUrl, publicContentUrl, publicProfileUrl, removeComment, removePost, reportPost, resolvePostGenre, setLike, setSave, useGram, type Comment, type Post } from "@/lib/gram";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 
@@ -142,27 +143,67 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
 
       <div className="relative bg-black select-none" onClick={tap}>
         {m.type === "video" ? (
-          <video src={mediaUrl(m.path)} poster={mediaUrl(m.poster)} controls playsInline loop className="max-h-[78vh] w-full object-contain" />
+          <video
+            src={mediaUrl(m.path)}
+            poster={mediaUrl(m.poster)}
+            controls
+            playsInline
+            loop
+            controlsList={myRank() >= 1 ? undefined : "nodownload"}
+            className="max-h-[78vh] w-full object-contain"
+          />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={mediaUrl(m.path)} alt={m.alt || post.caption || "NexusGram post"} loading="lazy" draggable={false} className="max-h-[78vh] w-full object-contain" style={m.w && m.h ? { aspectRatio: `${m.w}/${m.h}` } : undefined} />
         )}
-        {post.mood && (
-          <span className="absolute top-3 left-3 rounded-full px-2.5 py-1 text-[11px] font-bold text-black shadow" style={{ background: GRAM_MOODS.find((x) => x.id === post.mood)?.hue || "#fff" }}>
-            {GRAM_MOODS.find((x) => x.id === post.mood)?.label || post.mood}
-          </span>
-        )}
-        {post.remix_of && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              gramGo({ view: "post", id: post.remix_of! });
-            }}
-            className="absolute top-3 right-3 flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur"
-          >
-            <Repeat2 className="size-3.5" /> Remix
-          </button>
-        )}
+        <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
+          {(() => {
+            const g = resolvePostGenre(post);
+            const meta = g ? GRAM_GENRES.find((x) => x.id === g) : null;
+            return meta ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  gramGo({ view: "explore", genre: meta.id });
+                }}
+                className="rounded-full px-2.5 py-1 text-[11px] font-bold text-black shadow"
+                style={{ background: meta.hue }}
+              >
+                {meta.label}
+              </button>
+            ) : null;
+          })()}
+          {post.mood && (
+            <span className="rounded-full px-2.5 py-1 text-[11px] font-bold text-black shadow" style={{ background: GRAM_MOODS.find((x) => x.id === post.mood)?.hue || "#fff" }}>
+              {GRAM_MOODS.find((x) => x.id === post.mood)?.label || post.mood}
+            </span>
+          )}
+        </div>
+        <div className="absolute top-3 right-3 flex items-center gap-1.5">
+          {m.type === "video" && myRank() >= 1 && (
+            <a
+              href={mediaUrl(m.path)}
+              download={`nexusgram-${post.id.slice(0, 8)}.mp4`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur"
+              title="Download video (VIP+)"
+            >
+              <Download className="size-3.5" /> Save
+            </a>
+          )}
+          {post.remix_of && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                gramGo({ view: "post", id: post.remix_of! });
+              }}
+              className="flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur"
+            >
+              <Repeat2 className="size-3.5" /> Remix
+            </button>
+          )}
+        </div>
         <Burst show={burst} />
         {post.media.length > 1 && (
           <>

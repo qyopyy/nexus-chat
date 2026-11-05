@@ -31,6 +31,118 @@ export const GRAM_MOODS: { id: GramMood; label: string; hue: string }[] = [
   { id: "fire", label: "Fire", hue: "#ff8a3d" },
   { id: "dream", label: "Dream", hue: "#c9b8ff" },
 ];
+
+/** Music genres / styles for NexusGram discovery + hashtag optimization */
+export type GramGenre =
+  | "hiphop"
+  | "trap"
+  | "electronic"
+  | "pop"
+  | "phonk"
+  | "rnb"
+  | "drill"
+  | "rock"
+  | "indie"
+  | "latin"
+  | "afrobeats"
+  | "lofi"
+  | "metal"
+  | "jazz"
+  | "country"
+  | "house"
+  | "techno"
+  | "ambient";
+
+export const GRAM_GENRES: { id: GramGenre; label: string; tag: string; hue: string; aliases: string[] }[] = [
+  { id: "hiphop", label: "Hip-Hop/Rap", tag: "hiphop", hue: "#ff6b8a", aliases: ["hiphop", "hip-hop", "hip_hop", "rap", "rapmusic", "boom_bap", "boombap"] },
+  { id: "trap", label: "Trap", tag: "trap", hue: "#9b5cff", aliases: ["trap", "trapmusic", "atlanta_trap"] },
+  { id: "electronic", label: "Electronic", tag: "electronic", hue: "#00d4ff", aliases: ["electronic", "edm", "dance", "electro"] },
+  { id: "pop", label: "Pop", tag: "pop", hue: "#ff4d9e", aliases: ["pop", "popmusic", "synthpop"] },
+  { id: "phonk", label: "Phonk", tag: "phonk", hue: "#7cff4d", aliases: ["phonk", "driftphonk", "drift_phonk", "brazilianphonk"] },
+  { id: "rnb", label: "R&B", tag: "rnb", hue: "#ff8ec8", aliases: ["rnb", "r_and_b", "randb", "soul"] },
+  { id: "drill", label: "Drill", tag: "drill", hue: "#ff3d3d", aliases: ["drill", "ukdrill", "chicagodrill"] },
+  { id: "rock", label: "Rock", tag: "rock", hue: "#ff9a3d", aliases: ["rock", "altrock", "punk"] },
+  { id: "indie", label: "Indie", tag: "indie", hue: "#6ee7b7", aliases: ["indie", "indiemusic", "bedroompop"] },
+  { id: "latin", label: "Latin", tag: "latin", hue: "#fbbf24", aliases: ["latin", "reggaeton", "latinmusic", "salsa"] },
+  { id: "afrobeats", label: "Afrobeats", tag: "afrobeats", hue: "#34d399", aliases: ["afrobeats", "afrobeat", "amapiano"] },
+  { id: "lofi", label: "Lo-fi", tag: "lofi", hue: "#a78bfa", aliases: ["lofi", "lo_fi", "lofihop", "chillhop"] },
+  { id: "metal", label: "Metal", tag: "metal", hue: "#94a3b8", aliases: ["metal", "heavymetal", "metalcore"] },
+  { id: "jazz", label: "Jazz", tag: "jazz", hue: "#fcd34d", aliases: ["jazz", "smoothjazz", "bebop"] },
+  { id: "country", label: "Country", tag: "country", hue: "#d97706", aliases: ["country", "countrymusic", "americana"] },
+  { id: "house", label: "House", tag: "house", hue: "#38bdf8", aliases: ["house", "deephouse", "techhouse"] },
+  { id: "techno", label: "Techno", tag: "techno", hue: "#818cf8", aliases: ["techno", "hardtechno"] },
+  { id: "ambient", label: "Ambient", tag: "ambient", hue: "#67e8f9", aliases: ["ambient", "downtempo", "soundscape"] },
+];
+
+const GENRE_PREF_KEY = "nexus:gram:genrePrefs";
+
+export function getGenrePrefs(): GramGenre[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(GENRE_PREF_KEY);
+    if (!raw) return [];
+    const ids = JSON.parse(raw) as string[];
+    const known = new Set(GRAM_GENRES.map((g) => g.id));
+    return ids.filter((id): id is GramGenre => known.has(id as GramGenre));
+  } catch {
+    return [];
+  }
+}
+
+export function setGenrePrefs(prefs: GramGenre[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(GENRE_PREF_KEY, JSON.stringify([...new Set(prefs)].slice(0, 8)));
+}
+
+export function toggleGenrePref(genre: GramGenre) {
+  const cur = getGenrePrefs();
+  const next = cur.includes(genre) ? cur.filter((g) => g !== genre) : [...cur, genre].slice(0, 8);
+  setGenrePrefs(next);
+  return next;
+}
+
+export function detectGenreFromText(text: string): GramGenre | null {
+  const tags = extractHashtags(text);
+  const blob = `${tags.join(" ")} ${text}`.toLowerCase().replace(/[^a-z0-9_\s-]/g, " ");
+  for (const g of GRAM_GENRES) {
+    if (tags.includes(g.tag) || tags.includes(g.id)) return g.id;
+    if (g.aliases.some((a) => tags.includes(a) || blob.includes(` ${a} `) || blob.startsWith(`${a} `) || blob.endsWith(` ${a}`))) return g.id;
+  }
+  return null;
+}
+
+export function resolvePostGenre(p: Pick<Post, "genre" | "caption">): GramGenre | null {
+  if (p.genre && GRAM_GENRES.some((g) => g.id === p.genre)) return p.genre;
+  return detectGenreFromText(p.caption || "");
+}
+
+/** Rank posts by engagement × recency × genre affinity (client-side algorithm). */
+export function scorePost(p: Post, prefs: GramGenre[] = getGenrePrefs()): number {
+  const ageH = Math.max(0, (Date.now() - new Date(p.created_at).getTime()) / 3_600_000);
+  const engagement = p.like_count * 3 + p.comment_count * 5 + p.view_count * 0.12;
+  const recency = Math.exp(-ageH / 42);
+  const genre = resolvePostGenre(p);
+  const genreBoost = genre && prefs.includes(genre) ? 1.65 : genre ? 1.1 : 1;
+  const shortBoost = p.kind === "short" ? 1.06 : 1;
+  return (1 + engagement) * recency * genreBoost * shortBoost;
+}
+
+export function rankPosts(rows: Post[], prefs?: GramGenre[]): Post[] {
+  const p = prefs ?? getGenrePrefs();
+  return [...rows].sort((a, b) => scorePost(b, p) - scorePost(a, p));
+}
+
+export function ensureGenreHashtag(caption: string, genre: GramGenre | null | undefined): string {
+  if (!genre) return caption.trim().slice(0, 2200);
+  const g = GRAM_GENRES.find((x) => x.id === genre);
+  if (!g) return caption.trim().slice(0, 2200);
+  const tags = extractHashtags(caption);
+  if (tags.includes(g.tag) || g.aliases.some((a) => tags.includes(a))) return caption.trim().slice(0, 2200);
+  const base = caption.trim();
+  const next = base ? `${base} #${g.tag}` : `#${g.tag}`;
+  return next.slice(0, 2200);
+}
+
 export type Post = {
   id: string;
   author_id: string;
@@ -46,6 +158,7 @@ export type Post = {
   saved?: boolean;
   mood?: GramMood | null;
   remix_of?: string | null;
+  genre?: GramGenre | null;
 };
 export type Story = { id: string; author_id: string; media: Media; caption: string; duration_h: 24 | 48; expires_at: string; like_count: number; view_count: number; created_at: string };
 export type TrayItem = { author_id: string; latest: string; count: number; unseen: number };
@@ -76,7 +189,7 @@ export type GramRoute =
   | { view: "shorts"; start?: string }
   | { view: "profile"; username: string }
   | { view: "post"; id: string }
-  | { view: "explore"; tag?: string; mood?: GramMood }
+  | { view: "explore"; tag?: string; mood?: GramMood; genre?: GramGenre }
   | { view: "saved" }
   | { view: "insights" }
   | { view: "memories" }
@@ -251,25 +364,33 @@ export async function createPost(
   kind: "post" | "short",
   media: Media[],
   caption: string,
-  opts?: { mood?: GramMood | null; remixOf?: string | null; alt?: string | null },
+  opts?: { mood?: GramMood | null; remixOf?: string | null; alt?: string | null; genre?: GramGenre | null },
 ) {
   const mediaOut = media.map((m, i) => (i === 0 && opts?.alt ? { ...m, alt: opts.alt.slice(0, 200) } : m));
+  const genre = opts?.genre ?? detectGenreFromText(caption);
+  const captionOut = ensureGenreHashtag(caption, genre);
   const row: Record<string, unknown> = {
     author_id: me(),
     kind,
     media: mediaOut,
-    caption: caption.trim().slice(0, 2200),
+    caption: captionOut,
   };
   if (opts?.mood) row.mood = opts.mood;
   if (opts?.remixOf) row.remix_of = opts.remixOf;
+  if (genre) row.genre = genre;
   let { data, error } = await supabase.from("gram_posts").insert(row).select().single();
-  // mood/remix columns may not be migrated yet — retry without them
-  if (error && (opts?.mood || opts?.remixOf) && /mood|remix_of|schema|column/i.test(error.message + (error as { details?: string }).details)) {
+  // mood/remix/genre columns may not be migrated yet — retry without them
+  if (error && (opts?.mood || opts?.remixOf || genre) && /mood|remix_of|genre|schema|column/i.test(error.message + (error as { details?: string }).details)) {
     delete row.mood;
     delete row.remix_of;
+    delete row.genre;
     ({ data, error } = await supabase.from("gram_posts").insert(row).select().single());
   }
   if (error) throw new Error(errorText(error));
+  if (genre) {
+    const prefs = getGenrePrefs();
+    if (!prefs.includes(genre)) setGenrePrefs([...prefs, genre].slice(0, 8));
+  }
   return data as Post;
 }
 
@@ -297,6 +418,31 @@ export async function postsByMood(mood: GramMood, before?: string | null) {
     return [];
   }
   const rows = (data ?? []) as Post[];
+  void loadProfiles([...new Set(rows.map((r) => r.author_id))]);
+  return rows;
+}
+
+export async function postsByGenre(genre: GramGenre, before?: string | null) {
+  const g = GRAM_GENRES.find((x) => x.id === genre);
+  if (!g) return [] as Post[];
+  let q = supabase.from("gram_posts").select("*").eq("genre", genre).order("created_at", { ascending: false }).limit(40);
+  if (before) q = q.lt("created_at", before);
+  let { data, error } = await q;
+  // column missing or empty — fall back to hashtag / alias caption match
+  if (error || !(data ?? []).length) {
+    const tags = [g.tag, ...g.aliases.slice(0, 4)];
+    const or = tags.map((t) => `caption.ilike.%#${t}%`).join(",");
+    let hq = supabase.from("gram_posts").select("*").or(or).order("created_at", { ascending: false }).limit(40);
+    if (before) hq = hq.lt("created_at", before);
+    const res = await hq;
+    if (!error) error = res.error;
+    data = res.data ?? data;
+  }
+  if (error) {
+    toast(errorText(error), "error");
+    return [];
+  }
+  const rows = rankPosts((data ?? []) as Post[], [genre]);
   void loadProfiles([...new Set(rows.map((r) => r.author_id))]);
   return rows;
 }
@@ -345,12 +491,15 @@ export async function memoryLane() {
   });
 }
 export async function feed(scope: "following" | "discover", kind: "post" | "short" | null, before?: string | null) {
-  const { data, error } = await supabase.rpc("gram_feed", { p_scope: scope, p_kind: kind, p_before: before ?? null, p_limit: 15 });
+  const { data, error } = await supabase.rpc("gram_feed", { p_scope: scope, p_kind: kind, p_before: before ?? null, p_limit: scope === "discover" ? 28 : 15 });
   if (error) {
     toast(errorText(error), "error");
     return [];
   }
-  const rows = (data ?? []) as Post[];
+  let rows = (data ?? []) as Post[];
+  // Discover: re-rank by music genre affinity + engagement algorithm
+  if (scope === "discover" && !before) rows = rankPosts(rows).slice(0, 18);
+  else if (scope === "discover") rows = rankPosts(rows);
   void loadProfiles([...new Set(rows.map((r) => r.author_id))]);
   return rows;
 }

@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Heart, MessageCircle, Plus, Share2, Volume2, VolumeX } from "lucide-react";
+import { Download, Heart, MessageCircle, Plus, Share2, Volume2, VolumeX } from "lucide-react";
 import { useApp, toast } from "@/store/app";
+import { myRank } from "@/lib/admin";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 import { countView, feed, fmt, getPost, gramGo, mediaUrl, publicContentUrl, setFollow, setLike, useGram, type Post } from "@/lib/gram";
@@ -201,6 +202,17 @@ function Short({ p, muted, setMuted, mobile }: { p: Post; muted: boolean; setMut
         >
           <Share2 className="size-6 drop-shadow sm:size-7" />
         </ActionBtn>
+        {m.type === "video" && myRank() >= 1 && (
+          <a
+            href={mediaUrl(m.path)}
+            download={`short-${p.id.slice(0, 8)}.mp4`}
+            className="tap-target flex flex-col items-center justify-center gap-0.5 active:scale-90"
+            title="Download (VIP+)"
+          >
+            <Download className="size-6 drop-shadow sm:size-7" />
+            <span className="max-w-[3.5rem] truncate text-[11px] font-semibold drop-shadow sm:text-xs">Save</span>
+          </a>
+        )}
         {m.type === "video" && (
           <ActionBtn label={muted ? "Sound" : "Mute"} onClick={() => setMuted(!muted)}>
             {muted ? <VolumeX className="size-6 drop-shadow sm:size-7" /> : <Volume2 className="size-6 drop-shadow sm:size-7" />}

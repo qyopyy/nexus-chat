@@ -5,9 +5,56 @@ import * as tus from "tus-js-client";
 import { supabase, errorText } from "./supabase";
 import { useApp, toast } from "@/store/app";
 import { loadProfiles } from "./data";
+import { roleRank } from "./theme";
 import type { Video, VideoComment } from "./types";
 
 // ------------------------------------------------------------------ helpers
+/** VIP (rank 1), mods, admins, and owner can download any video by default. */
+export function canDownloadVideos() {
+  const s = useApp.getState();
+  return roleRank(s.userId ? s.profiles[s.userId]?.site_role : null) >= 1;
+}
+
+export async function downloadVideo(v: Pick<Video, "id" | "title" | "video_path" | "mime">) {
+  if (!canDownloadVideos()) {
+    toast("Video downloads are for VIP, mods, and admins", "error");
+    return false;
+  }
+  const url = await playbackUrl(v);
+  if (!url) {
+    toast("Couldn't get a download link", "error");
+    return false;
+  }
+  const safe = (v.title || "video").replace(/[^\w\- ]+/g, "").trim().slice(0, 60) || "video";
+  const ext = (v.mime || "").includes("webm") ? "webm" : "mp4";
+  const name = `${safe}.${ext}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("fetch failed");
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+    toast("Download started", "success");
+    return true;
+  } catch {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.target = "_blank";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    toast("Opening video for download", "success");
+    return true;
+  }
+}
+
 export function qualityLabel(h: number | null | undefined, w?: number | null) {
   const s = Math.min(h ?? 0, w ?? Infinity) || h || 0; // portrait videos: use the short side
   if (s >= 2160) return "4K";
