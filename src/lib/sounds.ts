@@ -53,6 +53,42 @@ function clickTone() {
   o.stop(t + 0.06);
 }
 
+/** Soft Discord-like welcome / login chime (respects welcomeSplash + volume). */
+function welcomeTone(egg = false) {
+  const p = prefs();
+  if (p.welcomeSplash === false) return;
+  const vol = Math.max(0, (p.uiVolume ?? 1) * (egg ? 0.16 : 0.14));
+  if (vol <= 0) return;
+  const a = audio();
+  if (!a) return;
+  const t0 = a.currentTime + 0.02;
+  const notes = egg
+    ? [
+        { f: 392, at: 0, d: 0.18 },
+        { f: 523.25, at: 0.12, d: 0.2 },
+        { f: 659.25, at: 0.26, d: 0.28 },
+        { f: 783.99, at: 0.42, d: 0.45 },
+      ]
+    : [
+        { f: 523.25, at: 0, d: 0.22 },
+        { f: 659.25, at: 0.08, d: 0.28 },
+        { f: 783.99, at: 0.18, d: 0.42 },
+      ];
+  for (const n of notes) {
+    const o = a.createOscillator();
+    const g = a.createGain();
+    o.type = "sine";
+    o.frequency.value = n.f;
+    const t = t0 + n.at;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + n.d);
+    o.connect(g).connect(a.destination);
+    o.start(t);
+    o.stop(t + n.d + 0.05);
+  }
+}
+
 export const sfx = {
   join: () => tone([523, 784], 0.1),
   leave: () => tone([784, 523], 0.1),
@@ -63,6 +99,8 @@ export const sfx = {
   screenOff: () => tone([990, 880, 660], 0.06),
   /** Soft UI button / control click — uses prefs.buttonFx */
   click: () => clickTone(),
+  welcome: () => welcomeTone(false),
+  discordo: () => welcomeTone(true),
 };
 
 let ringTimer: ReturnType<typeof setInterval> | null = null;
