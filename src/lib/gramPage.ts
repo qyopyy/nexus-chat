@@ -1,6 +1,6 @@
 // Server-only: renders the public NexusGram profile (/u/<username>) as plain HTML.
 
-type M = { path: string; type: "image" | "video"; poster?: string | null };
+type M = { path: string; type: "image" | "video"; poster?: string | null; dur?: number | null };
 export type PublicGram = {
   id: string;
   username: string;
@@ -122,7 +122,7 @@ export function renderGramProfile(p: PublicGram, base: string) {
   const shorts = p.grid.filter((g) => g.kind === "short");
   const tile = (g: PublicGram["grid"][number]) =>
     `<a href="${app}" title="Open in NexusGram"><img loading="lazy" src="${esc(media(g.cover.type === "video" ? g.cover.poster : g.cover.path))}" alt="">${g.kind === "short" ? `<small>▶ ${fmt(g.view_count)}</small>` : g.count > 1 ? `<i>1/${g.count}</i>` : ""}</a>`;
-  const stories = p.stories.map((s) => ({ t: s.media.type, u: media(s.media.path), p: media(s.media.poster), c: s.caption }));
+  const stories = p.stories.map((s) => ({ t: s.media.type, u: media(s.media.path), p: media(s.media.poster), c: s.caption, d: s.media.dur || 0 }));
   const links = (p.links ?? []).map((l) => ({ ...l, url: safeUrl(l.url) })).filter((l) => l.url);
 
   const body = `<div class="wrap">
@@ -154,7 +154,7 @@ document.querySelectorAll(".tabs button").forEach(function(b){b.onclick=function
 function share(){var u=${JSON.stringify(url)};if(navigator.share){navigator.share({title:${JSON.stringify(`${p.display_name} (@${p.username}) on NexusGram`)},url:u}).catch(function(){})}else{navigator.clipboard.writeText(u);var t=document.getElementById("toast");t.classList.add("on");setTimeout(function(){t.classList.remove("on")},1500)}}
 function bars(){document.getElementById("bars").innerHTML=S.map(function(_,k){return '<span><i style="width:'+(k<i?100:0)+'%"></i></span>'}).join("")}
 function show(){clearInterval(tm);var s=S[i],m=document.getElementById("m");bars();document.getElementById("cap").textContent=s.c||"";var bar=document.querySelectorAll("#bars i")[i];
-if(s.t==="video"){m.innerHTML='<video autoplay playsinline src="'+s.u+'" poster="'+s.p+'"></video>';var v=m.firstChild;v.ontimeupdate=function(){bar.style.width=(v.currentTime/(v.duration||1)*100)+"%"};v.onended=function(){step(1)}}
+if(s.t==="video"){m.innerHTML='<video autoplay muted playsinline preload="auto" src="'+s.u+'" poster="'+s.p+'"></video>';var v=m.firstChild;var fb=Math.max(6,Math.min(30,s.d||15));t0=Date.now();tm=setInterval(function(){if(v&&!v.paused&&v.currentTime>0.05&&v.duration>0){bar.style.width=(v.currentTime/v.duration*100)+"%";return}var k=(Date.now()-t0)/(fb*1000);bar.style.width=Math.min(100,k*100)+"%";if(k>=1)step(1)},50);v.ontimeupdate=function(){if(v.duration>0)bar.style.width=(v.currentTime/v.duration*100)+"%"};v.onended=function(){step(1)};v.onerror=function(){step(1)};v.play&&v.play().catch(function(){})}
 else{m.innerHTML='<img src="'+s.u+'" alt="">';t0=Date.now();tm=setInterval(function(){var k=(Date.now()-t0)/6000;bar.style.width=Math.min(100,k*100)+"%";if(k>=1)step(1)},50)}}
 function openStory(k){if(!S.length)return;i=k;document.getElementById("v").classList.add("on");show()}
 function closeStory(){clearInterval(tm);document.getElementById("v").classList.remove("on");document.getElementById("m").innerHTML=""}

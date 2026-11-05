@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 import { toast } from "@/store/app";
 import { cn } from "@/lib/utils";
-import { createPost, createStory, gramHome, uploadMedia, useGram, type Media } from "@/lib/gram";
+import { createPost, createStory, gramHome, mediaKind, uploadMedia, useGram, type Media } from "@/lib/gram";
 
 const TABS = [
   ["post", "Post", "Photos or a video for your profile grid"],
@@ -43,9 +43,9 @@ export default function Create() {
   const choose = (list: FileList | null) => {
     if (!list?.length) return;
     let arr = [...list];
-    if (kind === "short") arr = arr.filter((f) => f.type.startsWith("video/")).slice(0, 1);
-    else if (kind === "story") arr = arr.slice(0, 1);
-    else arr = arr.slice(0, 10);
+    if (kind === "short") arr = arr.filter((f) => mediaKind(f) === "video").slice(0, 1);
+    else if (kind === "story") arr = arr.filter((f) => mediaKind(f)).slice(0, 1);
+    else arr = arr.filter((f) => mediaKind(f)).slice(0, 10);
     if (!arr.length) return toast(kind === "short" ? "Shorts are videos — pick a video" : "Pick a photo or video", "error");
     const big = arr.find((f) => f.size > 100 * 1024 * 1024);
     if (big) return toast(`${big.name} is over 100 MB`, "error");
@@ -114,7 +114,7 @@ export default function Create() {
             <div className={cn("grid gap-2", files.length > 1 ? "grid-cols-3" : "grid-cols-1")}>
               {files.map((f, k) => (
                 <div key={k} className={cn("relative overflow-hidden rounded-xl bg-black", files.length > 1 ? "aspect-square" : kind === "post" ? "max-h-[50vh]" : "mx-auto aspect-[9/16] max-h-[50vh]")}>
-                  {f.type.startsWith("video/") ? (
+                  {mediaKind(f) === "video" ? (
                     <video src={urls[k]} muted autoPlay loop playsInline className="h-full w-full object-contain" />
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
