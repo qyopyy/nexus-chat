@@ -35,3 +35,14 @@ export function isBumpApp() {
     return false;
   }
 }
+
+/** Standalone Nexus Browser IPA (`hu.qyopy.browser`). */
+export function isBrowserApp() {
+  if (typeof window === "undefined") return false;
+  if (/BrowserApp|NexusBrowser/i.test(navigator.userAgent)) return true;
+  try {
+    return window.location.pathname.startsWith("/browser/app");
+  } catch {
+    return false;
+  }
+}

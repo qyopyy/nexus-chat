@@ -13,6 +13,7 @@ import {
   Fingerprint,
   ImageUpscale,
   KeyRound,
+  Globe,
   MapPin,
   Pipette,
   QrCode,
@@ -37,10 +38,13 @@ import TokenGen from "./TokenGen";
 import Base64Lab from "./Base64Lab";
 import SpotifyTakedown from "@/components/music/SpotifyTakedown";
 import BumpHub from "@/components/bump/BumpHub";
+import BrowserHub from "@/components/browser/BrowserHub";
 import { openBump } from "@/lib/bump";
+import { openBrowser } from "@/lib/browser";
 
 type ToolId =
   | "bump"
+  | "browser"
   | "image"
   | "pdf"
   | "music"
@@ -72,6 +76,15 @@ const TOOLS: {
     bg: "linear-gradient(135deg,#ff4d6d,#7c3aed 50%,#2563eb)",
     emoji: "📍",
     Icon: MapPin,
+  },
+  {
+    id: "browser",
+    name: "Browser",
+    tag: "Google search · fetch pages · IPA",
+    desc: "Built-in search browser — queries google.com on Nexus servers, opens results, bookmarks, and a standalone IPA.",
+    bg: "linear-gradient(135deg,#60a5fa,#7c3aed 55%,#0b1220)",
+    emoji: "🌐",
+    Icon: Globe,
   },
   {
     id: "image",
@@ -216,6 +229,13 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
       </div>
     );
   }
+  if (tool === "browser") {
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-[#0b1220]">
+        <BrowserHub mobile={mobile} onBack={backToGrid} />
+      </div>
+    );
+  }
   if (tool === "image") return <ImageStudio mobile={mobile} onBack={backToGrid} />;
   if (tool === "pdf") return <PdfEditor mobile={mobile} onBack={backToGrid} />;
   if (tool === "music") return <MusicCheck mobile={mobile} onBack={backToGrid} />;
@@ -297,6 +317,11 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
                 key={item.id}
                 type="button"
                 onClick={() => {
+                  if (item.id === "browser") {
+                    openBrowser();
+                    setTool("browser");
+                    return;
+                  }
                   setTool(item.id);
                   useApp.setState({ appsTool: item.id, hub: "apps" });
                 }}
