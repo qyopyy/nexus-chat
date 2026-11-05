@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isConfigured } from "@/lib/supabase";
+import { startLiveUpdates } from "@/lib/liveUpdate";
 import AuthScreen, { ResetPasswordScreen, type AuthMode } from "@/components/AuthScreen";
 import AppShell from "@/components/AppShell";
 import SetupScreen from "@/components/SetupScreen";
@@ -10,6 +11,9 @@ import SetupScreen from "@/components/SetupScreen";
 export default function Root({ mode, initialVideo, initialRelease, initialGram, initialGramPost, initialGramContent, initialUntitled }: { mode?: AuthMode; initialVideo?: string; initialRelease?: string; initialGram?: string; initialGramPost?: string; initialGramContent?: string; initialUntitled?: string }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [recovering, setRecovering] = useState(false);
+
+  // Capacitor APK/IPA load the live site — reload when a new web deploy lands
+  useEffect(() => startLiveUpdates(), []);
 
   useEffect(() => {
     if (!isConfigured) return;

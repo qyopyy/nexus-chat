@@ -250,3 +250,42 @@ grant execute on function public.install_bot_to_space(uuid, text, uuid) to authe
 grant execute on function public.uninstall_bot_from_space(uuid) to authenticated;
 grant execute on function public.bot_by_slug(text) to authenticated;
 grant execute on function public.bot_by_slug(text) to anon;
+
+-- Server-driven bot catalog (phones pick this up without an APK update)
+create or replace function public.list_public_bots()
+returns json
+language plpgsql security definer set search_path = '' as $$
+declare
+  community json;
+begin
+  select coalesce(json_agg(json_build_object(
+    'kind', 'community',
+    'id', b.id,
+    'slug', b.slug,
+    'name', b.name,
+    'description', b.description,
+    'color', b.color,
+    'avatar_url', b.avatar_url,
+    'commands', b.commands,
+    'uses', b.uses
+  ) order by b.created_at desc), '[]'::json)
+  into community
+  from public.community_bots b
+  where b.public = true;
+
+  return json_build_object(
+    'system', json_build_array(
+      json_build_object('kind','system','key','nexus','slug','nexusbot','name','Nexus Bot','description','Fun slash commands for every chat.','color','#5865F2','commands', json_build_array('/help','/roll','/flip','/8ball','/choose')),
+      json_build_object('kind','system','key','music','slug','musicbot','name','Music Bot','description','ISRC codes, Deezer + Spotify track lookup.','color','#EB459E','commands', json_build_array('/isrc','/song','/upc','/spotify','/track')),
+      json_build_object('kind','system','key','spotify','slug','spotifybot','name','Spotify Bot','description','Search Spotify tracks, albums, and artists.','color','#1DB954','commands', json_build_array('/spotify','/track','/album','/artist')),
+      json_build_object('kind','system','key','fun','slug','funbot','name','Fun Bot','description','Jokes, facts, rock-paper-scissors, rates & ships.','color','#FEE75C','commands', json_build_array('/joke','/fact','/rps','/rate','/ship')),
+      json_build_object('kind','system','key','trivia','slug','triviabot','name','Trivia Bot','description','Quick trivia rounds in any chat.','color','#57F287','commands', json_build_array('/trivia','/answer')),
+      json_build_object('kind','system','key','orders','slug','orderbot','name','Order Bot','description','Premium plans and your order status.','color','#3BA55D','commands', json_build_array('/premium','/orders'))
+    ),
+    'community', community
+  );
+end;
+$$;
+
+grant execute on function public.list_public_bots() to authenticated;
+grant execute on function public.list_public_bots() to anon;

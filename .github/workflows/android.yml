@@ -30,7 +30,7 @@ jobs:
       run:
         working-directory: mobile
     env:
-      NEXUS_URL: ${{ github.event.inputs.url || vars.NEXUS_URL || 'https://nexus-chat-plum.vercel.app' }}
+      NEXUS_URL: ${{ github.event.inputs.url || vars.NEXUS_URL || 'https://nexusproject.cc' }}
       HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
       # optional: Firebase google-services.json (whole file as a secret) → push notifications while the app is closed
       GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
