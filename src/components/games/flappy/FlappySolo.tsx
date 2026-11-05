@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { FlappyFrameHeader } from "./ui";
+import type { Equipped } from "./catalog";
 
 /** Solo flight — upgraded HTML engine, posts score/coins back when the run ends. */
 export default function FlappySolo({
   birdId,
+  equipped,
   onBack,
   onResult,
   mobile,
 }: {
   birdId: string;
+  equipped?: Equipped;
   onBack: () => void;
   onResult: (score: number, coins: number) => void;
   mobile?: boolean;
@@ -18,6 +21,13 @@ export default function FlappySolo({
   const box = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const done = useRef(false);
+
+  const src = useMemo(() => {
+    const q = new URLSearchParams({ bird: birdId, embed: "1", autostart: "1" });
+    const fit = equipped ? Object.values(equipped).filter(Boolean).join(",") : "";
+    if (fit) q.set("fit", fit);
+    return `/games/flappy-happy.html?${q.toString()}`;
+  }, [birdId, equipped]);
 
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
@@ -35,14 +45,7 @@ export default function FlappySolo({
     <div className="flex h-full min-h-0 flex-col bg-[#090d16] text-white">
       <FlappyFrameHeader title="Solo flight" onBack={onBack} mobile={mobile} onFull={() => void box.current?.requestFullscreen?.().catch(() => {})} />
       <div ref={box} className="relative min-h-0 flex-1">
-        <iframe
-          ref={frame}
-          src={`/games/flappy-happy.html?bird=${encodeURIComponent(birdId)}&embed=1&autostart=1`}
-          title="Flappy Happy Solo"
-          allow="fullscreen; autoplay"
-          allowFullScreen
-          className="absolute inset-0 size-full border-0"
-        />
+        <iframe ref={frame} src={src} title="Flappy Happy Solo" allow="fullscreen; autoplay" allowFullScreen className="absolute inset-0 size-full border-0" />
       </div>
     </div>
   );
