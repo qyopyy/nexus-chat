@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Heart, MessageCircle, Ellipsis, Send, Share2, Trash2, X } from "lucide-react";
+import { Bookmark, ChevronLeft, ChevronRight, Heart, Link2, MessageCircle, Ellipsis, Send, Share2, Trash2, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
-import { addComment, ago, comments, fmt, gramGo, mediaUrl, publicProfileUrl, removeComment, removePost, setLike, type Comment, type Post } from "@/lib/gram";
+import { addComment, ago, comments, fmt, gramGo, isSaved, mediaUrl, publicContentUrl, publicProfileUrl, removeComment, removePost, setLike, setSave, type Comment, type Post } from "@/lib/gram";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 
@@ -44,8 +44,13 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
   const [showComments, setShowComments] = useState(false);
   const [menu, setMenu] = useState(false);
   const [more, setMore] = useState(false);
+  const [saved, setSaved] = useState(!!post.saved);
   const lastTap = useRef(0);
   const m = post.media[i];
+
+  useEffect(() => {
+    void isSaved(post.id).then(setSaved);
+  }, [post.id]);
 
   const toggle = (force?: boolean) => {
     const on = force ?? !liked;
@@ -76,6 +81,16 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
           </button>
           {menu && (
             <div className="absolute top-9 right-0 z-20 w-48 rounded-xl bg-menu p-1 shadow-2xl" onMouseLeave={() => setMenu(false)}>
+              <button
+                onClick={() => {
+                  void navigator.clipboard.writeText(publicContentUrl(post.id));
+                  toast("Share link copied (/n/…)", "success");
+                  setMenu(false);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-hover"
+              >
+                <Link2 className="size-4" /> Copy /n/ link
+              </button>
               {author && (
                 <button
                   onClick={() => {
@@ -141,8 +156,31 @@ export default function PostCard({ post, onRemoved }: { post: Post; onRemoved?: 
           <button onClick={() => setShowComments(true)} className="grid size-10 place-items-center rounded-full active:scale-90" aria-label="Comments">
             <MessageCircle className="size-7 -scale-x-100" />
           </button>
-          <span className="ml-auto text-xs text-sub">{fmt(post.view_count)} views</span>
+          <button
+            onClick={() => {
+              void navigator.clipboard.writeText(publicContentUrl(post.id));
+              toast("Share link copied", "success");
+            }}
+            className="grid size-10 place-items-center rounded-full active:scale-90"
+            aria-label="Share"
+          >
+            <Share2 className="size-6" />
+          </button>
+          <button
+            onClick={async () => {
+              const on = !saved;
+              if (await setSave(post.id, on)) {
+                setSaved(on);
+                haptic.light();
+              }
+            }}
+            className="ml-auto grid size-10 place-items-center rounded-full active:scale-90"
+            aria-label={saved ? "Unsave" : "Save"}
+          >
+            <Bookmark className={cn("size-6", saved && "fill-current")} />
+          </button>
         </div>
+        <div className="px-1 text-[11px] text-sub">{fmt(post.view_count)} views</div>
         <div className="px-1 text-sm font-semibold">{fmt(likes)} likes</div>
         {post.caption && (
           <p className={cn("px-1 text-sm whitespace-pre-wrap", !more && "line-clamp-2")} onClick={() => setMore(true)}>
