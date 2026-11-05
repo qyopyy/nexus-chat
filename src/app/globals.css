@@ -390,3 +390,14 @@ html.big-targets [role="button"] {
 html.desat body {
   filter: saturate(var(--sat, 1));
 }
+
+/* Discord-style welcome splash */
+@keyframes welcomeIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes welcomeOut { from { opacity: 1 } to { opacity: 0 } }
+@keyframes welcomePop {
+  0% { transform: scale(1) }
+  40% { transform: scale(1.08) rotate(-2deg) }
+  100% { transform: scale(1) }
+}
+@keyframes welcomeBar { from { width: 0% } to { width: 100% } }
+@keyframes welcomeBarEgg { from { width: 0% } to { width: 100% } }

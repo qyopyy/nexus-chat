@@ -24,6 +24,8 @@ export type Prefs = {
   ringtone: boolean;
   /** Soft click FX when tapping buttons / links */
   buttonFx: boolean;
+  /** Discord-style welcome splash + chime on launch */
+  welcomeSplash: boolean;
   // advanced
   devMode: boolean;
 };
@@ -45,13 +47,14 @@ export const PREF_DEFAULTS: Prefs = {
   uiVolume: 1,
   ringtone: true,
   buttonFx: true,
+  welcomeSplash: true,
   devMode: false,
 };
 
 export const usePrefs = create<Prefs>()(
   persist(() => ({ ...PREF_DEFAULTS }), {
     name: "nexus.prefs",
-    version: 2,
+    version: 3,
     migrate: (persisted) => ({ ...PREF_DEFAULTS, ...((persisted as object) ?? {}) }),
   }),
 );

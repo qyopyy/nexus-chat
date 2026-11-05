@@ -294,8 +294,14 @@ export function ChatPrefsBlock() {
         checked={p.buttonFx !== false}
         onChange={(v) => setPref("buttonFx", v)}
       />
+      <Toggle
+        label="Welcome screen"
+        hint="Discord-style splash with a soft chime when Nexus opens. Turn off to skip it."
+        checked={p.welcomeSplash !== false}
+        onChange={(v) => setPref("welcomeSplash", v)}
+      />
       <Toggle label="Call ringtone" checked={p.ringtone} onChange={(v) => setPref("ringtone", v)} />
-      <div className={cn("py-3", !p.uiSounds && p.buttonFx === false && "pointer-events-none opacity-50")}>
+      <div className={cn("py-3", !p.uiSounds && p.buttonFx === false && p.welcomeSplash === false && "pointer-events-none opacity-50")}>
         <div className="mb-1 font-medium">Sound volume</div>
         <Slider value={p.uiVolume} max={1} onChange={(v) => setPref("uiVolume", v)} format={(v) => `${Math.round(v * 100)}%`} />
       </div>
