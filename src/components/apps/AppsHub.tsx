@@ -15,10 +15,12 @@ import {
   KeyRound,
   Pipette,
   QrCode,
+  ShieldAlert,
   Timer,
   type LucideIcon,
 } from "lucide-react";
 import { useApp } from "@/store/app";
+import { studioGo } from "@/store/studio";
 import { cn } from "@/lib/utils";
 import ImageResizer from "./ImageResizer";
 import PdfEditor from "./PdfEditor";
@@ -32,11 +34,13 @@ import BpmTap from "./BpmTap";
 import JsonLab from "./JsonLab";
 import TokenGen from "./TokenGen";
 import Base64Lab from "./Base64Lab";
+import SpotifyTakedown from "@/components/music/SpotifyTakedown";
 
 type ToolId =
   | "image"
   | "pdf"
   | "music"
+  | "spotify-td"
   | "qr"
   | "color"
   | "text"
@@ -82,6 +86,15 @@ const TOOLS: {
     bg: "linear-gradient(135deg,#5c0b4a,#1b0b5c)",
     emoji: "🧬",
     Icon: Fingerprint,
+  },
+  {
+    id: "spotify-td",
+    name: "Spotify takedown",
+    tag: "Instant copyright notice",
+    desc: "Paste a Spotify track link — resolve metadata and send a notice to Spotify.",
+    bg: "linear-gradient(135deg,#1DB954,#0b3d24)",
+    emoji: "⚡",
+    Icon: ShieldAlert,
   },
   {
     id: "qr",
@@ -171,6 +184,27 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
   if (tool === "image") return <ImageResizer mobile={mobile} onBack={() => setTool(null)} />;
   if (tool === "pdf") return <PdfEditor mobile={mobile} onBack={() => setTool(null)} />;
   if (tool === "music") return <MusicCheck mobile={mobile} onBack={() => setTool(null)} />;
+  if (tool === "spotify-td") {
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-chat">
+        <header className={cn("flex shrink-0 items-center gap-2 border-b border-black/20 px-3", mobile ? "pt-safe-3 pb-2" : "h-12")}>
+          <button onClick={() => setTool(null)} className="grid size-9 place-items-center rounded-full hover:bg-hover" aria-label="Back to apps">
+            <ArrowLeft className="size-5" />
+          </button>
+          <ShieldAlert className="size-5 text-[#1DB954]" />
+          <span className="min-w-0 flex-1 truncate font-bold">Spotify takedown</span>
+          <button onClick={() => studioGo("takedowns")} className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/15">
+            Full Studio
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+          <div className="mx-auto max-w-2xl">
+            <SpotifyTakedown />
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (tool === "qr") return <QrMaker mobile={mobile} onBack={() => setTool(null)} />;
   if (tool === "color") return <ColorStudio mobile={mobile} onBack={() => setTool(null)} />;
   if (tool === "text") return <TextLab mobile={mobile} onBack={() => setTool(null)} />;

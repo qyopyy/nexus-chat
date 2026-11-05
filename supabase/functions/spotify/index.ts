@@ -160,15 +160,83 @@ Deno.serve(async (req: Request) => {
       case "reverse": {
         const p = parseSpotifyUrl(String(b.url ?? ""));
         if (!p) return json({ error: "Paste a Spotify track or album link" }, 400);
-        if (p.kind === "track") return json({ kind: "track", track: trackLite(await sp(`/tracks/${p.id}`)) });
+        if (p.kind === "track") {
+          const t = await sp(`/tracks/${p.id}`);
+          if (!t) return json({ error: "Track not found on Spotify" }, 404);
+          const albumId = t.album?.id;
+          const album = albumId ? await sp(`/albums/${albumId}`).catch(() => null) : null;
+          return json({
+            kind: "track",
+            track: trackLite(t),
+            album: album ? albumLite(album) : t.album ? albumLite(t.album) : null,
+            upc: album?.external_ids?.upc ?? null,
+          });
+        }
         if (p.kind === "album") {
           const a = await sp(`/albums/${p.id}`);
           // Spotify removed batch "/tracks?ids=" (Feb 2026) — fetch tracks one by one for their ISRCs
           const ids = (a?.tracks?.items ?? []).map((t: any) => t.id).filter(Boolean).slice(0, 40);
           const tracks = await Promise.all(ids.map((id: string) => sp(`/tracks/${id}`).catch(() => null)));
-          return json({ kind: "album", album: albumLite(a), tracks: tracks.filter(Boolean).map(trackLite) });
+          return json({ kind: "album", album: albumLite(a), tracks: tracks.filter(Boolean).map(trackLite), upc: a?.external_ids?.upc ?? null });
         }
         return json({ kind: "artist", artist: artistLite(await sp(`/artists/${p.id}`)) });
+      }
+      /** Resolve a Spotify URL or ISRC into fields for an instant copyright notice */
+      case "takedown_lookup": {
+        const url = String(b.url ?? "").trim();
+        const isrcIn = String(b.isrc ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+        let track: ReturnType<typeof trackLite> = null;
+        let album: ReturnType<typeof albumLite> = null;
+        let upc: string | null = null;
+        if (url) {
+          const p = parseSpotifyUrl(url);
+          if (!p || (p.kind !== "track" && p.kind !== "album")) {
+            return json({ error: "Paste a Spotify track or album link (open.spotify.com/track/…)" }, 400);
+          }
+          if (p.kind === "track") {
+            const t = await sp(`/tracks/${p.id}`);
+            if (!t) return json({ error: "Track not found on Spotify" }, 404);
+            track = trackLite(t);
+            const albumId = t.album?.id;
+            const full = albumId ? await sp(`/albums/${albumId}`).catch(() => null) : null;
+            album = full ? albumLite(full) : t.album ? albumLite(t.album) : null;
+            upc = full?.external_ids?.upc ?? null;
+          } else {
+            const a = await sp(`/albums/${p.id}`);
+            if (!a) return json({ error: "Album not found on Spotify" }, 404);
+            album = albumLite(a);
+            upc = a.external_ids?.upc ?? null;
+            const firstId = a.tracks?.items?.[0]?.id;
+            if (firstId) {
+              const t = await sp(`/tracks/${firstId}`).catch(() => null);
+              track = trackLite(t);
+            }
+          }
+        } else if (isrcIn) {
+          if (!/^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(isrcIn)) return json({ error: "That doesn't look like an ISRC" }, 400);
+          const r = await sp(`/search?type=track&limit=5&q=${encodeURIComponent(`isrc:${isrcIn}`)}`);
+          const t = r?.tracks?.items?.[0];
+          if (!t) return json({ error: "No Spotify track found for that ISRC" }, 404);
+          track = trackLite(t);
+          const albumId = t.album?.id;
+          const full = albumId ? await sp(`/albums/${albumId}`).catch(() => null) : null;
+          album = full ? albumLite(full) : t.album ? albumLite(t.album) : null;
+          upc = full?.external_ids?.upc ?? null;
+        } else {
+          return json({ error: "Paste a Spotify link or ISRC" }, 400);
+        }
+        const infringing = track?.url || album?.url || url;
+        return json({
+          work_title: track?.name || album?.name || "",
+          work_artist: (track?.artists ?? album?.artists ?? []).map((a: { name: string }) => a.name).join(", "),
+          isrc: track?.isrc ?? null,
+          upc,
+          infringing: infringing ? [infringing] : [],
+          track,
+          album,
+          description:
+            "This Spotify release is an unauthorized use of my copyrighted recording. I own the exclusive rights and did not license or authorize this upload. Please remove or disable access immediately.",
+        });
       }
       case "search": {
         const q = String(b.q ?? "").trim().slice(0, 100);
