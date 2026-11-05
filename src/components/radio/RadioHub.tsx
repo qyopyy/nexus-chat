@@ -22,6 +22,7 @@ import Avatar from "@/components/ui/Avatar";
 import { loadProfiles } from "@/lib/data";
 import { INSTS, NOTES, hit, pctx, type Pattern } from "@/components/music/Tools2";
 import {
+  isRadioAudioFile,
   openRadio,
   radioAddUrl,
   radioExpectedPosition,
@@ -82,8 +83,12 @@ export default function RadioHub({ mobile }: { mobile?: boolean }) {
   const playing = !!player?.is_playing && !!current;
 
   const onFiles = async (files: FileList | File[]) => {
-    const list = [...files].filter((f) => f.type.startsWith("audio/") || /\.(mp3|wav|flac|m4a|aac|ogg|opus|webm)$/i.test(f.name));
-    if (!list.length) return toast("Drop audio files (mp3, m4a, wav…)", "error");
+    const all = [...files];
+    const list = all.filter(isRadioAudioFile);
+    if (!list.length) {
+      const hint = all[0] ? ` (got ${all[0].type || "unknown type"} · ${all[0].name || "unnamed"})` : "";
+      return toast(`Pick mp3, wav, m4a, or mp4 audio${hint}`, "error");
+    }
     setUploading(true);
     try {
       for (const f of list) await radioUpload(f);
@@ -246,11 +251,23 @@ export default function RadioHub({ mobile }: { mobile?: boolean }) {
             >
               <Upload className="size-3.5" /> {uploading ? "Uploading…" : "Add songs"}
             </button>
-            <input ref={fileRef} type="file" accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg" multiple className="hidden" onChange={(e) => { const f = e.target.files; e.target.value = ""; if (f) void onFiles(f); }} />
+            <input
+              ref={fileRef}
+              type="file"
+              // Phones: video/mp4 for M4A/MP4 songs; */* so Files/Downloads stay reachable on iOS/Android
+              accept="audio/*,video/mp4,video/*,audio/mp4,.mp3,.wav,.flac,.m4a,.mp4,.aac,.ogg,.opus,.webm,.caf,application/octet-stream"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files;
+                e.target.value = "";
+                if (f) void onFiles(f);
+              }}
+            />
             <button onClick={() => setUrlOpen((v) => !v)} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-4 py-2 text-xs font-semibold">
               <Link2 className="size-3.5" /> Paste URL
             </button>
-            <span className="self-center text-[11px] text-white/40">Unlimited queue · drag & drop works too</span>
+            <span className="self-center text-[11px] text-white/40">mp3 · wav · m4a · mp4 · drag & drop</span>
           </div>
 
           {urlOpen && (
