@@ -1,7 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { cookies } from "next/headers";
-import { GATE_COOKIE, tokenValid } from "@/lib/gate-server";
-import GateScreen from "@/components/GateScreen";
 import ThemeBoot from "@/components/ThemeBoot";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
@@ -22,17 +19,14 @@ export const viewport: Viewport = {
   themeColor: "#1e1f22",
 };
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const token = (await cookies()).get(GATE_COOKIE)?.value;
-  const unlocked = tokenValid(token);
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         <ThemeBoot />
       </head>
       <body>
-        {unlocked ? children : <GateScreen />}
+        {children}
         <Analytics />
       </body>
     </html>

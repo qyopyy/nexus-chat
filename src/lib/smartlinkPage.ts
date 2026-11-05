@@ -1,5 +1,4 @@
 // Server-only: renders the public smart-link page (/l/<slug>) as plain HTML.
-// Route handlers skip the root layout, so fans don't hit the site password gate.
 
 export type PageData = {
   slug: string;

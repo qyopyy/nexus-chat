@@ -1,4 +1,4 @@
-// Server-only: public vault share page (/s/<token>) rendered as plain HTML (no app, no password gate).
+// Server-only: public vault share page (/s/<token>) rendered as plain HTML.
 
 const FN = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/share`;
 

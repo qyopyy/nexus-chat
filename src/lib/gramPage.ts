@@ -1,5 +1,4 @@
 // Server-only: renders the public NexusGram profile (/u/<username>) as plain HTML.
-// Route handlers skip the root layout, so visitors don't hit the site password gate.
 
 type M = { path: string; type: "image" | "video"; poster?: string | null };
 export type PublicGram = {

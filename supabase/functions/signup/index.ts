@@ -1,11 +1,7 @@
 // Nexus signup — creates an already-confirmed account (no confirmation email,
-// so no email rate limits) after checking the site-password gate token.
+// so no email rate limits). Account passwords and sessions stay on Supabase Auth.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-
-// sha256("nexus-gate:<site password>") — default matches the app's default site password.
-// Override with the SITE_GATE_TOKEN secret if you change SITE_PASSWORD in the app.
-const DEFAULT_GATE_TOKEN = "660d46e572d98a220af6bf7f8ae42353bc8941a16dc7063d96bc0bea541b202b";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -25,11 +21,6 @@ Deno.serve(async (req: Request) => {
     body = await req.json();
   } catch {
     return json({ error: "Invalid request" }, 400);
-  }
-
-  const expected = Deno.env.get("SITE_GATE_TOKEN") || DEFAULT_GATE_TOKEN;
-  if (expected !== "off" && body.gate !== expected) {
-    return json({ error: "Site password required — reload the page and unlock the site first." }, 403);
   }
 
   const email = String(body.email ?? "").trim().toLowerCase();
