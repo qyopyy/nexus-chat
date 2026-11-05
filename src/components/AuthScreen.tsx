@@ -6,6 +6,7 @@ import { supabase, errorText } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { NexusCredit, copyNexusAppLink } from "@/components/ui/NexusCredit";
 import { mfaChallengeAndVerify, mfaListFactors, mfaNeedsChallenge } from "@/lib/mfa";
+import { signInWithApple } from "@/lib/appleAuth";
 
 export type AuthMode = "login" | "register" | "forgot" | "mfa";
 
@@ -346,6 +347,37 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
                     ? "Verify & continue"
                     : "Send reset link"}
           </button>
+
+          {(mode === "login" || mode === "register") && (
+            <>
+              <div className="my-4 flex items-center gap-3 text-[11px] font-semibold tracking-wide text-white/35 uppercase">
+                <span className="h-px flex-1 bg-white/10" />
+                or
+                <span className="h-px flex-1 bg-white/10" />
+              </div>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setError(null);
+                  const r = await signInWithApple();
+                  setBusy(false);
+                  if (!r.ok) setError(r.error || "Apple sign-in failed");
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3 text-sm font-bold text-black transition hover:bg-white/90 disabled:opacity-60"
+              >
+                <svg viewBox="0 0 24 24" className="size-5" aria-hidden>
+                  <path
+                    fill="currentColor"
+                    d="M16.365 12.73c-.03-2.02 1.65-2.99 1.73-3.04-0.94-1.38-2.41-1.57-2.93-1.59-1.25-.13-2.44.74-3.07.74-.63 0-1.61-.72-2.65-.7-1.36.02-2.62.79-3.32 2.01-1.42 2.46-.36 6.1 1.02 8.1.67.98 1.48 2.08 2.53 2.04 1.02-.04 1.41-.66 2.65-.66 1.23 0 1.58.66 2.66.64 1.1-.02 1.8-1 2.47-1.98.77-1.13 1.09-2.22 1.11-2.28-.02-.01-2.13-.82-2.16-3.28zM14.5 5.95c.56-.68.94-1.62.84-2.56-.81.03-1.79.54-2.37 1.22-.52.6-.98 1.56-.86 2.48.91.07 1.84-.46 2.39-1.14z"
+                  />
+                </svg>
+                Continue with Apple
+              </button>
+            </>
+          )}
+
           <button
             type="button"
             onClick={() => void copyNexusAppLink()}

@@ -11,7 +11,12 @@ export const supabase: SupabaseClient = createClient(
   url || "http://localhost:54321",
   key || "missing-key",
   {
-    auth: { persistSession: true, autoRefreshToken: true },
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      flowType: "pkce",
+    },
     realtime: { params: { eventsPerSecond: 40 } },
   },
 );
