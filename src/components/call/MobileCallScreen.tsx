@@ -5,6 +5,7 @@ import { ChevronDown, Headphones, HeadphoneOff, Mic, MicOff, MonitorUp, PhoneOff
 import { useApp, conversationTitle } from "@/store/app";
 import { SoundboardButton, SoundToast } from "./Soundboard";
 import { ReactButton, ReactionsOverlay } from "./Reactions";
+import { CallExtraControls, CallStatusChips } from "./CallExtras";
 import AvatarButton from "@/components/vavatar/AvatarButton";
 import { useCall, canScreenShare, leaveCall, setFocused, toggleDeafen, toggleMute, toggleScreen, toggleVideo } from "@/lib/call";
 import { haptic } from "@/lib/haptics";
@@ -97,6 +98,9 @@ export default function MobileCallScreen({ conversationId }: { conversationId: s
         <div className="min-w-0 flex-1 text-center">
           <div className="truncate text-[17px] font-bold">{title || "Call"}</div>
           <div className="text-[13px] text-white/70 tabular-nums">{statusText}</div>
+          <div className="mt-1 flex justify-center">
+            <CallStatusChips />
+          </div>
         </div>
         <span className="w-10" />
       </div>
@@ -163,6 +167,7 @@ export default function MobileCallScreen({ conversationId }: { conversationId: s
 
       {/* controls */}
       <div className="mx-3 mb-safe-3 rounded-[30px] bg-white/[.08] p-3 backdrop-blur-2xl">
+        <CallExtraControls mobile />
         <div className="mb-3 flex items-center justify-center gap-8">
           <AvatarButton mobile />
           <SoundboardButton mobile />

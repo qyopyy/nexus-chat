@@ -36,6 +36,7 @@ import Avatar from "@/components/ui/Avatar";
 import VideoTile, { type Tile } from "./VideoTile";
 import { SoundboardButton, SoundToast } from "./Soundboard";
 import { ReactButton, ReactionsOverlay } from "./Reactions";
+import { CallExtraControls, CallStatusChips } from "./CallExtras";
 import AvatarButton from "@/components/vavatar/AvatarButton";
 
 export default function CallStage({
@@ -55,6 +56,7 @@ export default function CallStage({
   const muted = useCall((s) => s.muted);
   const deafened = useCall((s) => s.deafened);
   const focused = useCall((s) => s.focused);
+  const layout = useCall((s) => s.layout);
   const status = useCall((s) => s.status);
   const error = useCall((s) => s.error);
   const ringing = useCall((s) => s.outgoingRing === conversationId);
@@ -95,22 +97,25 @@ export default function CallStage({
     }
   }, [tiles]);
 
-  const focusedTile = tiles.find((t) => t.key === focused);
+  const speakerMode = layout === "speaker";
+  const focusedTile = tiles.find((t) => t.key === focused) ?? (speakerMode ? tiles.find((t) => t.kind === "screen") ?? tiles.find((t) => !t.isMe) ?? tiles[0] : undefined);
   const others = focusedTile ? tiles.filter((t) => t !== focusedTile) : tiles;
   const n = tiles.length;
   const cols = n === 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4;
   const alone = Object.keys(participants).length === 0;
   const waitingFor = members ? members.filter((id) => id !== me) : dmPartner ? [dmPartner] : [];
+  const useSpotlight = !!focusedTile && (speakerMode || !!focused);
 
   return (
     <section className={cn("relative flex shrink-0 flex-col bg-black", expanded ? "min-h-0 flex-1" : "h-[46vh] min-h-[280px]")}>
       <SoundToast />
       <ReactionsOverlay />
       {/* top bar */}
-      <div className="flex items-center gap-2 px-4 pt-3 text-sm text-white/80">
+      <div className="flex flex-wrap items-center gap-2 px-4 pt-3 text-sm text-white/80">
         <span className={cn("size-2 rounded-full", status === "connected" ? "bg-ok" : "bg-idle")} />
         <CallTimer />
         <span className="text-white/50">· {Object.keys(participants).length + 1} in call</span>
+        <CallStatusChips />
         <button onClick={onToggleExpand} className="ml-auto rounded-md p-1.5 text-white/70 hover:bg-white/10 hover:text-white" title={expanded ? "Collapse" : "Expand"}>
           {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
         </button>
@@ -138,7 +143,7 @@ export default function CallStage({
             </div>
             <p className="text-lg text-white/80">Calling…</p>
           </div>
-        ) : focusedTile ? (
+        ) : useSpotlight && focusedTile ? (
           <div className="flex h-full flex-col gap-3">
             <div className="min-h-0 flex-1">
               <VideoTile tile={focusedTile} focused onClick={() => setFocused(focusedTile.key)} />
@@ -244,6 +249,7 @@ function CallControls() {
       <AvatarButton />
       <SoundboardButton />
       <ReactButton />
+      <CallExtraControls />
       <CtlBtn label={muted ? "Unmute" : "Mute"} off={muted || deafened} onClick={toggleMute}>
         {muted || deafened ? <MicOff className="size-6" /> : <Mic className="size-6" />}
       </CtlBtn>
