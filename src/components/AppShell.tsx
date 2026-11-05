@@ -34,12 +34,14 @@ import AppsHub from "@/components/apps/AppsHub";
 import MusicHub from "./music/MusicHub";
 import VideosHub from "./videos/VideosHub";
 import Studio from "./studio/Studio";
+import UntitledHub from "./untitled/UntitledHub";
 import { useStudio, videosGo } from "@/store/studio";
 import { releaseByCode } from "@/lib/protect";
 import NexusGram from "./gram/NexusGram";
 import { openGram } from "@/lib/gram";
+import { openUntitled } from "@/lib/untitled";
 
-export default function AppShell({ userId, initialVideo, initialRelease, initialGram }: { userId: string; initialVideo?: string; initialRelease?: string; initialGram?: string }) {
+export default function AppShell({ userId, initialVideo, initialRelease, initialGram, initialUntitled }: { userId: string; initialVideo?: string; initialRelease?: string; initialGram?: string; initialUntitled?: string }) {
   const spaceId = useApp((s) => s.spaceId);
   const conversationId = useApp((s) => s.conversationId);
   const showMembers = useApp((s) => s.showMembers);
@@ -87,6 +89,12 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       useApp.setState({ hub: "studio" });
     });
   }, [bootstrapped, initialRelease]);
+  // /m/<username> opens Untitled profile
+  useEffect(() => {
+    if (!bootstrapped || initialUntitled === undefined) return;
+    window.history.replaceState(null, "", "/");
+    openUntitled(initialUntitled ? { view: "profile", username: initialUntitled } : { view: "home" });
+  }, [bootstrapped, initialUntitled]);
   useEffect(() => {
     if (!bootstrapped) return;
     startSpotifySync();
@@ -170,6 +178,8 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
             <GamesHub />
           ) : hub === "apps" ? (
             <AppsHub />
+          ) : hub === "untitled" ? (
+            <UntitledHub />
           ) : hub === "music" ? (
             <MusicHub />
           ) : hub === "videos" ? (
