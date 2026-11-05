@@ -26,6 +26,7 @@ import { useChatFx } from "./chatFx";
 import { onInviteRow, loadPendingInvites } from "./gameInvites";
 import { isEffect, playEffect } from "./effects";
 import { isMuted } from "@/store/prefs";
+import { isSpaceMuted } from "./spacePrefs";
 import { haptic } from "./haptics";
 import { refreshBadges } from "./admin";
 import { nativeLocalNotify, usePush } from "./push";
@@ -36,9 +37,18 @@ import type { Message, PresenceState, Profile, Reaction } from "./types";
 
 type CallEvent = { id: string; conversation_id: string; caller_id: string; kind: "ring" | "cancel" | "decline"; created_at: string };
 
+function spaceIdForConv(convId: string): string | null {
+  const channels = useApp.getState().channels;
+  for (const [sid, list] of Object.entries(channels)) {
+    if (list.some((c) => c.id === convId)) return sid;
+  }
+  return null;
+}
+
 function notify(m: Message) {
   const s = useApp.getState();
-  if (s.myStatus === "dnd" || isMuted(m.conversation_id)) return;
+  const sid = spaceIdForConv(m.conversation_id);
+  if (s.myStatus === "dnd" || isMuted(m.conversation_id) || (sid && isSpaceMuted(sid))) return;
   sfx.message();
   haptic.light();
   const author = s.profiles[m.author_id]?.display_name ?? "New message";

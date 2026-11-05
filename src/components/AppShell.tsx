@@ -25,6 +25,7 @@ import MessageBanner from "./ui/MessageBanner";
 import Modals from "./modals/Modals";
 import MobileShell from "./mobile/MobileShell";
 import EffectsLayer from "./effects/EffectsLayer";
+import ErrorBoundary from "./ErrorBoundary";
 import { useIsMobile } from "@/lib/useMobile";
 import { startSpotifySync } from "@/lib/spotifyUser";
 import { startMediaAudio } from "@/lib/mediaAudio";
@@ -208,7 +209,15 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       <div className={cn("h-full shrink-0 md:flex", mobileSidebar ? "flex w-full md:w-auto" : "hidden")}>
         <ServerRail />
         <aside className="flex h-full w-full flex-col bg-side md:w-[320px]">
-          <div className="min-h-0 flex-1">{spaceId ? <SpaceSidebar spaceId={spaceId} /> : <HomeSidebar />}</div>
+          <div className="min-h-0 flex-1">
+            {spaceId ? (
+              <ErrorBoundary label="Server" onReset={() => useApp.setState({ spaceId: null, conversationId: null })}>
+                <SpaceSidebar spaceId={spaceId} />
+              </ErrorBoundary>
+            ) : (
+              <HomeSidebar />
+            )}
+          </div>
           <UserPanel />
         </aside>
       </div>

@@ -275,13 +275,19 @@ export function selectHome() {
 
 export async function selectSpace(spaceId: string) {
   const s = get();
-  set({ spaceId, mobileSidebar: true });
-  const channels = s.channels[spaceId] ?? (await loadSpace(spaceId));
-  const remembered = get().lastChannel[spaceId];
-  const target = channels.find((c) => c.id === remembered) ?? channels.find((c) => c.kind === "text");
-  set({ conversationId: target?.id ?? null });
-  if (!s.channels[spaceId]) return;
-  void loadSpace(spaceId); // refresh in background
+  set({ spaceId, conversationId: null, mobileSidebar: true, hub: null });
+  try {
+    const channels = s.channels[spaceId] ?? (await loadSpace(spaceId));
+    const remembered = get().lastChannel[spaceId];
+    const target = channels.find((c) => c.id === remembered) ?? channels.find((c) => c.kind === "text");
+    // only set if we're still on this server (user may have clicked away)
+    if (get().spaceId === spaceId) set({ conversationId: target?.id ?? null });
+    if (!s.channels[spaceId]) return;
+    void loadSpace(spaceId); // refresh in background
+  } catch (e) {
+    console.error("[selectSpace]", e);
+    toast("Couldn't open that server — try again", "error");
+  }
 }
 
 export function openConversation(convId: string | null, spaceId: string | null) {
@@ -387,6 +393,12 @@ export async function markRead(convId: string) {
     /* ignore */
   }
   void import("./badge").then(({ syncAppBadge }) => syncAppBadge());
+}
+
+/** Clear unread on every channel in a server. */
+export async function markSpaceRead(spaceId: string) {
+  const channels = get().channels[spaceId] ?? [];
+  await Promise.all(channels.map((c) => markRead(c.id)));
 }
 
 export async function sendMessage(convId: string, content: string, file?: File | null, chosenEffect?: EffectKind | null) {

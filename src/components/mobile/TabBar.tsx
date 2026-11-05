@@ -32,7 +32,7 @@ export default function TabBar() {
 
   const items: { id: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: "chats", label: "Chats", icon: <MessageCircle className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} />, badge: chatBadge },
-    { id: "spaces", label: "Spaces", icon: <LayoutGrid className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} />, badge: spaceBadge },
+    { id: "spaces", label: "Servers", icon: <LayoutGrid className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} />, badge: spaceBadge },
     { id: "gram", label: "Gram", icon: <Aperture className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} /> },
     { id: "videos", label: "Videos", icon: <Clapperboard className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} /> },
     { id: "music", label: "Music", icon: <Headphones className="size-[22px] max-[360px]:size-[20px]" strokeWidth={1.9} /> },
