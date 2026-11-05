@@ -28,6 +28,13 @@ const NEXUS_BOT = "00000000-0000-4000-8000-00000000b001";
 const PLATFORM: Record<string, { name: string; email: string }> = {
   spotify: { name: "Spotify", email: "infringement-claim@spotify.com" },
   apple: { name: "Apple Music", email: "copyrightnotices@apple.com" },
+  deezer: { name: "Deezer", email: "copyright@deezer.com" },
+  youtube: { name: "YouTube Claim / Content ID", email: "copyright@youtube.com" },
+  youtube_music: { name: "YouTube Music", email: "copyright@youtube.com" },
+  soundcloud: { name: "SoundCloud", email: "copyright@soundcloud.com" },
+  tidal: { name: "TIDAL", email: "copyright@tidal.com" },
+  amazon: { name: "Amazon Music", email: "copyright@amazon.com" },
+  tiktok: { name: "TikTok", email: "copyright@tiktok.com" },
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

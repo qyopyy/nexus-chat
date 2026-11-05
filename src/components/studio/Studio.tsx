@@ -244,7 +244,9 @@ export default function Studio() {
             {section === "takedowns" && (
               <>
                 <H>Takedown notices</H>
-                <p className="-mt-3 mb-4 text-sm text-sub">Someone uploaded your music to Spotify or Apple Music? Fill this in and send an official copyright notice in one go.</p>
+                <p className="-mt-3 mb-4 text-sm text-sub">
+                  Someone uploaded your music to Spotify, Apple Music, Deezer, YouTube Claim / Content ID, SoundCloud, TIDAL, Amazon Music or TikTok? Fill this in and send an official copyright notice in one go.
+                </p>
                 <TakedownTool />
               </>
             )}
