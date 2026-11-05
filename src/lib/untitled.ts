@@ -34,7 +34,21 @@ export type UntitledTrack = {
   duration: number | null;
   position: number;
   note: string | null;
+  folder: string | null;
+  version: number;
   listen_count: number;
+  created_at: string;
+};
+
+export type UntitledTrackVersion = {
+  id: string;
+  track_id: string;
+  owner_id: string;
+  path: string;
+  mime: string | null;
+  bytes: number;
+  duration: number | null;
+  version: number;
   created_at: string;
 };
 
@@ -93,10 +107,19 @@ export type UntitledRoute =
   | { view: "profile"; username: string }
   | { view: "explore" };
 
+export type PlayingState = {
+  projectId: string;
+  trackId: string;
+  title: string;
+  url: string;
+  queue: string[];
+};
+
 export const useUntitled = create<{
   stack: UntitledRoute[];
-  playing: { projectId: string; trackId: string; title: string; url: string } | null;
-}>(() => ({ stack: [{ view: "home" }], playing: null }));
+  playing: PlayingState | null;
+  rate: number;
+}>(() => ({ stack: [{ view: "home" }], playing: null, rate: 1 }));
 
 export const untitledGo = (r: UntitledRoute) => useUntitled.setState((s) => ({ stack: [...s.stack, r].slice(-20) }));
 export const untitledBack = () => useUntitled.setState((s) => ({ stack: s.stack.length > 1 ? s.stack.slice(0, -1) : s.stack }));
@@ -180,18 +203,15 @@ async function audioDuration(file: File): Promise<number | null> {
   }
 }
 
-export async function uploadTrack(projectId: string, file: File, onProgress?: (p: number) => void) {
+async function putAudio(projectId: string, file: File, onProgress?: (p: number) => void) {
   if (!file.type.startsWith("audio/") && !/\.(mp3|wav|flac|m4a|aac|ogg|webm)$/i.test(file.name)) {
     throw new Error("Upload an audio file");
   }
   if (file.size > 200 * 1024 * 1024) throw new Error("Tracks can be up to 200 MB");
-  const existing = await listTracks(projectId);
   const id = crypto.randomUUID();
   const ext = (file.name.split(".").pop() || "mp3").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp3";
   const path = `${me()}/${projectId}/${id}.${ext}`;
-  const title = file.name.replace(/\.[^.]+$/, "").slice(0, 200) || "Untitled track";
   const duration = await audioDuration(file);
-
   const { data: s } = await supabase.auth.getSession();
   await new Promise<void>((res, rej) => {
     const x = new XMLHttpRequest();
@@ -205,28 +225,45 @@ export async function uploadTrack(projectId: string, file: File, onProgress?: (p
     x.onerror = () => rej(new Error("Network error while uploading"));
     x.send(file);
   });
+  return { id, path, duration, mime: file.type || null, bytes: file.size };
+}
+
+export async function uploadTrack(projectId: string, file: File, onProgress?: (p: number) => void, folder?: string | null) {
+  const existing = await listTracks(projectId);
+  const uploaded = await putAudio(projectId, file, onProgress);
+  const title = file.name.replace(/\.[^.]+$/, "").slice(0, 200) || "Untitled track";
 
   const { data, error } = await supabase
     .from("untitled_tracks")
     .insert({
-      id,
+      id: uploaded.id,
       project_id: projectId,
       owner_id: me(),
       title,
-      path,
-      mime: file.type || null,
-      bytes: file.size,
-      duration,
+      path: uploaded.path,
+      mime: uploaded.mime,
+      bytes: uploaded.bytes,
+      duration: uploaded.duration,
       position: existing.length + 1,
+      folder: folder?.trim().slice(0, 80) || null,
+      version: 1,
     })
     .select()
     .single();
   if (error) {
-    await supabase.storage.from("untitled").remove([path]);
+    await supabase.storage.from("untitled").remove([uploaded.path]);
     throw new Error(errorText(error));
   }
   await supabase.from("untitled_projects").update({ updated_at: new Date().toISOString() }).eq("id", projectId);
   return data as UntitledTrack;
+}
+
+export async function uploadMany(projectId: string, files: File[], folder?: string | null, onProgress?: (done: number, total: number) => void) {
+  const out: UntitledTrack[] = [];
+  for (let i = 0; i < files.length; i++) {
+    out.push(await uploadTrack(projectId, files[i]!, (p) => onProgress?.((i + p) / files.length, 1), folder));
+  }
+  return out;
 }
 
 export async function renameTrack(id: string, title: string) {
@@ -235,8 +272,92 @@ export async function renameTrack(id: string, title: string) {
   return !error;
 }
 
+export async function setTrackFolder(id: string, folder: string | null) {
+  const { error } = await supabase
+    .from("untitled_tracks")
+    .update({ folder: folder?.trim().slice(0, 80) || null })
+    .eq("id", id)
+    .eq("owner_id", me());
+  if (error) toast(errorText(error), "error");
+  return !error;
+}
+
+export async function moveTrack(projectId: string, trackId: string, dir: -1 | 1) {
+  const tracks = await listTracks(projectId);
+  const i = tracks.findIndex((t) => t.id === trackId);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= tracks.length) return false;
+  const a = tracks[i]!;
+  const b = tracks[j]!;
+  await supabase.from("untitled_tracks").update({ position: b.position }).eq("id", a.id);
+  await supabase.from("untitled_tracks").update({ position: a.position }).eq("id", b.id);
+  // normalize
+  const refreshed = await listTracks(projectId);
+  await Promise.all(refreshed.map((t, idx) => supabase.from("untitled_tracks").update({ position: idx + 1 }).eq("id", t.id)));
+  return true;
+}
+
+export async function replaceTrackAudio(track: UntitledTrack, file: File, onProgress?: (p: number) => void) {
+  // archive current version
+  await supabase.from("untitled_track_versions").insert({
+    track_id: track.id,
+    owner_id: me(),
+    path: track.path,
+    mime: track.mime,
+    bytes: track.bytes,
+    duration: track.duration,
+    version: track.version,
+  });
+  const uploaded = await putAudio(track.project_id, file, onProgress);
+  const next = track.version + 1;
+  const { data, error } = await supabase
+    .from("untitled_tracks")
+    .update({
+      path: uploaded.path,
+      mime: uploaded.mime,
+      bytes: uploaded.bytes,
+      duration: uploaded.duration,
+      version: next,
+    })
+    .eq("id", track.id)
+    .eq("owner_id", me())
+    .select()
+    .single();
+  if (error) throw new Error(errorText(error));
+  await supabase.from("untitled_projects").update({ updated_at: new Date().toISOString() }).eq("id", track.project_id);
+  return data as UntitledTrack;
+}
+
+export async function listTrackVersions(trackId: string) {
+  const { data, error } = await supabase.from("untitled_track_versions").select("*").eq("track_id", trackId).order("version", { ascending: false });
+  if (error) throw new Error(errorText(error));
+  return (data ?? []) as UntitledTrackVersion[];
+}
+
+export async function restoreTrackVersion(track: UntitledTrack, ver: UntitledTrackVersion) {
+  await supabase.from("untitled_track_versions").insert({
+    track_id: track.id,
+    owner_id: me(),
+    path: track.path,
+    mime: track.mime,
+    bytes: track.bytes,
+    duration: track.duration,
+    version: track.version,
+  });
+  const next = Math.max(track.version, ver.version) + 1;
+  const { error } = await supabase
+    .from("untitled_tracks")
+    .update({ path: ver.path, mime: ver.mime, bytes: ver.bytes, duration: ver.duration, version: next })
+    .eq("id", track.id)
+    .eq("owner_id", me());
+  if (error) toast(errorText(error), "error");
+  return !error;
+}
+
 export async function removeTrack(t: UntitledTrack) {
-  await supabase.storage.from("untitled").remove([t.path]);
+  const versions = await listTrackVersions(t.id).catch(() => [] as UntitledTrackVersion[]);
+  const paths = [t.path, ...versions.map((v) => v.path)];
+  await supabase.storage.from("untitled").remove(paths);
   const { error } = await supabase.from("untitled_tracks").delete().eq("id", t.id).eq("owner_id", me());
   if (error) toast(errorText(error), "error");
   return !error;
@@ -313,6 +434,23 @@ export async function setUntitledFollow(userId: string, on: boolean) {
   return true;
 }
 
+export async function untitledFollowList(userId: string, which: "followers" | "following") {
+  const { data, error } = await supabase.rpc("untitled_follow_list", { p_user: userId, p_which: which });
+  if (error) throw new Error(errorText(error));
+  const ids = (data ?? []) as string[];
+  if (ids.length) await loadProfilesSafe(ids);
+  return ids;
+}
+
+async function loadProfilesSafe(ids: string[]) {
+  try {
+    const { loadProfiles } = await import("./data");
+    await loadProfiles(ids);
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function explorePublic(limit = 24) {
   const { data, error } = await supabase
     .from("untitled_projects")
@@ -324,12 +462,35 @@ export async function explorePublic(limit = 24) {
   return (data ?? []) as UntitledProject[];
 }
 
-export async function playTrack(projectId: string, track: UntitledTrack) {
+export async function playTrack(projectId: string, track: UntitledTrack, queue?: UntitledTrack[]) {
   const url = await trackUrl(track.path);
   if (!url) {
     toast("Couldn't load this track", "error");
     return;
   }
-  useUntitled.setState({ playing: { projectId, trackId: track.id, title: track.title, url } });
+  const q = (queue ?? [track]).map((t) => t.id);
+  useUntitled.setState({ playing: { projectId, trackId: track.id, title: track.title, url, queue: q } });
   void recordListen(projectId, track.id);
+}
+
+export async function playNextInQueue(tracks: UntitledTrack[]) {
+  const playing = useUntitled.getState().playing;
+  if (!playing) return;
+  const idx = playing.queue.indexOf(playing.trackId);
+  const nextId = playing.queue[idx + 1];
+  const next = tracks.find((t) => t.id === nextId);
+  if (next) await playTrack(playing.projectId, next, tracks.filter((t) => playing.queue.includes(t.id)));
+}
+
+export async function playPrevInQueue(tracks: UntitledTrack[]) {
+  const playing = useUntitled.getState().playing;
+  if (!playing) return;
+  const idx = playing.queue.indexOf(playing.trackId);
+  const prevId = playing.queue[idx - 1];
+  const prev = tracks.find((t) => t.id === prevId);
+  if (prev) await playTrack(playing.projectId, prev, tracks.filter((t) => playing.queue.includes(t.id)));
+}
+
+export function setPlaybackRate(rate: number) {
+  useUntitled.setState({ rate: Math.min(2, Math.max(0.5, rate)) });
 }

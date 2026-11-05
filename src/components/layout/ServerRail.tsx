@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { Aperture, AppWindow, Clapperboard, Gamepad2, Headphones, LayoutDashboard, MessageCircle, Plus } from "lucide-react";
 import { useApp, openModal } from "@/store/app";
 import { selectHome, selectSpace } from "@/lib/data";
+import { openUntitled } from "@/lib/untitled";
 import { cn, initials } from "@/lib/utils";
 
 function RailItem({
@@ -82,6 +83,9 @@ export default function ServerRail() {
       </RailItem>
       <RailItem active={hub === "music"} label="Music" onClick={() => useApp.setState({ hub: "music" })} color={hub === "music" ? "#1DB954" : undefined}>
         <Headphones className="size-6" />
+      </RailItem>
+      <RailItem active={hub === "untitled"} label="Untitled — WIP music" onClick={() => openUntitled()} color={hub === "untitled" ? "#c4a574" : undefined}>
+        <span className="text-lg font-semibold leading-none">♩</span>
       </RailItem>
       <RailItem active={hub === "games"} label="Games" onClick={() => useApp.setState({ hub: "games" })} color={hub === "games" ? "#ff2bd6" : undefined}>
         <Gamepad2 className="size-6" />

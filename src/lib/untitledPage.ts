@@ -112,7 +112,8 @@ export function renderSharePage(token: string, info: ShareInfo, open?: ShareOpen
   const tracks = (data.tracks ?? [])
     .map(
       (t, i) => `<div class="track"><div class="dot">${i + 1}</div><div style="flex:1;min-width:0"><b>${esc(t.title)}</b><br><span>${t.duration != null ? `${Math.floor(t.duration / 60)}:${String(Math.floor(t.duration % 60)).padStart(2, "0")}` : "—"}</span>
-      ${t.url ? `<audio controls preload="none" src="${esc(t.url)}"></audio>` : ""}</div></div>`,
+      ${t.url ? `<audio controls preload="none" src="${esc(t.url)}"></audio>` : ""}
+      ${data.download && t.url ? `<a class="btn ghost" style="margin-top:8px;padding:8px" href="${esc(t.url)}" download="${esc(t.title)}">Download</a>` : ""}</div></div>`,
     )
     .join("");
   return shell(
