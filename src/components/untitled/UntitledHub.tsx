@@ -57,6 +57,7 @@ import {
   untitledFollowList,
   updateProject,
   updateSharePermission,
+  isUntitledAudioFile,
   uploadMany,
   untitledBack,
   untitledGo,
@@ -147,7 +148,7 @@ function Home() {
       <div className="mb-8">
         <div className="text-[10px] font-semibold tracking-[0.22em] text-[#c4a574]/80 uppercase">A quiet place for drafts</div>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight text-[#f3efe6]">Untitled</h1>
-        <p className="mt-2 max-w-md text-sm text-[#8a8478]">Upload work-in-progress tracks, organize them into projects, share links with permission control, and grow a public profile.</p>
+        <p className="mt-2 max-w-md text-sm text-[#8a8478]">Upload WIP tracks (mp3, wav, m4a, mp4…), organize projects, share listen/download links, and grow a public profile.</p>
       </div>
 
       <div className="mb-4 flex items-center justify-between">
@@ -237,8 +238,12 @@ function ProjectView({ id, onTracks }: { id: string; onTracks?: (t: UntitledTrac
   }, [reload]);
 
   const doUpload = async (files: FileList | File[]) => {
-    const list = [...files].filter((f) => f.type.startsWith("audio/") || /\.(mp3|wav|flac|m4a|aac|ogg|webm)$/i.test(f.name));
-    if (!list.length) return toast("Drop audio files", "error");
+    const all = [...files];
+    const list = all.filter(isUntitledAudioFile);
+    if (!list.length) {
+      const hint = all[0] ? ` (got ${all[0].type || "unknown type"} · ${all[0].name || "unnamed"})` : "";
+      return toast(`Drop mp3, wav, m4a, or mp4 audio${hint}`, "error");
+    }
     setUpPct(0);
     try {
       await uploadMany(id, list, folder || null, (done) => setUpPct(done));
@@ -335,7 +340,18 @@ function ProjectView({ id, onTracks }: { id: string; onTracks?: (t: UntitledTrac
             <button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-full bg-[#c4a574] px-3.5 py-2 text-xs font-semibold text-black">
               <Upload className="size-3.5" /> Upload
             </button>
-            <input ref={fileRef} type="file" accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg" multiple className="hidden" onChange={(e) => { const f = e.target.files; e.target.value = ""; if (f?.length) void doUpload(f); }} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="audio/*,video/mp4,video/*,audio/mp4,.mp3,.wav,.flac,.m4a,.mp4,.aac,.ogg,.opus,.webm,.caf,application/octet-stream"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files;
+                e.target.value = "";
+                if (f?.length) void doUpload(f);
+              }}
+            />
             <input
               value={folder}
               onChange={(e) => setFolder(e.target.value)}
@@ -432,7 +448,7 @@ function ProjectView({ id, onTracks }: { id: string; onTracks?: (t: UntitledTrac
                     </div>
                   </div>
                   {mine && (
-                    <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                    <div className="flex items-center gap-0.5 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
                       <button onClick={() => void moveTrack(project.id, t.id, -1).then(reload)} className="rounded p-1 hover:bg-white/5" aria-label="Move up">
                         <ChevronUp className="size-3.5 text-[#8a8478]" />
                       </button>
@@ -501,13 +517,17 @@ function ProjectView({ id, onTracks }: { id: string; onTracks?: (t: UntitledTrac
               replaceRef.current.input = el;
             }}
             type="file"
-            accept="audio/*"
+            accept="audio/*,video/mp4,video/*,audio/mp4,.mp3,.wav,.flac,.m4a,.mp4,.aac,.ogg,.opus,.webm,.caf,application/octet-stream"
             className="hidden"
             onChange={async (e) => {
               const f = e.target.files?.[0];
               const track = replaceRef.current.track;
               e.target.value = "";
               if (!f || !track) return;
+              if (!isUntitledAudioFile(f)) {
+                toast(`Pick mp3, wav, m4a, or mp4 audio (got ${f.type || "unknown type"})`, "error");
+                return;
+              }
               setUpPct(0);
               try {
                 await replaceTrackAudio(track, f, setUpPct);
@@ -585,7 +605,6 @@ function SharePanel({ projectId, shares, onChange }: { projectId: string; shares
             <select value={permission} onChange={(e) => setPermission(e.target.value as SharePermission)} className="mt-1 w-full rounded-xl border border-white/10 bg-[#12100e] px-3 py-2 text-sm outline-none">
               <option value="listen">Listen only</option>
               <option value="download">Listen + download</option>
-              <option value="edit">Collaborate (edit)</option>
             </select>
           </label>
           <label className="text-[11px] text-[#8a8478]">
@@ -643,7 +662,6 @@ function SharePanel({ projectId, shares, onChange }: { projectId: string; shares
                 >
                   <option value="listen">Listen</option>
                   <option value="download">Download</option>
-                  <option value="edit">Edit</option>
                 </select>
                 <span className="text-[11px] text-[#8a8478]">
                   <Eye className="mr-0.5 inline size-3" />
