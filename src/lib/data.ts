@@ -275,7 +275,15 @@ export function selectHome() {
 
 export async function selectSpace(spaceId: string) {
   const s = get();
-  set({ spaceId, conversationId: null, mobileSidebar: true, hub: null });
+  // Seed stable empty arrays immediately so sidebar selectors never return a fresh `[]` each render.
+  set({
+    spaceId,
+    conversationId: null,
+    mobileSidebar: true,
+    hub: null,
+    channels: { ...s.channels, [spaceId]: s.channels[spaceId] ?? [] },
+    spaceMembers: { ...s.spaceMembers, [spaceId]: s.spaceMembers[spaceId] ?? [] },
+  });
   try {
     const channels = s.channels[spaceId] ?? (await loadSpace(spaceId));
     const remembered = get().lastChannel[spaceId];

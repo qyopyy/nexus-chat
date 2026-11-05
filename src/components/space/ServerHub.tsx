@@ -90,8 +90,8 @@ export default function ServerHub({ spaceId, onClose, initial = "home" }: { spac
 
 function Home({ spaceId, staff }: { spaceId: string; staff: boolean }) {
   const space = useApp((s) => s.spaces.find((x) => x.id === spaceId));
-  const members = useApp((s) => s.spaceMembers[spaceId] ?? []);
-  const channels = useApp((s) => s.channels[spaceId] ?? []);
+  const members = useApp((s) => s.spaceMembers[spaceId] ?? EMPTY_M);
+  const channels = useApp((s) => s.channels[spaceId] ?? EMPTY_C);
   const [edit, setEdit] = useState(false);
   const [w, setW] = useState(space?.welcome ?? "");
   const [r, setR] = useState(space?.rules ?? "");

@@ -4,15 +4,19 @@ import { useEffect, useState } from "react";
 import { Lock } from "lucide-react";
 import { useApp } from "@/store/app";
 import { myUnlocks, unlockChannel } from "@/lib/spaceExtras";
-import { openConversation } from "@/lib/data";
+import type { Conversation, SpaceMember } from "@/lib/types";
+
+const EMPTY_M: SpaceMember[] = [];
+const EMPTY_C: Conversation[] = [];
 
 /** Blocks viewing a password-protected room until the member unlocks it. */
 export default function ChannelLockGate({ spaceId }: { spaceId: string }) {
   const me = useApp((s) => s.userId);
-  const members = useApp((s) => s.spaceMembers[spaceId] ?? []);
-  const channels = useApp((s) => s.channels[spaceId] ?? []);
+  // Stable empty fallbacks — `?? []` in a Zustand selector re-renders forever (React #185).
+  const members = useApp((s) => s.spaceMembers[spaceId] ?? EMPTY_M);
+  const channels = useApp((s) => s.channels[spaceId] ?? EMPTY_C);
   const conversationId = useApp((s) => s.conversationId);
-  const [unlocks, setUnlocks] = useState<Set<string>>(new Set());
+  const [unlocks, setUnlocks] = useState<Set<string>>(() => new Set());
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -22,7 +26,13 @@ export default function ChannelLockGate({ spaceId }: { spaceId: string }) {
   const needsLock = !!channel && !!channel.password_hash && !staff && !unlocks.has(channel.id);
 
   useEffect(() => {
-    void myUnlocks(spaceId).then(setUnlocks);
+    let cancelled = false;
+    void myUnlocks(spaceId).then((set) => {
+      if (!cancelled) setUnlocks(set);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [spaceId, conversationId]);
 
   if (!needsLock || !channel) return null;
@@ -56,7 +66,6 @@ export default function ChannelLockGate({ spaceId }: { spaceId: string }) {
             if (ok) {
               setUnlocks((s) => new Set(s).add(channel.id));
               setPassword("");
-              openConversation(channel.id, spaceId);
             }
           }}
           className="mt-3 w-full rounded-full bg-accent py-2.5 font-bold text-white disabled:opacity-40"

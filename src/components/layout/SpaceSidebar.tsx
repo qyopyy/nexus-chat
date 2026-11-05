@@ -7,9 +7,7 @@ import { useCall, joinCall, unlockCallAudio } from "@/lib/call";
 import { deleteSpace, leaveSpace, markSpaceRead, openConversation } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import {
-  isCategoryCollapsed,
-  isFavoriteSpace,
-  isSpaceMuted,
+  EMPTY_SPACE_LIST,
   toggleCollapsedCategory,
   toggleFavoriteSpace,
   toggleMuteSpace,
@@ -18,13 +16,14 @@ import {
 import Avatar from "@/components/ui/Avatar";
 import SpaceMusic from "@/components/music/SpaceMusic";
 import ServerHub, { WelcomeGate } from "@/components/space/ServerHub";
-import type { Conversation } from "@/lib/types";
+import type { Conversation, SpaceMember } from "@/lib/types";
 
-const EMPTY: Conversation[] = [];
+const EMPTY_C: Conversation[] = [];
+const EMPTY_M: SpaceMember[] = [];
 
 export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
   const space = useApp((s) => s.spaces.find((x) => x.id === spaceId));
-  const channels = useApp((s) => s.channels[spaceId] ?? EMPTY);
+  const channels = useApp((s) => s.channels[spaceId] ?? EMPTY_C);
   const conversationId = useApp((s) => s.conversationId);
   const unread = useApp((s) => s.unread);
   const presence = useApp((s) => s.presence);
@@ -36,16 +35,15 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
   const [menu, setMenu] = useState(false);
   const [hub, setHub] = useState<null | "home" | "look" | "invites" | "roles" | "events" | "levels" | "members">(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const members = useApp((s) => s.spaceMembers[spaceId] ?? []);
+  // Stable empty fallbacks — `?? []` in a Zustand selector re-renders forever (React #185).
+  const members = useApp((s) => s.spaceMembers[spaceId] ?? EMPTY_M);
   const isOwner = space?.owner_id === me;
   const isStaff = isOwner || members.find((m) => m.user_id === me)?.role === "admin";
-  const favorites = useSpacePrefs((s) => s.favorites);
-  const mutedSpaces = useSpacePrefs((s) => s.muted);
-  const collapsedMap = useSpacePrefs((s) => s.collapsed);
-  const fav = favorites.includes(spaceId) || isFavoriteSpace(spaceId);
-  const quiet = mutedSpaces.includes(spaceId) || isSpaceMuted(spaceId);
-  const textCollapsed = (collapsedMap[spaceId] ?? []).includes("Text Channels") || isCategoryCollapsed(spaceId, "Text Channels");
-  const voiceCollapsed = (collapsedMap[spaceId] ?? []).includes("Voice Channels") || isCategoryCollapsed(spaceId, "Voice Channels");
+  const fav = useSpacePrefs((s) => s.favorites.includes(spaceId));
+  const quiet = useSpacePrefs((s) => s.muted.includes(spaceId));
+  const collapsedForSpace = useSpacePrefs((s) => s.collapsed[spaceId] ?? EMPTY_SPACE_LIST);
+  const textCollapsed = collapsedForSpace.includes("Text Channels");
+  const voiceCollapsed = collapsedForSpace.includes("Voice Channels");
 
   useEffect(() => {
     if (!menu) return;
