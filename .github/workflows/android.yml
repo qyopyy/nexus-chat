@@ -3,13 +3,18 @@ name: Android app (.apk / .aab)
 # Builds Nexus for Android.
 #  - Always: an installable APK (debug-signed) you can sideload on any Android phone.
 #  - If the ANDROID_KEYSTORE_* secrets exist: a release-signed APK + AAB ready for Google Play.
-# Run it from Actions → "Android app (.apk / .aab)" → Run workflow.
+# Triggers: Actions → Run workflow, or any push to main that touches mobile/.
 on:
   workflow_dispatch:
     inputs:
       url:
         description: "Live site the app opens (leave empty to use the NEXUS_URL repo variable)"
         required: false
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/android.yml"
 
 permissions:
   contents: write
@@ -21,7 +26,7 @@ jobs:
       run:
         working-directory: mobile
     env:
-      NEXUS_URL: ${{ inputs.url || vars.NEXUS_URL || 'https://nexus-chat-plum.vercel.app' }}
+      NEXUS_URL: ${{ github.event.inputs.url || vars.NEXUS_URL || 'https://nexus-chat-plum.vercel.app' }}
       HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
       # optional: Firebase google-services.json (whole file as a secret) → push notifications while the app is closed
       GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
@@ -59,6 +64,7 @@ jobs:
           grep -n "uses-" "$MANIFEST"
 
           # app icon (legacy PNGs everywhere; drop adaptive XML so ours is used)
+          test -f resources/icon-1024.png
           RES=android/app/src/main/res
           rm -rf "$RES/mipmap-anydpi-v26"
           for d in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
@@ -119,4 +125,6 @@ jobs:
           [ -f Nexus-release.aab ] && FILES="$FILES Nexus-release.aab Nexus-release.apk"
           gh release create "$TAG" $FILES --repo "$GITHUB_REPOSITORY" \
             --title "Nexus Android build ${GITHUB_RUN_NUMBER}" \
-            --notes "Nexus.apk → install on any Android phone (allow 'Install unknown apps'). Opens: ${NEXUS_URL}"
+            --notes "Nexus.apk → install on any Android phone (allow 'Install unknown apps'). Opens: ${NEXUS_URL}
+          
+          Updated shell with the current Nexus app icon (1024px source → launcher mipmaps)."

@@ -1,8 +1,13 @@
 {
   "name": "nexus-mobile",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "description": "Native iOS + Android shells for Nexus (Capacitor). The apps load the live web app, so web deploys update them instantly.",
+  "scripts": {
+    "sync": "npx cap sync",
+    "open:ios": "npx cap open ios",
+    "open:android": "npx cap open android"
+  },
   "dependencies": {
     "@capacitor/android": "^7.0.0",
     "@capacitor/core": "^7.0.0",

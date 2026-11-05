@@ -1,13 +1,18 @@
 name: iOS app (.ipa)
 
 # Builds an unsigned Nexus.ipa — install it with Sideloadly / AltStore using your Apple ID.
-# Manual only (Actions → "iOS app (.ipa)" → Run workflow): macOS minutes are limited on private repos.
+# Triggers: Actions → Run workflow, or any push to main that touches mobile/.
 on:
   workflow_dispatch:
     inputs:
       url:
         description: "Live site the app opens (leave empty to use the NEXUS_URL repo variable)"
         required: false
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/ipa.yml"
 
 permissions:
   contents: write
@@ -19,7 +24,7 @@ jobs:
       run:
         working-directory: mobile
     env:
-      NEXUS_URL: ${{ inputs.url || vars.NEXUS_URL || 'https://nexus-chat-plum.vercel.app' }}
+      NEXUS_URL: ${{ github.event.inputs.url || vars.NEXUS_URL || 'https://nexus-chat-plum.vercel.app' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -55,9 +60,31 @@ jobs:
           pb "Add :UIViewControllerBasedStatusBarAppearance bool false"
           pb "Set :UIUserInterfaceStyle Dark"
           pb "Add :UIUserInterfaceStyle string Dark"
+          pb "Set :CFBundleShortVersionString 1.${GITHUB_RUN_NUMBER}"
+          pb "Add :CFBundleShortVersionString string 1.${GITHUB_RUN_NUMBER}"
+          pb "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}"
+          pb "Add :CFBundleVersion string ${GITHUB_RUN_NUMBER}"
+
+          # App icon — resize the 1024 master into every AppIcon.appiconset slot
+          test -f resources/icon-1024.png
           ICONSET=ios/App/App/Assets.xcassets/AppIcon.appiconset
-          for f in "$ICONSET"/*.png; do cp resources/icon-1024.png "$f"; done
-          ls "$ICONSET"
+          mkdir -p "$ICONSET"
+          cp resources/AppIcon.Contents.json "$ICONSET/Contents.json"
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          src = Path("resources/icon-1024.png")
+          iconset = Path("ios/App/App/Assets.xcassets/AppIcon.appiconset")
+          data = json.loads((iconset / "Contents.json").read_text())
+          for img in data["images"]:
+              w, h = img["size"].split("x")
+              scale = int(img["scale"].replace("x", ""))
+              px = int(round(float(w) * scale))
+              out = iconset / img["filename"]
+              subprocess.check_call(["sips", "-z", str(px), str(px), str(src), "--out", str(out)], stdout=subprocess.DEVNULL)
+              print(out.name, px)
+          PY
+          ls -la "$ICONSET"
           plutil -p "$PLIST" | head -60
 
       - name: Build (unsigned)
@@ -68,6 +95,7 @@ jobs:
             -sdk iphoneos -destination 'generic/platform=iOS' \
             -archivePath "$PWD/build/App.xcarchive" archive \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            MARKETING_VERSION="1.${GITHUB_RUN_NUMBER}" CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
             | tail -40
           test -d build/App.xcarchive/Products/Applications/App.app
 
@@ -91,4 +119,6 @@ jobs:
           TAG="ios-${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" Nexus.ipa --repo "$GITHUB_REPOSITORY" \
             --title "Nexus iOS build ${GITHUB_RUN_NUMBER}" \
-            --notes "Unsigned IPA → install with Sideloadly using your Apple ID. Opens: ${NEXUS_URL}"
+            --notes "Unsigned IPA → install with Sideloadly using your Apple ID. Opens: ${NEXUS_URL}
+          
+          Updated shell with the current Nexus app icon (full AppIcon set from 1024px master)."
