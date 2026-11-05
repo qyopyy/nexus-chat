@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Bookmark, Clapperboard, Copy, ExternalLink, ListVideo, MessageCircle, Pin, Plus, Scissors, Search, Send, Share2, Sparkles, ThumbsDown, ThumbsUp, Trash2, Tv, Upload, X } from "lucide-react";
+import { ArrowLeft, Bookmark, Clapperboard, Copy, Download, ExternalLink, ListVideo, MessageCircle, Pin, Plus, Scissors, Search, Send, Share2, Sparkles, ThumbsDown, ThumbsUp, Trash2, Tv, Upload, X } from "lucide-react";
 import { addHistory, clearHistory, history, isLater, toggleLater, watchLater } from "@/lib/videoLists";
 import ClipToShort from "./ClipToShort";
 import VisualizerMaker from "@/components/media/VisualizerMaker";
@@ -10,8 +10,10 @@ import { useStudio, videosBack, videosGo, videosHome, type VideosRoute } from "@
 import { openLiveHub } from "@/lib/live";
 import { openPulse } from "@/lib/pulse";
 import {
+  canDownloadVideos,
   comment as addComment,
   comments as loadComments,
+  downloadVideo,
   feed,
   fmtViews,
   getVideo,
@@ -369,6 +371,15 @@ function Watch({ k, t, playlistId }: { k: string; t?: number; playlistId?: strin
               <button onClick={() => setShare(true)} className="flex items-center gap-1.5 rounded-full bg-side px-3.5 py-2 text-sm font-semibold hover:bg-hover">
                 <Share2 className="size-[18px]" /> Share
               </button>
+              {canDownloadVideos() && (
+                <button
+                  onClick={() => void downloadVideo(v)}
+                  className="flex items-center gap-1.5 rounded-full bg-side px-3.5 py-2 text-sm font-semibold hover:bg-hover"
+                  title="Download video (VIP, mods & admins)"
+                >
+                  <Download className="size-[18px]" /> Download
+                </button>
+              )}
               <button
                 onClick={() => {
                   const on = toggleLater(v.slug ?? v.id);

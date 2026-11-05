@@ -18,9 +18,14 @@ export type PulsePost = {
   repost_count: number;
   created_at: string;
   liked?: boolean;
+  bookmarked?: boolean;
 };
 
-export type PulseRoute = { view: "home" } | { view: "profile"; username: string } | { view: "post"; id: string };
+export type PulseRoute =
+  | { view: "home" }
+  | { view: "profile"; username: string }
+  | { view: "post"; id: string }
+  | { view: "tag"; tag: string };
 
 export const usePulse = create<{ stack: PulseRoute[] }>(() => ({ stack: [{ view: "home" }] }));
 export const pulseGo = (r: PulseRoute) => usePulse.setState((s) => ({ stack: [...s.stack, r].slice(-20) }));
@@ -36,27 +41,122 @@ export function openPulse(r?: PulseRoute) {
 
 const me = () => useApp.getState().userId!;
 
-export async function pulseFeed(before?: string | null) {
-  let q = supabase.from("pulse_posts").select("*").is("reply_to", null).order("created_at", { ascending: false }).limit(40);
+const BOOKMARK_KEY = "nexus:pulse:bookmarks";
+
+export function pulseBookmarks(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem(BOOKMARK_KEY) || "[]") as string[];
+  } catch {
+    return [];
+  }
+}
+
+export function pulseIsBookmarked(id: string) {
+  return pulseBookmarks().includes(id);
+}
+
+export function pulseToggleBookmark(id: string) {
+  const cur = pulseBookmarks();
+  const next = cur.includes(id) ? cur.filter((x) => x !== id) : [id, ...cur].slice(0, 200);
+  localStorage.setItem(BOOKMARK_KEY, JSON.stringify(next));
+  return next.includes(id);
+}
+
+export function extractPulseHashtags(text: string): string[] {
+  const found = text.match(/#[\p{L}\p{N}_]+/gu) ?? [];
+  return [...new Set(found.map((t) => t.slice(1).toLowerCase()))].slice(0, 12);
+}
+
+export function extractPulseMentions(text: string): string[] {
+  const found = text.match(/@([a-zA-Z0-9_]{2,24})/g) ?? [];
+  return [...new Set(found.map((t) => t.slice(1).toLowerCase()))].slice(0, 12);
+}
+
+async function attachLiked(rows: PulsePost[]): Promise<PulsePost[]> {
+  const ids = rows.map((r) => r.id);
+  let liked = new Set<string>();
+  const uid = useApp.getState().userId;
+  if (uid && ids.length) {
+    const { data: likes } = await supabase.from("pulse_likes").select("post_id").eq("user_id", uid).in("post_id", ids);
+    liked = new Set((likes ?? []).map((l) => l.post_id as string));
+  }
+  const marks = new Set(pulseBookmarks());
+  void loadProfiles([...new Set(rows.map((r) => r.author_id))]);
+  return rows.map((r) => ({ ...r, liked: liked.has(r.id), bookmarked: marks.has(r.id) }));
+}
+
+function scorePulse(p: PulsePost): number {
+  const ageH = Math.max(0, (Date.now() - new Date(p.created_at).getTime()) / 3_600_000);
+  const engagement = p.like_count * 2.5 + p.reply_count * 4 + p.repost_count * 3;
+  const recency = Math.exp(-ageH / 36);
+  return (1 + engagement) * recency;
+}
+
+export async function pulseFeed(before?: string | null, mode: "foryou" | "following" = "foryou") {
+  if (mode === "following") {
+    const uid = me();
+    const { data: follows } = await supabase.from("pulse_follows").select("followee_id").eq("follower_id", uid);
+    const ids = (follows ?? []).map((f) => f.followee_id as string);
+    if (!ids.length) return [] as PulsePost[];
+    let q = supabase.from("pulse_posts").select("*").in("author_id", ids).is("reply_to", null).order("created_at", { ascending: false }).limit(40);
+    if (before) q = q.lt("created_at", before);
+    const { data, error } = await q;
+    if (error) {
+      toast(errorText(error), "error");
+      return [];
+    }
+    return attachLiked((data ?? []) as PulsePost[]);
+  }
+
+  let q = supabase.from("pulse_posts").select("*").is("reply_to", null).order("created_at", { ascending: false }).limit(mode === "foryou" ? 50 : 40);
   if (before) q = q.lt("created_at", before);
   const { data, error } = await q;
   if (error) {
     toast(errorText(error), "error");
     return [];
   }
-  const rows = (data ?? []) as PulsePost[];
-  const ids = rows.map((r) => r.id);
-  let liked = new Set<string>();
-  if (ids.length) {
-    const { data: likes } = await supabase.from("pulse_likes").select("post_id").eq("user_id", me()).in("post_id", ids);
-    liked = new Set((likes ?? []).map((l) => l.post_id as string));
+  let rows = (data ?? []) as PulsePost[];
+  if (!before) rows = [...rows].sort((a, b) => scorePulse(b) - scorePulse(a)).slice(0, 40);
+  return attachLiked(rows);
+}
+
+export async function pulseByTag(tag: string, before?: string | null) {
+  const clean = tag.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 40);
+  if (!clean) return [] as PulsePost[];
+  let q = supabase.from("pulse_posts").select("*").ilike("body", `%#${clean}%`).is("reply_to", null).order("created_at", { ascending: false }).limit(40);
+  if (before) q = q.lt("created_at", before);
+  const { data, error } = await q;
+  if (error) {
+    toast(errorText(error), "error");
+    return [];
   }
-  void loadProfiles([...new Set(rows.map((r) => r.author_id))]);
-  return rows.map((r) => ({ ...r, liked: liked.has(r.id) }));
+  return attachLiked((data ?? []) as PulsePost[]);
+}
+
+export async function pulseTrendingTags(limit = 8): Promise<{ tag: string; count: number }[]> {
+  const { data } = await supabase.from("pulse_posts").select("body").is("reply_to", null).order("created_at", { ascending: false }).limit(120);
+  const counts = new Map<string, number>();
+  for (const row of data ?? []) {
+    for (const t of extractPulseHashtags((row as { body: string }).body || "")) {
+      counts.set(t, (counts.get(t) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
+}
+
+export async function pulseGet(id: string) {
+  const { data } = await supabase.from("pulse_posts").select("*").eq("id", id).maybeSingle();
+  if (!data) return null;
+  const [row] = await attachLiked([data as PulsePost]);
+  return row ?? null;
 }
 
 export async function pulseCreate(body: string, replyTo?: string | null) {
-  const text = body.trim().slice(0, 500);
+  const text = body.trim().slice(0, 280);
   if (!text) throw new Error("Write something first");
   const { data, error } = await supabase
     .from("pulse_posts")
@@ -107,9 +207,7 @@ export async function pulseDelete(id: string) {
 
 export async function pulseReplies(id: string) {
   const { data } = await supabase.from("pulse_posts").select("*").eq("reply_to", id).order("created_at").limit(100);
-  const rows = (data ?? []) as PulsePost[];
-  void loadProfiles(rows.map((r) => r.author_id));
-  return rows;
+  return attachLiked((data ?? []) as PulsePost[]);
 }
 
 export async function pulseSetFollow(userId: string, on: boolean) {
@@ -124,6 +222,13 @@ export async function pulseSetFollow(userId: string, on: boolean) {
   return true;
 }
 
+export async function pulseFollowingIds() {
+  const uid = useApp.getState().userId;
+  if (!uid) return new Set<string>();
+  const { data } = await supabase.from("pulse_follows").select("followee_id").eq("follower_id", uid);
+  return new Set((data ?? []).map((r) => r.followee_id as string));
+}
+
 export async function pulseProfile(username: string) {
   const { data: u } = await supabase.from("profiles").select("id, username, display_name, avatar_url, avatar_color, bio").ilike("username", username).maybeSingle();
   if (!u) return null;
@@ -135,12 +240,13 @@ export async function pulseProfile(username: string) {
     supabase.from("pulse_follows").select("follower_id").eq("follower_id", me()).eq("followee_id", id).maybeSingle(),
   ]);
   void loadProfiles([id]);
+  const marked = await attachLiked((posts ?? []) as PulsePost[]);
   return {
     ...u,
     followers: followers ?? 0,
     following: following ?? 0,
     is_following: !!follow,
-    posts: (posts ?? []) as PulsePost[],
+    posts: marked,
   };
 }
 

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 import { toast } from "@/store/app";
 import { cn } from "@/lib/utils";
-import { createPost, createStory, GRAM_MOODS, gramHome, mediaKind, uploadMedia, useGram, type GramMood, type Media } from "@/lib/gram";
+import { createPost, createStory, GRAM_GENRES, GRAM_MOODS, gramHome, mediaKind, uploadMedia, useGram, type GramGenre, type GramMood, type Media } from "@/lib/gram";
 
 const TABS = [
   ["post", "Post", "Photos or a video for your profile grid"],
@@ -21,6 +21,7 @@ export default function Create() {
   const [caption, setCaption] = useState("");
   const [alt, setAlt] = useState("");
   const [mood, setMood] = useState<GramMood | null>(null);
+  const [genre, setGenre] = useState<GramGenre | null>(null);
   const [hours, setHours] = useState<24 | 48>(24);
   const [busy, setBusy] = useState<string | null>(null);
   const pick = useRef<HTMLInputElement>(null);
@@ -32,6 +33,7 @@ export default function Create() {
       setCaption(remixOf ? "Remix ✨ " : "");
       setAlt("");
       setMood(null);
+      setGenre(null);
     }
   }, [mode, remixOf]);
   useEffect(() => {
@@ -74,7 +76,7 @@ export default function Create() {
         await createStory(media[0], caption, hours);
         toast(`Story shared for ${hours} hours`, "success");
       } else {
-        await createPost(kind, media, caption, { mood, remixOf, alt: alt.trim() || null });
+        await createPost(kind, media, caption, { mood, remixOf, alt: alt.trim() || null, genre });
         toast(remixOf ? "Remix posted" : kind === "short" ? "Short posted" : "Posted", "success");
       }
       useGram.setState({ create: null, remixOf: null });
@@ -155,6 +157,24 @@ export default function Create() {
 
           {kind !== "story" && (
             <>
+              <div className="mt-3">
+                <p className="mb-1.5 text-xs font-semibold text-sub">Genre / style</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {GRAM_GENRES.map((g) => (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => setGenre(genre === g.id ? null : g.id)}
+                      className={cn("rounded-full px-3 py-1 text-xs font-semibold", genre === g.id ? "text-black" : "bg-white/5 text-white/70 hover:bg-white/10")}
+                      style={genre === g.id ? { background: g.hue } : undefined}
+                      title={`#${g.tag}`}
+                    >
+                      {g.label}
+                    </button>
+                  ))}
+                </div>
+                {genre && <p className="mt-1 text-[11px] text-sub">Adds #{GRAM_GENRES.find((x) => x.id === genre)?.tag} and boosts For you ranking</p>}
+              </div>
               <div className="mt-3">
                 <p className="mb-1.5 text-xs font-semibold text-sub">Mood</p>
                 <div className="flex flex-wrap gap-1.5">

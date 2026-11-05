@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
 import {
   feed,
   fmt,
+  getGenrePrefs,
   getPost,
+  GRAM_GENRES,
   GRAM_MOODS,
   gramBack,
   gramGo,
@@ -16,11 +18,14 @@ import {
   mediaUrl,
   memoryLane,
   myCreatorInsights,
+  postsByGenre,
   postsByMood,
   postsByTag,
   savedFeed,
   scheduleStoryRepair,
+  toggleGenrePref,
   useGram,
+  type GramGenre,
   type GramMood,
   type Post,
 } from "@/lib/gram";
@@ -135,7 +140,7 @@ export default function NexusGram({ mobile }: { mobile?: boolean }) {
         <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="mx-auto w-full max-w-[640px] pb-6">
             {r.view === "home" && <Home />}
-            {r.view === "explore" && <Explore tag={r.tag} mood={r.mood} />}
+            {r.view === "explore" && <Explore tag={r.tag} mood={r.mood} genre={r.genre} />}
             {r.view === "saved" && <Saved />}
             {r.view === "insights" && <Insights />}
             {r.view === "memories" && <Memories />}
@@ -309,24 +314,28 @@ function ShortTeaser({ p }: { p: Post }) {
   );
 }
 
-function Explore({ tag, mood }: { tag?: string; mood?: GramMood }) {
+function Explore({ tag, mood, genre }: { tag?: string; mood?: GramMood; genre?: GramGenre }) {
   const discover = useFeed("discover", null);
   const [filterRows, setFilterRows] = useState<Post[] | null>(null);
   const [q, setQ] = useState(tag ?? "");
+  const [prefs, setPrefs] = useState<GramGenre[]>([]);
   useEffect(() => {
     setQ(tag ?? "");
   }, [tag]);
   useEffect(() => {
-    if (!tag && !mood) {
+    setPrefs(getGenrePrefs());
+  }, []);
+  useEffect(() => {
+    if (!tag && !mood && !genre) {
       setFilterRows(null);
       return;
     }
     setFilterRows(null);
-    void (mood ? postsByMood(mood) : postsByTag(tag!)).then(setFilterRows);
-  }, [tag, mood]);
+    void (genre ? postsByGenre(genre) : mood ? postsByMood(mood) : postsByTag(tag!)).then(setFilterRows);
+  }, [tag, mood, genre]);
 
-  const rows = tag || mood ? filterRows : discover.rows;
-  const trending = ["nexus", "shorts", "night", "music", "live", "friends"];
+  const rows = tag || mood || genre ? filterRows : discover.rows;
+  const trending = ["hiphop", "trap", "phonk", "electronic", "pop", "nexus", "shorts", "music", "live"];
 
   return (
     <div className="pb-10">
@@ -350,6 +359,27 @@ function Explore({ tag, mood }: { tag?: string; mood?: GramMood }) {
             Go
           </button>
         </form>
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-white/40 uppercase">Music genres</p>
+          <div className="flex flex-wrap gap-1.5">
+            {GRAM_GENRES.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => gramHome({ view: "explore", genre: g.id })}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setPrefs(toggleGenrePref(g.id));
+                }}
+                className={cn("rounded-full px-3 py-1 text-xs font-semibold", genre === g.id ? "text-black" : prefs.includes(g.id) ? "ring-1 ring-white/40 bg-white/10 text-white" : "bg-white/5 text-white/60 hover:bg-white/10")}
+                style={genre === g.id ? { background: g.hue } : undefined}
+                title={`Browse ${g.label} · right-click to pin for For you`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+          {prefs.length > 0 && <p className="mt-1.5 text-[11px] text-white/35">Pinned for For you: {prefs.map((id) => GRAM_GENRES.find((g) => g.id === id)?.label).filter(Boolean).join(" · ")}</p>}
+        </div>
         <div className="flex flex-wrap gap-1.5">
           {trending.map((t) => (
             <button key={t} onClick={() => gramHome({ view: "explore", tag: t })} className={cn("rounded-full px-3 py-1 text-xs font-semibold", tag === t ? "bg-white text-black" : "bg-white/5 text-white/60 hover:bg-white/10")}>
@@ -369,9 +399,15 @@ function Explore({ tag, mood }: { tag?: string; mood?: GramMood }) {
             </button>
           ))}
         </div>
-        {(tag || mood) && (
+        {(tag || mood || genre) && (
           <div className="flex items-center justify-between text-sm">
-            <p className="font-semibold">{mood ? `Mood · ${GRAM_MOODS.find((x) => x.id === mood)?.label}` : `#${tag}`}</p>
+            <p className="font-semibold">
+              {genre
+                ? `Genre · ${GRAM_GENRES.find((x) => x.id === genre)?.label}`
+                : mood
+                  ? `Mood · ${GRAM_MOODS.find((x) => x.id === mood)?.label}`
+                  : `#${tag}`}
+            </p>
             <button onClick={() => gramHome({ view: "explore" })} className="text-white/45 hover:text-white">
               Clear
             </button>
@@ -401,7 +437,7 @@ function Explore({ tag, mood }: { tag?: string; mood?: GramMood }) {
               );
             })}
           </div>
-          {!tag && !mood && !discover.done && <Sentinel onHit={discover.more} />}
+          {!tag && !mood && !genre && !discover.done && <Sentinel onHit={discover.more} />}
         </>
       )}
     </div>

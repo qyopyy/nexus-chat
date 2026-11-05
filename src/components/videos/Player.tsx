@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, Gauge, Link2, PictureInPicture2, Repeat, VolumeX } from "lucide-react";
+import { Camera, Download, Gauge, Link2, PictureInPicture2, Repeat, VolumeX } from "lucide-react";
 import { preparePlayback } from "@/lib/mediaAudio";
 import { toast } from "@/store/app";
-import { playbackUrl, qualityLabel, recordView, videoLink } from "@/lib/videos";
+import { canDownloadVideos, downloadVideo, playbackUrl, qualityLabel, recordView, videoLink } from "@/lib/videos";
 import { cn } from "@/lib/utils";
 import type { Video } from "@/lib/types";
 
@@ -151,6 +151,7 @@ export default function Player({ v, start, className, tools }: { v: Video; start
           loop={loop}
           poster={v.thumb_url ?? undefined}
           controls
+          controlsList={canDownloadVideos() ? undefined : "nodownload"}
           playsInline
           preload="metadata"
           className="size-full bg-black object-contain"
@@ -214,6 +215,11 @@ export default function Player({ v, start, className, tools }: { v: Video; start
         <button onClick={linkAt} className="flex shrink-0 items-center gap-1.5 rounded-full bg-side px-3 py-1.5 font-semibold hover:bg-hover">
           <Link2 className="size-4" /> Link at this time
         </button>
+        {canDownloadVideos() && (
+          <button onClick={() => void downloadVideo(v)} className="flex shrink-0 items-center gap-1.5 rounded-full bg-side px-3 py-1.5 font-semibold hover:bg-hover" title="Download (VIP+)">
+            <Download className="size-4" /> Download
+          </button>
+        )}
       </div>
     )}
     </div>
