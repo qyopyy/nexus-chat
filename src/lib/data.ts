@@ -422,6 +422,8 @@ export async function sendMessage(convId: string, content: string, file?: File |
   if (file && /^(audio|video)\//.test(file.type)) {
     const { shieldGate } = await import("./shield");
     if (await shieldGate(file, "chat")) return;
+    const { youtubeCidGate } = await import("./audio");
+    if (await youtubeCidGate(file, "chat")) return;
   }
   const effect = chosenEffect ?? (text ? effectForText(text) : null);
   if (effect) playEffect(effect);

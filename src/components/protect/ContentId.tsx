@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Fingerprint } from "lucide-react";
+import { Fingerprint, ShieldAlert } from "lucide-react";
 import { toast } from "@/store/app";
 import { studioGo } from "@/store/studio";
 import { loadProfiles } from "@/lib/data";
+import { checkStatus, setYoutubeCidBlock } from "@/lib/audio";
 import { isLive, listWorks, type ShieldWork } from "@/lib/shield";
 import { claimsAgainstMe, disputeClaim, myClaims, setClaim, setWorkPolicy, type Claim } from "@/lib/protect";
 import { cn } from "@/lib/utils";
@@ -25,15 +26,27 @@ export default function ContentId() {
   const [mine, setMine] = useState<Claim[]>([]);
   const [tab, setTab] = useState<"claims" | "refs" | "against">("claims");
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [ytCid, setYtCid] = useState(false);
+  const [ytStaff, setYtStaff] = useState(false);
+  const [ytReady, setYtReady] = useState(false);
+  const [ytBusy, setYtBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const [w, c, a] = await Promise.all([listWorks(), myClaims(), claimsAgainstMe()]);
+    const [w, c, a, st] = await Promise.all([listWorks(), myClaims(), claimsAgainstMe(), checkStatus()]);
     setWorks(w);
     setClaims(c);
     setMine(a);
+    setYtCid(!!st.youtubeCidBlock);
+    setYtStaff(!!st.staff);
+    setYtReady(!!st.configured);
     void loadProfiles([...c, ...a].flatMap((x) => [x.uploader_id, x.owner_id]).filter(Boolean) as string[]);
   }, []);
   useEffect(() => void load(), [load]);
+  // Live refresh of the global YouTube CID switch (~every 8s while this page is open)
+  useEffect(() => {
+    const t = setInterval(() => void checkStatus().then((s) => setYtCid(!!s.youtubeCidBlock)), 8_000);
+    return () => clearInterval(t);
+  }, []);
 
   const titles = useMemo(() => Object.fromEntries((works ?? []).map((w) => [w.id, w.title])), [works]);
   const open = claims.filter((c) => c.status === "open" || c.status === "disputed").length;
@@ -74,6 +87,47 @@ export default function ContentId() {
               <div className="text-xs text-white/70">{k}</div>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-line/70 bg-black/25 p-4">
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#ff0033]/15 text-[#ff4d6d]">
+            <ShieldAlert className="size-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="font-semibold">Global YouTube Content ID</div>
+              <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide", ytCid ? "bg-dnd/20 text-dnd" : "bg-white/10 text-sub")}>
+                {ytCid ? "Live · ON" : "OFF"}
+              </span>
+            </div>
+            <p className="mt-0.5 text-sm text-sub">
+              Separate site-wide kill switch. When on, audio that matches commercial / YouTube catalog recordings is blocked on upload — chat, videos, spaces, radio and releases. Does not replace your per-song Shield Content ID above.
+            </p>
+            {!ytReady && <p className="mt-1 text-xs text-idle">Connect ACRCloud in Studio → Distribution → Copyright check first.</p>}
+          </div>
+          {ytStaff && (
+            <button
+              type="button"
+              disabled={ytBusy || !ytReady}
+              onClick={async () => {
+                setYtBusy(true);
+                try {
+                  const next = !ytCid;
+                  await setYoutubeCidBlock(next);
+                  setYtCid(next);
+                  toast(next ? "YouTube Content ID block is ON — applying live" : "YouTube Content ID block is OFF", "success");
+                } catch (e) {
+                  toast((e as Error).message, "error");
+                }
+                setYtBusy(false);
+              }}
+              className={cn("rounded-full px-4 py-2 text-sm font-semibold text-white disabled:opacity-40", ytCid ? "bg-dnd" : "bg-accent")}
+            >
+              {ytBusy ? "Saving…" : ytCid ? "Turn off" : "Turn on"}
+            </button>
+          )}
         </div>
       </div>
 

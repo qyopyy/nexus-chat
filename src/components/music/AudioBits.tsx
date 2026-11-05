@@ -95,14 +95,15 @@ export const CHECK_INFO = {
   clean: { label: "No copyright matches", cls: "text-ok bg-ok/10 ring-ok/25" },
   own: { label: "Matches your own music", cls: "text-accent bg-accent/10 ring-accent/25" },
   match: { label: "Copyrighted music found", cls: "text-dnd bg-dnd/10 ring-dnd/30" },
+  blocked: { label: "Blocked by YouTube Content ID", cls: "text-dnd bg-dnd/15 ring-dnd/40" },
   error: { label: "Check couldn't finish", cls: "text-idle bg-idle/10 ring-idle/25" },
 } as const;
 
 export function CheckPill({ c, running }: { c?: AudioCheck | null; running?: boolean }) {
   if (running) return <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-sub">Checking copyright…</span>;
   if (!c) return null;
-  const i = CHECK_INFO[c.status];
-  const Icon = c.status === "match" ? ShieldAlert : c.status === "error" ? ShieldQuestion : ShieldCheck;
+  const i = CHECK_INFO[c.status] ?? CHECK_INFO.error;
+  const Icon = c.status === "match" || c.status === "blocked" ? ShieldAlert : c.status === "error" ? ShieldQuestion : ShieldCheck;
   return (
     <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1", i.cls)}>
       <Icon className="size-3" /> {i.label}
@@ -111,17 +112,18 @@ export function CheckPill({ c, running }: { c?: AudioCheck | null; running?: boo
 }
 
 export function CheckView({ c }: { c: AudioCheck }) {
-  const i = CHECK_INFO[c.status];
+  const i = CHECK_INFO[c.status] ?? CHECK_INFO.error;
   return (
     <div className={cn("rounded-xl p-3 ring-1", i.cls)}>
       <div className="flex items-center gap-2 font-semibold">
-        {c.status === "match" ? <ShieldAlert className="size-5" /> : c.status === "error" ? <ShieldQuestion className="size-5" /> : <ShieldCheck className="size-5" />}
+        {c.status === "match" || c.status === "blocked" ? <ShieldAlert className="size-5" /> : c.status === "error" ? <ShieldQuestion className="size-5" /> : <ShieldCheck className="size-5" />}
         {i.label}
         <span className="ml-auto text-[11px] font-normal text-sub">{new Date(c.created_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</span>
       </div>
       {c.status === "clean" && <p className="mt-1 text-sm text-txt/80">The audio fingerprint didn&apos;t match any released recording.</p>}
       {c.status === "error" && <p className="mt-1 text-sm text-txt/80">{c.note ?? "Try again in a moment."}</p>}
       {c.status === "own" && <p className="mt-1 text-sm text-txt/80">It matched a recording under your own artist name — that&apos;s fine.</p>}
+      {c.status === "blocked" && <p className="mt-1 text-sm text-txt/80">{c.note ?? "Global YouTube Content ID is on — this upload was blocked because it matches a commercial / YouTube catalog recording."}</p>}
       {c.matches.length > 0 && (
         <div className="mt-2 space-y-1.5">
           {c.matches.map((m, k) => (
@@ -151,6 +153,7 @@ export function CheckView({ c }: { c: AudioCheck }) {
             </div>
           ))}
           {c.status === "match" && <p className="text-xs text-txt/70">Only distribute or publish this if you own it or have a licence (samples need clearance too).</p>}
+          {c.status === "blocked" && <p className="text-xs text-txt/70">Staff turned on the global YouTube Content ID block. Turn it off in Studio → Content ID to allow matching uploads again.</p>}
         </div>
       )}
     </div>
