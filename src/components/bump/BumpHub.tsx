@@ -83,14 +83,14 @@ export default function BumpHub({ mobile }: { mobile?: boolean }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const q = new URLSearchParams(window.location.search).get("bump");
-    const path = window.location.pathname.match(/^\/b\/([a-z0-9]+)/i)?.[1];
+    const path = window.location.pathname.match(/^\/bump\/([a-z0-9]+)/i)?.[1];
     const code = q || path;
     if (code) {
       setRedeem(code);
       void bumpRedeemInvite(code).then(() => {
         const u = new URL(window.location.href);
         u.searchParams.delete("bump");
-        if (u.pathname.startsWith("/b/")) u.pathname = "/";
+        if (u.pathname.startsWith("/bump/")) u.pathname = "/";
         window.history.replaceState(null, "", u.pathname + u.search);
         void refresh();
       });

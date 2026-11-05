@@ -64,8 +64,9 @@ export function openBump() {
 
 export function bumpInviteLink(code: string) {
   const clean = code.trim();
-  if (typeof window === "undefined") return `https://nexusproject.cc/b/${encodeURIComponent(clean)}`;
-  return `${window.location.origin}/b/${encodeURIComponent(clean)}`;
+  // /bump/… — not /b/… (that path is reserved for bot profiles)
+  if (typeof window === "undefined") return `https://nexusproject.cc/bump/${encodeURIComponent(clean)}`;
+  return `${window.location.origin}/bump/${encodeURIComponent(clean)}`;
 }
 
 export function bumpSpotifyTrackEmbed(url: string | null | undefined) {

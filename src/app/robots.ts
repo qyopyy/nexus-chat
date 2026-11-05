@@ -6,7 +6,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/u/", "/n/", "/g/", "/v/", "/m/", "/b/"],
+        allow: ["/", "/u/", "/n/", "/g/", "/v/", "/m/", "/b/", "/bump/"],
         disallow: ["/api/", "/login", "/register", "/spotify-callback", "/release/"],
       },
     ],
