@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BellOff, CheckCheck, ChevronLeft, ChevronRight, Copy, Hash, Link2, Plus, Search, Star, Volume2 } from "lucide-react";
+import { BellOff, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, Hash, Link2, Plus, Search, Star, Volume2 } from "lucide-react";
 import { useApp, openModal, toast } from "@/store/app";
 import { loadSpace, markSpaceRead } from "@/lib/data";
 import { haptic } from "@/lib/haptics";
@@ -9,6 +9,7 @@ import { cn, initials } from "@/lib/utils";
 import {
   isFavoriteSpace,
   isSpaceMuted,
+  moveSpaceInList,
   sortSpaces,
   toggleFavoriteSpace,
   toggleMuteSpace,
@@ -58,13 +59,16 @@ function SpaceList() {
     return n;
   }, [spaces, channels, voiceCount]);
 
+  const spaceOrder = useSpacePrefs((s) => s.order);
+  const [reorder, setReorder] = useState(false);
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const base = needle
       ? spaces.filter((sp) => sp.name.toLowerCase().includes(needle) || (sp.description ?? "").toLowerCase().includes(needle))
       : spaces;
     return sortSpaces(base);
-  }, [spaces, q, favorites]); // favorites in deps so re-sort after starring
+  }, [spaces, q, favorites, spaceOrder]); // favorites/order in deps so re-sort after starring / ↑↓
+  const filteredIds = useMemo(() => filtered.map((s) => s.id), [filtered]);
 
   return (
     <div ref={scroller} className="h-full overflow-y-auto overscroll-contain">
@@ -72,9 +76,25 @@ function SpaceList() {
         title="My Servers"
         scroller={scroller}
         right={
-          <button onClick={() => openModal("createSpace")} className="grid size-10 place-items-center rounded-full text-accent active:bg-white/10" aria-label="Create or join a server">
-            <Plus className="size-6" />
-          </button>
+          <div className="flex items-center gap-1">
+            {spaces.length > 1 && (
+              <button
+                type="button"
+                onClick={() => {
+                  haptic.select();
+                  setReorder((v) => !v);
+                }}
+                aria-pressed={reorder}
+                className={cn("grid size-10 place-items-center rounded-full text-sm font-bold active:bg-white/10", reorder ? "bg-accent text-white" : "text-accent")}
+                aria-label={reorder ? "Done reordering" : "Reorder servers"}
+              >
+                ↕
+              </button>
+            )}
+            <button onClick={() => openModal("createSpace")} className="grid size-10 place-items-center rounded-full text-accent active:bg-white/10" aria-label="Create or join a server">
+              <Plus className="size-6" />
+            </button>
+          </div>
         }
       />
 
@@ -106,7 +126,7 @@ function SpaceList() {
             </button>
           </div>
         )}
-        {filtered.map((sp) => {
+        {filtered.map((sp, idx) => {
           const ch = channels[sp.id] ?? [];
           const text = ch.filter((c) => c.kind === "text").length;
           const voice = ch.filter((c) => c.kind === "voice");
@@ -116,8 +136,35 @@ function SpaceList() {
           const quiet = muted.includes(sp.id) || isSpaceMuted(sp.id);
           return (
             <div key={sp.id} className="relative">
+              {reorder && (
+                <div className="absolute top-3 right-3 z-10 flex gap-1">
+                  <button
+                    type="button"
+                    disabled={idx === 0}
+                    aria-label={`Move ${sp.name} up`}
+                    onClick={() => {
+                      if (moveSpaceInList(filteredIds, sp.id, -1)) haptic.light();
+                    }}
+                    className="grid size-9 place-items-center rounded-full bg-black/50 text-white disabled:opacity-30"
+                  >
+                    <ChevronUp className="size-5" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={idx === filtered.length - 1}
+                    aria-label={`Move ${sp.name} down`}
+                    onClick={() => {
+                      if (moveSpaceInList(filteredIds, sp.id, 1)) haptic.light();
+                    }}
+                    className="grid size-9 place-items-center rounded-full bg-black/50 text-white disabled:opacity-30"
+                  >
+                    <ChevronDown className="size-5" />
+                  </button>
+                </div>
+              )}
               <button
                 onClick={() => {
+                  if (reorder) return;
                   haptic.light();
                   useApp.setState({ spaceId: sp.id });
                   void loadSpace(sp.id);

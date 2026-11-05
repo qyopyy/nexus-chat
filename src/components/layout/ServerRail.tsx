@@ -13,6 +13,8 @@ import {
   LayoutDashboard,
   Megaphone,
   MessageCircle,
+  ChevronDown,
+  ChevronUp,
   Pencil,
   Plus,
   Radio,
@@ -27,7 +29,8 @@ import { openLiveHub } from "@/lib/live";
 import { openPulse } from "@/lib/pulse";
 import { can, openStaffDesk } from "@/lib/privileges";
 import { cn, initials } from "@/lib/utils";
-import { sortSpaces, useSpacePrefs } from "@/lib/spacePrefs";
+import { haptic } from "@/lib/haptics";
+import { moveSpaceInList, sortSpaces, useSpacePrefs } from "@/lib/spacePrefs";
 import { useRailLayout, type RailHubId } from "@/lib/railLayout";
 import RailCustomize, { HUB_META, applyRailTemplateFromHash } from "./RailCustomize";
 
@@ -175,10 +178,13 @@ export default function ServerRail() {
   const hub = useApp((s) => s.hub);
   const favorites = useSpacePrefs((s) => s.favorites);
   const muted = useSpacePrefs((s) => s.muted);
+  const spaceOrder = useSpacePrefs((s) => s.order);
   const entries = useRailLayout((s) => s.entries);
   const folders = useRailLayout((s) => s.folders);
-  const ordered = useMemo(() => sortSpaces(spaces), [spaces, favorites]);
+  const ordered = useMemo(() => sortSpaces(spaces), [spaces, favorites, spaceOrder]);
+  const spaceIds = useMemo(() => ordered.map((s) => s.id), [ordered]);
   const [customize, setCustomize] = useState(false);
+  const [reorderSpaces, setReorderSpaces] = useState(false);
   const [openFolder, setOpenFolder] = useState<string | null>(null);
   const folderPopRef = useRef<HTMLDivElement | null>(null);
 
@@ -309,28 +315,81 @@ export default function ServerRail() {
         </button>
 
         <div className="mx-auto h-0.5 w-8 rounded bg-line" />
-        {ordered.map((sp) => {
+        {ordered.length > 1 && (
+          <button
+            type="button"
+            title={reorderSpaces ? "Done reordering servers" : "Reorder servers (left-click ↑↓)"}
+            aria-label={reorderSpaces ? "Done reordering servers" : "Reorder servers"}
+            aria-pressed={reorderSpaces}
+            onClick={() => {
+              haptic.select();
+              setReorderSpaces((v) => !v);
+            }}
+            className={cn(
+              "grid size-8 place-items-center rounded-full text-[10px] font-bold transition",
+              reorderSpaces ? "bg-accent text-white" : "text-sub hover:bg-white/5 hover:text-txt",
+            )}
+          >
+            ↕
+          </button>
+        )}
+        {ordered.map((sp, idx) => {
           const quiet = muted.includes(sp.id);
           const spaceUnread = !quiet && (channels[sp.id] ?? []).some((c) => (unread[c.id] ?? 0) > 0);
           const fav = favorites.includes(sp.id);
           return (
-            <RailItem
-              key={sp.id}
-              active={spaceId === sp.id && !hub}
-              unread={spaceUnread}
-              label={quiet ? `${sp.name} (muted)` : sp.name}
-              onClick={() => (useApp.setState({ hub: null }), void selectSpace(sp.id))}
-              color={sp.icon_url ? undefined : sp.icon_color}
-            >
-              {sp.icon_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={sp.icon_url} alt="" className={cn("size-12 rounded-[inherit] object-cover", quiet && "opacity-55")} />
-              ) : (
-                <span className={cn("text-base font-semibold", quiet && "opacity-55")}>{initials(sp.name)}</span>
+            <div key={sp.id} className="group/space relative flex w-full flex-col items-center">
+              {reorderSpaces && (
+                <div className="mb-0.5 flex gap-0.5">
+                  <button
+                    type="button"
+                    disabled={idx === 0}
+                    title="Move server up"
+                    aria-label={`Move ${sp.name} up`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (moveSpaceInList(spaceIds, sp.id, -1)) haptic.light();
+                    }}
+                    className="grid size-5 place-items-center rounded bg-white/10 text-txt disabled:opacity-25"
+                  >
+                    <ChevronUp className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={idx === ordered.length - 1}
+                    title="Move server down"
+                    aria-label={`Move ${sp.name} down`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (moveSpaceInList(spaceIds, sp.id, 1)) haptic.light();
+                    }}
+                    className="grid size-5 place-items-center rounded bg-white/10 text-txt disabled:opacity-25"
+                  >
+                    <ChevronDown className="size-3.5" />
+                  </button>
+                </div>
               )}
-              {fav && <Star className="absolute -top-0.5 -right-0.5 size-3 fill-amber-400 text-amber-400 drop-shadow" />}
-              {quiet && <BellOff className="absolute -right-0.5 -bottom-0.5 size-3 text-sub drop-shadow" />}
-            </RailItem>
+              <RailItem
+                active={spaceId === sp.id && !hub}
+                unread={spaceUnread}
+                label={quiet ? `${sp.name} (muted)` : reorderSpaces ? `${sp.name} — use ↑↓ to reorder` : sp.name}
+                onClick={() => {
+                  if (reorderSpaces) return;
+                  useApp.setState({ hub: null });
+                  void selectSpace(sp.id);
+                }}
+                color={sp.icon_url ? undefined : sp.icon_color}
+              >
+                {sp.icon_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={sp.icon_url} alt="" className={cn("size-12 rounded-[inherit] object-cover", quiet && "opacity-55")} />
+                ) : (
+                  <span className={cn("text-base font-semibold", quiet && "opacity-55")}>{initials(sp.name)}</span>
+                )}
+                {fav && <Star className="absolute -top-0.5 -right-0.5 size-3 fill-amber-400 text-amber-400 drop-shadow" />}
+                {quiet && <BellOff className="absolute -right-0.5 -bottom-0.5 size-3 text-sub drop-shadow" />}
+              </RailItem>
+            </div>
           );
         })}
         <RailItem active={false} label="Add a Server" onClick={() => openModal("createSpace")}>
