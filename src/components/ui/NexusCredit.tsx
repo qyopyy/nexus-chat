@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, Instagram, Link2, Share2 } from "lucide-react";
+import { AtSign, Heart, Link2, Share2 } from "lucide-react";
 import { toast } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { SITE, shareAppText, shareAppUrl } from "@/lib/seo";
@@ -90,7 +90,7 @@ export function NexusCredit({
             rel="noreferrer"
             className="inline-flex items-center gap-1.5 font-semibold text-inherit underline-offset-2 hover:underline"
           >
-            <Instagram className="size-3.5 shrink-0 opacity-80" aria-hidden />
+            <AtSign className="size-3.5 shrink-0 opacity-80" aria-hidden />
             Instagram @{SITE.instagram.handle}
           </a>
         </div>
