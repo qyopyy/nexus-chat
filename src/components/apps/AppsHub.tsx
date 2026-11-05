@@ -1,16 +1,63 @@
 "use client";
 
 import { useState } from "react";
-import { AppWindow, ArrowLeft, FilePen, Fingerprint, ImagePlus } from "lucide-react";
+import {
+  Activity,
+  AppWindow,
+  ArrowLeft,
+  Binary,
+  Braces,
+  CaseSensitive,
+  FileDigit,
+  FilePen,
+  Fingerprint,
+  ImagePlus,
+  KeyRound,
+  Pipette,
+  QrCode,
+  Timer,
+  type LucideIcon,
+} from "lucide-react";
 import { useApp } from "@/store/app";
 import { cn } from "@/lib/utils";
 import ImageResizer from "./ImageResizer";
 import PdfEditor from "./PdfEditor";
 import MusicCheck from "./MusicCheck";
+import QrMaker from "./QrMaker";
+import ColorStudio from "./ColorStudio";
+import TextLab from "./TextLab";
+import Checksum from "./Checksum";
+import Metronome from "./Metronome";
+import BpmTap from "./BpmTap";
+import JsonLab from "./JsonLab";
+import TokenGen from "./TokenGen";
+import Base64Lab from "./Base64Lab";
 
-const TOOLS = [
+type ToolId =
+  | "image"
+  | "pdf"
+  | "music"
+  | "qr"
+  | "color"
+  | "text"
+  | "checksum"
+  | "metronome"
+  | "bpm"
+  | "json"
+  | "token"
+  | "base64";
+
+const TOOLS: {
+  id: ToolId;
+  name: string;
+  tag: string;
+  desc: string;
+  bg: string;
+  emoji: string;
+  Icon: LucideIcon;
+}[] = [
   {
-    id: "image" as const,
+    id: "image",
     name: "Image resizer",
     tag: "Resize on this device",
     desc: "Set width and height, keep the aspect ratio, preview, and download.",
@@ -19,7 +66,7 @@ const TOOLS = [
     Icon: ImagePlus,
   },
   {
-    id: "pdf" as const,
+    id: "pdf",
     name: "PDF editor",
     tag: "Notes, pages, download",
     desc: "Open a PDF, add text, reorder or delete pages, and save a new file.",
@@ -28,7 +75,7 @@ const TOOLS = [
     Icon: FilePen,
   },
   {
-    id: "music" as const,
+    id: "music",
     name: "Music ID check",
     tag: "Shield 360 · ACRCloud",
     desc: "Check a track against your Nexus fingerprints and ACRCloud Content ID.",
@@ -36,13 +83,103 @@ const TOOLS = [
     emoji: "🧬",
     Icon: Fingerprint,
   },
+  {
+    id: "qr",
+    name: "QR maker",
+    tag: "Links & codes",
+    desc: "Turn a URL or short note into a downloadable QR image.",
+    bg: "linear-gradient(135deg,#23a559,#0b3d24)",
+    emoji: "▣",
+    Icon: QrCode,
+  },
+  {
+    id: "color",
+    name: "Color studio",
+    tag: "HEX · RGB · contrast",
+    desc: "Pick brand colors and check contrast against white and black.",
+    bg: "linear-gradient(135deg,#faa61a,#5c3b0b)",
+    emoji: "🎨",
+    Icon: Pipette,
+  },
+  {
+    id: "text",
+    name: "Text lab",
+    tag: "Count · case · slug",
+    desc: "Word counts, casing, slugify, and tidy whitespace for titles and bios.",
+    bg: "linear-gradient(135deg,#5865f2,#1b1f5c)",
+    emoji: "Aa",
+    Icon: CaseSensitive,
+  },
+  {
+    id: "checksum",
+    name: "File checksum",
+    tag: "SHA-256 / 384 / 512",
+    desc: "Hash a local file to verify downloads or release assets.",
+    bg: "linear-gradient(135deg,#eb459e,#4a0b3a)",
+    emoji: "#",
+    Icon: FileDigit,
+  },
+  {
+    id: "metronome",
+    name: "Metronome",
+    tag: "Practice tempo",
+    desc: "Click track with adjustable BPM and time signature.",
+    bg: "linear-gradient(135deg,#f23f42,#5c0b12)",
+    emoji: "⏱",
+    Icon: Timer,
+  },
+  {
+    id: "bpm",
+    name: "BPM tap",
+    tag: "Estimate tempo",
+    desc: "Tap along with a song to read an estimated BPM.",
+    bg: "linear-gradient(135deg,#57f287,#0b3d24)",
+    emoji: "♩",
+    Icon: Activity,
+  },
+  {
+    id: "json",
+    name: "JSON lab",
+    tag: "Pretty · minify",
+    desc: "Format, minify, and validate JSON for APIs and webhooks.",
+    bg: "linear-gradient(135deg,#fee75c,#5c4b0b)",
+    emoji: "{}",
+    Icon: Braces,
+  },
+  {
+    id: "token",
+    name: "Token gen",
+    tag: "Passwords · UUIDs",
+    desc: "Generate strong passwords or UUIDs with Web Crypto.",
+    bg: "linear-gradient(135deg,#00a8fc,#0b2a5c)",
+    emoji: "🔑",
+    Icon: KeyRound,
+  },
+  {
+    id: "base64",
+    name: "Base64",
+    tag: "Encode · decode",
+    desc: "Convert UTF-8 text to Base64 and back for tokens and payloads.",
+    bg: "linear-gradient(135deg,#4e5058,#1e1f22)",
+    emoji: "64",
+    Icon: Binary,
+  },
 ];
 
 export default function AppsHub({ mobile }: { mobile?: boolean }) {
-  const [tool, setTool] = useState<(typeof TOOLS)[number]["id"] | null>(null);
+  const [tool, setTool] = useState<ToolId | null>(null);
   if (tool === "image") return <ImageResizer mobile={mobile} onBack={() => setTool(null)} />;
   if (tool === "pdf") return <PdfEditor mobile={mobile} onBack={() => setTool(null)} />;
   if (tool === "music") return <MusicCheck mobile={mobile} onBack={() => setTool(null)} />;
+  if (tool === "qr") return <QrMaker mobile={mobile} onBack={() => setTool(null)} />;
+  if (tool === "color") return <ColorStudio mobile={mobile} onBack={() => setTool(null)} />;
+  if (tool === "text") return <TextLab mobile={mobile} onBack={() => setTool(null)} />;
+  if (tool === "checksum") return <Checksum mobile={mobile} onBack={() => setTool(null)} />;
+  if (tool === "metronome") return <Metronome mobile={mobile} onBack={() => setTool(null)} />;
+  if (tool === "bpm") return <BpmTap mobile={mobile} onBack={() => setTool(null)} />;
+  if (tool === "json") return <JsonLab mobile={mobile} onBack={() => setTool(null)} />;
+  if (tool === "token") return <TokenGen mobile={mobile} onBack={() => setTool(null)} />;
+  if (tool === "base64") return <Base64Lab mobile={mobile} onBack={() => setTool(null)} />;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-chat">
@@ -58,7 +195,7 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl space-y-6 p-3 sm:p-5">
           <p className="text-sm text-sub">
-            Tools for files you already have. Image and PDF edits stay in the browser. Music ID check uses your Shield 360 catalogue and optional ACRCloud matching.
+            Creator utilities that run in this tab. File tools stay on-device; Music ID check uses your Shield 360 catalogue and optional ACRCloud matching.
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {TOOLS.map((item) => (
