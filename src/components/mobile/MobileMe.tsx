@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { Bell, ChevronRight, Copy, LayoutDashboard, LogOut, Mic, Moon, Palette, Shield, Sparkles, UserPen, Users, Gamepad2, Crown, Vault } from "lucide-react";
+import { AppWindow, Bell, ChevronRight, Copy, LayoutDashboard, LogOut, Mic, Moon, Palette, Shield, Sparkles, UserPen, Users, Gamepad2, Crown, Vault } from "lucide-react";
 import { useApp, openModal, toast } from "@/store/app";
 import { useStudio } from "@/store/studio";
 import { leaveCall } from "@/lib/call";
@@ -113,6 +113,7 @@ export default function MobileMe() {
         {row(<Users className="size-[18px]" />, "#2aabee", "Friends", () => useApp.setState({ mobileTab: "friends" }), pending > 0 ? <span className="rounded-full bg-dnd px-2 text-xs font-bold text-white">{pending}</span> : undefined)}
         {row(<LayoutDashboard className="size-[18px]" />, "#eb459e", "Studio — videos & music releases", () => useApp.setState({ hub: "studio" }))}
         {row(<Gamepad2 className="size-[18px]" />, "#ff2bd6", "Games", () => useApp.setState({ mobileTab: "games" }))}
+        {row(<AppWindow className="size-[18px]" />, "#00a8fc", "Apps — resize images & edit PDFs", () => useApp.setState({ mobileTab: "apps" }))}
         {row(<Vault className="size-[18px]" />, "#5865f2", "My Vault — private files & share links", () => {
           useStudio.setState({ section: "vault", releaseId: null });
           useApp.setState({ hub: "studio" });

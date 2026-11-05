@@ -45,7 +45,7 @@ export default function TabBar() {
     <nav className="tabbar relative z-30 shrink-0 border-t border-white/[.07] bg-side/80 pb-safe backdrop-blur-2xl">
       <div className="mx-auto flex max-w-lg">
         {items.map((it) => {
-          const active = tab === it.id || (it.id === "music" && tab === "games");
+          const active = tab === it.id || (it.id === "music" && tab === "games") || (it.id === "me" && tab === "apps");
           return (
             <button
               key={it.id}
