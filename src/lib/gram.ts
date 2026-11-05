@@ -34,14 +34,16 @@ export type GramProfile = {
 export type Comment = { id: number; post_id: string; author_id: string; body: string; created_at: string };
 
 export type GramRoute = { view: "home" } | { view: "shorts"; start?: string } | { view: "profile"; username: string } | { view: "post"; id: string } | { view: "explore" };
-export const useGram = create<{ stack: GramRoute[]; story: { authors: string[]; index: number } | null; create: null | "post" | "short" | "story" }>(() => ({
+export const useGram = create<{ stack: GramRoute[]; story: { authors: string[]; index: number } | null; create: null | "post" | "short" | "story"; trayEpoch: number }>(() => ({
   stack: [{ view: "home" }],
   story: null,
   create: null,
+  trayEpoch: 0,
 }));
 export const gramGo = (r: GramRoute) => useGram.setState((s) => ({ stack: [...s.stack, r] }));
 export const gramBack = () => useGram.setState((s) => ({ stack: s.stack.length > 1 ? s.stack.slice(0, -1) : s.stack }));
 export const gramHome = (r: GramRoute = { view: "home" }) => useGram.setState({ stack: [r] });
+export const bumpStoryTray = () => useGram.setState((s) => ({ trayEpoch: s.trayEpoch + 1 }));
 /** open NexusGram (desktop hub or phone tab) at a route */
 export function openGram(r?: GramRoute) {
   if (r) gramHome(r);
@@ -58,6 +60,35 @@ export const ago = (d: string) => {
 };
 const me = () => useApp.getState().userId!;
 
+const VIDEO_EXT = /^(mp4|m4v|mov|webm|mkv|avi|3gp|3g2)$/i;
+const IMAGE_EXT = /^(jpe?g|png|gif|webp|heic|heif|bmp|avif)$/i;
+
+/** browsers (esp. iOS) often leave File.type empty — infer from the name */
+export function mediaKind(file: File): "video" | "image" | null {
+  const t = (file.type || "").toLowerCase();
+  if (t.startsWith("video/")) return "video";
+  if (t.startsWith("image/")) return "image";
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  if (VIDEO_EXT.test(ext)) return "video";
+  if (IMAGE_EXT.test(ext)) return "image";
+  return null;
+}
+function mimeFor(file: File, kind: "video" | "image") {
+  if (file.type) return file.type;
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  if (kind === "video") {
+    if (ext === "mov") return "video/quicktime";
+    if (ext === "webm") return "video/webm";
+    if (ext === "m4v") return "video/x-m4v";
+    return "video/mp4";
+  }
+  if (ext === "png") return "image/png";
+  if (ext === "gif") return "image/gif";
+  if (ext === "webp") return "image/webp";
+  if (ext === "heic" || ext === "heif") return "image/heic";
+  return "image/jpeg";
+}
+
 // ------------------------------------------------------------------ media upload
 async function downscale(file: File, max = 1440): Promise<{ blob: Blob; w: number; h: number }> {
   const bmp = await createImageBitmap(file).catch(() => null);
@@ -65,7 +96,7 @@ async function downscale(file: File, max = 1440): Promise<{ blob: Blob; w: numbe
   const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
   const w = Math.round(bmp.width * k);
   const h = Math.round(bmp.height * k);
-  if (k === 1 && file.size < 1.5e6 && /jpe?g|webp/.test(file.type)) return { blob: file, w, h };
+  if (k === 1 && file.size < 1.5e6 && /jpe?g|webp/.test(file.type || mimeFor(file, "image"))) return { blob: file, w, h };
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;
@@ -73,59 +104,129 @@ async function downscale(file: File, max = 1440): Promise<{ blob: Blob; w: numbe
   const blob = await new Promise<Blob>((res) => c.toBlob((b) => res(b ?? file), "image/jpeg", 0.88));
   return { blob, w, h };
 }
-/** grab a frame from a video for the cover image */
+/** grab a frame from a video for the cover image — never blocks the upload for long */
 async function videoInfo(file: File): Promise<{ w: number; h: number; dur: number; poster: Blob | null }> {
   const url = URL.createObjectURL(file);
   try {
     const v = document.createElement("video");
     v.muted = true;
+    v.defaultMuted = true;
     v.playsInline = true;
-    v.preload = "auto";
+    v.setAttribute("playsinline", "");
+    v.setAttribute("webkit-playsinline", "");
+    v.preload = "metadata";
     v.src = url;
     await new Promise<void>((res, rej) => {
-      v.onloadeddata = () => res();
-      v.onerror = () => rej(new Error("Can't read this video"));
-      setTimeout(() => res(), 8000);
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        res();
+      };
+      v.onloadedmetadata = finish;
+      v.onloadeddata = finish;
+      v.onerror = () => {
+        if (done) return;
+        done = true;
+        rej(new Error("Can't read this video"));
+      };
+      setTimeout(finish, 5000);
     });
-    v.currentTime = Math.min(0.5, (v.duration || 1) / 3);
-    await new Promise<void>((res) => {
-      v.onseeked = () => res();
-      setTimeout(res, 3000);
-    });
+    // seek for a poster frame when we have dimensions; otherwise skip quickly
+    if (v.videoWidth > 0) {
+      try {
+        v.currentTime = Math.min(0.4, Number.isFinite(v.duration) && v.duration > 0 ? v.duration / 4 : 0.1);
+        await new Promise<void>((res) => {
+          v.onseeked = () => res();
+          setTimeout(res, 2000);
+        });
+      } catch {
+        /* some iOS codecs refuse seeks */
+      }
+    }
     const w = v.videoWidth || 720;
     const h = v.videoHeight || 1280;
-    const k = Math.min(1, 720 / Math.max(w, h));
-    const c = document.createElement("canvas");
-    c.width = Math.round(w * k);
-    c.height = Math.round(h * k);
-    c.getContext("2d")!.drawImage(v, 0, 0, c.width, c.height);
-    const poster = await new Promise<Blob | null>((res) => c.toBlob((b) => res(b), "image/jpeg", 0.82));
-    return { w, h, dur: v.duration || 0, poster };
+    let poster: Blob | null = null;
+    if (v.videoWidth > 0) {
+      try {
+        const k = Math.min(1, 720 / Math.max(w, h));
+        const c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(w * k));
+        c.height = Math.max(1, Math.round(h * k));
+        c.getContext("2d")!.drawImage(v, 0, 0, c.width, c.height);
+        poster = await new Promise<Blob | null>((res) => c.toBlob((b) => res(b), "image/jpeg", 0.82));
+      } catch {
+        poster = null;
+      }
+    }
+    const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
+    return { w, h, dur, poster };
   } finally {
     URL.revokeObjectURL(url);
   }
 }
-async function put(blob: Blob, ext: string, type: string) {
+/** XHR upload — fetch-based supabase.storage.upload hangs after CORS OPTIONS on iOS for large .mov/.mp4 */
+async function put(blob: Blob, ext: string, type: string, onProgress?: (p: number) => void) {
   const path = `${me()}/${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage.from("gram").upload(path, blob, { contentType: type, upsert: false, cacheControl: "31536000" });
-  if (error) throw new Error(errorText(error));
+  const { data: s } = await supabase.auth.getSession();
+  const token = s.session?.access_token;
+  if (!token) throw new Error("Sign in again to upload");
+  await new Promise<void>((res, rej) => {
+    const x = new XMLHttpRequest();
+    x.open("POST", `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/gram/${path.split("/").map(encodeURIComponent).join("/")}`);
+    x.setRequestHeader("Authorization", `Bearer ${token}`);
+    x.setRequestHeader("apikey", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "");
+    x.setRequestHeader("Content-Type", type || "application/octet-stream");
+    x.setRequestHeader("x-upsert", "false");
+    x.setRequestHeader("cache-control", "31536000");
+    x.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
+    };
+    x.onload = () => {
+      if (x.status < 300) return res();
+      let msg = `Upload failed (${x.status})`;
+      try {
+        const j = JSON.parse(x.responseText) as { message?: string; error?: string };
+        msg = j.message || j.error || msg;
+      } catch {
+        /* */
+      }
+      rej(new Error(msg));
+    };
+    x.onerror = () => rej(new Error("Network error while uploading — check your connection and try again"));
+    x.ontimeout = () => rej(new Error("Upload timed out — try a shorter clip"));
+    x.timeout = 5 * 60 * 1000;
+    x.send(blob);
+  });
   return path;
 }
 export async function uploadMedia(file: File, onStep?: (s: string) => void): Promise<Media> {
-  if (file.type.startsWith("video/")) {
+  const kind = mediaKind(file);
+  if (kind === "video") {
     if (file.size > 100 * 1024 * 1024) throw new Error("Videos can be up to 100 MB");
     onStep?.("Reading video…");
-    const info = await videoInfo(file);
+    const info = await videoInfo(file).catch(() => ({ w: 720, h: 1280, dur: 0, poster: null as Blob | null }));
     onStep?.("Uploading video…");
     const ext = (file.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
-    const path = await put(file, ext, file.type || "video/mp4");
-    const poster = info.poster ? await put(info.poster, "jpg", "image/jpeg") : null;
+    const path = await put(file, ext, mimeFor(file, "video"), (p) => onStep?.(`Uploading video… ${Math.round(p * 100)}%`));
+    let poster: string | null = null;
+    if (info.poster) {
+      onStep?.("Uploading cover…");
+      poster = await put(info.poster, "jpg", "image/jpeg").catch(() => null);
+    }
     return { path, type: "video", w: info.w, h: info.h, dur: Math.round(info.dur * 10) / 10, poster };
   }
-  if (!file.type.startsWith("image/")) throw new Error("Pick a photo or a video");
+  if (kind !== "image") throw new Error("Pick a photo or a video");
+  if (/heic|heif/i.test(file.type) || /\.heic$/i.test(file.name) || /\.heif$/i.test(file.name)) {
+    // most browsers can't display HEIC in <img>; convert via canvas when possible
+    onStep?.("Converting photo…");
+  }
   onStep?.("Uploading photo…");
   const { blob, w, h } = await downscale(file);
-  const path = await put(blob, blob.type === "image/png" ? "png" : "jpg", blob.type || "image/jpeg");
+  if ((blob === file || blob.size === 0) && /heic|heif/i.test(file.type || file.name)) {
+    throw new Error("This HEIC photo can't be used here — export it as JPEG first");
+  }
+  const path = await put(blob, blob.type === "image/png" ? "png" : "jpg", blob.type || "image/jpeg", (p) => onStep?.(`Uploading photo… ${Math.round(p * 100)}%`));
   return { path, type: "image", w, h };
 }
 
@@ -220,6 +321,7 @@ export async function changeUsername(name: string) {
 export async function createStory(media: Media, caption: string, hours: 24 | 48) {
   const { data, error } = await supabase.from("gram_stories").insert({ author_id: me(), media, caption: caption.trim().slice(0, 200), duration_h: hours }).select().single();
   if (error) throw new Error(errorText(error));
+  bumpStoryTray();
   return data as Story;
 }
 export async function storyTray() {
@@ -243,7 +345,9 @@ export async function myStoryState(ids: string[]) {
 export const viewStory = (id: string) => void supabase.rpc("gram_view_story", { p_story: id });
 export async function likeStory(id: string, on: boolean) {
   const q = on ? supabase.from("gram_story_likes").insert({ story_id: id, user_id: me() }) : supabase.from("gram_story_likes").delete().eq("story_id", id).eq("user_id", me());
-  await q;
+  const { error } = await q;
+  if (error && !/duplicate/i.test(error.message)) toast(errorText(error), "error");
+  return !error || /duplicate/i.test(error?.message ?? "");
 }
 export async function storyViewers(id: string) {
   const { data } = await supabase.from("gram_story_views").select("viewer_id, at").eq("story_id", id).order("at", { ascending: false }).limit(300);

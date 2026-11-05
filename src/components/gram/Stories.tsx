@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Eye, Heart, Plus, Trash2, X } from "lucide-react";
+import { Eye, Heart, Plus, Trash2, Volume2, VolumeX, X } from "lucide-react";
 import { useApp } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
@@ -29,9 +29,11 @@ export function StoryTray() {
   const meId = useApp((s) => s.userId)!;
   const [tray, setTray] = useState<TrayItem[]>([]);
   const open = useGram((s) => s.story);
+  const create = useGram((s) => s.create);
+  const trayEpoch = useGram((s) => s.trayEpoch);
   useEffect(() => {
-    if (!open) void storyTray().then(setTray);
-  }, [open]);
+    if (!open && create !== "story") void storyTray().then(setTray);
+  }, [open, create, trayEpoch]);
   const mine = tray.find((t) => t.author_id === meId);
   const others = tray.filter((t) => t.author_id !== meId);
   const authors = [...(mine ? [meId] : []), ...others.map((t) => t.author_id)];
@@ -66,6 +68,7 @@ export function StoryViewer() {
   const [i, setI] = useState(0);
   const [t, setT] = useState(0);
   const [hold, setHold] = useState(false);
+  const [muted, setMuted] = useState(true);
   const [liked, setLiked] = useState<Set<string>>(new Set());
   const [viewers, setViewers] = useState<string[] | null>(null);
   const vid = useRef<HTMLVideoElement>(null);
@@ -101,11 +104,20 @@ export function StoryViewer() {
     setViewers(null);
   }, [s?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // timer for photos (6 s); videos follow their own time
+  // photos: 6s; videos: follow playback, with a duration/15s fallback if autoplay is blocked
   useEffect(() => {
     if (!s || hold || viewers) return;
-    if (s.media.type === "video") return;
-    const id = setInterval(() => setT((x) => x + 0.05 / 6), 50);
+    const fallback = s.media.type === "video" ? Math.max(6, Math.min(30, s.media.dur && s.media.dur > 0 ? s.media.dur : 15)) : 6;
+    // only drive the bar from the fallback when it's a photo, or a video that isn't advancing
+    if (s.media.type === "video") {
+      const id = setInterval(() => {
+        const v = vid.current;
+        if (v && !v.paused && Number.isFinite(v.duration) && v.duration > 0 && v.currentTime > 0.05) return;
+        setT((x) => x + 0.05 / fallback);
+      }, 50);
+      return () => clearInterval(id);
+    }
+    const id = setInterval(() => setT((x) => x + 0.05 / fallback), 50);
     return () => clearInterval(id);
   }, [s, hold, viewers]);
   useEffect(() => {
@@ -117,9 +129,10 @@ export function StoryViewer() {
   useEffect(() => {
     const v = vid.current;
     if (!v) return;
+    v.muted = muted;
     if (hold || viewers) v.pause();
     else void v.play().catch(() => {});
-  }, [hold, viewers, s?.id]);
+  }, [hold, viewers, muted, s?.id]);
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       if (e.key === "Escape") close();
@@ -152,9 +165,16 @@ export function StoryViewer() {
               src={mediaUrl(s.media.path)}
               poster={mediaUrl(s.media.poster)}
               autoPlay
+              muted={muted}
               playsInline
-              onTimeUpdate={(e) => setT(e.currentTarget.currentTime / Math.max(0.1, e.currentTarget.duration))}
+              preload="auto"
+              onLoadedData={(e) => void e.currentTarget.play().catch(() => {})}
+              onTimeUpdate={(e) => {
+                const d = e.currentTarget.duration;
+                if (Number.isFinite(d) && d > 0) setT(e.currentTarget.currentTime / d);
+              }}
               onEnded={() => setT(1)}
+              onError={() => setT(1)}
               className="absolute inset-0 h-full w-full object-contain"
             />
           ) : (
@@ -190,7 +210,16 @@ export function StoryViewer() {
               <span className="text-sm font-bold">{p?.username}</span>
             </button>
             {s && <span className="text-xs text-white/70">{ago(s.created_at)} · {s.duration_h}h</span>}
-            <button onClick={close} className="ml-auto grid size-9 place-items-center rounded-full hover:bg-white/10" aria-label="Close">
+            {s?.media.type === "video" && (
+              <button
+                onClick={() => setMuted((m) => !m)}
+                className="ml-auto grid size-9 place-items-center rounded-full hover:bg-white/10"
+                aria-label={muted ? "Unmute" : "Mute"}
+              >
+                {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
+              </button>
+            )}
+            <button onClick={close} className={cn("grid size-9 place-items-center rounded-full hover:bg-white/10", s?.media.type !== "video" && "ml-auto")} aria-label="Close">
               <X className="size-6" />
             </button>
           </div>
