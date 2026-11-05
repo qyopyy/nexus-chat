@@ -5,6 +5,7 @@ import { ArrowLeft, Mic, MicOff, MonitorUp, Radio, Video, VideoOff } from "lucid
 import { useApp, toast } from "@/store/app";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
+import AvatarButton from "@/components/vavatar/AvatarButton";
 import {
   LIVE_QUALITIES,
   canLiveScreenShare,
@@ -73,7 +74,7 @@ function Lobby({ list }: { list: ReturnType<typeof useLive.getState>["liveList"]
         <div className="overflow-hidden rounded-3xl border border-[#9146ff]/30 bg-gradient-to-br from-[#2a0a4a] to-[#0e0e10] p-5">
           <div className="text-[10px] font-semibold tracking-[0.2em] text-[#bf94ff] uppercase">Go live</div>
           <h1 className="mt-1 text-2xl font-black">Broadcast in HD or 4K</h1>
-          <p className="mt-1 text-sm text-white/60">Camera, screen share, or both. Viewers sync over WebRTC — chat while you stream.</p>
+          <p className="mt-1 text-sm text-white/60">Camera, screen share, or both — and swap in your V-Avatar mid-stream with ✨. Viewers sync over WebRTC.</p>
 
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             <label className="text-xs text-white/50">
@@ -188,6 +189,7 @@ function StreamRoom({ mobile }: { mobile?: boolean }) {
   const micOn = useLive((s) => s.micOn);
   const camOn = useLive((s) => s.camOn);
   const screenOn = useLive((s) => s.screenOn);
+  const avatarOn = useLive((s) => s.avatarOn);
   const [text, setText] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const screenRef = useRef<HTMLVideoElement>(null);
@@ -225,10 +227,13 @@ function StreamRoom({ mobile }: { mobile?: boolean }) {
         {role === "host" && localScreen && (
           <video ref={screenRef} autoPlay playsInline muted className="absolute right-3 bottom-20 w-[30%] max-w-xs rounded-xl border border-white/20 object-contain shadow-2xl" />
         )}
-        <div className="absolute top-3 left-3 flex items-center gap-2">
+        <div className="absolute top-3 left-3 flex flex-wrap items-center gap-2">
           <span className="rounded bg-[#eb0400] px-2 py-0.5 text-[11px] font-black tracking-wide">LIVE</span>
           <span className="rounded bg-black/60 px-2 py-0.5 text-[11px] font-semibold backdrop-blur">{viewers} watching</span>
           <span className="rounded bg-black/60 px-2 py-0.5 text-[11px] text-white/70 backdrop-blur">{stream.quality}</span>
+          {avatarOn && (
+            <span className="rounded bg-gradient-to-r from-[#ff2bd6] to-[#8b5cff] px-2 py-0.5 text-[11px] font-bold tracking-wide">V-Avatar</span>
+          )}
         </div>
         <div className="absolute top-3 right-3 flex items-center gap-2 rounded-full bg-black/50 py-1 pr-3 pl-1 backdrop-blur">
           <Avatar userId={stream.host_id} size={28} plain />
@@ -240,19 +245,20 @@ function StreamRoom({ mobile }: { mobile?: boolean }) {
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3 pt-10">
           <div className="truncate text-lg font-bold">{stream.title}</div>
           {role === "host" && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button onClick={() => toggleLiveMic()} className={cn("grid size-10 place-items-center rounded-full", micOn ? "bg-white/15" : "bg-[#eb0400]")}>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button onClick={() => toggleLiveMic()} className={cn("tap-target grid place-items-center rounded-full", micOn ? "bg-white/15" : "bg-[#eb0400]")} aria-label={micOn ? "Mute" : "Unmute"}>
                 {micOn ? <Mic className="size-4" /> : <MicOff className="size-4" />}
               </button>
-              <button onClick={() => toggleLiveCam()} className={cn("grid size-10 place-items-center rounded-full", camOn ? "bg-white/15" : "bg-[#eb0400]")}>
+              <button onClick={() => toggleLiveCam()} className={cn("tap-target grid place-items-center rounded-full", avatarOn ? "bg-gradient-to-br from-[#ff2bd6]/40 to-[#8b5cff]/40" : camOn ? "bg-white/15" : "bg-[#eb0400]")} aria-label={camOn ? "Camera off" : "Camera on"} title={avatarOn ? "Turn off V-Avatar" : camOn ? "Camera off" : "Camera on"}>
                 {camOn ? <Video className="size-4" /> : <VideoOff className="size-4" />}
               </button>
+              <AvatarButton context="live" />
               {canLiveScreenShare() && (
-                <button onClick={() => void toggleLiveScreen()} className={cn("grid size-10 place-items-center rounded-full", screenOn ? "bg-[#9146ff]" : "bg-white/15")} title="Share screen">
+                <button onClick={() => void toggleLiveScreen()} className={cn("tap-target grid place-items-center rounded-full", screenOn ? "bg-[#9146ff]" : "bg-white/15")} title="Share screen" aria-label="Share screen">
                   <MonitorUp className="size-4" />
                 </button>
               )}
-              <button onClick={() => void endLive()} className="ml-auto rounded-full bg-[#eb0400] px-4 py-2 text-xs font-bold">
+              <button onClick={() => void endLive()} className="ml-auto min-h-10 rounded-full bg-[#eb0400] px-4 py-2 text-xs font-bold">
                 End stream
               </button>
             </div>
