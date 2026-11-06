@@ -16,6 +16,8 @@ export const supabase: SupabaseClient = createClient(
       autoRefreshToken: true,
       detectSessionInUrl: true,
       flowType: "pkce",
+      // Opt into passkeys / WebAuthn (Authy TOTP uses MFA; passkeys use this flag).
+      experimental: { passkey: true },
     },
     realtime: { params: { eventsPerSecond: 40 } },
   },
