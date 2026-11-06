@@ -35,8 +35,8 @@ const GAMES: { id: GameId; name: string; tag: string; desc: string; bg: string; 
   {
     id: "globalstrike",
     name: "Global Strike",
-    tag: "CS:GO-style · same engine · mobile",
-    desc: "CS:GO-flavored bomb defuse on the Classic Strike raycast engine — SMGs, Galil/FAMAS, AUG, SSG, Zeus, phone stick + FIRE pads.",
+    tag: "CS:GO-style · HQ 3D engine · mobile",
+    desc: "CS:GO-flavored bomb defuse with a new high-quality Three.js arena — SMGs, Galil/FAMAS, AUG, SSG, Zeus, phone stick + FIRE pads.",
     bg: "linear-gradient(135deg,#0ea5e9,#0f172a 50%,#ea580c)",
     emoji: "🌐",
     C: null,
@@ -125,10 +125,10 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
           <button onClick={() => setOpen("globalstrike")} className="group relative block w-full overflow-hidden rounded-3xl text-left" style={{ background: "linear-gradient(135deg,#0c4a6e 0%,#0f172a 42%,#c2410c 100%)" }}>
             <div className="pointer-events-none absolute inset-0 opacity-35" style={{ background: "radial-gradient(ellipse at 80% 20%,rgba(14,165,233,.35),transparent 55%)" }} />
             <div className="relative z-10 p-5 sm:p-8">
-              <div className="text-xs font-bold tracking-widest text-sky-300/90 uppercase">New · CS:GO-style · same engine · mobile ready</div>
+              <div className="text-xs font-bold tracking-widest text-sky-300/90 uppercase">New · CS:GO-style · HQ 3D engine · mobile ready</div>
               <div className="mt-1 font-mono text-3xl font-black tracking-tight text-white sm:text-5xl">GLOBAL STRIKE</div>
               <p className="mt-2 max-w-lg text-sm text-white/85">
-                Bomb defuse with the Classic Strike raycast engine — SMGs, Galil / FAMAS, AUG, SSG, Zeus. Virtual stick + FIRE pads sized for every phone.
+                Bomb defuse in a lit Three.js arena (mobile-tuned) — SMGs, Galil / FAMAS, AUG, SSG, Zeus. Virtual stick + FIRE pads sized for every phone.
               </p>
               <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-orange-400 px-5 py-2.5 font-bold text-black transition group-hover:scale-105">
                 <Play className="size-4 fill-current" /> Play Global · multiplayer

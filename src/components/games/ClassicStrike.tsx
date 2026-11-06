@@ -1,9 +1,8 @@
 "use client";
 
 /**
- * Classic / Global Strike — same browser raycast engine.
- * Classic = CS 1.6-style; Global = CS:GO-style loadout + HUD (original homage, not Valve assets).
- * Solo vs bots or online peers via classicstrike/net. Full mobile virtual controls.
+ * Classic / Global Strike — Classic uses Canvas2D raycast; Global defaults to the
+ * high-quality Three.js engine (mobile-tuned). Original homage, not Valve assets.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -11,6 +10,9 @@ import { type GameProps } from "./common";
 import { peerPose, type CsNet } from "./classicstrike/net";
 import MobileControls from "./classicstrike/MobileControls";
 import { freshTouchCtl } from "./classicstrike/touchCtl";
+import { createHqEngine, type HqEngine } from "./classicstrike/hqEngine";
+
+export type StrikeEngine = "raycast" | "hq";
 
 type Team = "T" | "CT";
 export type StrikeEdition = "classic" | "global";
@@ -116,8 +118,10 @@ export type ClassicStrikeProps = GameProps & {
   net?: CsNet | null;
   playerName?: string;
   initialTeam?: Team;
-  /** classic = 1.6 homage; global = CS:GO-style loadout on the same engine */
+  /** classic = 1.6 homage; global = CS:GO-style loadout */
   edition?: StrikeEdition;
+  /** Global defaults to hq (Three.js); classic stays raycast */
+  engine?: StrikeEngine;
 };
 
 export default function ClassicStrike({
@@ -128,12 +132,15 @@ export default function ClassicStrike({
   playerName = "You",
   initialTeam = "T",
   edition = "classic",
+  engine,
 }: ClassicStrikeProps) {
   const online = mode === "online" && !!net;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const touchCtl = useRef(freshTouchCtl());
   const isTouch =
     typeof window !== "undefined" && (navigator.maxTouchPoints > 0 || "ontouchstart" in window);
+  const preferHq = (engine ?? (edition === "global" ? "hq" : "raycast")) === "hq";
+  const [hqOn, setHqOn] = useState(preferHq);
   const [hud, setHud] = useState({
     hp: 100,
     armor: 0,
@@ -163,8 +170,13 @@ export default function ClassicStrike({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    let hq: HqEngine | null = null;
+    let ctx: CanvasRenderingContext2D | null = null;
+    let useHq = preferHq;
+    if (!preferHq) {
+      ctx = canvas.getContext("2d");
+      if (!ctx) return;
+    }
     const pool = arsenalFor(edition);
     const wepOf = (id: WepId) => pool.find((w) => w.id === id) || pool[0]!;
     const ctl = touchCtl.current;
@@ -385,14 +397,41 @@ export default function ClassicStrike({
       const parent = canvas.parentElement;
       w = parent?.clientWidth || 640;
       h = parent?.clientHeight || 480;
-      canvas.width = w * devicePixelRatio;
-      canvas.height = h * devicePixelRatio;
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
-      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      if (hq) {
+        hq.resize(w, h);
+      } else if (ctx) {
+        const dpr = Math.min(devicePixelRatio || 1, isTouch ? 1.5 : 2);
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
     };
     resize();
     window.addEventListener("resize", resize);
+
+    // Boot HQ Three.js engine (Global default); fall back to raycast if WebGL fails
+    if (preferHq) {
+      void createHqEngine(canvas, MAP, { mobile: isTouch })
+        .then((eng) => {
+          if (!alive) {
+            eng.dispose();
+            return;
+          }
+          hq = eng;
+          useHq = true;
+          setHqOn(true);
+          resize();
+        })
+        .catch(() => {
+          if (!alive) return;
+          ctx = canvas.getContext("2d");
+          useHq = false;
+          setHqOn(false);
+          resize();
+        });
+    }
 
     const onKey = (e: KeyboardEvent) => {
       keys[e.code] = e.type === "keydown";
@@ -953,13 +992,42 @@ export default function ClassicStrike({
         if (p.life <= 0) particles.splice(i, 1);
       }
 
-      // ——— RENDER raycaster ———
+      // ——— RENDER ———
+      if (hq && useHq) {
+        hq.frame({
+          player: { x: player.x, y: player.y, a: player.a },
+          bots: bots.map((b) => ({
+            x: b.x,
+            y: b.y,
+            a: b.a,
+            hp: b.hp,
+            team: b.team,
+            alive: b.alive,
+            name: b.name,
+          })),
+          bomb: bombPlanted ? { x: bombX, y: bombY, t: bombT } : null,
+          flash,
+          wep: player.wep,
+        });
+        syncHud();
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+
+      const g = ctx;
+      if (!g) {
+        syncHud();
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+
+      // Canvas2D raycaster (Classic / HQ fallback)
       const FOV = Math.PI / 3;
       const rays = Math.min(320, w);
-      ctx.fillStyle = "#1c1917";
-      ctx.fillRect(0, 0, w, h / 2);
-      ctx.fillStyle = "#292524";
-      ctx.fillRect(0, h / 2, w, h / 2);
+      g.fillStyle = "#1c1917";
+      g.fillRect(0, 0, w, h / 2);
+      g.fillStyle = "#292524";
+      g.fillRect(0, h / 2, w, h / 2);
 
       for (let col = 0; col < rays; col++) {
         const rayA = player.a - FOV / 2 + (col / rays) * FOV;
@@ -994,8 +1062,8 @@ export default function ClassicStrike({
         const shade = Math.max(0.15, 1 - dist / 16);
         if (hit === 1) {
           const side = Math.abs(Math.floor(hitX) - hitX) < 0.02 || Math.abs(Math.ceil(hitX) - hitX) < 0.02;
-          ctx.fillStyle = side ? `rgb(${40 * shade | 0},${55 * shade | 0},${40 * shade | 0})` : `rgb(${70 * shade | 0},${90 * shade | 0},${55 * shade | 0})`;
-          ctx.fillRect((col * w) / rays, (h - wallH) / 2, w / rays + 1, wallH);
+          g.fillStyle = side ? `rgb(${40 * shade | 0},${55 * shade | 0},${40 * shade | 0})` : `rgb(${70 * shade | 0},${90 * shade | 0},${55 * shade | 0})`;
+          g.fillRect((col * w) / rays, (h - wallH) / 2, w / rays + 1, wallH);
         }
       }
 
@@ -1018,23 +1086,23 @@ export default function ClassicStrike({
             const size = Math.min(h * 0.9, (h * 0.55) / dist);
             const sx = w / 2 + (a / FOV) * w - size / 2;
             const sy = h / 2 - size * 0.15;
-            ctx.fillStyle = b.team === "T" ? "#b45309" : "#1d4ed8";
-            ctx.fillRect(sx + size * 0.3, sy + size * 0.25, size * 0.4, size * 0.55);
-            ctx.fillStyle = "#fcd34d";
-            ctx.beginPath();
-            ctx.arc(sx + size / 2, sy + size * 0.2, size * 0.18, 0, Math.PI * 2);
-            ctx.fill();
+            g.fillStyle = b.team === "T" ? "#b45309" : "#1d4ed8";
+            g.fillRect(sx + size * 0.3, sy + size * 0.25, size * 0.4, size * 0.55);
+            g.fillStyle = "#fcd34d";
+            g.beginPath();
+            g.arc(sx + size / 2, sy + size * 0.2, size * 0.18, 0, Math.PI * 2);
+            g.fill();
             if (b.name) {
-              ctx.fillStyle = "#fff";
-              ctx.font = `bold ${Math.max(10, size * 0.12)}px sans-serif`;
-              ctx.textAlign = "center";
-              ctx.fillText(b.name.slice(0, 12), sx + size / 2, sy - 4);
+              g.fillStyle = "#fff";
+              g.font = `bold ${Math.max(10, size * 0.12)}px sans-serif`;
+              g.textAlign = "center";
+              g.fillText(b.name.slice(0, 12), sx + size / 2, sy - 4);
             }
             // HP bar
-            ctx.fillStyle = "#000";
-            ctx.fillRect(sx + size * 0.2, sy, size * 0.6, 4);
-            ctx.fillStyle = "#22c55e";
-            ctx.fillRect(sx + size * 0.2, sy, size * 0.6 * (b.hp / 100), 4);
+            g.fillStyle = "#000";
+            g.fillRect(sx + size * 0.2, sy, size * 0.6, 4);
+            g.fillStyle = "#22c55e";
+            g.fillRect(sx + size * 0.2, sy, size * 0.6 * (b.hp / 100), 4);
           },
         });
       }
@@ -1053,12 +1121,12 @@ export default function ClassicStrike({
               const size = Math.min(80, 40 / dist);
               const sx = w / 2 + (a / FOV) * w;
               const sy = h / 2 + 20;
-              ctx.fillStyle = "#111";
-              ctx.fillRect(sx - size / 2, sy, size, size * 0.5);
-              ctx.fillStyle = bombT < 10 ? "#ef4444" : "#fbbf24";
-              ctx.font = `bold ${Math.max(10, size * 0.45)}px monospace`;
-              ctx.textAlign = "center";
-              ctx.fillText(bombT.toFixed(1), sx, sy + size * 0.4);
+              g.fillStyle = "#111";
+              g.fillRect(sx - size / 2, sy, size, size * 0.5);
+              g.fillStyle = bombT < 10 ? "#ef4444" : "#fbbf24";
+              g.font = `bold ${Math.max(10, size * 0.45)}px monospace`;
+              g.textAlign = "center";
+              g.fillText(bombT.toFixed(1), sx, sy + size * 0.4);
             },
           });
         }
@@ -1067,75 +1135,75 @@ export default function ClassicStrike({
       for (const s of sprs) s.draw();
 
       // gun viewmodel
-      ctx.fillStyle = "#44403c";
-      ctx.fillRect(w * 0.55, h * 0.72, w * 0.35, h * 0.28);
-      ctx.fillStyle = "#292524";
-      ctx.fillRect(w * 0.62, h * 0.68, w * 0.12, h * 0.1);
-      ctx.fillStyle = "#a8a29e";
-      ctx.fillRect(w * 0.64, h * 0.55, w * 0.06, h * 0.15);
+      g.fillStyle = "#44403c";
+      g.fillRect(w * 0.55, h * 0.72, w * 0.35, h * 0.28);
+      g.fillStyle = "#292524";
+      g.fillRect(w * 0.62, h * 0.68, w * 0.12, h * 0.1);
+      g.fillStyle = "#a8a29e";
+      g.fillRect(w * 0.64, h * 0.55, w * 0.06, h * 0.15);
 
       // crosshair
-      ctx.strokeStyle = "#fafafa";
-      ctx.lineWidth = 1.5;
+      g.strokeStyle = "#fafafa";
+      g.lineWidth = 1.5;
       const cx = w / 2;
       const cy = h / 2;
       const gap = 4;
       const len = 8;
-      ctx.beginPath();
-      ctx.moveTo(cx - gap - len, cy);
-      ctx.lineTo(cx - gap, cy);
-      ctx.moveTo(cx + gap, cy);
-      ctx.lineTo(cx + gap + len, cy);
-      ctx.moveTo(cx, cy - gap - len);
-      ctx.lineTo(cx, cy - gap);
-      ctx.moveTo(cx, cy + gap);
-      ctx.lineTo(cx, cy + gap + len);
-      ctx.stroke();
+      g.beginPath();
+      g.moveTo(cx - gap - len, cy);
+      g.lineTo(cx - gap, cy);
+      g.moveTo(cx + gap, cy);
+      g.lineTo(cx + gap + len, cy);
+      g.moveTo(cx, cy - gap - len);
+      g.lineTo(cx, cy - gap);
+      g.moveTo(cx, cy + gap);
+      g.lineTo(cx, cy + gap + len);
+      g.stroke();
 
       // minimap
       const ms = 6;
       const mox = 12;
       const moy = 12;
-      ctx.globalAlpha = 0.85;
+      g.globalAlpha = 0.85;
       for (let y = 0; y < MH; y++) {
         for (let x = 0; x < MW; x++) {
           const c = MAP[y][x];
-          ctx.fillStyle = c === 1 ? "#3f3f46" : c === 2 ? "#b91c1c" : c === 3 ? "#1d4ed8" : c === 4 ? "#a16207" : c === 5 ? "#1e3a8a" : "#57534e";
-          ctx.fillRect(mox + x * ms, moy + y * ms, ms - 0.5, ms - 0.5);
+          g.fillStyle = c === 1 ? "#3f3f46" : c === 2 ? "#b91c1c" : c === 3 ? "#1d4ed8" : c === 4 ? "#a16207" : c === 5 ? "#1e3a8a" : "#57534e";
+          g.fillRect(mox + x * ms, moy + y * ms, ms - 0.5, ms - 0.5);
         }
       }
-      ctx.fillStyle = "#fbbf24";
-      ctx.beginPath();
-      ctx.arc(mox + player.x * ms, moy + player.y * ms, 2.5, 0, Math.PI * 2);
-      ctx.fill();
+      g.fillStyle = "#fbbf24";
+      g.beginPath();
+      g.arc(mox + player.x * ms, moy + player.y * ms, 2.5, 0, Math.PI * 2);
+      g.fill();
       for (const b of bots) {
         if (!b.alive) continue;
-        ctx.fillStyle = b.team === "T" ? "#f97316" : "#60a5fa";
-        ctx.fillRect(mox + b.x * ms - 1.5, moy + b.y * ms - 1.5, 3, 3);
+        g.fillStyle = b.team === "T" ? "#f97316" : "#60a5fa";
+        g.fillRect(mox + b.x * ms - 1.5, moy + b.y * ms - 1.5, 3, 3);
       }
       if (bombPlanted) {
-        ctx.fillStyle = "#ef4444";
-        ctx.fillRect(mox + bombX * ms - 2, moy + bombY * ms - 2, 4, 4);
+        g.fillStyle = "#ef4444";
+        g.fillRect(mox + bombX * ms - 2, moy + bombY * ms - 2, 4, 4);
       }
-      ctx.globalAlpha = 1;
+      g.globalAlpha = 1;
 
       if (flash > 0) {
-        ctx.fillStyle = `rgba(255,255,255,${Math.min(0.85, flash)})`;
-        ctx.fillRect(0, 0, w, h);
+        g.fillStyle = `rgba(255,255,255,${Math.min(0.85, flash)})`;
+        g.fillRect(0, 0, w, h);
       }
 
       // Desktop buy overlay (touch uses HTML sheet)
       if (buyOpen && phase === "buy" && !isTouch) {
-        ctx.fillStyle = "rgba(0,0,0,0.72)";
-        ctx.fillRect(w * 0.12, h * 0.12, w * 0.76, h * 0.7);
-        ctx.strokeStyle = edition === "global" ? "#f97316" : "#fbbf24";
-        ctx.strokeRect(w * 0.12, h * 0.12, w * 0.76, h * 0.7);
-        ctx.fillStyle = edition === "global" ? "#f97316" : "#fbbf24";
-        ctx.font = "bold 18px monospace";
-        ctx.textAlign = "left";
-        ctx.fillText(edition === "global" ? "GLOBAL BUY (B)" : "BUY MENU  (B to close)", w * 0.15, h * 0.18);
-        ctx.font = "12px monospace";
-        ctx.fillStyle = "#e7e5e4";
+        g.fillStyle = "rgba(0,0,0,0.72)";
+        g.fillRect(w * 0.12, h * 0.12, w * 0.76, h * 0.7);
+        g.strokeStyle = edition === "global" ? "#f97316" : "#fbbf24";
+        g.strokeRect(w * 0.12, h * 0.12, w * 0.76, h * 0.7);
+        g.fillStyle = edition === "global" ? "#f97316" : "#fbbf24";
+        g.font = "bold 18px monospace";
+        g.textAlign = "left";
+        g.fillText(edition === "global" ? "GLOBAL BUY (B)" : "BUY MENU  (B to close)", w * 0.15, h * 0.18);
+        g.font = "12px monospace";
+        g.fillStyle = "#e7e5e4";
         const lines =
           edition === "global"
             ? [
@@ -1156,18 +1224,18 @@ export default function ClassicStrike({
                 "4  AWP            $4750",
                 "5  Kevlar+Helmet  $650",
               ];
-        lines.forEach((l, i) => ctx.fillText(l, w * 0.15, h * 0.24 + i * 20));
-        ctx.fillStyle = "#a3e635";
-        ctx.fillText(`Money $${player.money}`, w * 0.15, h * 0.76);
+        lines.forEach((l, i) => g.fillText(l, w * 0.15, h * 0.24 + i * 20));
+        g.fillStyle = "#a3e635";
+        g.fillText(`Money $${player.money}`, w * 0.15, h * 0.76);
       }
 
       if (!pointerLocked && !buyOpen && !isTouch) {
-        ctx.fillStyle = "rgba(0,0,0,0.5)";
-        ctx.fillRect(0, h * 0.42, w, 36);
-        ctx.fillStyle = "#fff";
-        ctx.font = "14px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("Click to capture mouse · WASD move · B buy · R reload", w / 2, h * 0.42 + 24);
+        g.fillStyle = "rgba(0,0,0,0.5)";
+        g.fillRect(0, h * 0.42, w, 36);
+        g.fillStyle = "#fff";
+        g.font = "14px sans-serif";
+        g.textAlign = "center";
+        g.fillText("Click to capture mouse · WASD move · B buy · R reload", w / 2, h * 0.42 + 24);
       }
 
       syncHud();
@@ -1186,8 +1254,9 @@ export default function ClassicStrike({
       canvas.removeEventListener("touchmove", onTouchMove);
       canvas.removeEventListener("touchstart", onTouchStart);
       if (document.pointerLockElement === canvas) document.exitPointerLock();
+      hq?.dispose();
     };
-  }, [onOver, onScore, mode, net, playerName, initialTeam, edition, isTouch]);
+  }, [onOver, onScore, mode, net, playerName, initialTeam, edition, isTouch, preferHq]);
 
   const buyItems =
     edition === "global"
@@ -1214,6 +1283,22 @@ export default function ClassicStrike({
   return (
     <div className="relative size-full min-h-[360px] overflow-hidden bg-black select-none">
       <canvas ref={canvasRef} className="size-full touch-none" />
+      {/* HQ crosshair + engine badge (raycast draws these on canvas) */}
+      {hqOn && (
+        <>
+          <div className="pointer-events-none absolute inset-0 z-[5] grid place-items-center">
+            <div className="relative size-6">
+              <div className="absolute top-1/2 left-0 h-px w-2 -translate-y-1/2 bg-white/90" />
+              <div className="absolute top-1/2 right-0 h-px w-2 -translate-y-1/2 bg-white/90" />
+              <div className="absolute top-0 left-1/2 h-2 w-px -translate-x-1/2 bg-white/90" />
+              <div className="absolute bottom-0 left-1/2 h-2 w-px -translate-x-1/2 bg-white/90" />
+            </div>
+          </div>
+          <div className="pointer-events-none absolute top-2 left-1/2 z-[5] -translate-x-1/2 rounded-full bg-sky-500/25 px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-sky-100 ring-1 ring-sky-400/40">
+            HQ ENGINE{isTouch ? " · MOBILE" : ""}
+          </div>
+        </>
+      )}
       {isTouch && (
         <MobileControls
           ctl={touchCtl}
