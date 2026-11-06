@@ -27,6 +27,8 @@ export type BumpNearby = {
   profile_place_name?: string | null;
   profile_place_lat?: number | null;
   profile_place_lng?: number | null;
+  username?: string | null;
+  display_name?: string | null;
 };
 
 export type BumpProfile = {

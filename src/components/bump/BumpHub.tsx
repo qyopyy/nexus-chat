@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Bell,
   BellOff,
+  Compass,
   Copy,
   Download,
   ExternalLink,
@@ -76,6 +77,16 @@ import WumpGroups from "./WumpGroups";
 import { WUMP, WUMP_TAGLINE } from "@/lib/wumpBrand";
 import { pauseBumpMusic, playBumpTrack, useBumpMusic } from "@/lib/bumpMusic";
 import { fetchWumpPrivacy, loadWumpPrivacyLocal } from "@/lib/wumpPrivacy";
+import {
+  wumpDeleteSavedPlace,
+  wumpExploreMark,
+  wumpExploreStats,
+  wumpListSavedPlaces,
+  wumpProfileUrl,
+  wumpSavePlace,
+  type WumpExploreStats,
+  type WumpSavedPlace,
+} from "@/lib/wumpPlaces";
 
 type Tab = "nearby" | "friends" | "music" | "profile" | "social" | "messages" | "settings" | "groups";
 
@@ -125,7 +136,18 @@ export default function BumpHub({
   const [myHeading, setMyHeading] = useState<number | null>(null);
   const [myAccuracy, setMyAccuracy] = useState<number | null>(null);
   const [myPlaceName, setMyPlaceName] = useState<string | null>(null);
+  const [savedPlaces, setSavedPlaces] = useState<WumpSavedPlace[]>([]);
+  const [explore, setExplore] = useState<WumpExploreStats>({
+    percent: 0,
+    explored_local: 0,
+    total_local: 0,
+    explored_all: 0,
+    radius_m: 5000,
+    has_location: false,
+  });
+  const [placesPanel, setPlacesPanel] = useState(false);
   const bumpOnly = standalone || isBumpApp();
+  const myUsername = me ? profiles[me]?.username || null : null;
   const musicPlaying = useBumpMusic((s) => s.playing);
   const musicCurrentId = useBumpMusic((s) => s.currentId);
   const musicTracks = useBumpMusic((s) => s.tracks);
@@ -159,6 +181,19 @@ export default function BumpHub({
     return m;
   }, [nearby]);
 
+  const refreshExplore = useCallback(async (lat?: number | null, lng?: number | null) => {
+    if (!me) return;
+    const stats = await wumpExploreStats(lat ?? myLat, lng ?? myLng);
+    setExplore(stats);
+  }, [me, myLat, myLng]);
+
+  const refreshPlaces = useCallback(async () => {
+    if (!me) return;
+    const rows = await wumpListSavedPlaces();
+    setSavedPlaces(rows);
+    if (rows.length) setPlacesPanel(true);
+  }, [me]);
+
   const refresh = useCallback(async () => {
     if (!me) return;
     const [n, f, mine] = await Promise.all([
@@ -176,6 +211,10 @@ export default function BumpHub({
       setMyHeading(mine.heading ?? null);
       setMyAccuracy(mine.accuracy_m ?? null);
       setMyPlaceName(mine.place_name || mine.place_locality || null);
+      void refreshExplore(mine.lat, mine.lng);
+      void wumpExploreMark(mine.lat, mine.lng).then((r) => {
+        if (r?.new) void refreshExplore(mine.lat, mine.lng);
+      });
     } else {
       setLive(false);
       setMyLat(null);
@@ -183,8 +222,13 @@ export default function BumpHub({
       setMyHeading(null);
       setMyAccuracy(null);
       setMyPlaceName(null);
+      void refreshExplore(null, null);
     }
-  }, [me, radius]);
+  }, [me, radius, refreshExplore]);
+
+  useEffect(() => {
+    void refreshPlaces();
+  }, [refreshPlaces]);
 
   // Restore Live + nearby; poll fast while Live so pins feel realtime
   useEffect(() => {
@@ -242,6 +286,9 @@ export default function BumpHub({
           setMyHeading(meta.heading);
           setMyAccuracy(meta.accuracy);
         }
+      },
+      onExplore: () => {
+        void refreshExplore();
       },
     });
     return () => {
@@ -364,6 +411,28 @@ export default function BumpHub({
   function openPerson(userId: string) {
     setViewUser(userId);
     setTab("social");
+  }
+
+  function openProfilePage(username: string) {
+    const url = wumpProfileUrl(username);
+    if (!url) return;
+    if (typeof window !== "undefined") {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  }
+
+  async function handleSavePlace(input: {
+    name: string;
+    lat: number;
+    lng: number;
+    locality?: string | null;
+    source: "map" | "live" | "tap";
+  }) {
+    const row = await wumpSavePlace(input);
+    if (row) {
+      setSavedPlaces((prev) => [row, ...prev.filter((p) => p.id !== row.id)]);
+      setPlacesPanel(true);
+    }
   }
 
   function openMessages(userId: string) {
@@ -523,12 +592,16 @@ export default function BumpHub({
               myHeading={myHeading}
               myAccuracy={myAccuracy}
               myPlaceName={myPlaceName}
+              myUsername={myUsername}
               nearby={nearby}
               live={live}
               viewsToday={friendIds.length + nearby.length + (live ? 1 : 0)}
-              placesCount={
-                nearby.filter((n) => n.place_name || n.profile_place_name).length + family.length
-              }
+              placesCount={savedPlaces.length + nearby.filter((n) => n.place_name || n.profile_place_name).length + family.length}
+              savedPlaces={savedPlaces}
+              explorePercent={explore.percent}
+              exploreLocal={explore.explored_local}
+              exploreTotal={explore.total_local}
+              exploreAll={explore.explored_all}
               playing={musicPlaying}
               onTogglePlay={() => {
                 if (musicPlaying) pauseBumpMusic();
@@ -540,36 +613,55 @@ export default function BumpHub({
                 }
               }}
               onOpenPerson={(id) => openPerson(id)}
+              onOpenProfilePage={openProfilePage}
               onSearch={() => setTab("social")}
               onScratch={() => setTab("messages")}
               onGoLive={() => void goLive()}
+              onSavePlace={(p) => handleSavePlace(p)}
               onPlaces={() => {
+                setPlacesPanel((v) => !v);
                 if (!live) void goLive();
-                else {
-                  const named = nearby.filter((n) => n.place_name || n.place_locality || n.profile_place_name);
-                  toast(
-                    named.length
-                      ? `${named.length} named place${named.length === 1 ? "" : "s"} nearby on ${WUMP}`
-                      : myPlaceName
-                        ? `You're near ${myPlaceName}`
-                        : `${nearby.length} people nearby — place names update live`,
-                    "info",
-                  );
-                }
               }}
             />
-            {live && (myPlaceName || nearby.some((n) => n.place_name || n.profile_place_name)) && (
+            <div className="flex items-center gap-2 rounded-2xl bg-side px-3 py-2.5 ring-1 ring-white/5">
+              <Compass className="size-5 shrink-0 text-emerald-400" />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-bold">
+                  {explore.percent}% of nearby map explored
+                </div>
+                <div className="text-[11px] text-sub">
+                  {explore.has_location
+                    ? `${explore.explored_local} / ~${explore.total_local} cells within ${(explore.radius_m / 1000).toFixed(0)} km · ${explore.explored_all} total`
+                    : "Go Live to start exploring the map"}
+                </div>
+              </div>
+              {myUsername && (
+                <button
+                  type="button"
+                  onClick={() => openProfilePage(myUsername)}
+                  className="shrink-0 rounded-full bg-sky-500/15 px-2.5 py-1 text-[11px] font-bold text-sky-300 ring-1 ring-sky-500/30"
+                >
+                  @{myUsername}
+                </button>
+              )}
+            </div>
+            {live && (myPlaceName || nearby.some((n) => n.place_name || n.profile_place_name || n.username)) && (
               <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {myPlaceName && (
-                  <div className="shrink-0 rounded-full bg-sky-500/15 px-3 py-1.5 text-xs font-semibold text-sky-300 ring-1 ring-sky-500/30">
-                    You · {myPlaceName}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => (myUsername ? openProfilePage(myUsername) : setTab("profile"))}
+                    className="shrink-0 rounded-full bg-sky-500/15 px-3 py-1.5 text-xs font-semibold text-sky-300 ring-1 ring-sky-500/30"
+                  >
+                    {myUsername ? `@${myUsername}` : "You"} · {myPlaceName}
+                  </button>
                 )}
                 {nearby
-                  .filter((n) => n.place_name || n.place_locality || n.profile_place_name)
+                  .filter((n) => n.place_name || n.place_locality || n.profile_place_name || n.username)
                   .slice(0, 12)
                   .map((n) => {
-                    const name = profiles[n.user_id]?.display_name || profiles[n.user_id]?.username || "Friend";
+                    const username = n.username || profiles[n.user_id]?.username || null;
+                    const name = n.display_name || profiles[n.user_id]?.display_name || username || "Friend";
                     const place = n.place_name || n.place_locality || n.profile_place_name;
                     return (
                       <button
@@ -578,11 +670,68 @@ export default function BumpHub({
                         onClick={() => openPerson(n.user_id)}
                         className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-txt ring-1 ring-white/10 hover:bg-white/10"
                       >
-                        {name} · {place}
+                        {username ? `@${username}` : name}
+                        {place ? ` · ${place}` : ""}
                       </button>
                     );
                   })}
               </div>
+            )}
+            {(placesPanel || savedPlaces.length > 0) && (
+              <section className="overflow-hidden rounded-2xl bg-side ring-1 ring-white/5">
+                <div className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
+                  <MapPin className="size-4 text-sky-400" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold">Saved places</div>
+                    <div className="text-[11px] text-sub">Tap the map or bookmark while Live to save spots</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPlacesPanel((v) => !v)}
+                    className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-sub"
+                  >
+                    {placesPanel ? "Hide" : "Show"}
+                  </button>
+                </div>
+                {placesPanel && (
+                  <ul className="max-h-56 divide-y divide-white/5 overflow-y-auto">
+                    {!savedPlaces.length ? (
+                      <li className="px-4 py-4 text-xs text-sub">No saved places yet — tap anywhere on the map to save one.</li>
+                    ) : (
+                      savedPlaces.map((p) => (
+                        <li key={p.id} className="flex items-center gap-3 px-4 py-2.5">
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-semibold">{p.name}</div>
+                            <div className="truncate text-[11px] text-sub">
+                              {p.locality || `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`}
+                              {p.source !== "map" ? ` · ${p.source}` : ""}
+                            </div>
+                          </div>
+                          <a
+                            href={appleMapsLink(p.lat, p.lng, p.name)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-full bg-sky-500/15 px-2.5 py-1 text-[11px] font-bold text-sky-300"
+                          >
+                            Go
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void wumpDeleteSavedPlace(p.id).then((ok) => {
+                                if (ok) setSavedPlaces((prev) => prev.filter((x) => x.id !== p.id));
+                              });
+                            }}
+                            className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-sub hover:text-danger"
+                          >
+                            Delete
+                          </button>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                )}
+              </section>
             )}
             {!bumpOnly && (
               <a
@@ -1089,7 +1238,19 @@ function BumpProfileEditor({ userId }: { userId: string }) {
           />
           <div className="min-w-0 flex-1 pb-1">
             <div className="truncate text-lg font-extrabold">{displayName || nexus?.display_name || "You"}</div>
-            <div className="truncate text-sm text-sub">@{username || nexus?.username || "…"}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="truncate text-sm text-sub">@{username || nexus?.username || "…"}</div>
+              {(username || nexus?.username) && (
+                <a
+                  href={wumpProfileUrl(username || nexus?.username) || "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-bold text-sky-300 ring-1 ring-sky-500/30"
+                >
+                  Profile page <ExternalLink className="size-2.5" />
+                </a>
+              )}
+            </div>
             <div className="mt-1 text-[11px] text-sub">{prof ? `${prof.followers} followers · ${prof.following} following` : "Loading…"}</div>
           </div>
         </div>
@@ -1227,7 +1388,19 @@ function BumpSocialPane({
             <Avatar userId={prof.user_id} size={72} className="ring-[3px] ring-side" />
             <div className="min-w-0 flex-1 pt-8">
               <div className="truncate text-lg font-extrabold">{prof.display_name}</div>
-              <div className="truncate text-sm text-sub">@{prof.username}</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="truncate text-sm text-sub">@{prof.username}</div>
+                {prof.username && (
+                  <a
+                    href={wumpProfileUrl(prof.username) || "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-bold text-sky-300 ring-1 ring-sky-500/30"
+                  >
+                    Profile page <ExternalLink className="size-2.5" />
+                  </a>
+                )}
+              </div>
               <div className="mt-1 text-[11px] text-sub">
                 <button type="button" className="font-semibold hover:underline" onClick={() => setWhich("followers")}>
                   {prof.followers} followers

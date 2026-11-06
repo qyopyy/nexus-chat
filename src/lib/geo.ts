@@ -311,6 +311,7 @@ export const wumpAvatarIcon = (
     me?: boolean;
     label?: string;
     place?: string | null;
+    username?: string | null;
     heading?: number | null;
     stale?: boolean;
   },
@@ -318,12 +319,14 @@ export const wumpAvatarIcon = (
   const ring = opts.me ? "#38bdf8" : opts.color || "#22c55a";
   const opacity = opts.stale ? 0.45 : 1;
   const place = opts.place ? escHtml(opts.place.slice(0, 28)) : "";
+  const user = opts.username ? escHtml(`@${opts.username.slice(0, 18)}`) : "";
   const meta = opts.label ? escHtml(opts.label) : "";
+  const lines = [user, place, meta].filter(Boolean);
   const sub =
-    place || meta
-      ? `<span style="position:absolute;left:50%;bottom:-${place && meta ? 28 : 14}px;transform:translateX(-50%);white-space:nowrap;background:rgba(15,23,42,.88);color:#fff;font:700 9px system-ui;padding:2px 6px;border-radius:999px;text-align:center;line-height:1.25;max-width:140px;overflow:hidden;text-overflow:ellipsis">${
-          place ? `<span style="display:block">${place}</span>` : ""
-        }${meta ? `<span style="opacity:.85">${meta}</span>` : ""}</span>`
+    lines.length > 0
+      ? `<span style="position:absolute;left:50%;bottom:-${Math.max(14, lines.length * 12)}px;transform:translateX(-50%);white-space:nowrap;background:rgba(15,23,42,.9);color:#fff;font:700 9px system-ui;padding:2px 6px;border-radius:10px;text-align:center;line-height:1.25;max-width:148px;overflow:hidden;text-overflow:ellipsis">${lines
+          .map((l, i) => `<span style="display:block;${i === 0 && user ? "color:#7dd3fc" : i === 0 && place ? "" : "opacity:.9"}">${l}</span>`)
+          .join("")}</span>`
       : "";
   const cone =
     opts.heading != null && Number.isFinite(opts.heading)

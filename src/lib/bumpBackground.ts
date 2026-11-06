@@ -8,6 +8,7 @@
 import { supabase } from "./supabase";
 import { watchDeviceLocation, type DeviceLocation, type LocationWatchHandle } from "./location";
 import { bumpExpireStale, bumpNearby, bumpPublishSample, type BumpNearby, type BumpVisible } from "./bump";
+import { wumpExploreMark } from "./wumpPlaces";
 import { isNativeApp } from "./useMobile";
 import { haptic } from "./haptics";
 import { useApp } from "@/store/app";
@@ -44,6 +45,7 @@ let opts: {
   radiusM: number;
   onNearby?: (rows: BumpNearby[]) => void;
   onLocation?: (lat: number, lng: number, meta?: { heading: number | null; speed: number | null; accuracy: number | null }) => void;
+  onExplore?: () => void;
 } = { visible: "friends", label: null, alerts: true, radiusM: 800 };
 
 function ln(): CapLN | null {
@@ -89,7 +91,13 @@ async function publishQuiet(loc: DeviceLocation, force = false) {
   const priv = loadWumpPrivacyLocal();
   if (!priv.wump_share_enabled) return;
   const ok = await bumpPublishSample(loc, opts.visible, opts.label, { geocode });
-  if (ok) opts.onLocation?.(loc.lat, loc.lng, { heading: loc.heading, speed: loc.speed, accuracy: loc.accuracy });
+  if (ok) {
+    opts.onLocation?.(loc.lat, loc.lng, { heading: loc.heading, speed: loc.speed, accuracy: loc.accuracy });
+    // Fog-of-war style exploration cells (server-side, no IPA)
+    void wumpExploreMark(loc.lat, loc.lng).then((r) => {
+      if (r?.new) opts.onExplore?.();
+    });
+  }
 }
 
 async function notifyNearby(rows: BumpNearby[]) {
@@ -152,6 +160,7 @@ export async function startBumpBackground(input: {
   radiusM?: number;
   onNearby?: (rows: BumpNearby[]) => void;
   onLocation?: (lat: number, lng: number, meta?: { heading: number | null; speed: number | null; accuracy: number | null }) => void;
+  onExplore?: () => void;
 }) {
   await stopBumpBackground({ clearServer: false });
   opts = {
@@ -161,6 +170,7 @@ export async function startBumpBackground(input: {
     radiusM: input.radiusM ?? 800,
     onNearby: input.onNearby,
     onLocation: input.onLocation,
+    onExplore: input.onExplore,
   };
   knownNearby = new Set();
   lastLat = null;
@@ -233,6 +243,7 @@ export function updateBumpBackgroundOptions(
     alerts: boolean;
     radiusM: number;
     onLocation?: (lat: number, lng: number, meta?: { heading: number | null; speed: number | null; accuracy: number | null }) => void;
+    onExplore?: () => void;
   }>,
 ) {
   opts = { ...opts, ...partial };
