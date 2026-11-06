@@ -27,7 +27,8 @@ export type GameId =
   | "orbit"
   | "drift"
   | "classicstrike"
-  | "globalstrike";
+  | "globalstrike"
+  | "beat";
 export type Row = { user_id: string; best: number; at: string };
 
 /** Solo arcade titles that track scores via submitScore / GameScreen (not room multiplayer). */

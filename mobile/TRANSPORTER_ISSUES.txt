@@ -49,3 +49,19 @@ Other notes
   went through the signed workflow above.
 • Description / keywords are NOT inside the IPA — paste from
   mobile/app-store-listing.txt (and per-app notes) in App Store Connect.
+
+
+New Apple Distribution certificate (created 6 Nov 2026, team B44X8B76QR)
+------------------------------------------------------------------------
+• The distribution.cer you download from Apple is only the PUBLIC half. CI needs the .p12:
+  combine distribution.cer with the private key you made the CSR from
+  (NexusDistribution.key) — see APP_STORE_CI_SETUP.txt step A.3.
+• Provisioning profiles embed the certificate they were made with. Profiles created BEFORE
+  this certificate don't contain it → regenerate EVERY App Store profile (Nexus, Wump,
+  Browser, Link): developer.apple.com → Profiles → open profile → Edit → tick the new
+  certificate → Save → Download → update the matching GitHub secret.
+• The signed workflows now run .github/scripts/check-signing-match.py right after importing,
+  and stop with a plain-English error if the .p12, the profile and APPLE_TEAM_ID don't match
+  (or the profile has expired).
+• Then: Actions → “iOS App Store apps (signed)” → app = nexus / wump → upload = true.
+  Never drag a *-ios-N (Sideloadly) IPA into Transporter.
