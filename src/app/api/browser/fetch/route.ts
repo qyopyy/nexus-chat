@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseBrowserDnsFromRequest, resolveDoh } from "@/lib/browserDns";
+import { extractArticleFromHtml } from "@/lib/browserReading";
 import { applyShieldsToHtml, emptyShieldStats } from "@/lib/browserShields";
 
 export const runtime = "nodejs";
@@ -77,23 +78,26 @@ export async function GET(req: NextRequest) {
       stats = applied.stats;
     }
 
-    const title =
-      html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, "").trim().slice(0, 200) || url.hostname;
-    const text = html
-      .replace(/<!--[\s\S]*?-->/g, " ")
-      .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/&nbsp;/g, " ")
-      .replace(/&amp;/g, "&")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 8000);
+    const article = extractArticleFromHtml(html, finalUrl);
+    const title = article.title || url.hostname;
+    const text =
+      article.paragraphs.join("\n\n").slice(0, 8000) ||
+      html
+        .replace(/<!--[\s\S]*?-->/g, " ")
+        .replace(/<script[\s\S]*?<\/script>/gi, " ")
+        .replace(/<style[\s\S]*?<\/style>/gi, " ")
+        .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 8000);
     return NextResponse.json({
       url: finalUrl,
       title,
       text,
+      article,
       status: res.status,
       shields: stats,
     });

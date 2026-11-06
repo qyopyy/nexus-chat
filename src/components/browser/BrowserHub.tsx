@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   ArrowLeft,
   ArrowRight,
+  BookOpen,
   Bookmark,
   Download,
   ExternalLink,
@@ -27,7 +28,16 @@ import {
   searchUrlForPrefs,
   type BrowserPrefs,
 } from "@/lib/browserPrefs";
+import {
+  articleFromPlainText,
+  extractArticleFromDocument,
+  extractArticleFromHtml,
+  loadReadingModeSession,
+  saveReadingModeSession,
+  type ExtractedArticle,
+} from "@/lib/browserReading";
 import { emptyShieldStats, summarizeShields, type ShieldStats } from "@/lib/browserShields";
+import BrowserReadingView from "./BrowserReadingView";
 import BrowserSettings from "./BrowserSettings";
 
 type View =
@@ -89,6 +99,12 @@ export default function BrowserHub({
   const [findQ, setFindQ] = useState("");
   const [findIdx, setFindIdx] = useState(0);
   const findInput = useRef<HTMLInputElement>(null);
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const [readingMode, setReadingMode] = useState(false);
+  const [readingArticle, setReadingArticle] = useState<ExtractedArticle | null>(null);
+  const [readingBusy, setReadingBusy] = useState(false);
+  const [readingError, setReadingError] = useState<string | null>(null);
+  const [readingUrl, setReadingUrl] = useState("");
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -116,6 +132,7 @@ export default function BrowserHub({
     setPrefs(loadBrowserPrefs());
     setHistory(loadList(HIST_KEY));
     setBookmarks(loadList(BM_KEY));
+    setReadingMode(loadReadingModeSession());
   }, []);
 
   const updatePrefs = (next: BrowserPrefs) => {
@@ -321,6 +338,88 @@ export default function BrowserHub({
     toast("Bookmarked", "success");
   }
 
+  const pageUrlForReading = view.kind === "page" || view.kind === "web" ? view.url : "";
+
+  const loadReadingArticle = useCallback(
+    async (url: string, pageText?: string, pageTitle?: string) => {
+      if (!url) {
+        setReadingError("Open a page first to use Reading mode.");
+        setReadingArticle(null);
+        return;
+      }
+      setReadingBusy(true);
+      setReadingError(null);
+      setReadingUrl(url);
+      try {
+        const doc = frameRef.current?.contentDocument;
+        if (doc?.body && (doc.body.innerText || "").trim().length > 80) {
+          const extracted = extractArticleFromDocument(doc, url);
+          if (extracted.paragraphs.length) {
+            setReadingArticle(extracted);
+            setReadingBusy(false);
+            return;
+          }
+        }
+
+        const res = await fetch(`/api/browser/fetch?url=${encodeURIComponent(url)}&${shieldQs}`);
+        const data = (await res.json()) as {
+          error?: string;
+          title?: string;
+          text?: string;
+          article?: ExtractedArticle;
+          html?: string;
+        };
+        if (data.error) throw new Error(data.error);
+        if (data.article?.paragraphs?.length) {
+          setReadingArticle(data.article);
+        } else if (data.html) {
+          setReadingArticle(extractArticleFromHtml(data.html, url));
+        } else if (data.text || pageText) {
+          setReadingArticle(articleFromPlainText(data.title || pageTitle || url, data.text || pageText || "", url));
+        } else {
+          setReadingArticle(null);
+          setReadingError("Couldn't extract readable content from this page.");
+        }
+      } catch (e) {
+        if (pageText) {
+          setReadingArticle(articleFromPlainText(pageTitle || url, pageText, url));
+        } else {
+          setReadingArticle(null);
+          setReadingError(e instanceof Error ? e.message : "Couldn't load article.");
+        }
+      }
+      setReadingBusy(false);
+    },
+    [shieldQs],
+  );
+
+  useEffect(() => {
+    if (!readingMode) return;
+    if (view.kind === "page") {
+      void loadReadingArticle(view.url, view.text, view.title);
+    } else if (view.kind === "web") {
+      void loadReadingArticle(view.url);
+    } else {
+      setReadingArticle(null);
+      setReadingError(null);
+    }
+  }, [readingMode, view, loadReadingArticle]);
+
+  function toggleReadingMode() {
+    if (readingMode) {
+      setReadingMode(false);
+      saveReadingModeSession(false);
+      setReadingError(null);
+      return;
+    }
+    if (view.kind !== "page" && view.kind !== "web") {
+      toast("Open a page first to use Reading mode", "info");
+      return;
+    }
+    setReadingMode(true);
+    saveReadingModeSession(true);
+  }
+
   const engineLabel =
     prefs.engine === "custom" ? "Custom" : prefs.engine.charAt(0).toUpperCase() + prefs.engine.slice(1);
   const shieldsActive = prefs.shields.enabled;
@@ -413,6 +512,23 @@ export default function BrowserHub({
               </span>
             )}
           </button>
+          <button
+            type="button"
+            onClick={toggleReadingMode}
+            className={cn(
+              "grid size-9 place-items-center rounded-full transition",
+              readingMode
+                ? "bg-[#60a5fa]/20 text-[#93c5fd] ring-1 ring-[#60a5fa]/40"
+                : pageUrlForReading
+                  ? "text-white/70 hover:bg-white/10"
+                  : "text-white/30 hover:bg-white/10",
+            )}
+            aria-label={readingMode ? "Exit reading mode" : "Reading mode"}
+            aria-pressed={readingMode}
+            title={readingMode ? "Exit reading mode" : "Reading mode"}
+          >
+            <BookOpen className="size-4" />
+          </button>
           <button type="button" onClick={() => setSettingsOpen(true)} className="grid size-8 place-items-center rounded-full text-white/70 hover:bg-white/10" aria-label="Settings">
             <Settings2 className="size-4" />
           </button>
@@ -450,6 +566,19 @@ export default function BrowserHub({
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {readingMode && (view.kind === "page" || view.kind === "web") ? (
+          <BrowserReadingView
+            article={readingArticle}
+            url={readingUrl || pageUrlForReading}
+            busy={readingBusy}
+            error={readingError}
+            onClose={() => {
+              setReadingMode(false);
+              saveReadingModeSession(false);
+            }}
+          />
+        ) : (
+        <>
         {view.kind === "home" && (
           <div className="mx-auto flex max-w-2xl flex-col items-center px-4 pt-10 pb-8">
             <div className="relative mb-6 grid size-20 place-items-center rounded-[1.75rem] bg-gradient-to-br from-[#60a5fa] via-[#a78bfa] to-[#f472b6] shadow-2xl shadow-blue-500/30">
@@ -688,12 +817,18 @@ export default function BrowserHub({
               </a>
             </div>
             <iframe
+              ref={frameRef}
               title="Nexus Browser"
               src={shieldsActive || prefs.dns !== "system" ? proxiedUrl(view.url) : view.url}
               className="min-h-0 w-full flex-1 bg-white"
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+              onLoad={() => {
+                if (readingMode) void loadReadingArticle(view.url);
+              }}
             />
           </div>
+        )}
+        </>
         )}
       </div>
     </div>
