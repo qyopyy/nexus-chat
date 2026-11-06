@@ -1,11 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, AtSign, Eye, EyeOff, Link2, Lock, Mail, MessageCircle, MonitorUp, Palette, ShieldCheck, User, Video } from "lucide-react";
+import { ArrowLeft, AtSign, Eye, EyeOff, Fingerprint, Link2, Lock, Mail, MessageCircle, MonitorUp, Palette, ShieldCheck, User, Video } from "lucide-react";
 import { supabase, errorText } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { NexusCredit, copyNexusAppLink } from "@/components/ui/NexusCredit";
-import { mfaChallengeAndVerify, mfaListFactors, mfaNeedsChallenge } from "@/lib/mfa";
+import {
+  mfaAuthenticatePasskeyFactor,
+  mfaChallengeAndVerify,
+  mfaListFactors,
+  mfaNeedsChallenge,
+  signInWithPasskey,
+  webAuthnSupported,
+  type MfaFactor,
+} from "@/lib/mfa";
 import { signInWithApple } from "@/lib/appleAuth";
 
 export type AuthMode = "login" | "register" | "forgot" | "mfa";
@@ -61,16 +69,27 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
+  const [mfaFactors, setMfaFactors] = useState<MfaFactor[]>([]);
   const [mfaCode, setMfaCode] = useState("");
   const honeypot = useRef<HTMLInputElement>(null);
+  const passkeysOk = webAuthnSupported();
+
+  const activeMfa = mfaFactors.find((f) => f.id === mfaFactorId) || null;
+  const mfaIsPasskey = activeMfa?.factor_type === "webauthn";
+
+  async function loadMfaFactors() {
+    const { totp, webauthn } = await mfaListFactors();
+    const verified = [...webauthn, ...totp].filter((f) => f.status === "verified");
+    setMfaFactors(verified);
+    const preferred = verified.find((f) => f.factor_type === "webauthn") || verified[0] || null;
+    setMfaFactorId(preferred?.id ?? null);
+    return verified;
+  }
 
   useEffect(() => {
     if (initialMode !== "mfa") return;
     setModeState("mfa");
-    void mfaListFactors().then(({ totp }) => {
-      const factor = totp.find((f) => f.status === "verified") || totp[0];
-      if (factor) setMfaFactorId(factor.id);
-    });
+    void loadMfaFactors();
   }, [initialMode]);
 
   const setMode = (m: AuthMode) => {
@@ -88,13 +107,11 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
       window.history.replaceState(null, "", "/");
       return;
     }
-    const { totp } = await mfaListFactors();
-    const factor = totp.find((f) => f.status === "verified") || totp[0];
-    if (!factor) {
+    const verified = await loadMfaFactors();
+    if (!verified.length) {
       window.history.replaceState(null, "", "/");
       return;
     }
-    setMfaFactorId(factor.id);
     setMfaCode("");
     setMode("mfa");
   }
@@ -106,9 +123,15 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
     setInfo(null);
     try {
       if (mode === "mfa") {
-        if (!mfaFactorId || mfaCode.trim().length < 6) throw new Error("Enter the 6-digit code from your authenticator app.");
-        const ok = await mfaChallengeAndVerify(mfaFactorId, mfaCode.trim());
-        if (!ok) throw new Error("Invalid authenticator code.");
+        if (!mfaFactorId) throw new Error("No 2FA method available.");
+        if (mfaIsPasskey) {
+          const ok = await mfaAuthenticatePasskeyFactor(mfaFactorId);
+          if (!ok) throw new Error("Passkey verification failed.");
+        } else {
+          if (mfaCode.trim().length < 6) throw new Error("Enter the 6-digit code from Authy or your authenticator app.");
+          const ok = await mfaChallengeAndVerify(mfaFactorId, mfaCode.trim());
+          if (!ok) throw new Error("Invalid authenticator code.");
+        }
         window.history.replaceState(null, "", "/");
       } else if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
@@ -229,6 +252,7 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
               onClick={async () => {
                 if (mode === "mfa") await supabase.auth.signOut();
                 setMfaFactorId(null);
+                setMfaFactors([]);
                 setMfaCode("");
                 setMode("login");
               }}
@@ -239,7 +263,7 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
           )}
 
           <h2 className="text-2xl font-bold text-white">
-            {mode === "login" ? "Welcome back!" : mode === "register" ? "Join the crew" : mode === "mfa" ? "Two-factor code" : "Reset your password"}
+            {mode === "login" ? "Welcome back!" : mode === "register" ? "Join the crew" : mode === "mfa" ? "Two-factor check" : "Reset your password"}
           </h2>
           <p className="mt-1 mb-6 text-sm text-white/55">
             {mode === "login"
@@ -247,25 +271,61 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
               : mode === "register"
                 ? "It takes less than a minute."
                 : mode === "mfa"
-                  ? "Open your authenticator app and enter the 6-digit code."
+                  ? mfaIsPasskey
+                    ? "Confirm with your linked passkey or security key."
+                    : "Open Authy (or your authenticator) and enter the 6-digit code."
                   : "We'll email you a link to set a new one."}
           </p>
 
           <div className="space-y-4">
             {mode === "mfa" ? (
-              <Field
-                icon={<ShieldCheck className="size-5" />}
-                label="Authenticator code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                required
-                value={mfaCode}
-                onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="123456"
-                maxLength={6}
-              />
+              <>
+                {mfaFactors.length > 1 && (
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-bold tracking-wide text-white/60 uppercase">Method</span>
+                    <select
+                      value={mfaFactorId ?? ""}
+                      onChange={(e) => {
+                        setMfaFactorId(e.target.value);
+                        setMfaCode("");
+                      }}
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-white outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
+                    >
+                      {mfaFactors.map((f) => (
+                        <option key={f.id} value={f.id} className="bg-black text-white">
+                          {f.factor_type === "webauthn"
+                            ? `Passkey · ${f.friendly_name || "Security key"}`
+                            : `Authy · ${f.friendly_name || "Authenticator"}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {!mfaIsPasskey && (
+                  <Field
+                    icon={<ShieldCheck className="size-5" />}
+                    label="Authy / authenticator code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    required
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="123456"
+                    maxLength={6}
+                  />
+                )}
+              </>
             ) : (
-              <Field icon={<Mail className="size-5" />} label="Email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+              <Field
+                icon={<Mail className="size-5" />}
+                label="Email"
+                type="email"
+                required
+                autoComplete={mode === "login" ? "username webauthn" : "email"}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
             )}
             {mode === "register" && (
               <div className="grid gap-4 sm:grid-cols-2">
@@ -344,7 +404,9 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
                 : mode === "register"
                   ? "Create Account"
                   : mode === "mfa"
-                    ? "Verify & continue"
+                    ? mfaIsPasskey
+                      ? "Continue with passkey"
+                      : "Verify & continue"
                     : "Send reset link"}
           </button>
 
@@ -355,6 +417,24 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
                 or
                 <span className="h-px flex-1 bg-white/10" />
               </div>
+              {mode === "login" && passkeysOk && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    setError(null);
+                    const ok = await signInWithPasskey();
+                    setBusy(false);
+                    if (ok) await enterMfaIfNeeded();
+                    else setError("Passkey sign-in failed or was cancelled.");
+                  }}
+                  className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 py-3 text-sm font-bold text-white transition hover:bg-white/10 disabled:opacity-60"
+                >
+                  <Fingerprint className="size-5" />
+                  Continue with passkey
+                </button>
+              )}
               <button
                 type="button"
                 disabled={busy}
