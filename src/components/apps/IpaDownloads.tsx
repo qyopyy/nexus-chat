@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, ExternalLink, Smartphone } from "lucide-react";
+import { AlertTriangle, Download, ExternalLink, ShieldCheck, Smartphone } from "lucide-react";
 import {
+  NEXUS_APPSTORE_WORKFLOW_URL,
   NEXUS_CAPGO_APP_URL,
   fetchLatestIpa,
   ipaReleasesUrl,
@@ -12,7 +13,7 @@ import {
 } from "@/lib/ipaDownloads";
 import { cn } from "@/lib/utils";
 
-const KINDS: IpaKind[] = ["nexus", "wump", "link", "browser"];
+const SIDELOAD_KINDS: IpaKind[] = ["nexus", "wump", "link", "browser"];
 
 /** Website surface for GitHub IPA builds + Capgo cloud channel. */
 export default function IpaDownloads({ compact }: { compact?: boolean }) {
@@ -21,7 +22,8 @@ export default function IpaDownloads({ compact }: { compact?: boolean }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const entries = await Promise.all(KINDS.map(async (k) => [k, await fetchLatestIpa(k)] as const));
+      const kinds: IpaKind[] = ["appstore", ...SIDELOAD_KINDS];
+      const entries = await Promise.all(kinds.map(async (k) => [k, await fetchLatestIpa(k)] as const));
       if (cancelled) return;
       const next: Partial<Record<IpaKind, LatestIpa | null>> = {};
       for (const [k, v] of entries) next[k] = v;
@@ -31,6 +33,8 @@ export default function IpaDownloads({ compact }: { compact?: boolean }) {
       cancelled = true;
     };
   }, []);
+
+  const appstore = latest.appstore;
 
   return (
     <section
@@ -46,7 +50,7 @@ export default function IpaDownloads({ compact }: { compact?: boolean }) {
         <div className="min-w-0 flex-1">
           <div className={cn("text-sm font-black", compact ? "text-txt" : "text-white")}>iOS apps (.ipa)</div>
           <p className={cn("text-[11px] leading-relaxed", compact ? "text-sub" : "text-white/55")}>
-            Built on GitHub Actions · Sideloadly / AltStore · live site via Vercel · Capgo OTA for the native shell
+            Sideloadly builds for devices · App Store signed build for Transporter (embedded.mobileprovision)
           </p>
         </div>
         <a
@@ -59,8 +63,50 @@ export default function IpaDownloads({ compact }: { compact?: boolean }) {
         </a>
       </div>
 
+      <div
+        className={cn(
+          "mb-3 rounded-xl px-3 py-2.5 text-[11px] leading-relaxed",
+          compact ? "bg-black/20 text-sub" : "bg-amber-500/10 text-amber-100/90 ring-1 ring-amber-400/20",
+        )}
+      >
+        <div className="mb-1 flex items-center gap-1.5 font-bold">
+          <AlertTriangle className="size-3.5 shrink-0" />
+          Transporter error 90174?
+        </div>
+        You dropped an unsigned Sideloadly IPA. Use the App Store signed build below (or run{" "}
+        <a href={NEXUS_APPSTORE_WORKFLOW_URL} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+          iOS App Store (signed)
+        </a>
+        ). Sideloadly Nexus.ipa has no embedded.mobileprovision on purpose.
+      </div>
+
+      <a
+        href={appstore?.url || NEXUS_APPSTORE_WORKFLOW_URL}
+        target="_blank"
+        rel="noreferrer"
+        className={cn(
+          "mb-3 flex items-center gap-3 rounded-xl px-2.5 py-2.5 transition ring-1",
+          compact ? "bg-ok/10 ring-ok/30 hover:bg-ok/15" : "bg-emerald-500/10 ring-emerald-400/25 hover:bg-emerald-500/15",
+        )}
+      >
+        <span className={cn("grid size-9 place-items-center rounded-lg", compact ? "bg-ok/20 text-ok" : "bg-emerald-400/20 text-emerald-200")}>
+          <ShieldCheck className="size-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className={cn("block truncate text-sm font-semibold", compact ? "text-txt" : "text-white")}>
+            App Store signed · Transporter OK
+          </span>
+          <span className={cn("block truncate text-[10px]", compact ? "text-sub" : "text-white/55")}>
+            {appstore
+              ? `${appstore.tag} · ${appstore.name}`
+              : "No ios-appstore-* release yet — run Actions → iOS App Store (signed)"}
+          </span>
+        </span>
+        <ExternalLink className={cn("size-3.5 shrink-0", compact ? "text-sub" : "text-white/40")} />
+      </a>
+
       <ul className="space-y-1.5">
-        {KINDS.map((kind) => {
+        {SIDELOAD_KINDS.map((kind) => {
           const meta = IPA_KIND_META[kind];
           const hit = latest[kind];
           const href = hit?.url || ipaReleasesUrl(kind);
@@ -81,7 +127,7 @@ export default function IpaDownloads({ compact }: { compact?: boolean }) {
                 <span className="min-w-0 flex-1">
                   <span className={cn("block truncate text-sm font-semibold", compact ? "text-txt" : "text-white")}>{meta.label}</span>
                   <span className={cn("block truncate text-[10px]", compact ? "text-sub" : "text-white/45")}>
-                    {hit ? `${hit.tag} · ${hit.name}` : `GitHub releases · ${meta.bundleId}`}
+                    {hit ? `${hit.tag} · ${hit.name}` : `Sideloadly only · ${meta.bundleId}`}
                   </span>
                 </span>
                 <ExternalLink className={cn("size-3.5 shrink-0", compact ? "text-sub" : "text-white/40")} />

@@ -1,40 +1,49 @@
 Transporter / App Store Connect — issues & fix (no local Xcode)
 ===============================================================
 
-Issues you hit
---------------
-1) ERROR 90174 — Missing Provisioning Profile
-   Unsigned Sideloadly IPA has no embedded.mobileprovision.
+ERROR YOU HIT (screenshot)
+--------------------------
+  Missing Provisioning Profile (90174)
+  Apps must contain a provisioning profile in a file named
+  embedded.mobileprovision.
 
-2) No icon in Transporter
-   Placeholder while verification fails; marketing icon must be opaque RGB.
-
-3) No App Store description
-   Description is edited in App Store Connect — paste from app-store-listing.txt
-   (name, subtitle, description, keywords, What’s New, review notes, privacy).
-   Android: play-store-listing.txt.
-
-4) Xcode “not compatible” on your Mac
-   Current Xcode needs a newer macOS. You do NOT need Xcode locally.
+Cause: the IPA dropped into Transporter was the UNSIGNED Sideloadly build
+(GitHub release “Nexus iOS build N” / asset Nexus.ipa / tag ios-N).
+Those builds intentionally omit embedded.mobileprovision so Sideloadly can
+re-sign with your personal Apple ID.
 
 
-Fix: sign + upload on GitHub’s Mac (cloud)
------------------------------------------
-Follow:  mobile/APP_STORE_CI_SETUP.txt
+Fix (cloud — no local Xcode)
+----------------------------
+1. Add Apple signing secrets once — follow mobile/APP_STORE_CI_SETUP.txt
+   (Apple Distribution .p12 + App Store provisioning profile + ASC API key).
 
-Workflow:  Actions → “iOS App Store (signed)”
+2. GitHub → Actions → “iOS App Store (signed)” → Run workflow
+     • upload = true  → signs AND sends to App Store Connect (preferred)
+     • upload = false → only produces Nexus-AppStore.ipa artifact
 
-That produces a real App Store IPA with:
-  • embedded.mobileprovision
-  • Apple Distribution signature
-  • opaque App Store icons
+3. Use ONLY that artifact / release:
+     tag:  ios-appstore-N
+     file: Nexus-AppStore.ipa
+   The workflow HARD-FAILS if embedded.mobileprovision is missing, so
+   Transporter will not see 90174 on a green run.
 
-Then either:
-  • upload=true in the workflow (API key), or
-  • download Nexus-AppStore.ipa and drop it into Transporter
+4. Optional: website Apps → iOS apps shows “App Store (signed)” when a
+   ios-appstore-* release exists.
 
 
-Do NOT upload
--------------
-GitHub releases named “Nexus iOS build N” / Sideloadly Nexus.ipa
-→ always 90174.
+Do NOT upload to Transporter
+----------------------------
+  • Nexus iOS build N / Nexus.ipa / tag ios-*
+  • Wump / Browser / Link Sideloadly IPAs
+  • Any IPA Sideloadly or AltStore re-signed for your personal Apple ID
+  → always 90174 (or a different team / profile mismatch).
+
+
+Other Transporter notes
+-----------------------
+• No icon while verification fails — expected; marketing icon is opaque RGB
+  inside the signed IPA.
+• Description / keywords / review notes are NOT inside the IPA — paste from
+  mobile/app-store-listing.txt in App Store Connect.
+• Xcode “not compatible” on an older Mac → ignore; CI uses macos-15.
