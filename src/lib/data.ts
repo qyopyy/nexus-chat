@@ -574,6 +574,106 @@ function dropTemp(tempId: string) {
   useChat.setState((s) => ({ messages: s.messages.filter((m) => m.id !== tempId) }));
 }
 
+/** Content prefix used for Telegram-style forwards (schema-free). */
+export const FORWARDED_PREFIX = "↪ Forwarded from ";
+
+export function isForwardedContent(content: string) {
+  return content.startsWith(FORWARDED_PREFIX);
+}
+
+/** Parse attribution line from a forwarded message body. */
+export function parseForwarded(content: string): { from: string; body: string } | null {
+  if (!isForwardedContent(content)) return null;
+  const nl = content.indexOf("\n");
+  const header = (nl === -1 ? content : content.slice(0, nl)).slice(FORWARDED_PREFIX.length).replace(/:$/, "").trim();
+  const body = nl === -1 ? "" : content.slice(nl + 1);
+  return { from: header || "Unknown", body };
+}
+
+/**
+ * Forward a message into another DM/group chat.
+ * Uses a content attribution prefix (no schema change). Attachments stay private to their
+ * original conversation folder, so media is summarized in text rather than re-linked.
+ */
+export async function forwardMessage(targetConvId: string, message: Message) {
+  const me = get().userId;
+  if (!me || message.deleted_at || message.pending) return false;
+
+  const author = get().profiles[message.author_id];
+  const handle = message.bot_name
+    ? message.bot_name
+    : author?.username
+      ? `@${author.username}`
+      : author?.display_name || "Unknown";
+
+  let body = (message.content ?? "").trim();
+  // Avoid nesting multiple forward headers when re-forwarding
+  const parsed = parseForwarded(body);
+  if (parsed) body = parsed.body.trim();
+
+  if (message.attachment_url) {
+    const media =
+      message.attachment_type?.startsWith("image/")
+        ? "photo"
+        : message.attachment_type?.startsWith("video/")
+          ? "video"
+          : message.attachment_type?.startsWith("audio/") && message.attachment_name?.startsWith("voice-")
+            ? "voice message"
+            : message.attachment_name || "attachment";
+    const note = `📎 Original had media: ${media}`;
+    body = body ? `${body}\n\n${note}` : note;
+  }
+
+  if (!body) return false;
+
+  const content = `${FORWARDED_PREFIX}${handle}:\n${body}`;
+  const tempId = `temp-${crypto.randomUUID()}`;
+  const optimistic: Message = {
+    id: tempId,
+    conversation_id: targetConvId,
+    author_id: me,
+    content,
+    reply_to_id: null,
+    attachment_url: null,
+    attachment_name: null,
+    attachment_type: null,
+    edited_at: null,
+    deleted_at: null,
+    created_at: new Date().toISOString(),
+    effect: null,
+    pending: true,
+  };
+  useChat.setState((s) => (s.conversationId === targetConvId ? { messages: [...s.messages, optimistic] } : s));
+  void import("./sounds").then(({ sfx }) => sfx.send());
+
+  const { data, error } = await supabase
+    .from("messages")
+    .insert({
+      conversation_id: targetConvId,
+      author_id: me,
+      content,
+      reply_to_id: null,
+    })
+    .select()
+    .single();
+  if (error) {
+    dropTemp(tempId);
+    toast(errorText(error), "error");
+    return false;
+  }
+  const real = data as Message;
+  useChat.setState((s) => {
+    if (s.conversationId !== targetConvId) return s;
+    const already = s.messages.some((m) => m.id === real.id);
+    return {
+      messages: already ? s.messages.filter((m) => m.id !== tempId) : s.messages.map((m) => (m.id === tempId ? real : m)),
+    };
+  });
+  bumpChatList(real);
+  toast("Message forwarded", "success");
+  return true;
+}
+
 export async function editMessage(id: string, content: string) {
   const text = content.trim();
   if (!text) return;
