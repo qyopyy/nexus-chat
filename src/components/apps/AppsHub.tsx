@@ -192,7 +192,7 @@ const TOOLS: {
     id: "promo",
     name: "Promo studio",
     tag: "IG · Reels · TikTok",
-    desc: "Daily captions for Stories, Reels, and TikTok to promote Nexus — one-tap copy.",
+    desc: "30-day Story / Reel / TikTok scripts with shot lists — copy captions and film every day.",
     bg: "linear-gradient(135deg,#ff2bd6,#7c3aed)",
     emoji: "📣",
     Icon: Megaphone,

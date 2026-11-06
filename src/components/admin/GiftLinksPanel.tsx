@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Gift, Copy } from "lucide-react";
 import { toast } from "@/store/app";
 import { PLANS, createPremiumGift, giftLink, listPremiumGifts, type PremiumGift } from "@/lib/premium";
-import { giftShareText } from "@/lib/promoCopy";
+import { giftReelText, giftShareText, giftStoryText } from "@/lib/promoCopy";
 import { can } from "@/lib/privileges";
 import type { PremiumTier } from "@/lib/types";
 
@@ -17,6 +17,8 @@ export default function GiftLinksPanel({ compact }: { compact?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [gifts, setGifts] = useState<PremiumGift[]>([]);
   const [lastUrl, setLastUrl] = useState<string | null>(null);
+  const [lastDays, setLastDays] = useState(30);
+  const [lastPlan, setLastPlan] = useState("Nexus Lighting");
   const refresh = useCallback(() => void listPremiumGifts().then(setGifts), []);
   useEffect(() => {
     if (can.giftLinks()) void refresh();
@@ -36,7 +38,7 @@ export default function GiftLinksPanel({ compact }: { compact?: boolean }) {
         </div>
         <div>
           <h3 className="font-bold">Premium gift links</h3>
-          <p className="text-sm text-sub">Shareable claim URLs — copy the link or a ready DM / Story caption.</p>
+          <p className="text-sm text-sub">Mods & admins — mint Lighting gifts, then copy DM / Story / Reel caption text with the claim URL.</p>
         </div>
       </div>
       <form
@@ -48,9 +50,11 @@ export default function GiftLinksPanel({ compact }: { compact?: boolean }) {
           if (!g) return;
           const url = giftLink(g.code);
           setLastUrl(url);
+          setLastDays(days);
+          setLastPlan(planLabel);
           try {
-            await navigator.clipboard.writeText(url);
-            toast("Gift link copied", "success");
+            await navigator.clipboard.writeText(giftShareText(url, days, planLabel));
+            toast("Gift caption copied", "success");
           } catch {
             toast("Gift link created", "success");
           }
@@ -75,24 +79,40 @@ export default function GiftLinksPanel({ compact }: { compact?: boolean }) {
       {lastUrl && (
         <div className="space-y-2 rounded-xl border border-line bg-side/60 p-3">
           <div className="break-all font-mono text-xs">{lastUrl}</div>
+          <pre className="whitespace-pre-wrap rounded-lg bg-black/20 p-2 text-[11px] text-sub">{giftShareText(lastUrl, lastDays, lastPlan)}</pre>
           <div className="flex flex-wrap gap-2">
             <button type="button" className="inline-flex items-center gap-1 rounded-full bg-hover px-3 py-1.5 text-xs font-bold" onClick={() => void navigator.clipboard.writeText(lastUrl).then(() => toast("Link copied", "success"))}>
-              <Copy className="size-3.5" /> Copy link
+              <Copy className="size-3.5" /> Link only
             </button>
             <button
               type="button"
               className="inline-flex items-center gap-1 rounded-full bg-[#ffd400]/20 px-3 py-1.5 text-xs font-bold text-[#ffd400]"
-              onClick={() => void navigator.clipboard.writeText(giftShareText(lastUrl, days, planLabel)).then(() => toast("Gift caption copied", "success"))}
+              onClick={() => void navigator.clipboard.writeText(giftShareText(lastUrl, lastDays, lastPlan)).then(() => toast("DM gift text copied", "success"))}
             >
-              <Copy className="size-3.5" /> Copy gift text
+              <Copy className="size-3.5" /> DM text
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-full bg-[#ff2bd6]/20 px-3 py-1.5 text-xs font-bold text-[#ff2bd6]"
+              onClick={() => void navigator.clipboard.writeText(giftStoryText(lastUrl, lastDays, lastPlan)).then(() => toast("Story gift text copied", "success"))}
+            >
+              <Copy className="size-3.5" /> Story text
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-full bg-accent/20 px-3 py-1.5 text-xs font-bold text-accent"
+              onClick={() => void navigator.clipboard.writeText(giftReelText(lastUrl, lastDays, lastPlan)).then(() => toast("Reel/TikTok gift caption copied", "success"))}
+            >
+              <Copy className="size-3.5" /> Reel / TikTok
             </button>
           </div>
         </div>
       )}
       {gifts.length > 0 && (
-        <ul className="max-h-48 space-y-1.5 overflow-y-auto text-xs text-sub">
+        <ul className="max-h-56 space-y-1.5 overflow-y-auto text-xs text-sub">
           {gifts.slice(0, 20).map((g) => {
             const url = giftLink(g.code);
+            const name = PLANS.find((p) => p.id === g.tier)?.name ?? "Nexus Lighting";
             const label = PLANS.find((p) => p.id === g.tier)?.short ?? g.tier;
             return (
               <li key={g.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-line/50 px-2 py-1.5">
@@ -103,8 +123,14 @@ export default function GiftLinksPanel({ compact }: { compact?: boolean }) {
                 <button type="button" className="ml-auto font-semibold text-accent" onClick={() => void navigator.clipboard.writeText(url).then(() => toast("Copied", "success"))}>
                   Link
                 </button>
-                <button type="button" className="font-semibold text-[#ffd400]" onClick={() => void navigator.clipboard.writeText(giftShareText(url, g.days, PLANS.find((p) => p.id === g.tier)?.name)).then(() => toast("Gift text copied", "success"))}>
-                  Text
+                <button type="button" className="font-semibold text-[#ffd400]" onClick={() => void navigator.clipboard.writeText(giftShareText(url, g.days, name)).then(() => toast("DM text copied", "success"))}>
+                  DM
+                </button>
+                <button type="button" className="font-semibold text-[#ff2bd6]" onClick={() => void navigator.clipboard.writeText(giftStoryText(url, g.days, name)).then(() => toast("Story text copied", "success"))}>
+                  Story
+                </button>
+                <button type="button" className="font-semibold text-accent" onClick={() => void navigator.clipboard.writeText(giftReelText(url, g.days, name)).then(() => toast("Reel text copied", "success"))}>
+                  Reel
                 </button>
               </li>
             );
