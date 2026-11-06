@@ -153,7 +153,10 @@ export function personLd(opts: {
   image?: string | null;
   description?: string | null;
   followers?: number;
+  /** Social profile URLs — helps TikTok / Snap / Meta match your Nexus Link during verification */
+  sameAs?: string[];
 }) {
+  const sameAs = (opts.sameAs ?? []).filter((u) => /^https?:\/\//i.test(u));
   return {
     "@context": "https://schema.org",
     "@type": "Person",
@@ -162,6 +165,7 @@ export function personLd(opts: {
     url: opts.url,
     ...(opts.image ? { image: opts.image } : {}),
     ...(opts.description ? { description: truncate(opts.description, 300) } : {}),
+    ...(sameAs.length ? { sameAs } : {}),
     ...(opts.followers != null
       ? {
           interactionStatistic: {

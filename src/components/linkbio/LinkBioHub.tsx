@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, ChevronDown, ChevronUp, Copy, ExternalLink, Link2, Lock, LogOut, Plus, QrCode, Settings2, Shield, Sparkles, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, BadgeCheck, ChevronDown, ChevronUp, Copy, ExternalLink, Link2, Lock, LogOut, Plus, QrCode, Settings2, Shield, Sparkles, Star, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useApp, toast } from "@/store/app";
 import { roleRank } from "@/lib/theme";
@@ -28,7 +28,9 @@ import {
   type LinkBioStats,
   type LinkBioTheme,
 } from "@/lib/linkbio";
+import { SOCIAL_VERIFY_LIST, linkVerifyReadiness } from "@/lib/linkVerify";
 import { spotifyEmbed } from "@/lib/links";
+import { studioGo } from "@/store/studio";
 import LinkBioAdmin from "@/components/linkbio/LinkBioAdmin";
 
 export { openLinkBio };
@@ -249,6 +251,78 @@ export default function LinkBioHub({
                 <p className="mt-3 text-[11px] text-white/40">
                   Sync copies your Nexus display name, avatar, bio, and status into this Link page. Extra Nexus usernames (up to 10) live in Settings → My Account.
                 </p>
+              </section>
+            )}
+
+            {tab === "dashboard" && (
+              <section className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+                <div className="mb-3 flex items-center gap-2">
+                  <BadgeCheck className="size-4 text-[#c084fc]" />
+                  <h2 className="text-sm font-bold tracking-wide text-white/70 uppercase">Verification · eligible website</h2>
+                </div>
+                <p className="mb-3 text-sm text-white/60">
+                  TikTok, Snapchat, and Facebook accept a public website on their verification forms. Your Nexus Link page is eligible — copy it as Website.
+                </p>
+                {(() => {
+                  const checks = linkVerifyReadiness(page);
+                  const score = Math.round((checks.filter((c) => c.ok).length / checks.length) * 100);
+                  return (
+                    <>
+                      <div className="mb-3 flex items-center gap-3">
+                        <div className="text-2xl font-black tabular-nums" style={{ color: score >= 80 ? "#23a55a" : score >= 50 ? "#f0b232" : "#ed4245" }}>
+                          {score}%
+                        </div>
+                        <div className="text-xs text-white/45">page readiness for verification reviewers</div>
+                      </div>
+                      <div className="mb-3 grid gap-1 sm:grid-cols-2">
+                        {checks.map((c) => (
+                          <div key={c.label} className="flex gap-2 text-xs">
+                            <span className={c.ok ? "text-emerald-400" : "text-amber-300"}>{c.ok ? "✓" : "!"}</span>
+                            <span className="text-white/70">{c.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {SOCIAL_VERIFY_LIST.map((p) => (
+                    <a
+                      key={p.id}
+                      href={p.applyUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full px-3 py-1.5 text-xs font-bold text-black"
+                      style={{ background: p.color, color: p.id === "snapchat" ? "#111" : "#fff" }}
+                    >
+                      {p.emoji} {p.short}
+                    </a>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-xl bg-[#a855f7] px-3 py-2 text-sm font-bold"
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(publicUrl);
+                      toast("Nexus Link copied — paste as Website", "success");
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <Copy className="size-3.5" /> Copy as Website
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold hover:bg-white/15"
+                    onClick={() => {
+                      studioGo("checkmark");
+                      useApp.setState({ hub: "studio", appsTool: null, mobileTab: "me" });
+                    }}
+                  >
+                    Full verification guides
+                  </button>
+                </div>
               </section>
             )}
 

@@ -80,7 +80,7 @@ export default function LinkBioLanding() {
             <span className="block bg-gradient-to-r from-[#e9d5ff] via-[#c084fc] to-[#a855f7] bg-clip-text text-transparent">One glow page.</span>
           </h1>
           <p className="mt-4 max-w-lg text-base text-white/60 sm:text-lg">
-            Nexus Link is the invite-only link-in-bio for the crew — Juice 999 themes, Premium, verified checkmarks, and badges.
+            Nexus Link is the invite-only link-in-bio for the crew — Juice 999 themes, Premium, verified checkmarks, and badges. Eligible as Website on TikTok, Snapchat & Facebook verification.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">

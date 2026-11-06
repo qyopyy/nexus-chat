@@ -422,12 +422,19 @@ ${FX_JS}
 })();
 </script>`;
 
+  const sameAs = locked
+    ? []
+    : (p.links ?? [])
+        .map((l) => safeUrl(l.url))
+        .filter(Boolean)
+        .slice(0, 20);
   const ld = personLd({
     name: p.display_name || p.username,
     username: p.username,
     url,
     image: p.avatar_url,
     description: locked ? null : p.bio,
+    sameAs,
   });
   return `<!doctype html><html lang="en"><head>
 ${seoHead({ title, description: desc, url, image: p.avatar_url, type: "profile", keywords: ["Nexus Link", "link in bio"], twitterCard: p.avatar_url ? "summary_large_image" : "summary" })}

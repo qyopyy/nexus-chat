@@ -308,8 +308,16 @@ function PlatformPanel({ p, tier, live, releases, open, onSent }: { p: Platform;
               </label>
             )}
             <label className="block">
-              <span className="mb-1 block text-xs text-sub">Website & socials (Instagram, TikTok, Snapchat…)</span>
-              <input className={inp} value={v.socials} onChange={(e) => setV({ ...v, socials: e.target.value })} />
+              <span className="mb-1 block text-xs text-sub">Website & socials (Nexus Link /bio/… is eligible · Instagram, TikTok, Snapchat, Facebook…)</span>
+              <input
+                className={inp}
+                value={v.socials}
+                placeholder="https://yoursite/bio/you · https://tiktok.com/@you"
+                onChange={(e) => setV({ ...v, socials: e.target.value })}
+              />
+              <p className="mt-1 text-[11px] text-sub">
+                Paste your Nexus Link as Website for Spotify / Apple / YouTube claims. Studio → Verification covers TikTok, Snapchat & Facebook badge applications with the same URL.
+              </p>
             </label>
             <div className="flex flex-wrap gap-1.5 text-xs">
               {(["artist", "manager", "label"] as const).map((r) => (

@@ -1,16 +1,167 @@
 "use client";
 
-import { useState } from "react";
-import { BadgeCheck, ExternalLink, Search } from "lucide-react";
-import { toast } from "@/store/app";
+import { useEffect, useMemo, useState } from "react";
+import { BadgeCheck, Copy, ExternalLink, Search } from "lucide-react";
+import { toast, useApp } from "@/store/app";
 import { studioGo } from "@/store/studio";
 import { addWatch, fmtNum, spotifyProfile, type SpotifyProfile } from "@/lib/protect";
+import { linkbioMine, openLinkBio, publicLinkBioUrl } from "@/lib/linkbio";
+import { SOCIAL_VERIFY, SOCIAL_VERIFY_LIST, linkVerifyReadiness, type SocialVerifyPlatform } from "@/lib/linkVerify";
 import { cn } from "@/lib/utils";
 
 const CLAIM = "https://artists.spotify.com/c/team/access/artist";
 
-/** Spotify ✓ Verified Artist checker: stats, readiness, how to get (and keep) the checkmark */
+type Tab = "spotify" | SocialVerifyPlatform;
+
+/** Verification hub: Spotify ✓ + TikTok / Snapchat / Facebook with Nexus Link as eligible website */
 export default function Checkmark() {
+  const [tab, setTab] = useState<Tab>("spotify");
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setTab("spotify")}
+          className={cn("rounded-full px-4 py-2 text-sm font-bold", tab === "spotify" ? "bg-[#1DB954] text-black" : "bg-hover hover:bg-active")}
+        >
+          🟢 Spotify
+        </button>
+        {SOCIAL_VERIFY_LIST.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setTab(p.id)}
+            className={cn("rounded-full px-4 py-2 text-sm font-bold", tab === p.id ? "text-black" : "bg-hover hover:bg-active")}
+            style={tab === p.id ? { background: p.color, color: p.id === "snapchat" ? "#111" : "#fff" } : undefined}
+          >
+            {p.emoji} {p.short}
+          </button>
+        ))}
+      </div>
+      {tab === "spotify" ? <SpotifyCheckmark /> : <SocialVerifyPanel platform={tab} />}
+    </div>
+  );
+}
+
+function SocialVerifyPanel({ platform }: { platform: SocialVerifyPlatform }) {
+  const cfg = SOCIAL_VERIFY[platform];
+  const me = useApp((s) => (s.userId ? s.profiles[s.userId] : null));
+  const [bioUrl, setBioUrl] = useState<string | null>(null);
+  const [page, setPage] = useState<Awaited<ReturnType<typeof linkbioMine>>>(null);
+
+  useEffect(() => {
+    void linkbioMine().then((p) => {
+      setPage(p);
+      if (p?.username) setBioUrl(publicLinkBioUrl(p.username));
+      else if (me?.username) setBioUrl(`${typeof window !== "undefined" ? window.location.origin : ""}/bio/${me.username}`);
+    });
+  }, [me?.username]);
+
+  const checks = useMemo(() => (page ? linkVerifyReadiness(page) : null), [page]);
+  const score = checks ? Math.round((checks.filter((c) => c.ok).length / checks.length) * 100) : null;
+
+  const copyUrl = async () => {
+    if (!bioUrl) return toast("Create a Nexus Link page first", "error");
+    try {
+      await navigator.clipboard.writeText(bioUrl);
+      toast("Nexus Link copied — paste as Website", "success");
+    } catch {
+      toast(bioUrl, "info");
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="overflow-hidden rounded-3xl p-5 text-white" style={{ background: `linear-gradient(135deg,#0a0a0a,${cfg.color}99 55%,#111)` }}>
+        <div className="flex items-center gap-2 text-xs font-bold tracking-widest text-white/80 uppercase">
+          <BadgeCheck className="size-4" /> {cfg.badge} · Nexus Link eligible
+        </div>
+        <div className="mt-1 text-2xl font-black">{cfg.name}</div>
+        <p className="mt-1 max-w-2xl text-sm text-white/85">{cfg.eligible}</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void copyUrl()}
+            className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-sm font-black text-black"
+          >
+            <Copy className="size-4" /> Copy Nexus Link as Website
+          </button>
+          <a
+            href={cfg.applyUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-full bg-black/40 px-4 py-2.5 text-sm font-bold ring-1 ring-white/25"
+          >
+            <ExternalLink className="size-4" /> {cfg.applyLabel}
+          </a>
+          <button type="button" onClick={() => openLinkBio()} className="rounded-full bg-black/40 px-4 py-2.5 text-sm font-bold ring-1 ring-white/25">
+            Open Nexus Link dashboard
+          </button>
+        </div>
+        {bioUrl && <p className="mt-3 font-mono text-xs text-white/70 break-all">{bioUrl}</p>}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="space-y-3 rounded-2xl bg-side p-4">
+          <div className="text-xs font-bold text-sub uppercase">Requirements</div>
+          <ul className="space-y-1.5 text-sm">
+            {cfg.reqs.map((r) => (
+              <li key={r} className="flex gap-2">
+                <span style={{ color: cfg.color }}>✓</span>
+                <span>{r}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="text-xs font-bold text-sub uppercase">How to apply</div>
+          <ol className="list-inside list-decimal space-y-1 text-sm">
+            {cfg.steps.map((s) => (
+              <li key={s}>{s}</li>
+            ))}
+          </ol>
+        </div>
+
+        <div className="space-y-3 rounded-2xl bg-side p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 font-semibold">Nexus Link readiness</div>
+            {score != null && (
+              <div className="text-2xl font-black tabular-nums" style={{ color: score >= 80 ? "#23a55a" : score >= 50 ? "#f0b232" : "#ed4245" }}>
+                {score}%
+              </div>
+            )}
+          </div>
+          {!page ? (
+            <div className="rounded-xl bg-black/25 p-3 text-sm">
+              No Nexus Link page yet. Create one, then paste it as Website on {cfg.short}.
+              <button type="button" onClick={() => openLinkBio()} className="mt-2 block rounded-full bg-accent px-4 py-1.5 font-bold text-white">
+                Set up Nexus Link
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {checks!.map((c) => (
+                <div key={c.label} className="flex gap-2 text-sm">
+                  <span className={c.ok ? "text-ok" : "text-idle"}>{c.ok ? "✓" : "!"}</span>
+                  <div>
+                    <div>{c.label}</div>
+                    {!c.ok && <div className="text-xs text-sub">{c.tip}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="rounded-xl bg-black/20 p-3 text-xs text-sub">
+            {cfg.tips.map((t) => (
+              <div key={t}>• {t}</div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Spotify ✓ Verified Artist checker: stats, readiness, how to get (and keep) the checkmark */
+function SpotifyCheckmark() {
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [p, setP] = useState<SpotifyProfile | null>(null);
@@ -49,7 +200,7 @@ export default function Checkmark() {
         </div>
         <div className="mt-1 text-2xl font-black">Get the blue ✓ Verified Artist badge</div>
         <p className="mt-1 max-w-2xl text-sm text-white/85">
-          Spotify shows the checkmark on profiles that are claimed through Spotify for Artists — it can&apos;t be bought or added by any app. Check a profile here to see its stats, what&apos;s missing and how to claim it.
+          Spotify shows the checkmark on profiles that are claimed through Spotify for Artists — it can&apos;t be bought or added by any app. Check a profile here to see its stats, what&apos;s missing and how to claim it. Use your Nexus Link as the website when they ask.
         </p>
         <form onSubmit={check} className="mt-4 flex flex-wrap gap-2">
           <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://open.spotify.com/artist/…" className="min-w-0 flex-1 rounded-full bg-white/15 px-4 py-2.5 text-sm text-white placeholder-white/60 outline-none focus:bg-white/20" />
@@ -126,7 +277,7 @@ export default function Checkmark() {
                 <div className="font-semibold">How to get the checkmark</div>
                 <ol className="list-inside list-decimal space-y-1">
                   <li>Open Spotify for Artists → Get access → Artist, and paste the artist link.</li>
-                  <li>Verify with your website or socials. Through a preferred distributor it&apos;s often approved instantly.</li>
+                  <li>Verify with your website or socials — paste your Nexus Link (/bio/…) as Website.</li>
                   <li>Once you&apos;re in, the ✓ appears on the profile — then add a photo, bio and Artist Pick.</li>
                 </ol>
                 <div className="flex flex-wrap gap-2">
@@ -135,6 +286,9 @@ export default function Checkmark() {
                   </a>
                   <button onClick={() => studioGo("claims")} className="rounded-full bg-hover px-4 py-2 font-semibold hover:bg-active">
                     Let the label help
+                  </button>
+                  <button onClick={() => openLinkBio()} className="rounded-full bg-hover px-4 py-2 font-semibold hover:bg-active">
+                    Get Nexus Link URL
                   </button>
                 </div>
                 <p className="text-xs text-sub">Already claimed by someone else? Ask that team&apos;s Admin to invite you, or contact Spotify for Artists support.</p>
