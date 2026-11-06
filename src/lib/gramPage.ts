@@ -3,6 +3,14 @@
 import { jsonLd, personLd, seoHead, truncate } from "@/lib/seo";
 
 type M = { path: string; type: "image" | "video"; poster?: string | null; dur?: number | null; alt?: string | null };
+export type PublicBadge = {
+  key: string;
+  name: string;
+  icon: string;
+  color: string;
+  description?: string | null;
+  priority?: number | null;
+};
 export type PublicGram = {
   id: string;
   username: string;
@@ -14,6 +22,9 @@ export type PublicGram = {
   bio: string | null;
   links?: { type: string; url: string; label?: string }[] | null;
   verified: boolean;
+  role?: string | null;
+  premium_tier?: string | null;
+  badges?: PublicBadge[] | null;
   followers: number;
   following: number;
   posts: number;
@@ -36,35 +47,50 @@ const initials = (s: string) =>
     .toUpperCase();
 
 const CSS = `
-*{box-sizing:border-box;margin:0}html,body{background:#07060f;color:#f4f2ff;font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box;margin:0}html,body{background:#07060f;color:#f4f2ff;font:15px/1.45 "Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}
 .wrap{max-width:640px;margin:0 auto;padding-bottom:60px}
 .hero{position:relative;height:230px;overflow:hidden}
 .hero img{width:100%;height:100%;object-fit:cover}
-.hero:after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgba(7,6,15,.1),rgba(7,6,15,.35) 55%,#07060f)}
+.hero:after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgba(7,6,15,.08),rgba(7,6,15,.4) 55%,#07060f)}
 .top{position:absolute;z-index:2;top:14px;left:16px;right:16px;display:flex;align-items:center;gap:8px}
 .logo{display:flex;align-items:center;gap:7px;font-weight:900;letter-spacing:-.02em}
 .logo b{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:linear-gradient(135deg,#ff2bd6,#8b5cff,#00c2ff);color:#fff;font-size:15px}
 .top .open{margin-left:auto;background:rgba(0,0,0,.45);backdrop-filter:blur(10px);padding:7px 14px;border-radius:999px;font-weight:700;font-size:13px}
 .head{position:relative;margin-top:-86px;text-align:center;padding:0 18px}
-.ring{display:inline-block;padding:4px;border-radius:50%;background:rgba(255,255,255,.18)}
+.ring{display:inline-block;padding:4px;border-radius:50%;background:rgba(255,255,255,.18);box-shadow:0 12px 40px -12px rgba(0,0,0,.65)}
 .ring.live{background:conic-gradient(from 200deg,#feda75,#fa7e1e,#d62976,#962fbf,#4f5bd5,#feda75);cursor:pointer}
+.ring.gold{background:conic-gradient(from 180deg,#ffe27a,#f0b232,#ffd700,#fff1b0,#f0b232,#ffe27a);animation:spin 8s linear infinite}
 .ring>span{display:block;padding:3px;border-radius:50%;background:#07060f}
 .av{width:124px;height:124px;border-radius:50%;object-fit:cover;display:grid;place-items:center;font-size:42px;font-weight:900;color:#fff}
-h1{margin-top:12px;font-size:26px;font-weight:900;letter-spacing:-.02em;display:flex;align-items:center;justify-content:center;gap:6px}
+@keyframes spin{to{transform:rotate(1turn)}}
+h1{margin-top:14px;font-size:28px;font-weight:900;letter-spacing:-.03em;display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap}
+h1 .nm{background:linear-gradient(90deg,#fff,#ffe27a 45%,#ff9ad5 80%,#a78bfa);-webkit-background-clip:text;background-clip:text;color:transparent}
 h1 svg{width:22px;height:22px;flex:none}
-.user{color:#a9a3c9;font-weight:600}
-.bio{margin:10px auto 0;max-width:460px;white-space:pre-wrap;color:#dcd8f4}
-.links{display:flex;flex-direction:column;gap:6px;margin:12px auto 0;max-width:420px;text-align:left}
-.links a{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:14px;background:rgba(255,255,255,.05);font-size:13px;font-weight:600;color:#dcd8f4}
-.links a:hover{background:rgba(255,255,255,.09)}
+h1 .star{font-size:20px;filter:drop-shadow(0 0 8px #faa61a)}
+.user{color:#a9a3c9;font-weight:600;margin-top:2px}
+.chips{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:12px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:800;letter-spacing:.01em;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+.chip.founder{background:linear-gradient(135deg,rgba(240,178,50,.28),rgba(240,178,50,.08));box-shadow:inset 0 0 0 1px #f0b23288;color:#ffe27a}
+.chip.vip{background:linear-gradient(135deg,rgba(235,69,158,.28),rgba(235,69,158,.08));box-shadow:inset 0 0 0 1px #eb459e88;color:#ffb3d9}
+.chip.premium{background:linear-gradient(135deg,rgba(250,166,26,.3),rgba(250,166,26,.08));box-shadow:inset 0 0 0 1px #faa61a88;color:#ffd27a}
+.chip.owner{background:linear-gradient(135deg,rgba(240,178,50,.22),rgba(139,92,255,.12));box-shadow:inset 0 0 0 1px #f0b23266;color:#ffe9a8}
+.badges{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:12px auto 0;max-width:480px}
+.badge{display:inline-grid;place-items:center;min-width:30px;height:30px;padding:0 7px;border-radius:10px;font-size:15px;line-height:1;transition:transform .15s}
+.badge:hover{transform:translateY(-1px)}
+.bio{margin:14px auto 0;max-width:460px;white-space:pre-wrap;color:#dcd8f4;font-size:14.5px;line-height:1.55}
+.links{display:flex;flex-direction:column;gap:8px;margin:16px auto 0;max-width:440px;text-align:left}
+.links a{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:16px;background:linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.03));box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);font-size:13.5px;font-weight:650;color:#ece8ff;transition:background .15s,transform .15s}
+.links a:hover{background:rgba(255,255,255,.1);transform:translateY(-1px)}
+.links .ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;font-size:16px;background:rgba(0,0,0,.28);flex:none}
 .links .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.links .arrow{opacity:.45;font-size:14px}
 .links .fans{flex:none;display:none;align-items:baseline;gap:4px;padding:4px 10px;border-radius:999px;background:linear-gradient(90deg,#ffd400,#ff8a00,#ff2bd6);color:#000;font-weight:900;font-variant-numeric:tabular-nums}
 .links .fans.on{display:inline-flex}
 .links .fans b{font-size:13px}
 .links .fans i{font-size:10px;font-style:normal;font-weight:800}
-.stats{display:flex;justify-content:center;gap:6px;margin-top:18px}
-.stats div{min-width:84px;padding:8px 6px;border-radius:16px;background:rgba(255,255,255,.05)}
+.stats{display:flex;justify-content:center;gap:6px;margin-top:20px}
+.stats div{min-width:84px;padding:10px 6px;border-radius:16px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}
 .stats b{display:block;font-size:20px;font-weight:900;font-variant-numeric:tabular-nums}
 .stats span{font-size:12px;color:#a9a3c9}
 .btns{display:flex;gap:8px;max-width:440px;margin:18px auto 0}
@@ -105,6 +131,20 @@ h1 svg{width:22px;height:22px;flex:none}
 @media(min-width:640px){.hero{height:280px;border-radius:0 0 28px 28px}}
 `;
 
+const LINK_ICON: Record<string, string> = {
+  website: "🌐",
+  instagram: "📸",
+  youtube: "▶️",
+  tiktok: "🎵",
+  x: "𝕏",
+  twitter: "𝕏",
+  telegram: "✈️",
+  soundcloud: "☁️",
+  spotify: "🎧",
+  discord: "💬",
+  github: "⌘",
+};
+
 const ICON = {
   check: `<svg viewBox="0 0 24 24" fill="#4cb3ff"><path d="M12 1.5l2.6 2 3.2-.3 1 3.1 2.8 1.6-1 3.1 1 3.1-2.8 1.6-1 3.1-3.2-.3-2.6 2-2.6-2-3.2.3-1-3.1L1.4 14l1-3.1-1-3.1 2.8-1.6 1-3.1 3.2.3z"/><path d="M8 12.2l2.7 2.7L16.4 9" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`,
@@ -131,15 +171,38 @@ export function renderGramProfile(p: PublicGram, base: string) {
     `<a href="${app}" title="Open in NexusGram"><img loading="lazy" src="${esc(media(g.cover.type === "video" ? g.cover.poster : g.cover.path))}" alt="">${g.kind === "short" ? `<small>▶ ${fmt(g.view_count)}</small>` : g.count > 1 ? `<i>1/${g.count}</i>` : ""}</a>`;
   const stories = p.stories.map((s) => ({ t: s.media.type, u: media(s.media.path), p: media(s.media.poster), c: s.caption, d: s.media.dur || 0 }));
   const links = (p.links ?? []).map((l) => ({ ...l, url: safeUrl(l.url) })).filter((l) => l.url);
+  const badges = (p.badges ?? []).filter((b) => b?.key);
+  const hasFounder = badges.some((b) => b.key === "founder") || p.role === "owner";
+  const hasVip = badges.some((b) => b.key === "vip") || p.role === "vip";
+  const hasPremium = Boolean(p.premium_tier) || badges.some((b) => b.key === "premium");
+  const ringClass = stories.length ? " live" : hasPremium || hasFounder ? " gold" : "";
+  const chips = [
+    hasFounder ? `<span class="chip founder" title="Founded Nexus">👑 Founder</span>` : "",
+    p.role === "owner" ? `<span class="chip owner" title="Site owner">✦ Owner</span>` : p.role === "admin" ? `<span class="chip owner">🛡️ Admin</span>` : "",
+    hasVip ? `<span class="chip vip" title="VIP member">💎 VIP</span>` : "",
+    hasPremium ? `<span class="chip premium" title="Nexus Lighting Premium">⭐ Premium</span>` : "",
+  ]
+    .filter(Boolean)
+    .join("");
+  const badgeRow = badges
+    .filter((b) => !["verified"].includes(b.key))
+    .slice(0, 14)
+    .map(
+      (b) =>
+        `<span class="badge" title="${esc(b.description ? `${b.name} — ${b.description}` : b.name)}" style="background:${esc(b.color)}26;box-shadow:inset 0 0 0 1px ${esc(b.color)}66">${esc(b.icon)}</span>`,
+    )
+    .join("");
 
   const body = `<div class="wrap">
 <div class="hero">${hero}<div class="top"><a class="logo" href="${base}"><b>N</b>NexusGram</a><a class="open" href="${app}">Open in Nexus</a></div></div>
 <div class="head">
-  <span class="ring${stories.length ? " live" : ""}"${stories.length ? ' onclick="openStory(0)" title="Watch story"' : ""}><span>${av}</span></span>
-  <h1>${esc(p.display_name || p.username)}${p.verified ? ICON.check : ""}</h1>
+  <span class="ring${ringClass}"${stories.length ? ' onclick="openStory(0)" title="Watch story"' : ""}><span>${av}</span></span>
+  <h1><span class="nm">${esc(p.display_name || p.username)}</span>${hasPremium ? `<span class="star" title="Premium">⭐</span>` : ""}${p.verified ? ICON.check : ""}</h1>
   <div class="user">@${esc(p.username)}</div>
+  ${chips ? `<div class="chips">${chips}</div>` : ""}
+  ${badgeRow ? `<div class="badges" aria-label="Badges">${badgeRow}</div>` : ""}
   ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ""}
-  ${links.length ? `<div class="links" id="soc">${links.map((l, i) => `<a href="${esc(l.url)}" target="_blank" rel="noopener nofollow" data-i="${i}" data-type="${esc(l.type || "")}" data-url="${esc(l.url)}"><span class="nm">${esc(l.label || l.type || "Link")}</span><span class="fans" id="fans-${i}"><b></b><i></i></span></a>`).join("")}</div>` : ""}
+  ${links.length ? `<div class="links" id="soc">${links.map((l, i) => `<a href="${esc(l.url)}" target="_blank" rel="noopener nofollow" data-i="${i}" data-type="${esc(l.type || "")}" data-url="${esc(l.url)}"><span class="ic">${LINK_ICON[(l.type || "").toLowerCase()] || "🔗"}</span><span class="nm">${esc(l.label || l.type || "Link")}</span><span class="fans" id="fans-${i}"><b></b><i></i></span><span class="arrow">›</span></a>`).join("")}</div>` : ""}
   <div class="stats"><div><b>${fmt(p.followers)}</b><span>Followers</span></div><div><b>${fmt(p.following)}</b><span>Following</span></div><div><b>${fmt(p.posts)}</b><span>Posts</span></div><div><b>${fmt(p.likes)}</b><span>Likes</span></div></div>
   <div class="btns">
     <a class="btn main" href="${app}">${ICON.plus} Follow</a>
