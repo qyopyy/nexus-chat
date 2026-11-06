@@ -393,17 +393,22 @@ export default function BrowserHub({
     [shieldQs],
   );
 
+  const readingSourceUrl = view.kind === "page" || view.kind === "web" ? view.url : "";
+  const readingSourceText = view.kind === "page" ? view.text : "";
+  const readingSourceTitle = view.kind === "page" ? view.title : "";
+
   useEffect(() => {
     if (!readingMode) return;
     if (view.kind === "page") {
-      void loadReadingArticle(view.url, view.text, view.title);
+      void loadReadingArticle(readingSourceUrl, readingSourceText, readingSourceTitle);
     } else if (view.kind === "web") {
-      void loadReadingArticle(view.url);
+      const t = window.setTimeout(() => void loadReadingArticle(readingSourceUrl), 50);
+      return () => window.clearTimeout(t);
     } else {
       setReadingArticle(null);
       setReadingError(null);
     }
-  }, [readingMode, view, loadReadingArticle]);
+  }, [readingMode, view.kind, readingSourceUrl, readingSourceText, readingSourceTitle, loadReadingArticle]);
 
   function toggleReadingMode() {
     if (readingMode) {
@@ -565,20 +570,21 @@ export default function BrowserHub({
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {readingMode && (view.kind === "page" || view.kind === "web") ? (
-          <BrowserReadingView
-            article={readingArticle}
-            url={readingUrl || pageUrlForReading}
-            busy={readingBusy}
-            error={readingError}
-            onClose={() => {
-              setReadingMode(false);
-              saveReadingModeSession(false);
-            }}
-          />
-        ) : (
-        <>
+      <div className="relative min-h-0 flex-1 overflow-y-auto">
+        {readingMode && (view.kind === "page" || view.kind === "web") && (
+          <div className="absolute inset-0 z-10 overflow-y-auto bg-[#141a24]">
+            <BrowserReadingView
+              article={readingArticle}
+              url={readingUrl || pageUrlForReading}
+              busy={readingBusy}
+              error={readingError}
+              onClose={() => {
+                setReadingMode(false);
+                saveReadingModeSession(false);
+              }}
+            />
+          </div>
+        )}
         {view.kind === "home" && (
           <div className="mx-auto flex max-w-2xl flex-col items-center px-4 pt-10 pb-8">
             <div className="relative mb-6 grid size-20 place-items-center rounded-[1.75rem] bg-gradient-to-br from-[#60a5fa] via-[#a78bfa] to-[#f472b6] shadow-2xl shadow-blue-500/30">
@@ -827,8 +833,6 @@ export default function BrowserHub({
               }}
             />
           </div>
-        )}
-        </>
         )}
       </div>
     </div>
