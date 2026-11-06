@@ -25,6 +25,15 @@ export default function Root({ mode, initialVideo, initialRelease, initialGram, 
     window.location.replace("/bump/app" + window.location.search);
   }, []);
 
+  // Standalone Nexus Link IPA stays on /bio/app (never the main chat shell)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!/LinkBioApp|NexusLink/i.test(navigator.userAgent)) return;
+    const p = window.location.pathname;
+    if (p.startsWith("/bio/app") || p.startsWith("/bio/admin") || p.startsWith("/bio/")) return;
+    window.location.replace("/bio/app" + window.location.search);
+  }, []);
+
   useEffect(() => {
     if (!isConfigured) return;
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
