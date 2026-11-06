@@ -12,9 +12,20 @@ type GhRelease = {
   assets: { name: string; browser_download_url: string }[];
 };
 
+const KINDS = Object.keys(IPA_KIND_META) as IpaKind[];
+
 function kindOf(raw: string | null): IpaKind {
-  if (raw === "wump" || raw === "link" || raw === "browser" || raw === "nexus" || raw === "appstore") return raw;
+  if (raw && (KINDS as string[]).includes(raw)) return raw as IpaKind;
   return "nexus";
+}
+
+function tagMatches(kind: IpaKind, tag: string, prefix: string): boolean {
+  // Sideloadly Nexus tags are exactly `ios-N` — never match `ios-appstore-N`.
+  if (kind === "nexus") return /^ios-\d+$/.test(tag);
+  if (kind === "wump") return /^wump-ios-\d+$/.test(tag);
+  if (kind === "browser") return /^browser-ios-\d+$/.test(tag);
+  if (kind === "link") return /^link-ios-\d+$/.test(tag);
+  return tag.startsWith(prefix);
 }
 
 /** Public latest IPA asset from GitHub Releases (Sideloadly / AltStore / App Store signed). */
@@ -36,12 +47,7 @@ export async function GET(req: Request) {
     const releases = (await r.json()) as GhRelease[];
     for (const rel of releases) {
       const tag = rel.tag_name || "";
-      // Sideloadly Nexus tags are `ios-N` — never match `ios-appstore-N` for kind=nexus.
-      if (kind === "nexus") {
-        if (!/^ios-\d+$/.test(tag)) continue;
-      } else if (!tag.startsWith(meta.tagPrefix)) {
-        continue;
-      }
+      if (!tagMatches(kind, tag, meta.tagPrefix)) continue;
       const asset =
         rel.assets?.find((a) => a.name === meta.assetHint) ||
         rel.assets?.find((a) => a.name.toLowerCase().endsWith(".ipa"));

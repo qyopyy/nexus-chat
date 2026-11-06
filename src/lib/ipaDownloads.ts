@@ -5,10 +5,20 @@ export const NEXUS_APPSTORE_IPA_RELEASES_URL =
   "https://github.com/qyopyy/nexus-chat/releases?q=App+Store+IPA&expanded=true";
 export const NEXUS_APPSTORE_WORKFLOW_URL =
   "https://github.com/qyopyy/nexus-chat/actions/workflows/ipa-appstore.yml";
+export const NEXUS_APPSTORE_APPS_WORKFLOW_URL =
+  "https://github.com/qyopyy/nexus-chat/actions/workflows/ipa-appstore-apps.yml";
 export const NEXUS_CAPGO_APP_URL = "https://console.capgo.app/app/hu.qyopy.nexus.B44X8B76QR";
 export const NEXUS_CAPGO_APP_ID = "hu.qyopy.nexus.B44X8B76QR";
 
-export type IpaKind = "nexus" | "wump" | "link" | "browser" | "appstore";
+export type IpaKind =
+  | "nexus"
+  | "wump"
+  | "link"
+  | "browser"
+  | "appstore"
+  | "wump-appstore"
+  | "browser-appstore"
+  | "link-appstore";
 
 export const IPA_KIND_META: Record<
   IpaKind,
@@ -22,6 +32,30 @@ export const IPA_KIND_META: Record<
     bundleId: "hu.qyopy.nexus.B44X8B76QR",
     transporterOk: true,
   },
+  "wump-appstore": {
+    label: "Wump (App Store signed)",
+    tagPrefix: "wump-appstore-",
+    assetHint: "Wump-AppStore.ipa",
+    query: "Wump App Store IPA",
+    bundleId: "hu.qyopy.bump.B44X8B76QR",
+    transporterOk: true,
+  },
+  "browser-appstore": {
+    label: "Browser (App Store signed)",
+    tagPrefix: "browser-appstore-",
+    assetHint: "Browser-AppStore.ipa",
+    query: "Browser App Store IPA",
+    bundleId: "hu.qyopy.browser.B44X8B76QR",
+    transporterOk: true,
+  },
+  "link-appstore": {
+    label: "Nexus Link (App Store signed)",
+    tagPrefix: "link-appstore-",
+    assetHint: "NexusLink-AppStore.ipa",
+    query: "Link App Store IPA",
+    bundleId: "hu.qyopy.link",
+    transporterOk: true,
+  },
   nexus: {
     label: "Nexus (Sideloadly)",
     tagPrefix: "ios-",
@@ -30,21 +64,21 @@ export const IPA_KIND_META: Record<
     bundleId: "hu.qyopy.nexus.B44X8B76QR",
   },
   wump: {
-    label: "Wump",
+    label: "Wump (Sideloadly)",
     tagPrefix: "wump-ios-",
     assetHint: "Wump.ipa",
     query: "Wump iOS",
     bundleId: "hu.qyopy.bump.B44X8B76QR",
   },
   link: {
-    label: "Nexus Link",
+    label: "Nexus Link (Sideloadly)",
     tagPrefix: "link-ios-",
     assetHint: "NexusLink.ipa",
     query: "Nexus Link iOS",
     bundleId: "hu.qyopy.link",
   },
   browser: {
-    label: "Browser",
+    label: "Browser (Sideloadly)",
     tagPrefix: "browser-ios-",
     assetHint: "Browser.ipa",
     query: "Browser iOS",

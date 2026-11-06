@@ -148,7 +148,7 @@ jobs:
 
           PBX="App.xcodeproj/project.pbxproj"
           test -f "$PBX"
-          python3 "$GITHUB_WORKSPACE/mobile/scripts/patch-ios-manual-signing.py" "$PBX" \
+          python3 "$GITHUB_WORKSPACE/.github/scripts/patch-ios-manual-signing.py" "$PBX" \
             --bundle-id "$BUNDLE_ID" \
             --team-id "$TEAM_ID" \
             --profile-uuid "$PROFILE_UUID" \
@@ -228,7 +228,7 @@ jobs:
           IPA=$(ls build/export/*.ipa | head -1)
           cp "$IPA" "$GITHUB_WORKSPACE/Nexus-AppStore.ipa"
           ls -lh "$GITHUB_WORKSPACE/Nexus-AppStore.ipa"
-          bash "$GITHUB_WORKSPACE/mobile/scripts/verify-ipa-provisioning.sh" "$GITHUB_WORKSPACE/Nexus-AppStore.ipa"
+          bash "$GITHUB_WORKSPACE/.github/scripts/verify-ipa-provisioning.sh" "$GITHUB_WORKSPACE/Nexus-AppStore.ipa"
 
       - uses: actions/upload-artifact@v4
         with:
