@@ -3,10 +3,11 @@
 import TypingBubbles from "./TypingBubbles";
 import { HighFivePrompt } from "./Extras";
 
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronDown, Timer } from "lucide-react";
 import { useApp } from "@/store/app";
 import { useChat } from "@/store/chat";
+import { getChatWallpaper, subscribeChatWallpapers } from "@/lib/chatWallpaper";
 import { TTL_OPTIONS, expired, isTimerNotice, loadOlder } from "@/lib/data";
 import { formatDay, sameDay } from "@/lib/utils";
 import MessageBubble from "./MessageBubble";
@@ -111,9 +112,36 @@ export default function MessageList({ conversationId, initialUnread }: { convers
     return map;
   }, [messages]);
 
+  const wallpaper = useSyncExternalStore(
+    subscribeChatWallpapers,
+    () => getChatWallpaper(conversationId),
+    () => null,
+  );
+
   return (
     <div className="relative min-h-0 flex-1">
-      <div ref={ref} onScroll={onScroll} className="chat-wallpaper h-full overflow-y-auto">
+      {wallpaper && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 overflow-hidden"
+          style={{
+            backgroundColor: "var(--color-wall, #1b2733)",
+            backgroundImage: `url(${JSON.stringify(wallpaper)})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+            // Match global glass wallpaper: subtle blur + dim from appearance prefs
+            filter: "blur(var(--app-bg-blur, 0px)) brightness(var(--app-bg-dim, .75))",
+            transform: "scale(1.04)",
+          }}
+        />
+      )}
+      <div
+        ref={ref}
+        onScroll={onScroll}
+        className="chat-wallpaper relative h-full overflow-y-auto"
+        style={wallpaper ? { backgroundImage: "none", backgroundColor: "transparent" } : undefined}
+      >
         <div className="mx-auto flex max-w-4xl flex-col px-2 py-4 sm:px-6">
           {!!ttl && (
             <div className="sticky top-2 z-20 mb-2 flex items-center gap-1.5 self-center rounded-full bg-accent/20 px-3 py-1 text-xs font-semibold text-txt backdrop-blur">

@@ -3,12 +3,13 @@
 import { useChatFx } from "@/lib/chatFx";
 import { TypingAnim } from "./TypingBubbles";
 
-import { useEffect, useMemo, useState } from "react";
-import { Bookmark, Bot, ChevronLeft, Hash, Maximize2, MessageSquare, Phone, Search, Users, Video, Volume2 } from "lucide-react";
-import { useApp, conversationTitle, findChannel, openProfileCard } from "@/store/app";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Bookmark, Bot, ChevronLeft, Hash, Image as ImageIcon, Maximize2, MessageSquare, Phone, Search, Users, Video, Volume2 } from "lucide-react";
+import { useApp, conversationTitle, findChannel, openProfileCard, toast } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { useChat } from "@/store/chat";
 import { useCall, startCall } from "@/lib/call";
+import { clearChatWallpaper, fileToDataUrl, getChatWallpaper, setChatWallpaper, subscribeChatWallpapers } from "@/lib/chatWallpaper";
 import { cn } from "@/lib/utils";
 import Avatar, { statusLabel } from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
@@ -16,6 +17,8 @@ import { useIsMobile } from "@/lib/useMobile";
 import BotsPanel from "./BotsPanel";
 import ChatSearch from "./ChatSearch";
 import SavedMessages from "./SavedMessages";
+
+const WALLPAPER_MAX_BYTES = 2 * 1024 * 1024;
 
 export default function ChatHeader({
   conversationId,
@@ -30,6 +33,13 @@ export default function ChatHeader({
   const [bots, setBots] = useState(false);
   const [search, setSearch] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [wallpaperMenu, setWallpaperMenu] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const wallpaper = useSyncExternalStore(
+    subscribeChatWallpapers,
+    () => getChatWallpaper(conversationId),
+    () => null,
+  );
   const title = useApp((s) => conversationTitle(s, conversationId));
   const chat = useApp((s) => s.chatList.find((c) => c.id === conversationId));
   const channel = useApp((s) => findChannel(s, conversationId));
@@ -66,6 +76,10 @@ export default function ChatHeader({
   }
 
   const canCall = kind === "dm" || kind === "group";
+
+  useEffect(() => {
+    setWallpaperMenu(false);
+  }, [conversationId]);
 
   useEffect(() => {
     if (kind === "voice") return;
@@ -144,6 +158,88 @@ export default function ChatHeader({
           <HeaderBtn label="Bots & webhooks" onClick={() => setBots(true)}>
             <Bot className="size-5" />
           </HeaderBtn>
+        )}
+        {kind !== "voice" && (
+          <div className="relative">
+            <HeaderBtn
+              label="Chat wallpaper"
+              active={!!wallpaper || wallpaperMenu}
+              onClick={() => {
+                haptic.light();
+                setWallpaperMenu((v) => !v);
+              }}
+            >
+              <ImageIcon className="size-5" />
+            </HeaderBtn>
+            {wallpaperMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setWallpaperMenu(false)} />
+                <div className="absolute top-11 right-0 z-50 w-56 animate-pop rounded-2xl bg-menu p-1.5 shadow-2xl ring-1 ring-white/10">
+                  <button
+                    type="button"
+                    className="flex w-full items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-hover"
+                    onClick={() => {
+                      setWallpaperMenu(false);
+                      const url = window.prompt("Wallpaper image URL", wallpaper?.startsWith("data:") ? "" : wallpaper ?? "");
+                      if (url === null) return;
+                      const trimmed = url.trim();
+                      if (!trimmed) {
+                        clearChatWallpaper(conversationId);
+                        toast("Wallpaper cleared", "info");
+                        return;
+                      }
+                      setChatWallpaper(conversationId, trimmed);
+                      toast("Wallpaper set for this chat", "success");
+                    }}
+                  >
+                    Set from URL
+                  </button>
+                  <button
+                    type="button"
+                    className="flex w-full items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-hover"
+                    onClick={() => {
+                      setWallpaperMenu(false);
+                      fileRef.current?.click();
+                    }}
+                  >
+                    Upload image
+                  </button>
+                  {wallpaper && (
+                    <button
+                      type="button"
+                      className="flex w-full items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-dnd hover:bg-hover"
+                      onClick={() => {
+                        setWallpaperMenu(false);
+                        clearChatWallpaper(conversationId);
+                        toast("Wallpaper cleared", "info");
+                      }}
+                    >
+                      Clear wallpaper
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (!f) return;
+                if (!f.type.startsWith("image/")) return toast("Pick an image file", "error");
+                if (f.size > WALLPAPER_MAX_BYTES) return toast("Max 2 MB for chat wallpapers", "error");
+                void fileToDataUrl(f)
+                  .then((dataUrl) => {
+                    setChatWallpaper(conversationId, dataUrl);
+                    toast("Wallpaper set for this chat", "success");
+                  })
+                  .catch(() => toast("Could not read that image", "error"));
+              }}
+            />
+          </div>
         )}
         {kind !== "voice" && (
           <HeaderBtn label={showMembers ? "Hide member list" : "Show member list"} active={showMembers} onClick={() => useApp.setState({ showMembers: !showMembers })} className="hidden lg:grid">
