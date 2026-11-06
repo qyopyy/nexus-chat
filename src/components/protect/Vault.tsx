@@ -35,6 +35,8 @@ import {
   updateVault,
   uploadVault,
   VAULT_KINDS,
+  vaultIsUnlimited,
+  vaultLimitLabel,
   vaultUrl,
   vaultUsage,
   type VaultFile,
@@ -230,7 +232,8 @@ export default function Vault() {
     void load();
   };
 
-  const pct = Math.min(100, (usage.used / Math.max(1, usage.limit)) * 100);
+  const unlimited = vaultIsUnlimited(usage.limit);
+  const pct = unlimited ? Math.min(12, usage.used > 0 ? 8 : 0) : Math.min(100, (usage.used / Math.max(1, usage.limit)) * 100);
   const FILTERS: { id: Filter; label: string }[] = [
     { id: "all", label: "All" },
     { id: "music", label: "Music" },
@@ -243,18 +246,19 @@ export default function Vault() {
     <div className="space-y-4">
       <audio ref={audioRef} preload="none" className="hidden" />
 
-      <div className="overflow-hidden rounded-3xl p-5 text-white" style={{ background: "linear-gradient(135deg,#1b2a6b,#4b1b6b 60%,#6b1b4b)" }}>
+      <div className="overflow-hidden rounded-3xl p-5 text-white" style={{ background: "linear-gradient(135deg,#0f172a,#1e3a5f 45%,#0ea5e9 120%)" }}>
         <div className="flex items-center gap-2 text-xs font-bold tracking-widest text-white/70 uppercase">
-          <Lock className="size-4" /> My Vault
+          <Lock className="size-4" /> Nexus Drive
         </div>
-        <div className="mt-1 text-2xl font-black">Masters, stems & private files</div>
+        <div className="mt-1 text-2xl font-black">Private cloud · all formats</div>
         <p className="mt-1 max-w-2xl text-sm text-white/80">
-          Store unreleased music with kind tags, duration, artist credits, and notes. Share with expiring, password, or download-limited links — turn them off any time.
+          Google Drive–clean layout with Proton-style private share links. Upload any file type, preview media, and share with expiry, password, or download caps.
         </p>
         <div className="mt-4">
           <div className="flex flex-wrap justify-between gap-2 text-xs font-semibold text-white/80">
             <span>
-              {fmtBytes(usage.used)} of {fmtBytes(usage.limit)} · {usage.files} files
+              {fmtBytes(usage.used)}
+              {unlimited ? " · Unlimited storage" : ` of ${vaultLimitLabel(usage.limit)}`} · {usage.files} files
               {musicCount > 0 && (
                 <span className="text-white/60">
                   {" "}
@@ -262,7 +266,7 @@ export default function Vault() {
                 </span>
               )}
             </span>
-            {tier < 4 && (
+            {!unlimited && tier < 4 && (
               <button onClick={() => openModal("premium", needPlan(tier + 1).id)} className="underline">
                 Get more space
               </button>
@@ -311,7 +315,7 @@ export default function Vault() {
           ref={pick}
           type="file"
           multiple
-          accept="audio/*,video/*,image/*,.pdf,.zip,.wav,.flac,.aiff,.aif,.mp3,.m4a"
+          accept="*/*"
           hidden
           onChange={(e) => (e.target.files?.length && void add(e.target.files), (e.target.value = ""))}
         />
@@ -338,7 +342,7 @@ export default function Vault() {
           <Upload className="size-4" /> Upload files
         </button>
         <p className="mt-2 text-xs text-sub">
-          or drop them here{folder ? ` — into “${folder}”` : ""} · up to 2 GB each · masters, stems, mixes, artwork, contracts…
+          or drop them here{folder ? ` — into “${folder}”` : ""} · any format · unlimited storage · private share links
         </p>
         {ups.map((u) => (
           <div key={u.name} className="mx-auto mt-2 max-w-md text-left text-xs">

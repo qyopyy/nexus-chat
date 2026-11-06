@@ -94,9 +94,21 @@ export function fmtDuration(ms?: number | null) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+/** Sentinel used by vault_limit() for “unlimited” (100 TiB). */
+export const VAULT_UNLIMITED_BYTES = 109951162777600;
+
 export async function vaultUsage() {
   const { data } = await supabase.rpc("vault_usage");
-  return (data ?? { used: 0, limit: 1073741824, files: 0 }) as { used: number; limit: number; files: number };
+  return (data ?? { used: 0, limit: VAULT_UNLIMITED_BYTES, files: 0 }) as { used: number; limit: number; files: number };
+}
+
+export function vaultLimitLabel(limit: number) {
+  if (limit >= VAULT_UNLIMITED_BYTES * 0.5) return "Unlimited";
+  return fmtBytes(limit);
+}
+
+export function vaultIsUnlimited(limit: number) {
+  return limit >= VAULT_UNLIMITED_BYTES * 0.5;
 }
 export async function listVault() {
   const { data } = await supabase.from("vault_files").select("*").eq("owner_id", me()).order("created_at", { ascending: false }).limit(2000);
@@ -109,11 +121,35 @@ export async function uploadVault(
   meta?: { kind?: VaultKind; artist?: string; title?: string; note?: string; duration_ms?: number | null },
 ) {
   const id = crypto.randomUUID();
-  const safe = file.name.replace(/[^\w.\- ()]+/g, "_").slice(-120) || "file";
+  let upload: Blob = file;
+  let uploadName = file.name;
+  let uploadMime = file.type || "application/octet-stream";
+  // Media: compress to Full HD 60fps (video) / high-quality image before vault store
+  try {
+    if (file.type.startsWith("video/") || /\.(mp4|mov|webm|mkv|m4v)$/i.test(file.name)) {
+      onProgress?.(0.02);
+      const { compressVideo, FULL_HD_60 } = await import("./compressMedia");
+      const out = await compressVideo(file, { ...FULL_HD_60 });
+      upload = out.blob;
+      uploadMime = out.mime || "video/mp4";
+      uploadName = file.name.replace(/\.[^.]+$/, "") + "." + (out.ext || "mp4");
+    } else if (file.type.startsWith("image/") && !/gif$/i.test(file.name)) {
+      const { compressImage } = await import("./compressMedia");
+      const { blob } = await compressImage(file, 1920, 0.9);
+      upload = blob;
+      uploadMime = blob.type || "image/jpeg";
+      if (!/\.jpe?g$/i.test(uploadName) && uploadMime.includes("jpeg")) uploadName = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+    }
+  } catch {
+    upload = file;
+    uploadName = file.name;
+    uploadMime = file.type || "application/octet-stream";
+  }
+  const safe = uploadName.replace(/[^\w.\- ()]+/g, "_").slice(-120) || "file";
   const path = `${me()}/${id}/${safe}`;
   let duration_ms = meta?.duration_ms ?? null;
-  if (duration_ms == null && (file.type.startsWith("audio/") || file.type.startsWith("video/"))) {
-    duration_ms = await probeMediaDuration(file);
+  if (duration_ms == null && (uploadMime.startsWith("audio/") || uploadMime.startsWith("video/") || file.type.startsWith("audio/") || file.type.startsWith("video/"))) {
+    duration_ms = await probeMediaDuration(upload);
   }
   const kind = meta?.kind ?? guessVaultKind(file);
   // register first so the quota is checked before any bytes move
@@ -123,9 +159,9 @@ export async function uploadVault(
       id,
       owner_id: me(),
       path,
-      name: file.name.slice(0, 300),
-      mime: file.type || null,
-      bytes: file.size,
+      name: uploadName.slice(0, 300),
+      mime: uploadMime || null,
+      bytes: upload.size,
       folder: folder.trim().slice(0, 100),
       kind,
       duration_ms,
@@ -143,12 +179,12 @@ export async function uploadVault(
       x.open("POST", `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/user-vault/${path.split("/").map(encodeURIComponent).join("/")}`);
       x.setRequestHeader("Authorization", `Bearer ${s.session?.access_token}`);
       x.setRequestHeader("apikey", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "");
-      x.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+      x.setRequestHeader("Content-Type", uploadMime);
       x.setRequestHeader("x-upsert", "true");
-      x.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
+      x.upload.onprogress = (e) => e.lengthComputable && onProgress?.(0.05 + e.loaded / e.total * 0.95);
       x.onload = () => (x.status < 300 ? res() : rej(new Error(`Upload failed (${x.status})`)));
       x.onerror = () => rej(new Error("Network error while uploading"));
-      x.send(file);
+      x.send(upload);
     });
   } catch (e) {
     await supabase.from("vault_files").delete().eq("id", id);
