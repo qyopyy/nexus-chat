@@ -292,6 +292,7 @@ body{background:${t.bg};overflow-x:hidden}
 .layout-minimal .links a{background:transparent;box-shadow:none;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;padding:12px 4px}
 .links a{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:${radius};background:${linkBg};backdrop-filter:blur(10px);box-shadow:${linkBorder};color:${t.text};text-decoration:none;font-weight:700;transition:transform .15s,background .15s}
 .links a:hover{transform:translateY(-2px);background:rgba(255,255,255,.12)}
+.links a.cta{background:linear-gradient(135deg,${accent}cc,${accent}66);box-shadow:0 0 0 1px ${accent}88,0 8px 28px ${accent}44;font-size:1.05em;padding:16px 18px}
 .links .ic{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;background:rgba(0,0,0,.25);flex:none}
 .links .nm{flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .links .arrow{opacity:.4}
@@ -354,7 +355,7 @@ ${t.watermark ? `<div class="wm">${esc(t.watermark)}</div>` : ""}
       ? `<div class="links">${links
           .map(
             (l) =>
-              `<a href="${esc(l.url)}" target="_blank" rel="noopener nofollow" data-url="${esc(l.url)}"><span class="ic">${LINK_ICON[(l.type || "").toLowerCase()] || "🔗"}</span><span class="nm">${esc(l.label || l.type || "Link")}</span><span class="arrow">›</span></a>`,
+              `<a class="${(l as { featured?: boolean }).featured ? "cta" : ""}" href="${esc(l.url)}" target="_blank" rel="noopener nofollow" data-url="${esc(l.url)}"><span class="ic">${LINK_ICON[(l.type || "").toLowerCase()] || "🔗"}</span><span class="nm">${esc(l.label || l.type || "Link")}${(l as { featured?: boolean }).featured ? " ★" : ""}</span><span class="arrow">›</span></a>`,
           )
           .join("")}</div>`
       : ""

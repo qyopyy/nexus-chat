@@ -11,8 +11,11 @@ import { peerPose, type CsNet } from "./classicstrike/net";
 import MobileControls from "./classicstrike/MobileControls";
 import { freshTouchCtl } from "./classicstrike/touchCtl";
 import { createHqEngine, type HqEngine } from "./classicstrike/hqEngine";
+import { STRIKE_MAPS, type StrikeMapId } from "./classicstrike/maps";
+import { strikeSfx, unlockStrikeAudio } from "./classicstrike/sfx";
 
 export type StrikeEngine = "raycast" | "hq";
+export type StrikePlayMode = "bomb" | "dm";
 
 type Team = "T" | "CT";
 export type StrikeEdition = "classic" | "global";
@@ -73,29 +76,6 @@ function arsenalFor(edition: StrikeEdition) {
   return ARSENAL.filter((w) => !w.edition || w.edition === edition);
 }
 
-// Dust2-inspired grid (1 wall, 0 floor, 2 site A, 3 site B, 4 T spawn, 5 CT spawn)
-const MAP: number[][] = [
-  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-  [1, 4, 4, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 5, 5, 5, 1],
-  [1, 4, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 5, 5, 1],
-  [1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1],
-  [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 1, 2, 2, 2, 0, 0, 0, 0, 3, 3, 1, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 1, 0, 0, 0, 1, 2, 2, 2, 0, 0, 0, 0, 3, 3, 1, 0, 0, 0, 1, 0, 0, 1],
-  [1, 0, 1, 0, 0, 0, 0, 2, 2, 0, 0, 1, 1, 0, 0, 3, 0, 0, 0, 0, 1, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1],
-  [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
-  [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
-  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-];
-const MH = MAP.length;
-const MW = MAP[0].length;
 
 type Bot = {
   x: number;
@@ -122,6 +102,8 @@ export type ClassicStrikeProps = GameProps & {
   edition?: StrikeEdition;
   /** Global defaults to hq (Three.js); classic stays raycast */
   engine?: StrikeEngine;
+  playMode?: StrikePlayMode;
+  mapId?: StrikeMapId;
 };
 
 export default function ClassicStrike({
@@ -133,6 +115,8 @@ export default function ClassicStrike({
   initialTeam = "T",
   edition = "classic",
   engine,
+  playMode = "bomb",
+  mapId = "dust",
 }: ClassicStrikeProps) {
   const online = mode === "online" && !!net;
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -141,6 +125,12 @@ export default function ClassicStrike({
     typeof window !== "undefined" && (navigator.maxTouchPoints > 0 || "ontouchstart" in window);
   const preferHq = (engine ?? (edition === "global" ? "hq" : "raycast")) === "hq";
   const [hqOn, setHqOn] = useState(preferHq);
+  const [hitmark, setHitmark] = useState(0);
+  const [feed, setFeed] = useState<{ id: number; text: string }[]>([]);
+  const MAP = STRIKE_MAPS[mapId]?.grid ?? STRIKE_MAPS.dust.grid;
+  const MH = MAP.length;
+  const MW = MAP[0].length;
+  const isDm = playMode === "dm";
   const [hud, setHud] = useState({
     hp: 100,
     armor: 0,
@@ -180,6 +170,7 @@ export default function ClassicStrike({
     const pool = arsenalFor(edition);
     const wepOf = (id: WepId) => pool.find((w) => w.id === id) || pool[0]!;
     const ctl = touchCtl.current;
+    unlockStrikeAudio();
 
     let w = 0;
     let h = 0;
@@ -189,6 +180,17 @@ export default function ClassicStrike({
     const onlineMode = mode === "online" && !!net;
     let lastRoundBroadcast = 0;
     let roundSeed = Math.floor(Math.random() * 1e9);
+    let recoil = 0;
+    let pitch = 0;
+    let shake = 0;
+    let zoom = false;
+    let feedId = 0;
+    const pushFeed = (text: string) => {
+      feedId++;
+      const id = feedId;
+      setFeed((f) => [...f.slice(-4), { id, text }]);
+      setTimeout(() => setFeed((f) => f.filter((x) => x.id !== id)), 3200);
+    };
 
     const player = {
       x: 1.5,
@@ -265,10 +267,24 @@ export default function ClassicStrike({
       giveDefault();
       bombPlanted = false;
       defuse = 0;
-      phase = "buy";
-      phaseT = edition === "global" ? 20 : 15;
-      buyOpen = true;
-      setBuySheet(true);
+      if (isDm) {
+        phase = "live";
+        phaseT = 180;
+        buyOpen = false;
+        setBuySheet(false);
+        player.money = 16000;
+        const rifle = (player.team === "T" ? "ak47" : edition === "global" ? "aug" : "m4a1") as WepId;
+        const wp = wepOf(rifle);
+        player.wep = rifle;
+        player.mag = wp.mag;
+        player.reserve = wp.reserve;
+        strikeSfx.round();
+      } else {
+        phase = "buy";
+        phaseT = edition === "global" ? 20 : 15;
+        buyOpen = true;
+        setBuySheet(true);
+      }
       bots.length = 0;
       // Keep peer placeholders; refill AI bots for empty slots
       const peerIds = onlineMode && net ? [...net.peers.keys()] : [];
@@ -373,7 +389,7 @@ export default function ClassicStrike({
     };
 
     const buy = (id: WepId) => {
-      if (phase !== "buy") return;
+      if (phase !== "buy" && !isDm) return;
       const wp = wepOf(id);
       if (wp.team && wp.team !== player.team) {
         msg = "Wrong team weapon";
@@ -391,6 +407,7 @@ export default function ClassicStrike({
       player.reserve = wp.reserve;
       msg = `Bought ${wp.name}`;
       msgT = 1.2;
+      strikeSfx.buy();
     };
 
     const resize = () => {
@@ -435,8 +452,11 @@ export default function ClassicStrike({
 
     const onKey = (e: KeyboardEvent) => {
       keys[e.code] = e.type === "keydown";
+      if (e.code === "KeyQ" || e.code === "ShiftRight") {
+        zoom = e.type === "keydown" && (player.wep === "awp" || player.wep === "ssg");
+      }
       if (e.type === "keydown") {
-        if (e.code === "KeyB") {
+        if (e.code === "KeyB" && !isDm) {
           buyOpen = !buyOpen && phase === "buy";
           setBuySheet(!!buyOpen);
         }
@@ -525,14 +545,19 @@ export default function ClassicStrike({
     window.addEventListener("keyup", onKey);
 
     const tryFire = () => {
-      if (phase === "buy") return;
+      if (!isDm && phase === "buy") return;
       if (player.cool > 0 || player.mag <= 0 || player.hp <= 0) return;
       const wp = wepOf(player.wep);
       player.cool = wp.rpm / 1000;
       player.mag--;
-      shoot("p", player.x, player.y, player.a, player.team, player.wep);
+      const kick = wp.id === "awp" || wp.id === "ssg" ? 0.085 : wp.id === "deagle" ? 0.05 : 0.028;
+      recoil = Math.min(1, recoil + kick * 3);
+      pitch = Math.max(-0.18, pitch - kick);
+      strikeSfx.fire(wp.id === "awp" || wp.id === "deagle");
+      shoot("p", player.x, player.y, player.a + pitch * 0.3, player.team, player.wep);
     };
     const onClick = async () => {
+      unlockStrikeAudio();
       if (!isTouch && !pointerLocked) {
         try {
           await canvas.requestPointerLock();
@@ -546,6 +571,7 @@ export default function ClassicStrike({
     const onMouse = (e: MouseEvent) => {
       if (document.pointerLockElement === canvas) {
         player.a += e.movementX * 0.0025;
+        pitch = Math.max(-0.35, Math.min(0.35, pitch - e.movementY * 0.002));
       }
     };
     document.addEventListener("mousemove", onMouse);
@@ -943,9 +969,19 @@ export default function ClassicStrike({
               player.deaths++;
               msg = "YOU DIED";
               msgT = 2;
+              shake = 1;
+              strikeSfx.death();
               setTimeout(() => {
-                if (!ended) resetRound(player.team === "T" ? "CT" : "T");
-              }, 1800);
+                if (!ended) {
+                  if (isDm) {
+                    const sp = spawnCell(player.team === "T" ? 4 : 5);
+                    player.x = sp.x;
+                    player.y = sp.y;
+                    player.hp = 100;
+                    giveDefault();
+                  } else resetRound(player.team === "T" ? "CT" : "T");
+                }
+              }, isDm ? 900 : 1800);
             }
             continue;
           }
@@ -970,6 +1006,10 @@ export default function ClassicStrike({
                   player.score += 100;
                   msg = "ENEMY DOWN +$300";
                   msgT = 1.2;
+                  strikeSfx.kill();
+                  setHitmark(1);
+                  pushFeed(`${playerName} eliminated ${b.name || "enemy"}`);
+                  setTimeout(() => setHitmark(0), 180);
                   if (!bots.some((x) => x.alive && x.team !== player.team && !x.isPeer) &&
                       !(onlineMode && net && [...net.peers.values()].some((p) => p.team !== player.team && p.last?.alive))) {
                     msg = "ENEMY ELIMINATED";
@@ -993,6 +1033,14 @@ export default function ClassicStrike({
       }
 
       // ——— RENDER ———
+      // AAA juicing decay
+      recoil = Math.max(0, recoil - dt * 3.2);
+      pitch *= Math.max(0, 1 - dt * 2.4);
+      shake = Math.max(0, shake - dt * 2.8);
+      if (bombPlanted && phase === "planted" && Math.floor(bombT * 2) !== Math.floor((bombT + dt) * 2)) {
+        if (bombT < 12) strikeSfx.tick();
+      }
+
       if (hq && useHq) {
         hq.frame({
           player: { x: player.x, y: player.y, a: player.a },
@@ -1005,9 +1053,13 @@ export default function ClassicStrike({
             alive: b.alive,
             name: b.name,
           })),
-          bomb: bombPlanted ? { x: bombX, y: bombY, t: bombT } : null,
+          bomb: !isDm && bombPlanted ? { x: bombX, y: bombY, t: bombT } : null,
           flash,
           wep: player.wep,
+          pitch,
+          fov: zoom ? 38 : 72,
+          recoil,
+          shake,
         });
         syncHud();
         raf = requestAnimationFrame(tick);
@@ -1256,7 +1308,7 @@ export default function ClassicStrike({
       if (document.pointerLockElement === canvas) document.exitPointerLock();
       hq?.dispose();
     };
-  }, [onOver, onScore, mode, net, playerName, initialTeam, edition, isTouch, preferHq]);
+  }, [onOver, onScore, mode, net, playerName, initialTeam, edition, isTouch, preferHq, mapId, playMode, isDm, MAP, MH, MW]);
 
   const buyItems =
     edition === "global"
@@ -1284,20 +1336,50 @@ export default function ClassicStrike({
     <div className="relative size-full min-h-[360px] overflow-hidden bg-black select-none">
       <canvas ref={canvasRef} className="size-full touch-none" />
       {/* HQ crosshair + engine badge (raycast draws these on canvas) */}
+      {(hqOn || hitmark > 0) && (
+        <div className="pointer-events-none absolute inset-0 z-[5] grid place-items-center">
+          <div className={`relative ${hitmark ? "size-8" : "size-6"}`}>
+            <div className={`absolute top-1/2 left-0 h-px -translate-y-1/2 ${hitmark ? "w-3 bg-red-400" : "w-2 bg-white/90"}`} />
+            <div className={`absolute top-1/2 right-0 h-px -translate-y-1/2 ${hitmark ? "w-3 bg-red-400" : "w-2 bg-white/90"}`} />
+            <div className={`absolute top-0 left-1/2 w-px -translate-x-1/2 ${hitmark ? "h-3 bg-red-400" : "h-2 bg-white/90"}`} />
+            <div className={`absolute bottom-0 left-1/2 w-px -translate-x-1/2 ${hitmark ? "h-3 bg-red-400" : "h-2 bg-white/90"}`} />
+          </div>
+        </div>
+      )}
       {hqOn && (
-        <>
-          <div className="pointer-events-none absolute inset-0 z-[5] grid place-items-center">
-            <div className="relative size-6">
-              <div className="absolute top-1/2 left-0 h-px w-2 -translate-y-1/2 bg-white/90" />
-              <div className="absolute top-1/2 right-0 h-px w-2 -translate-y-1/2 bg-white/90" />
-              <div className="absolute top-0 left-1/2 h-2 w-px -translate-x-1/2 bg-white/90" />
-              <div className="absolute bottom-0 left-1/2 h-2 w-px -translate-x-1/2 bg-white/90" />
-            </div>
+        <div className="pointer-events-none absolute top-2 left-1/2 z-[5] -translate-x-1/2 rounded-full bg-sky-500/25 px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-sky-100 ring-1 ring-sky-400/40">
+          HQ ENGINE{isTouch ? " · MOBILE" : ""} · {isDm ? "DEATHMATCH" : "BOMB"} · {STRIKE_MAPS[mapId]?.name}
+        </div>
+      )}
+      {/* Killfeed */}
+      <div className="pointer-events-none absolute top-10 right-2 z-[6] space-y-1 text-right">
+        {feed.map((f) => (
+          <div key={f.id} className="rounded bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-amber-100 ring-1 ring-white/10">
+            {f.text}
           </div>
-          <div className="pointer-events-none absolute top-2 left-1/2 z-[5] -translate-x-1/2 rounded-full bg-sky-500/25 px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-sky-100 ring-1 ring-sky-400/40">
-            HQ ENGINE{isTouch ? " · MOBILE" : ""}
+        ))}
+      </div>
+      {/* HQ minimap */}
+      {hqOn && (
+        <div className="pointer-events-none absolute top-10 left-2 z-[5] opacity-90">
+          <div
+            className="grid gap-px rounded border border-white/20 bg-black/50 p-1"
+            style={{ gridTemplateColumns: `repeat(${MW}, 5px)` }}
+          >
+            {MAP.flatMap((row, y) =>
+              row.map((c, x) => (
+                <div
+                  key={`${x}-${y}`}
+                  className="size-[5px]"
+                  style={{
+                    background:
+                      c === 1 ? "#3f3f46" : c === 2 ? "#b91c1c" : c === 3 ? "#1d4ed8" : c === 4 ? "#a16207" : c === 5 ? "#1e3a8a" : "#57534e",
+                  }}
+                />
+              )),
+            )}
           </div>
-        </>
+        </div>
       )}
       {isTouch && (
         <MobileControls

@@ -20,7 +20,14 @@ export type LinkBioFont = "glow" | "marker" | "display" | "space" | "mono" | "ju
 export type LinkBioButtonStyle = "pill" | "square" | "outline" | "glass";
 export type LinkBioLayout = "classic" | "cards" | "minimal";
 
-export type LinkBioLink = { type?: string; url: string; label?: string };
+export type LinkBioLink = { type?: string; url: string; label?: string; featured?: boolean };
+
+export type LinkBioStats = {
+  views: number;
+  clicks: number;
+  days: number;
+  top: { url: string; hits: number }[];
+};
 
 export type LinkBioPage = {
   id: string;
@@ -211,6 +218,21 @@ export async function linkbioSave(patch: Record<string, unknown>): Promise<LinkB
   }
   toast("Saved");
   return data as LinkBioPage;
+}
+
+export async function linkbioStats(days = 7): Promise<LinkBioStats | null> {
+  const { data, error } = await supabase.rpc("linkbio_stats", { p_days: days });
+  if (error) {
+    toast(errorText(error));
+    return null;
+  }
+  const raw = data as { views?: number; clicks?: number; days?: number; top?: { url: string; hits: number }[] };
+  return {
+    views: Number(raw?.views ?? 0),
+    clicks: Number(raw?.clicks ?? 0),
+    days: Number(raw?.days ?? days),
+    top: Array.isArray(raw?.top) ? raw.top : [],
+  };
 }
 
 export async function linkbioAdminList(): Promise<LinkBioAdminRow[]> {
