@@ -53,27 +53,16 @@ jobs:
 
       - name: Permissions, icon and app settings
         run: |
+          # Shared privacy purpose strings (ITMS-90683) — same script Capgo builds use
+          python3 scripts/patch-ios-info-plist.py ios/App/App/Info.plist
           PLIST=ios/App/App/Info.plist
           pb() { /usr/libexec/PlistBuddy -c "$1" "$PLIST" 2>/dev/null || true; }
-          pb "Add :NSMicrophoneUsageDescription string Nexus uses your microphone for voice calls."
-          pb "Add :NSCameraUsageDescription string Nexus uses your camera for video calls."
-          pb "Add :NSPhotoLibraryUsageDescription string Choose photos and videos to send in chats."
-          pb "Add :NSPhotoLibraryAddUsageDescription string Save photos and videos from chats."
-          pb "Add :NSLocationWhenInUseUsageDescription string Nexus uses your location for Bump so you can find friends and family nearby. Location is rounded and expires after 20 minutes."
-          pb "Add :NSLocationAlwaysAndWhenInUseUsageDescription string Nexus can refresh your Bump pin in the background while you are Live, so family can keep finding you nearby. Turn Live off anytime to stop sharing."
-          pb "Add :UIBackgroundModes array"
-          pb "Add :UIBackgroundModes:0 string audio"
-          pb "Add :UIBackgroundModes:1 string voip"
-          pb "Add :UIBackgroundModes:2 string remote-notification"
-          pb "Add :UIBackgroundModes:3 string fetch"
-          pb "Add :UIBackgroundModes:4 string location"
           pb "Set :CFBundleDisplayName Nexus"
           pb "Add :CFBundleDisplayName string Nexus"
           pb "Set :CFBundleName Nexus"
           pb "Add :CFBundleName string Nexus"
           pb "Set :CFBundleIdentifier ${BUNDLE_ID}"
           pb "Add :CFBundleIdentifier string ${BUNDLE_ID}"
-          pb "Add :ITSAppUsesNonExemptEncryption bool false"
           pb "Add :UIStatusBarStyle string UIStatusBarStyleLightContent"
           pb "Add :UIViewControllerBasedStatusBarAppearance bool false"
           pb "Set :UIUserInterfaceStyle Dark"

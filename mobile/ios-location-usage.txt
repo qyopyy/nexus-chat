@@ -1,4 +1,8 @@
-Nexus iOS location strings (injected by .github/workflows/ipa.yml)
+Nexus iOS location / privacy strings
+====================================
+
+Required for App Store Connect (ITMS-90683). Capgo Cloud Build uploads
+mobile/ios as-is — these keys must be in Info.plist before every cloud build.
 
 NSLocationWhenInUseUsageDescription:
   Nexus uses your location for Bump so you can find friends and family nearby. Location is rounded and expires after 20 minutes.
@@ -6,7 +10,19 @@ NSLocationWhenInUseUsageDescription:
 NSLocationAlwaysAndWhenInUseUsageDescription:
   Nexus can refresh your Bump pin in the background while you are Live, so family can keep finding you nearby. Turn Live off anytime to stop sharing.
 
-UIBackgroundModes includes: audio, voip, remote-notification, fetch, location
+Also set by the same patcher:
+  NSMicrophoneUsageDescription, NSCameraUsageDescription,
+  NSPhotoLibraryUsageDescription, NSPhotoLibraryAddUsageDescription,
+  UIBackgroundModes: audio, voip, remote-notification, fetch, location
+
+Apply / refresh:
+  cd mobile && npm run patch:ios-plist
+  # or after regenerating the native project:
+  cd mobile && npm run sync:ios
+
+GitHub Actions (ipa.yml / ipa-appstore.yml) still inject the same strings via
+PlistBuddy after `npx cap add ios`. Capgo Builder does not — always run the
+patcher (or keep a patched ios/) before `build request`.
 
 After `npm i` in mobile/, run `npx cap sync ios` so @capacitor/geolocation is linked.
-A standalone Bump IPA also exists under mobile-bump/ (hu.qyopy.bump).
+A standalone Bump/Wump IPA also exists under mobile-bump/ (hu.qyopy.bump).
