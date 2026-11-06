@@ -69,7 +69,7 @@ export const PREF_DEFAULTS: Prefs = {
   uiVolume: 1,
   ringtone: true,
   buttonFx: true,
-  welcomeSplash: true,
+  welcomeSplash: false,
   messageSounds: true,
   sendSounds: true,
   messageSound: "ping",
@@ -80,8 +80,13 @@ export const PREF_DEFAULTS: Prefs = {
 export const usePrefs = create<Prefs>()(
   persist(() => ({ ...PREF_DEFAULTS }), {
     name: "nexus.prefs",
-    version: 4,
-    migrate: (persisted) => ({ ...PREF_DEFAULTS, ...((persisted as object) ?? {}) }),
+    version: 5,
+    migrate: (persisted, from) => {
+      const p = { ...PREF_DEFAULTS, ...((persisted as object) ?? {}) };
+      // v5: welcome splash off by default (Settings → Appearance / Chat)
+      if (from != null && from < 5) p.welcomeSplash = false;
+      return p;
+    },
   }),
 );
 export const setPref = <K extends keyof Prefs>(k: K, v: Prefs[K]) => usePrefs.setState({ [k]: v } as Partial<Prefs>);

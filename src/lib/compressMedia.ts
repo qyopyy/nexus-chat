@@ -3,8 +3,15 @@
 /**
  * Client-side media compression for uploads.
  * Re-encodes to browser-friendly H.264/MP4 (or WebM) so iPhone HEVC/.mov
- * plays everywhere. Preserves source FPS up to 60 with a high-quality bitrate.
+ * plays everywhere. Defaults: Full HD (1920) @ up to 60fps.
  */
+
+/** Shared Full HD 60fps policy used by chat, Gram, and Studio MOV convert. */
+export const FULL_HD_60 = { maxEdge: 1920, maxFps: 60 } as const;
+
+function isMovLike(type: string, name: string) {
+  return /quicktime|hevc|hvc1|dolby|\.mov$|\.m4v$/i.test(`${type} ${name}`);
+}
 
 export type CompressProgress = (label: string, ratio?: number) => void;
 
@@ -29,14 +36,14 @@ function extFor(mime: string) {
   return mime.includes("mp4") ? "mp4" : "webm";
 }
 
-/** High-quality bitrate by resolution (cleaner encodes, still smaller than phone HEVC) */
+/** High-quality bitrate by resolution (Full HD 60fps stays crisp) */
 function videoBitrate(w: number, h: number, fps: number) {
   const px = w * h;
-  const fpsBoost = fps > 45 ? 1.35 : fps > 30 ? 1.15 : 1;
+  const fpsBoost = fps > 45 ? 1.45 : fps > 30 ? 1.2 : 1;
   let base = 2_800_000;
-  if (px >= 2_500_000) base = 10_000_000; // ~1440p
-  else if (px >= 1_800_000) base = 8_000_000; // ~1080p
-  else if (px >= 900_000) base = 5_000_000; // ~720p
+  if (px >= 2_500_000) base = 12_000_000; // ~1440p+
+  else if (px >= 1_800_000) base = 10_000_000; // Full HD ~1080p
+  else if (px >= 900_000) base = 5_500_000; // ~720p
   else base = 3_200_000;
   return Math.round(base * fpsBoost);
 }
@@ -99,20 +106,22 @@ export type CompressVideoOpts = {
 
 /**
  * Re-encode video via canvas + MediaRecorder.
- * Keeps source FPS (capped at 60 by default), high-quality bitrate, even dimensions.
+ * .mov / QuickTime / HEVC always become MP4 at Full HD (1920) @ up to 60fps.
  */
 export async function compressVideo(file: File | Blob, opts: CompressVideoOpts = {}): Promise<CompressedVideo> {
-  const maxEdge = opts.maxEdge ?? 1440;
-  const maxFps = opts.maxFps ?? 60;
+  const maxEdge = opts.maxEdge ?? FULL_HD_60.maxEdge;
+  const maxFps = opts.maxFps ?? FULL_HD_60.maxFps;
   const onProgress = opts.onProgress;
   const mime = pickMime();
   const name = file instanceof File ? file.name : "clip.mp4";
   const lower = name.toLowerCase();
   const type = (file.type || "").toLowerCase();
-  const alreadyFriendly = /mp4|webm/.test(type) || /\.(mp4|webm)$/.test(lower);
-  const needsTranscode = opts.force || /quicktime|hevc|hvc1|dolby|\.mov$|\.m4v$|\.mkv$|\.avi$/i.test(`${type} ${lower}`) || !alreadyFriendly;
+  const movLike = isMovLike(type, lower);
+  const alreadyFriendly = !movLike && (/mp4|webm/.test(type) || /\.(mp4|webm)$/.test(lower));
+  // Always convert MOV/HEVC → MP4; also force non-web containers
+  const needsTranscode = opts.force || movLike || /mkv|avi$/i.test(lower) || /\/x-matroska|\/avi/i.test(type) || !alreadyFriendly;
 
-  // Tiny already-web files: skip re-encode unless forced
+  // Tiny already-web files: skip re-encode unless forced / MOV
   if (!needsTranscode && !opts.force && file.size < 4 * 1024 * 1024 && alreadyFriendly) {
     onProgress?.("Video looks good — skipping compress…");
     const info = await probe(file);
@@ -150,10 +159,11 @@ export async function compressVideo(file: File | Blob, opts: CompressVideoOpts =
     } catch {
       /* keep 30 */
     }
-    // Prefer 60 when source is clearly high-frame (common on phones) even if getSettings lies
-    if (fps < 50 && maxFps >= 60) {
-      // Many phone clips are 60fps but browsers report 30 — bump when resolution is story/reel sized
-      if (Math.max(sw, sh) >= 1080 && file.size / Math.max(dur, 1) > 1.2e6) fps = Math.min(maxFps, 60);
+    // Prefer Full HD 60fps: phones often report 30 while the source is 60
+    if (maxFps >= 60 && fps < 50) {
+      if (movLike || Math.max(sw, sh) >= 1080 || file.size / Math.max(dur, 1) > 800_000) {
+        fps = 60;
+      }
     }
     fps = Math.max(24, Math.min(maxFps, fps));
 
@@ -252,22 +262,25 @@ export async function compressVideo(file: File | Blob, opts: CompressVideoOpts =
     ac = null;
     if (!blob.size) throw new Error("Compression produced an empty file");
 
-    // Only keep original when it was already web-friendly AND smaller (and not a forced repair)
-    if (!opts.force && alreadyFriendly && blob.size > file.size * 1.05) {
+    // Never keep original MOV/HEVC — always ship the converted MP4
+    if (!opts.force && !movLike && alreadyFriendly && blob.size > file.size * 1.05) {
       onProgress?.("Keeping original (already efficient)…");
       const info = await probe(file);
       return { blob: file, ...info, mime: type || "video/mp4", ext: lower.endsWith("webm") ? "webm" : "mp4", skipped: true };
     }
 
-    onProgress?.("Compression done", 1);
+    // Prefer .mp4 extension even if recorder fell back to webm mime with mp4 codecs string
+    const outMime = blob.type || mime;
+    const outExt = movLike ? "mp4" : extFor(outMime);
+    onProgress?.(movLike ? "Converted MOV → MP4" : "Compression done", 1);
     return {
-      blob,
+      blob: outExt === "mp4" && !outMime.includes("mp4") ? new Blob([blob], { type: "video/mp4" }) : blob,
       w,
       h,
       dur: Math.round((dur || 0) * 10) / 10,
       fps,
-      mime: blob.type || mime,
-      ext: extFor(blob.type || mime),
+      mime: outExt === "mp4" ? "video/mp4" : outMime,
+      ext: outExt,
       poster,
       skipped: false,
     };

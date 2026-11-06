@@ -395,7 +395,7 @@ export function ChatPrefsBlock() {
       />
       <Toggle
         label="Welcome screen"
-        hint="Discord-style splash with a soft chime when Nexus opens. Turn off to skip it."
+        hint="Discord-style splash with a soft chime when Nexus opens. Off by default — also in Appearance."
         checked={p.welcomeSplash !== false}
         onChange={(v) => setPref("welcomeSplash", v)}
       />

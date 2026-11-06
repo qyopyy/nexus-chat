@@ -123,6 +123,7 @@ function Dialog({ editId, onClose }: { editId: string | null; onClose: () => voi
     setPreparing(true);
     let v: Video | null = null;
     let i: FileInfo = { width: 0, height: 0, duration: 0 };
+    let uploadFile = f;
     try {
       setFile(f);
       setPreview(URL.createObjectURL(f));
@@ -138,9 +139,26 @@ function Dialog({ editId, onClose }: { editId: string | null; onClose: () => voi
         setPreview(null);
         return;
       }
-      i = await inspectVideo(f);
+      // MOV / QuickTime → Full HD 60fps MP4 before the resumable upload (≤250 MB clips)
+      const movLike = /quicktime|hevc/i.test(f.type) || /\.(mov|m4v)$/i.test(f.name);
+      if (movLike && f.size <= 250 * 1024 * 1024) {
+        try {
+          const { compressVideo, FULL_HD_60 } = await import("@/lib/compressMedia");
+          toast("Converting MOV → Full HD 60fps MP4…");
+          const out = await compressVideo(f, { ...FULL_HD_60, force: true });
+          if (!out.skipped) {
+            uploadFile = new File([out.blob], f.name.replace(/\.[^.]+$/, "") + ".mp4", { type: out.mime || "video/mp4" });
+            setFile(uploadFile);
+            setPreview(URL.createObjectURL(uploadFile));
+            toast("Converted MOV → Full HD 60fps MP4", "success");
+          }
+        } catch {
+          toast("Couldn't convert MOV — uploading original", "error");
+        }
+      }
+      i = await inspectVideo(uploadFile);
       setInfo(i);
-      v = await startVideoUpload(f, i);
+      v = await startVideoUpload(uploadFile, i);
     } catch (e) {
       toast(`Upload failed: ${(e as Error).message}`, "error");
     } finally {
