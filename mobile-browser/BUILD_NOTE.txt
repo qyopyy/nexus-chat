@@ -1,0 +1,3 @@
+Nexus Browser IPA rebuild trigger — 2026-11-06
+Loads https://nexusproject.cc/browser/app live (search + shields update on web deploy).
+Rebuild shell so Sideloadly installs get the latest Cap config / icons.

@@ -84,7 +84,7 @@ const TOOLS: {
     id: "browser",
     name: "Browser",
     tag: "Google search · fetch pages · IPA",
-    desc: "Private browser with Brave-style shields, NextDNS / custom DoH, search engines, bookmarks, and a standalone IPA.",
+    desc: "Private browser with live search, Brave-style shields, NextDNS / custom DoH, and IPA/APK shells.",
     bg: "linear-gradient(135deg,#60a5fa,#7c3aed 55%,#0b1220)",
     emoji: "🌐",
     iconSrc: "/browser-icon.png",
