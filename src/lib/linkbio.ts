@@ -22,11 +22,16 @@ export type LinkBioLayout = "classic" | "cards" | "minimal";
 
 export type LinkBioLink = { type?: string; url: string; label?: string; featured?: boolean };
 
+export type LinkBioStatsSeriesDay = { day: string; views: number; clicks: number };
+
 export type LinkBioStats = {
   views: number;
+  views_all: number;
+  views_period: number;
   clicks: number;
   days: number;
   top: { url: string; hits: number }[];
+  series: LinkBioStatsSeriesDay[];
 };
 
 export type LinkBioPage = {
@@ -264,12 +269,30 @@ export async function linkbioStats(days = 7): Promise<LinkBioStats | null> {
     toast(errorText(error));
     return null;
   }
-  const raw = data as { views?: number; clicks?: number; days?: number; top?: { url: string; hits: number }[] };
+  const raw = data as {
+    views?: number;
+    views_all?: number;
+    views_period?: number;
+    clicks?: number;
+    days?: number;
+    top?: { url: string; hits: number }[];
+    series?: LinkBioStatsSeriesDay[];
+  };
+  const viewsAll = Number(raw?.views_all ?? raw?.views ?? 0);
   return {
-    views: Number(raw?.views ?? 0),
+    views: viewsAll,
+    views_all: viewsAll,
+    views_period: Number(raw?.views_period ?? 0),
     clicks: Number(raw?.clicks ?? 0),
     days: Number(raw?.days ?? days),
     top: Array.isArray(raw?.top) ? raw.top : [],
+    series: Array.isArray(raw?.series)
+      ? raw.series.map((d) => ({
+          day: String(d.day),
+          views: Number(d.views ?? 0),
+          clicks: Number(d.clicks ?? 0),
+        }))
+      : [],
   };
 }
 
