@@ -54,6 +54,7 @@ import BumpHub from "@/components/bump/BumpHub";
 import BrowserHub from "@/components/browser/BrowserHub";
 import LinkBioHub, { openLinkBio } from "@/components/linkbio/LinkBioHub";
 import IpaDownloads from "@/components/apps/IpaDownloads";
+import TestFlightInvites from "@/components/apps/TestFlightInvites";
 import { openBump } from "@/lib/bump";
 import { openBrowser } from "@/lib/browser";
 
@@ -427,6 +428,8 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
               </span>
             </div>
           </button>
+
+          <TestFlightInvites />
 
           <IpaDownloads />
 
