@@ -37,6 +37,9 @@ input{width:100%;margin-top:14px;padding:12px 14px;border-radius:12px;border:1px
 button{width:100%;margin-top:12px;padding:13px;border:0;border-radius:999px;font-weight:800;font-size:15px;cursor:pointer;background:#fff;color:#000}
 button.ghost{background:#ffffff14;color:#fff}audio,video,img{width:100%;margin-top:16px;border-radius:14px;background:#000}
 .player{margin-top:16px;padding:14px;border-radius:16px;background:#0b0b0f;border:1px solid #ffffff10}.player audio{margin-top:0}
+.preview-frame{width:100%;height:min(70vh,560px);margin-top:16px;border:0;border-radius:14px;background:#0b0b0f}
+.preview-text{background:#fff}.generic{margin-top:16px;padding:18px;border-radius:16px;background:#0b0b0f;border:1px solid #ffffff10;text-align:center;color:#b5bac1;font-size:14px}
+.generic-ico{font-size:36px;margin-bottom:8px}
 .foot{margin-top:18px;text-align:center;color:#80848e;font-size:12px}.foot a{color:#b5bac1}
 </style></head><body><div class="card">${body}<div class="foot">🔒 Shared privately with <a href="/">Nexus Vault</a></div></div></body></html>`;
 
@@ -56,16 +59,25 @@ export function renderShare(token: string, info: ShareInfo, error?: string) {
   const meta = [size(info.bytes), info.owner ? `shared by ${esc(info.owner)}` : "", info.expires_at ? `expires ${new Date(info.expires_at).toUTCString().slice(5, 22)} UTC` : "", info.left != null ? `${info.left} download${info.left === 1 ? "" : "s"} left` : ""].filter(Boolean).join(" · ");
   const m = info.mime ?? "";
   const audio = m.startsWith("audio/");
-  const preview = !info.password && /^(audio|video|image)\//.test(m)
+  const pdf = m.includes("pdf") || /\.pdf$/i.test(info.name ?? "");
+  const texty = /^(text\/|application\/(json|xml|javascript))/.test(m) || /\.(txt|md|csv|json|xml|log)$/i.test(info.name ?? "");
+  const preview = !info.password
     ? audio
       ? `<div class="player"><audio controls preload="metadata" src="/s/${t}/get?mode=preview"></audio></div>`
       : m.startsWith("video/")
         ? `<video controls preload="none" src="/s/${t}/get?mode=preview"></video>`
-        : `<img alt="" src="/s/${t}/get?mode=preview">`
+        : m.startsWith("image/")
+          ? `<img alt="" src="/s/${t}/get?mode=preview">`
+          : pdf
+            ? `<iframe title="PDF preview" class="preview-frame" src="/s/${t}/get?mode=preview#toolbar=1"></iframe>`
+            : texty
+              ? `<iframe title="File preview" class="preview-frame preview-text" src="/s/${t}/get?mode=preview"></iframe>`
+              : `<div class="generic"><div class="generic-ico">${icon(m)}</div><p>Preview isn’t available for this format — download to open on your device.</p></div>`
     : "";
+  const badge = audio ? "Private audio" : pdf ? "PDF" : m.startsWith("video/") ? "Video" : m.startsWith("image/") ? "Image" : "Secure file";
   const head = audio
-    ? `<div class="art"><div class="ico">${icon(m)}</div><div><h1>${esc(info.name)}</h1><div class="sub">${meta}</div><span class="badge">Private audio</span></div></div>`
-    : `<div class="ico">${icon(m)}</div><h1>${esc(info.name)}</h1><div class="sub">${meta}</div>`;
+    ? `<div class="art"><div class="ico">${icon(m)}</div><div><h1>${esc(info.name)}</h1><div class="sub">${meta}</div><span class="badge">${badge}</span></div></div>`
+    : `<div class="ico">${icon(m)}</div><h1>${esc(info.name)}</h1><div class="sub">${meta}</div><span class="badge">${badge}</span>`;
   return shell(
     info.name ?? "Shared file",
     `${head}${preview}
@@ -73,8 +85,8 @@ export function renderShare(token: string, info: ShareInfo, error?: string) {
 ${info.password ? `<input type="password" name="password" placeholder="Password" autocomplete="off" required autofocus>` : ""}
 ${error ? `<div class="err">${esc(REASON[error] ?? error)}</div>` : ""}
 ${info.download ? `<button name="mode" value="download">${audio ? "⬇ Download track" : "⬇ Download"}</button>` : ""}
-${info.password || !info.download ? `<button class="ghost" name="mode" value="preview">${audio ? "▶ Stream" : "Open"}</button>` : ""}
+${info.password || !info.download ? `<button class="ghost" name="mode" value="preview">${audio ? "▶ Stream" : pdf || texty ? "Open preview" : "Open"}</button>` : ""}
 </form>`,
-    audio,
+    audio || pdf || texty,
   );
 }
