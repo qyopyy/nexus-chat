@@ -3,6 +3,7 @@
 import { Bell, CheckCheck, X } from "lucide-react";
 import {
   markNotificationsRead,
+  openLocalNotification,
   openNotification,
   setNotificationPanelOpen,
   useNotificationInbox,
@@ -15,8 +16,10 @@ import Avatar from "@/components/ui/Avatar";
 export default function NotificationPanel({ mobile }: { mobile?: boolean }) {
   const open = useNotificationInbox((s) => s.open);
   const items = useNotificationInbox((s) => s.items);
+  const localItems = useNotificationInbox((s) => s.localItems);
   const unread = useNotificationInbox((s) => s.unread);
   const loaded = useNotificationInbox((s) => s.loaded);
+  const empty = loaded && !items.length && !localItems.length;
 
   if (!open) return null;
 
@@ -25,7 +28,7 @@ export default function NotificationPanel({ mobile }: { mobile?: boolean }) {
       <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
         <Bell className="size-4 text-accent" />
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold">Messages</div>
+          <div className="text-sm font-bold">Notifications</div>
           <div className="text-[11px] text-sub">{unread ? `${unread} unread · live` : "Caught up · live from server"}</div>
         </div>
         {unread > 0 && (
@@ -48,10 +51,29 @@ export default function NotificationPanel({ mobile }: { mobile?: boolean }) {
               <div key={i} className="h-14 animate-pulse rounded-xl bg-white/5" />
             ))}
           </div>
-        ) : !items.length ? (
-          <p className="px-4 py-10 text-center text-sm text-sub">No message notifications yet.</p>
+        ) : empty ? (
+          <p className="px-4 py-10 text-center text-sm text-sub">No notifications yet.</p>
         ) : (
           <ul>
+            {localItems.map((it) => (
+              <li key={it.id} className="border-b border-white/5 last:border-0">
+                <button
+                  type="button"
+                  onClick={() => openLocalNotification(it)}
+                  className={cn("flex w-full items-start gap-3 px-3 py-3 text-left hover:bg-hover", !it.read_at && "bg-accent/5")}
+                >
+                  <span className="grid size-9 place-items-center rounded-full bg-white/10">⏰</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className={cn("truncate text-sm", !it.read_at ? "font-bold" : "font-semibold")}>{it.title}</span>
+                      {!it.read_at && <span className="size-1.5 shrink-0 rounded-full bg-accent" />}
+                    </div>
+                    <div className="truncate text-[12px] text-sub">{it.body}</div>
+                    <div className="mt-0.5 text-[10px] text-faint">{fmtClock(new Date(it.created_at))}</div>
+                  </div>
+                </button>
+              </li>
+            ))}
             {items.map((it) => (
               <li key={it.id} className="border-b border-white/5 last:border-0">
                 <button
@@ -75,7 +97,7 @@ export default function NotificationPanel({ mobile }: { mobile?: boolean }) {
         )}
       </div>
       <div className="border-t border-line px-3 py-2 text-[10px] text-sub">
-        Stored on Nexus servers · delivered via Firebase Cloud Messaging when the app is closed
+        Messages sync to Nexus servers · event reminders stay on this device
       </div>
     </div>
   );
