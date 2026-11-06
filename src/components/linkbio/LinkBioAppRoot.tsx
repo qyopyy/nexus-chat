@@ -6,6 +6,7 @@ import { supabase, isConfigured } from "@/lib/supabase";
 import { mfaNeedsChallenge } from "@/lib/mfa";
 import { useApp } from "@/store/app";
 import { loadProfiles } from "@/lib/data";
+import { useRealtime } from "@/lib/realtime";
 import AuthScreen, { ResetPasswordScreen } from "@/components/AuthScreen";
 import SetupScreen from "@/components/SetupScreen";
 import LinkBioAuth from "@/components/linkbio/LinkBioAuth";
@@ -19,6 +20,7 @@ export default function LinkBioAppRoot({ initialAdmin = false }: { initialAdmin?
   const [needsMfa, setNeedsMfa] = useState(false);
   const bootstrapped = useApp((s) => s.bootstrapped);
   const userId = session?.user?.id ?? null;
+  useRealtime(bootstrapped && userId && !needsMfa ? userId : null);
 
   useEffect(() => {
     if (!isConfigured) return;
