@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { ExternalLink, LogOut, MapPin, MessageCircle, Music2, Radio, Shield, UserRound, Users } from "lucide-react";
+import { ExternalLink, LogOut, MessageCircle, Music2, Radio, Shield, UserRound, Users } from "lucide-react";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { startLiveUpdates } from "@/lib/liveUpdate";
 import { mfaNeedsChallenge } from "@/lib/mfa";
@@ -110,12 +110,14 @@ export default function BumpAppRoot() {
           }}
         />
         <div className="relative flex items-center gap-3 px-4 pb-3 pt-2">
-          <div
-            className="grid size-11 place-items-center rounded-2xl text-white shadow-lg shadow-emerald-900/40"
-            style={{ background: "linear-gradient(135deg,#22c55a,#14532d)" }}
-          >
-            <MapPin className="size-5" />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/wump-icon.png"
+            alt=""
+            className="size-11 rounded-2xl object-cover shadow-lg shadow-emerald-900/40 ring-1 ring-white/15"
+            width={44}
+            height={44}
+          />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-extrabold tracking-tight text-white">Wump</h1>

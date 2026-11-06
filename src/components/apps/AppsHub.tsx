@@ -66,6 +66,8 @@ const TOOLS: {
   desc: string;
   bg: string;
   emoji: string;
+  /** Optional branded app icon (Nexus-style masters in /public) */
+  iconSrc?: string;
   Icon: LucideIcon;
 }[] = [
   {
@@ -75,6 +77,7 @@ const TOOLS: {
     desc: "Real OpenStreetMap pins, Live sharing, family/friend invite links — also a separate Wump IPA.",
     bg: "linear-gradient(135deg,#ff4d6d,#7c3aed 50%,#2563eb)",
     emoji: "📍",
+    iconSrc: "/wump-icon.png",
     Icon: MapPin,
   },
   {
@@ -84,6 +87,7 @@ const TOOLS: {
     desc: "Built-in search browser — queries google.com on Nexus servers, opens results, bookmarks, and a standalone IPA.",
     bg: "linear-gradient(135deg,#60a5fa,#7c3aed 55%,#0b1220)",
     emoji: "🌐",
+    iconSrc: "/browser-icon.png",
     Icon: Globe,
   },
   {
@@ -291,9 +295,14 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
           >
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_0%,rgba(34,197,94,.35),transparent_55%)]" />
             <div className="relative flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:p-6">
-              <div className="grid size-16 shrink-0 place-items-center rounded-2xl bg-black/25 text-3xl ring-1 ring-white/10 sm:size-20 sm:text-4xl">
-                📍
-              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/wump-icon.png"
+                alt=""
+                className="size-16 shrink-0 rounded-2xl object-cover ring-1 ring-white/15 sm:size-20"
+                width={80}
+                height={80}
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <MapPin className="size-4 text-[#86efac]" />
@@ -327,8 +336,19 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
                 }}
                 className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5"
               >
-                <div className="relative grid h-36 place-items-center text-6xl" style={{ background: item.bg }}>
-                  <span className="transition group-hover:scale-110">{item.emoji}</span>
+                <div className="relative grid h-36 place-items-center overflow-hidden text-6xl" style={{ background: item.bg }}>
+                  {item.iconSrc ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.iconSrc}
+                      alt=""
+                      className="size-24 rounded-[28px] object-cover shadow-lg shadow-black/40 ring-1 ring-white/20 transition group-hover:scale-105"
+                      width={96}
+                      height={96}
+                    />
+                  ) : (
+                    <span className="transition group-hover:scale-110">{item.emoji}</span>
+                  )}
                   <item.Icon className="absolute top-3 left-3 size-5 text-white" />
                 </div>
                 <div className="p-4">
