@@ -24,6 +24,7 @@ import {
 import { sfx } from "./sounds";
 import { useChatFx } from "./chatFx";
 import { onInviteRow, loadPendingInvites } from "./gameInvites";
+import { onScoreChallengeMessage, SCORE_CHALLENGE_RE } from "./scoreChallenges";
 import { isEffect, playEffect } from "./effects";
 import { isMuted } from "@/store/prefs";
 import { isSpaceMuted } from "./spacePrefs";
@@ -114,6 +115,10 @@ async function onMessageInsert(m: Message) {
       useApp.setState((s) => ({ unread: { ...s.unread, [m.conversation_id]: (s.unread[m.conversation_id] ?? 0) + 1 } }));
       notify(m, { skipSound: true }); // sound already played above
       void syncAppBadge();
+    }
+    // schema-free arcade score duels arrive as DMs with a parseable 🎯 line
+    if (m.content && SCORE_CHALLENGE_RE.test(m.content)) {
+      onScoreChallengeMessage(m.author_id, m.content, m.id, m.created_at);
     }
   }
 

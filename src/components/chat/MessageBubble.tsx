@@ -20,6 +20,7 @@ import VoicePlayer from "./VoicePlayer";
 import AttachViewer, { AttachDownloadButton } from "./AttachViewer";
 import VideoEmbed from "@/components/videos/VideoEmbed";
 import GameInvite from "@/components/games/GameInvite";
+import { ScoreChallengeCard } from "@/components/games/ScoreChallenge";
 import ServerInvite from "@/components/space/ServerInvite";
 import LinkEmbed from "./LinkEmbed";
 import { PollCard } from "./Poll";
@@ -369,6 +370,7 @@ function MessageBubbleImpl({
                 !BUMP_PIN_RE.test(m.content) && <LinkEmbed text={m.content} mine={mine} />}
               {m.content.includes("/v/") && !deleted && <VideoEmbed text={m.content} />}
               {m.content.includes("play=") && !deleted && <GameInvite text={m.content} />}
+              {m.content.includes("🎯") && /Beat my score/i.test(m.content) && !deleted && <ScoreChallengeCard text={m.content} fromId={m.author_id} />}
               {(m.content.includes("/i/") || /[?&]join=/.test(m.content)) && !deleted && <ServerInvite text={m.content} />}
             </>
           )}

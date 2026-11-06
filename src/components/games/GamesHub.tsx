@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ExternalLink, Gamepad2, Maximize, Minimize, Play, Trophy } from "lucide-react";
+import { ArrowLeft, ExternalLink, Gamepad2, Maximize, Minimize, Play, Swords, Trophy } from "lucide-react";
 import { useApp } from "@/store/app";
-import { leaderboard, localBest, saveLocalBest, submitScore, type GameId, type Row } from "@/lib/games";
+import { isSoloScoreGame, leaderboard, localBest, saveLocalBest, submitScore, type GameId, type Row, type SoloScoreGame } from "@/lib/games";
+import { resolveScoreChallenge } from "@/lib/scoreChallenges";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import StreetsLauncher from "./streets/StreetsLauncher";
 import { useGames } from "@/store/games";
+import { ScoreChallengeSheet } from "./ScoreChallenge";
 import Blocks from "./Blocks";
 import Snake from "./Snake";
 import G2048 from "./G2048";
@@ -94,11 +96,18 @@ const WEB_GAMES: { name: string; url: string; tag: string; color: string }[] = [
 export default function GamesHub({ mobile }: { mobile?: boolean }) {
   const [open, setOpen] = useState<GameId | null>(null);
   const [frame, setFrame] = useState<(typeof WEB_GAMES)[number] | null>(null);
+  const [hubChallenge, setHubChallenge] = useState<SoloScoreGame | null>(null);
   const joinCode = useGames((s) => s.joinCode);
   const joinFor = useGames((s) => s.joinGame);
+  const soloFocus = useGames((s) => s.soloFocus);
   useEffect(() => {
     if (joinCode) setOpen(joinFor === "flappy" ? "flappy" : joinFor);
   }, [joinCode, joinFor]);
+  useEffect(() => {
+    if (!soloFocus) return;
+    setOpen(soloFocus);
+    useGames.setState({ soloFocus: null });
+  }, [soloFocus]);
   if (frame) return <WebFrame game={frame} onBack={() => setFrame(null)} mobile={mobile} />;
   if (open === "streets") return <StreetsLauncher onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "classicstrike") return <ClassicStrikeLauncher onBack={() => setOpen(null)} mobile={mobile} edition="classic" />;
@@ -213,20 +222,26 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
             <h2 className="mb-3 text-lg font-bold">Nexus games</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {GAMES.map((g) => (
-                <button key={g.id} onClick={() => setOpen(g.id)} className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5">
-                  <div className="relative grid aspect-[4/3] place-items-center text-5xl" style={{ background: g.bg }}>
-                    <span className="transition group-hover:scale-110">{g.emoji}</span>
-                    {g.isNew && <span className="absolute top-2 left-2 rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-black">NEW</span>}
-                  </div>
-                  <div className="p-2.5">
-                    <div className="truncate font-semibold">{g.name}</div>
-                    <div className="truncate text-xs text-sub">{g.tag}</div>
-                    <Best id={g.id} />
-                  </div>
-                </button>
+                <div key={g.id} className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5">
+                  <button onClick={() => setOpen(g.id)} className="block w-full text-left">
+                    <div className="relative grid aspect-[4/3] place-items-center text-5xl" style={{ background: g.bg }}>
+                      <span className="transition group-hover:scale-110">{g.emoji}</span>
+                      {g.isNew && <span className="absolute top-2 left-2 rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-black">NEW</span>}
+                    </div>
+                    <div className="p-2.5 pb-1">
+                      <div className="truncate font-semibold">{g.name}</div>
+                      <div className="truncate text-xs text-sub">{g.tag}</div>
+                      <Best id={g.id} />
+                    </div>
+                  </button>
+                  {isSoloScoreGame(g.id) && <HubChallengeBtn id={g.id} onChallenge={() => setHubChallenge(g.id)} />}
+                </div>
               ))}
             </div>
           </section>
+          {hubChallenge && localBest(hubChallenge) > 0 && (
+            <ScoreChallengeSheet game={hubChallenge} score={localBest(hubChallenge)} onClose={() => setHubChallenge(null)} />
+          )}
 
           <section>
             <h2 className="mb-1 text-lg font-bold">Play on the web</h2>
@@ -271,6 +286,22 @@ function Best({ id }: { id: GameId }) {
   ) : null;
 }
 
+function HubChallengeBtn({ id, onChallenge }: { id: SoloScoreGame; onChallenge: () => void }) {
+  const [b, setB] = useState(0);
+  useEffect(() => setB(localBest(id)), [id]);
+  if (!b) return null;
+  return (
+    <div className="px-2.5 pb-2.5">
+      <button
+        onClick={onChallenge}
+        className="flex w-full items-center justify-center gap-1 rounded-full bg-black/40 px-2 py-1 text-[11px] font-bold text-[#ffd400] hover:bg-black/55"
+      >
+        <Swords className="size-3" /> Challenge a friend
+      </button>
+    </div>
+  );
+}
+
 function GameScreen({ id, onBack, mobile }: { id: GameId; onBack: () => void; mobile?: boolean }) {
   const g = GAMES.find((x) => x.id === id)!;
   const [session, setSession] = useState(0);
@@ -278,9 +309,14 @@ function GameScreen({ id, onBack, mobile }: { id: GameId; onBack: () => void; mo
   const [prevBest, setPrevBest] = useState(0);
   const [rows, setRows] = useState<Row[]>([]);
   const [full, setFull] = useState(false);
+  const [challengeOpen, setChallengeOpen] = useState(false);
   const live = useRef(0);
   const me = useApp((s) => s.userId);
   const wrap = useRef<HTMLDivElement>(null);
+  const activeChallenge = useGames((s) => s.activeScoreChallenge);
+  const duel = activeChallenge?.game === id ? activeChallenge : null;
+  const duelWho = useApp((s) => (duel ? s.profiles[duel.from_id]?.display_name : null));
+  const canChallenge = isSoloScoreGame(id);
 
   const loadBoard = useCallback(() => void leaderboard(id).then(setRows), [id]);
   useEffect(loadBoard, [loadBoard]);
@@ -294,6 +330,7 @@ function GameScreen({ id, onBack, mobile }: { id: GameId; onBack: () => void; mo
       setResult(s);
       saveLocalBest(id, s);
       void submitScore(id, s).then(loadBoard);
+      if (isSoloScoreGame(id)) resolveScoreChallenge(id, s);
     },
     [id, loadBoard],
   );
@@ -335,13 +372,34 @@ function GameScreen({ id, onBack, mobile }: { id: GameId; onBack: () => void; mo
                 <div className="text-7xl">{g.emoji}</div>
                 <div className="mt-2 text-3xl font-black">{g.name}</div>
                 <p className="mx-auto mt-2 max-w-sm text-sm text-white/85">{g.desc}</p>
-                <button onClick={() => setSession(1)} className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black">
-                  <Play className="size-4 fill-current" /> Play
-                </button>
+                {duel && (
+                  <p className="mx-auto mt-3 max-w-sm rounded-full bg-black/35 px-4 py-2 text-sm font-semibold text-[#ffd400]">
+                    Beat {duelWho ?? "a friend"}&apos;s {duel.target.toLocaleString()}
+                  </p>
+                )}
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                  <button onClick={() => setSession(1)} className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black">
+                    <Play className="size-4 fill-current" /> {duel ? "Accept & play" : "Play"}
+                  </button>
+                  {canChallenge && localBest(id) > 0 && !duel && (
+                    <button onClick={() => setChallengeOpen(true)} className="inline-flex items-center gap-2 rounded-full bg-white/15 px-5 py-3 font-semibold">
+                      <Swords className="size-4" /> Challenge a friend
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
-            <C key={session} onOver={onOver} onScore={onScore} />
+            <>
+              {duel && session > 0 && result === null && (
+                <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center">
+                  <span className="rounded-full bg-black/70 px-3 py-1 text-xs font-bold text-[#ffd400] backdrop-blur">
+                    Target: {duel.target.toLocaleString()}
+                  </span>
+                </div>
+              )}
+              <C key={session} onOver={onOver} onScore={onScore} />
+            </>
           )}
           {result !== null && (
             <div className="absolute inset-0 z-20 grid place-items-center bg-black/70 p-6 text-center">
@@ -349,7 +407,7 @@ function GameScreen({ id, onBack, mobile }: { id: GameId; onBack: () => void; mo
                 <div className="text-sm font-bold tracking-widest text-white/60 uppercase">Score</div>
                 <div className="text-6xl font-black tabular-nums">{result.toLocaleString()}</div>
                 {result > prevBest && result > 0 && <div className="mt-1 font-bold text-[#ffd400]">New personal best!</div>}
-                <div className="mt-5 flex justify-center gap-2">
+                <div className="mt-5 flex flex-wrap justify-center gap-2">
                   <button
                     onClick={() => {
                       setResult(null);
@@ -359,12 +417,20 @@ function GameScreen({ id, onBack, mobile }: { id: GameId; onBack: () => void; mo
                   >
                     Play again
                   </button>
+                  {canChallenge && result > 0 && (
+                    <button onClick={() => setChallengeOpen(true)} className="inline-flex items-center gap-1.5 rounded-full bg-[#ffd400] px-5 py-2.5 font-bold text-black">
+                      <Swords className="size-4" /> Challenge a friend
+                    </button>
+                  )}
                   <button onClick={onBack} className="rounded-full bg-white/15 px-5 py-2.5 font-semibold">
                     Games
                   </button>
                 </div>
               </div>
             </div>
+          )}
+          {challengeOpen && canChallenge && (result ?? localBest(id)) > 0 && (
+            <ScoreChallengeSheet game={id} score={result ?? localBest(id)} onClose={() => setChallengeOpen(false)} />
           )}
         </div>
         <aside className={cn("shrink-0 border-white/10 bg-[#0d0d16] lg:w-72 lg:border-l", session > 0 && result === null ? "hidden lg:block" : "block")}>
