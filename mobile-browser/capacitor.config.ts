@@ -4,7 +4,8 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const url = process.env.BROWSER_URL || process.env.NEXUS_URL || "https://nexusproject.cc/browser/app";
 
 const config: CapacitorConfig = {
-  appId: "hu.qyopy.browser",
+  // Must match App Store Connect Bundle ID (Nexus Browser - hu.qyopy.browser.B44X8B76QR)
+  appId: "hu.qyopy.browser.B44X8B76QR",
   appName: "Nexus Browser",
   webDir: "www",
   backgroundColor: "#0b1220",
@@ -52,6 +53,13 @@ const config: CapacitorConfig = {
     webContentsDebuggingEnabled: false,
   },
   plugins: {
+    CapacitorUpdater: {
+      autoUpdate: true,
+      keepUrlPathAfterReload: true,
+      statsUrl: "https://stats.capgo.app/stats",
+      updateUrl: "https://plugin.capgo.app/updates",
+      appReadyTimeout: 20000,
+    },
     Haptics: {},
     PushNotifications: { presentationOptions: ["badge", "sound", "alert"] },
     LocalNotifications: { iconColor: "#60a5fa", sound: "default" },

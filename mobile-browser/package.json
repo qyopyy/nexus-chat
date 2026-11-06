@@ -2,11 +2,13 @@
   "name": "nexus-browser-mobile",
   "version": "1.0.0",
   "private": true,
-  "description": "Standalone Nexus Browser iOS/Android shell (Capacitor). Loads /browser/app — Google search via Nexus, separate home-screen icon.",
+  "description": "Standalone Nexus Browser iOS/Android shell (Capacitor). Loads /browser/app \u2014 Google search via Nexus, separate home-screen icon.",
   "scripts": {
     "sync": "npx cap sync",
     "open:ios": "npx cap open ios",
-    "open:android": "npx cap open android"
+    "open:android": "npx cap open android",
+    "patch:ios-plist": "python3 scripts/patch-ios-info-plist.py",
+    "sync:ios": "npx cap sync ios && python3 scripts/patch-ios-info-plist.py"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
@@ -14,7 +16,8 @@
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.6.0",
     "@capacitor/local-notifications": "^8.3.1",
-    "@capacitor/push-notifications": "^8.1.3"
+    "@capacitor/push-notifications": "^8.1.3",
+    "@capgo/capacitor-updater": "^8.54.2"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.6.0",

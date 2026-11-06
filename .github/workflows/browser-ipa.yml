@@ -1,6 +1,6 @@
 name: Browser iOS app (.ipa)
 
-# Standalone Nexus Browser.ipa (bundle hu.qyopy.browser) — Sideloadly / AltStore.
+# Standalone Nexus Browser.ipa (bundle hu.qyopy.browser.B44X8B76QR) — Sideloadly / App Store.
 # Opens https://nexusproject.cc/browser/app — live search + Shields (web deploy updates UI).
 on:
   workflow_dispatch:
@@ -102,8 +102,8 @@ jobs:
         run: |
           cd ios/App
           APP=build/App.xcarchive/Products/Applications/App.app
-          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier hu.qyopy.browser" "$APP/Info.plist" 2>/dev/null \
-            || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string hu.qyopy.browser" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier hu.qyopy.browser.B44X8B76QR" "$APP/Info.plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string hu.qyopy.browser.B44X8B76QR" "$APP/Info.plist"
           bash "$GITHUB_WORKSPACE/.github/scripts/fix-ios-framework-ids.sh" "$APP"
           rm -rf Payload && mkdir Payload
           cp -R "$APP" Payload/
@@ -123,7 +123,7 @@ jobs:
           TAG="browser-ios-${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" NexusBrowser.ipa --repo "$GITHUB_REPOSITORY" \
             --title "Nexus Browser iOS build ${GITHUB_RUN_NUMBER}" \
-            --notes "Standalone **Nexus Browser** IPA (bundle \`hu.qyopy.browser\`).
+            --notes "Standalone **Nexus Browser** IPA (bundle \`hu.qyopy.browser.B44X8B76QR\`).
 
           Install with Sideloadly / AltStore using your Apple ID.
           Opens: ${BROWSER_URL}

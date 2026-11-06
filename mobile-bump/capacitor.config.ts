@@ -5,7 +5,8 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const url = process.env.BUMP_URL || process.env.NEXUS_URL || "https://nexusproject.cc/wump/app";
 
 const config: CapacitorConfig = {
-  appId: "hu.qyopy.bump",
+  // Must match App Store Connect Bundle ID (Wump - hu.qyopy.bump.B44X8B76QR)
+  appId: "hu.qyopy.bump.B44X8B76QR",
   appName: "Wump",
   webDir: "www",
   backgroundColor: "#0b3d24",
@@ -49,6 +50,13 @@ const config: CapacitorConfig = {
     webContentsDebuggingEnabled: false,
   },
   plugins: {
+    CapacitorUpdater: {
+      autoUpdate: true,
+      keepUrlPathAfterReload: true,
+      statsUrl: "https://stats.capgo.app/stats",
+      updateUrl: "https://plugin.capgo.app/updates",
+      appReadyTimeout: 20000,
+    },
     Haptics: {},
     Geolocation: {},
     SignInWithApple: {},

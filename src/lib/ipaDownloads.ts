@@ -22,7 +22,7 @@ export const IPA_KIND_META: Record<
     tagPrefix: "wump-ios-",
     assetHint: "Wump.ipa",
     query: "Wump iOS",
-    bundleId: "hu.qyopy.bump",
+    bundleId: "hu.qyopy.bump.B44X8B76QR",
   },
   link: {
     label: "Nexus Link",
@@ -36,7 +36,7 @@ export const IPA_KIND_META: Record<
     tagPrefix: "browser-ios-",
     assetHint: "Browser.ipa",
     query: "Browser iOS",
-    bundleId: "hu.qyopy.browser",
+    bundleId: "hu.qyopy.browser.B44X8B76QR",
   },
 };
 
