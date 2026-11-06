@@ -169,7 +169,7 @@ export default function Composer({
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-      const recorder = mime ? new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 64000 }) : new MediaRecorder(stream);
+      const recorder = mime ? new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 192000 }) : new MediaRecorder(stream);
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = new Ctx();
       const analyser = ctx.createAnalyser();

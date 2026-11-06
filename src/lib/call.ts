@@ -16,6 +16,16 @@ import { loadJSON, saveJSON } from "./utils";
 import { sfx, startRing, stopRing } from "./sounds";
 import { builtinMeta, isSoundUrl, renderBuiltin, type Sound } from "./soundboard";
 import { isMobileDevice, startAvatar, type AvatarEngine, type VAvatar } from "./vavatar";
+import {
+  ensureVoiceFxWorklet,
+  loadSavedFxId,
+  loadSavedModel,
+  resolvePreset,
+  saveFxId,
+  voiceFxLabel,
+  type VoiceFxId,
+  type VoiceModelPack,
+} from "./voiceChanger";
 
 // ------------------------------------------------------------------ types
 
@@ -34,7 +44,8 @@ export type RemoteParticipant = {
 };
 
 export type NoiseMode = "off" | "standard" | "ai";
-export type VoiceQuality = 64 | 128 | 320;
+/** Opus kbps — 510 is near the practical Opus ceiling for stereo studio voice */
+export type VoiceQuality = 64 | 128 | 320 | 510;
 
 export type ScreenQuality = "720p30" | "1080p30" | "1080p60" | "1440p30" | "2160p30" | "source";
 
@@ -55,11 +66,17 @@ export type VoiceSettings = {
   noiseMode: NoiseMode;
   /** Opus bitrate in kbps (Discord: 64 default, 96–384 boosted) */
   voiceQuality: VoiceQuality;
-  /** settings schema bump: v2 moved everyone to 320 kbps */
+  /** settings schema bump: v3 defaults to 510 kbps studio */
   qualityV?: number;
   soundboardVolume: number; // 0..1
   /** mirror local camera tile */
   mirrorSelf: boolean;
+  /** Capture stereo for studio / music calls when quality ≥ 320 */
+  stereoStudio: boolean;
+  /** Soft whisper — lower outbound gain without hard mute */
+  whisper: boolean;
+  /** Live voice changer preset */
+  voiceFx: VoiceFxId;
 };
 
 export type IncomingCall = { conversationId: string; callerId: string; at: number };
@@ -105,6 +122,8 @@ type CallState = {
   callPingMs: number | null;
   /** front / back camera preference for flip */
   facingMode: "user" | "environment";
+  /** loaded AI voice-model pack (from zip) */
+  voiceModel: VoiceModelPack | null;
 };
 
 export const DEFAULT_SETTINGS: VoiceSettings = {
@@ -121,10 +140,13 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   vadThreshold: 0.015,
   screenQuality: "1080p30",
   noiseMode: "ai",
-  voiceQuality: 320,
-  qualityV: 2,
+  voiceQuality: 510,
+  qualityV: 3,
   soundboardVolume: 0.7,
   mirrorSelf: true,
+  stereoStudio: true,
+  whisper: false,
+  voiceFx: "off",
 };
 
 export const useCall = create<CallState>(() => ({
@@ -157,6 +179,7 @@ export const useCall = create<CallState>(() => ({
   callQuality: null,
   callPingMs: null,
   facingMode: "user",
+  voiceModel: null,
 }));
 
 const get = useCall.getState;
@@ -286,13 +309,15 @@ function applyOutput() {
 
 /** high-quality capture: 48 kHz, no browser resampling; browser NS only in "standard" mode (Nexus Clear replaces it) */
 export function micConstraints(s: VoiceSettings): MediaTrackConstraints {
-  const c: MediaTrackConstraints & { voiceIsolation?: boolean } = {
+  const stereo = !!s.stereoStudio && s.voiceQuality >= 320;
+  const c: MediaTrackConstraints & { voiceIsolation?: boolean; latency?: number } = {
     noiseSuppression: s.noiseMode === "standard",
     echoCancellation: s.echoCancellation,
     autoGainControl: s.autoGainControl,
-    channelCount: 1,
+    channelCount: stereo ? 2 : 1,
     sampleRate: 48000,
     sampleSize: 16,
+    latency: 0.01,
   };
   if (s.noiseMode !== "off") c.voiceIsolation = true; // Chrome/Safari on supported hardware (Apple voice isolation etc.)
   return c;
@@ -363,10 +388,11 @@ async function buildMic() {
   }
 }
 
-// ------------------------------------------------------------------ voice DSP ("Nexus Clear")
-// mic → high-pass 75 Hz (rumble) → [RNNoise AI denoise] → de-ess shelf → leveler (compressor) → input gain
+// ------------------------------------------------------------------ voice DSP ("Nexus Clear" + Voice FX)
+// mic → high-pass → [RNNoise] → voice FX → presence / de-ess → leveler → input gain
 let voiceIn: AudioNode | null = null;
 let clearNode: AudioWorkletNode | null = null;
+let voiceFxNode: AudioWorkletNode | null = null;
 let clearVad = 1;
 let clearLoad: Promise<boolean> | null = null;
 let wasmBytes: ArrayBuffer | null = null;
@@ -388,32 +414,38 @@ async function loadClear(a: AudioContext): Promise<boolean> {
 
 async function buildVoiceChain(a: AudioContext) {
   const s = get().settings;
+  const model = get().voiceModel;
+  const preset = resolvePreset(s.voiceFx || "off", model);
   if (voiceIn) {
     // rebuild: drop the old chain head (keeps inputGain → gate → micDest intact, so no renegotiation)
     voiceIn.disconnect();
     clearNode?.disconnect();
     clearNode?.port.close();
     clearNode = null;
+    voiceFxNode?.disconnect();
+    voiceFxNode?.port.close();
+    voiceFxNode = null;
   }
+  const hpHz = preset.highpass ?? 75;
   const hp = a.createBiquadFilter();
   hp.type = "highpass";
-  hp.frequency.value = 75;
+  hp.frequency.value = hpHz;
   hp.Q.value = 0.7;
   const air = a.createBiquadFilter(); // gentle presence lift, makes voices clearer on small speakers
   air.type = "peaking";
-  air.frequency.value = 3200;
+  air.frequency.value = preset.formantHz ?? 3200;
   air.Q.value = 0.9;
-  air.gain.value = 1.5;
+  air.gain.value = preset.formantGain ?? 1.5;
   const ess = a.createBiquadFilter(); // tame harsh sibilance
   ess.type = "highshelf";
   ess.frequency.value = 9000;
-  ess.gain.value = -2;
-  const lev = a.createDynamicsCompressor(); // broadcast-style leveler
-  lev.threshold.value = -26;
+  ess.gain.value = preset.id === "radio" ? -1 : -2;
+  const lev = a.createDynamicsCompressor(); // broadcast-style leveler — studio-ish
+  lev.threshold.value = s.voiceQuality >= 320 ? -22 : -26;
   lev.knee.value = 12;
-  lev.ratio.value = 3;
-  lev.attack.value = 0.004;
-  lev.release.value = 0.22;
+  lev.ratio.value = s.voiceQuality >= 510 ? 2.4 : 3;
+  lev.attack.value = 0.003;
+  lev.release.value = 0.18;
 
   let chainTail: AudioNode = hp;
   clearVad = 1;
@@ -435,7 +467,35 @@ async function buildVoiceChain(a: AudioContext) {
       set({ clearActive: false });
     }
   } else set({ clearActive: s.noiseMode === "ai" ? false : null });
+
+  if (preset.id !== "off" && preset.wet > 0 && (await ensureVoiceFxWorklet(a))) {
+    try {
+      voiceFxNode = new AudioWorkletNode(a, "nexus-voice-fx", {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [1],
+        processorOptions: { ratio: preset.ratio, wet: preset.wet, robot: !!preset.robot },
+      });
+      chainTail.connect(voiceFxNode);
+      chainTail = voiceFxNode;
+    } catch (e) {
+      console.warn("Voice FX unavailable", e);
+    }
+  }
+
+  if (preset.lowpass) {
+    const lp = a.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = preset.lowpass;
+    chainTail.connect(lp);
+    chainTail = lp;
+  }
+
   chainTail.connect(air).connect(ess).connect(lev).connect(inputGain!);
+  if (inputGain) {
+    const base = s.inputVolume * (s.whisper ? 0.28 : 1);
+    inputGain.gain.setTargetAtTime(base, a.currentTime, 0.02);
+  }
   voiceIn = hp;
 }
 
@@ -671,7 +731,7 @@ function ensurePeer(id: string, session?: string | null): Peer {
   pc.onnegotiationneeded = async () => {
     try {
       p.makingOffer = true;
-      await pc.setLocalDescription();
+      await setLocalTuned(pc);
       send("signal", { to: id, toSession: p.session, description: pc.localDescription?.toJSON() });
     } catch (e) {
       console.warn("negotiation failed", e);
@@ -706,12 +766,26 @@ function ensurePeer(id: string, session?: string | null): Peer {
 }
 
 /** Force a new local offer — recovers when the first offer was broadcast before the peer subscribed. */
+async function setLocalTuned(pc: RTCPeerConnection) {
+  const kbps = get().settings.voiceQuality;
+  const stereo = !!get().settings.stereoStudio && kbps >= 320;
+  if (pc.signalingState === "have-remote-offer") {
+    const answer = await pc.createAnswer();
+    if (answer.sdp) answer.sdp = tuneOpus(answer.sdp, kbps, stereo);
+    await pc.setLocalDescription(answer);
+  } else {
+    const offer = await pc.createOffer();
+    if (offer.sdp) offer.sdp = tuneOpus(offer.sdp, kbps, stereo);
+    await pc.setLocalDescription(offer);
+  }
+}
+
 async function renegotiate(p: Peer) {
   if (!p || p.pc.signalingState === "closed") return;
   if (p.makingOffer || p.pc.signalingState !== "stable") return;
   try {
     p.makingOffer = true;
-    await p.pc.setLocalDescription();
+    await setLocalTuned(p.pc);
     const desc = p.pc.localDescription;
     if (desc) send("signal", { to: p.id, toSession: p.session, description: desc.toJSON() });
   } catch (e) {
@@ -730,10 +804,11 @@ async function handleSignal(p: Peer, msg: SignalPayload) {
     p.ignoreOffer = !p.polite && collision;
     if (p.ignoreOffer) return;
     p.settingRemoteAnswer = desc.type === "answer";
-    await pc.setRemoteDescription(desc.sdp ? { type: desc.type, sdp: tuneOpus(desc.sdp, get().settings.voiceQuality) } : desc);
+    const stereo = !!get().settings.stereoStudio && get().settings.voiceQuality >= 320;
+    await pc.setRemoteDescription(desc.sdp ? { type: desc.type, sdp: tuneOpus(desc.sdp, get().settings.voiceQuality, stereo) } : desc);
     p.settingRemoteAnswer = false;
     if (desc.type === "offer") {
-      await pc.setLocalDescription();
+      await setLocalTuned(pc);
       send("signal", { to: p.id, toSession: p.session, description: pc.localDescription?.toJSON() });
     }
   } else if (msg.candidate) {
@@ -749,7 +824,7 @@ async function handleSignal(p: Peer, msg: SignalPayload) {
  * HQ Opus: the remote's fmtp line tells OUR encoder what to send, so we raise it before applying:
  * fullband 48 kHz, stereo, up to `kbps` (Discord's default is 64), in-band FEC for packet loss, no DTX (no pumping).
  */
-export function tuneOpus(sdp: string, kbps: number) {
+export function tuneOpus(sdp: string, kbps: number, stereo = true) {
   const pts = [...sdp.matchAll(/a=rtpmap:(\d+) opus\/48000(?:\/2)?/gi)].map((m) => m[1]);
   let out = sdp;
   for (const pt of pts) {
@@ -757,9 +832,9 @@ export function tuneOpus(sdp: string, kbps: number) {
       minptime: "10",
       useinbandfec: "1",
       usedtx: "0",
-      stereo: "1",
-      "sprop-stereo": "1",
-      maxaveragebitrate: String(kbps * 1000),
+      stereo: stereo ? "1" : "0",
+      "sprop-stereo": stereo ? "1" : "0",
+      maxaveragebitrate: String(Math.min(510_000, kbps * 1000)),
       maxplaybackrate: "48000",
       "sprop-maxcapturerate": "48000",
       cbr: "0",
@@ -788,8 +863,9 @@ async function tuneAudioSender(sender: RTCRtpSender) {
     if (!params.encodings?.length) params.encodings = [{}];
     const kbps = get().settings.voiceQuality;
     for (const e of params.encodings) {
-      e.maxBitrate = kbps * 1000;
+      e.maxBitrate = Math.min(510_000, kbps * 1000);
       e.priority = "high";
+      e.maxFramerate = undefined;
       (e as RTCRtpEncodingParameters & { networkPriority?: string }).networkPriority = "high";
     }
     await sender.setParameters(params);
@@ -953,7 +1029,7 @@ function onSoundStop(msg: Envelope) {
 }
 
 // ------------------------------------------------------------------ reactions & raise hand
-export const REACTIONS = ["👍", "😂", "❤️", "🔥", "👏", "😮", "🎉", "💀"];
+export const REACTIONS = ["👍", "😂", "❤️", "🔥", "👏", "😮", "🎉", "💀", "🎵", "🙌", "🤯", "👀"];
 let reactSeq = 0;
 let lastReact = 0;
 function pushReaction(from: string, emoji: string) {
@@ -985,10 +1061,15 @@ function stopStream(s: MediaStream | null) {
 function migrateSettings(saved: Partial<VoiceSettings>): VoiceSettings {
   const s = { ...DEFAULT_SETTINGS, ...saved };
   if (!saved.noiseMode) s.noiseMode = saved.noiseSuppression === false ? "off" : "ai";
-  if (saved.qualityV !== 2 || ![64, 128, 320].includes(s.voiceQuality)) {
-    s.voiceQuality = 320;
-    s.qualityV = 2;
+  const allowed: VoiceQuality[] = [64, 128, 320, 510];
+  if (saved.qualityV !== 3 || !allowed.includes(s.voiceQuality as VoiceQuality)) {
+    // bump older installs to studio max once
+    if (!saved.voiceQuality || saved.qualityV === 2 || (saved.voiceQuality as number) === 320) s.voiceQuality = 510;
+    else if (!allowed.includes(s.voiceQuality as VoiceQuality)) s.voiceQuality = 510;
+    s.qualityV = 3;
   }
+  if (saved.stereoStudio === undefined) s.stereoStudio = true;
+  if (!saved.voiceFx) s.voiceFx = loadSavedFxId();
   return s;
 }
 
@@ -1002,6 +1083,7 @@ export function initCallEngine(userId: string) {
     localMutes: loadJSON<Record<string, boolean>>("nexus.localMutes", {}),
     muted: loadJSON("nexus.selfmute", { muted: false }).muted,
     deafened: loadJSON("nexus.selfdeaf", { deafened: false }).deafened,
+    voiceModel: loadSavedModel(),
   });
 
   const isTyping = (t: EventTarget | null) =>
@@ -1021,6 +1103,8 @@ export function initCallEngine(userId: string) {
     else if (k === "v") (e.preventDefault(), void toggleVideo());
     else if (k === "h") (e.preventDefault(), toggleHand());
     else if (k === "g") (e.preventDefault(), setCallLayout(get().layout === "gallery" ? "speaker" : "gallery"));
+    else if (k === "f") (e.preventDefault(), void cycleVoiceFx());
+    else if (k === "w") (e.preventDefault(), toggleWhisper());
     else if (k === "r" && !e.shiftKey) (e.preventDefault(), sendReaction(REACTIONS[Math.floor(Math.random() * REACTIONS.length)]!));
     else if (k === "r" && e.shiftKey) (e.preventDefault(), toggleCallRecording());
     else if (e.code === "Space" && s.mode !== "ptt") {
@@ -1470,8 +1554,12 @@ export async function updateSettings(patch: Partial<VoiceSettings>) {
   const settings = { ...prev, ...patch };
   set({ settings });
   saveJSON("nexus.voice", settings);
+  if (patch.voiceFx) saveFxId(patch.voiceFx);
 
-  if (inputGain && ctx && patch.inputVolume !== undefined) inputGain.gain.setTargetAtTime(settings.inputVolume, ctx.currentTime, 0.02);
+  if (inputGain && ctx && (patch.inputVolume !== undefined || patch.whisper !== undefined)) {
+    const base = settings.inputVolume * (settings.whisper ? 0.28 : 1);
+    inputGain.gain.setTargetAtTime(base, ctx.currentTime, 0.02);
+  }
   if (patch.outputVolume !== undefined || patch.outputDeviceId !== undefined) applyOutput();
 
   const inCall = get().status !== "idle";
@@ -1480,8 +1568,22 @@ export async function updateSettings(patch: Partial<VoiceSettings>) {
     (patch.noiseSuppression !== undefined && patch.noiseSuppression !== prev.noiseSuppression) ||
     (patch.echoCancellation !== undefined && patch.echoCancellation !== prev.echoCancellation) ||
     (patch.autoGainControl !== undefined && patch.autoGainControl !== prev.autoGainControl) ||
-    (patch.noiseMode !== undefined && patch.noiseMode !== prev.noiseMode);
+    (patch.noiseMode !== undefined && patch.noiseMode !== prev.noiseMode) ||
+    (patch.stereoStudio !== undefined && patch.stereoStudio !== prev.stereoStudio) ||
+    (patch.voiceFx !== undefined && patch.voiceFx !== prev.voiceFx) ||
+    (patch.voiceQuality !== undefined && patch.voiceQuality !== prev.voiceQuality && (patch.voiceQuality >= 320) !== (prev.voiceQuality >= 320));
   if (inCall && micChanged) await buildMic(); // outgoing track stays the same → no renegotiation
+  else if (inCall && ctx && patch.voiceFx !== undefined && patch.voiceFx !== prev.voiceFx) {
+    await buildVoiceChain(ctx);
+    if (micSource && voiceIn) {
+      try {
+        micSource.disconnect();
+      } catch {
+        /* ignore */
+      }
+      micSource.connect(voiceIn);
+    }
+  }
   if (inCall && patch.voiceQuality && patch.voiceQuality !== prev.voiceQuality) {
     for (const p of peers.values()) p.pc.getSenders().forEach((sn) => sn.track?.kind === "audio" && void tuneAudioSender(sn));
   }
@@ -1749,4 +1851,46 @@ export function myCallId() {
 
 export function noiseModeLabel(m: NoiseMode) {
   return m === "ai" ? "Nexus Clear" : m === "standard" ? "Browser NS" : "Noise off";
+}
+
+export function voiceQualityLabel(q: VoiceQuality) {
+  return q === 510 ? "Ultra studio 510" : q === 320 ? "Studio 320" : q === 128 ? "High 128" : "Standard 64";
+}
+
+/** Cycle built-in voice FX (+ custom AI pack when loaded). */
+export async function cycleVoiceFx() {
+  const model = get().voiceModel;
+  const order: VoiceFxId[] = model
+    ? ["off", "chipmunk", "helium", "deep", "bass", "robot", "radio", "custom"]
+    : ["off", "chipmunk", "helium", "deep", "bass", "robot", "radio"];
+  const cur = get().settings.voiceFx || "off";
+  const next = order[(Math.max(0, order.indexOf(cur)) + 1) % order.length]!;
+  await updateSettings({ voiceFx: next });
+  return next;
+}
+
+export function toggleWhisper() {
+  const whisper = !get().settings.whisper;
+  void updateSettings({ whisper });
+  return whisper;
+}
+
+/** Attach / replace an AI voice-model zip (nexus-voice.json inside). */
+export async function attachVoiceModelZip(file: File) {
+  const { parseVoiceModelZip } = await import("./voiceChanger");
+  const pack = await parseVoiceModelZip(file, file.name);
+  set({ voiceModel: pack });
+  await updateSettings({ voiceFx: "custom" });
+  return pack;
+}
+
+export async function clearVoiceModel() {
+  const { saveModel } = await import("./voiceChanger");
+  saveModel(null);
+  set({ voiceModel: null });
+  await updateSettings({ voiceFx: "off" });
+}
+
+export function currentVoiceFxLabel() {
+  return voiceFxLabel(get().settings.voiceFx || "off", get().voiceModel);
 }
