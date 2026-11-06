@@ -13,11 +13,11 @@ type GhRelease = {
 };
 
 function kindOf(raw: string | null): IpaKind {
-  if (raw === "wump" || raw === "link" || raw === "browser" || raw === "nexus") return raw;
+  if (raw === "wump" || raw === "link" || raw === "browser" || raw === "nexus" || raw === "appstore") return raw;
   return "nexus";
 }
 
-/** Public latest IPA asset from GitHub Releases (Sideloadly / AltStore). */
+/** Public latest IPA asset from GitHub Releases (Sideloadly / AltStore / App Store signed). */
 export async function GET(req: Request) {
   const kind = kindOf(new URL(req.url).searchParams.get("kind"));
   const meta = IPA_KIND_META[kind];
@@ -35,7 +35,13 @@ export async function GET(req: Request) {
     }
     const releases = (await r.json()) as GhRelease[];
     for (const rel of releases) {
-      if (!rel.tag_name?.startsWith(meta.tagPrefix)) continue;
+      const tag = rel.tag_name || "";
+      // Sideloadly Nexus tags are `ios-N` — never match `ios-appstore-N` for kind=nexus.
+      if (kind === "nexus") {
+        if (!/^ios-\d+$/.test(tag)) continue;
+      } else if (!tag.startsWith(meta.tagPrefix)) {
+        continue;
+      }
       const asset =
         rel.assets?.find((a) => a.name === meta.assetHint) ||
         rel.assets?.find((a) => a.name.toLowerCase().endsWith(".ipa"));
@@ -47,6 +53,7 @@ export async function GET(req: Request) {
         url: asset.browser_download_url,
         publishedAt: rel.published_at,
         htmlUrl: rel.html_url,
+        transporterOk: !!meta.transporterOk,
       });
     }
     return NextResponse.json({ error: "not_found", kind }, { status: 404 });

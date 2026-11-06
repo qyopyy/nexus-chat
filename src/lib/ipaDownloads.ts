@@ -1,17 +1,29 @@
 /** GitHub release search links for Sideloadly / AltStore IPAs. */
 export const NEXUS_IPA_RELEASES_URL =
   "https://github.com/qyopyy/nexus-chat/releases?q=Nexus+iOS&expanded=true";
+export const NEXUS_APPSTORE_IPA_RELEASES_URL =
+  "https://github.com/qyopyy/nexus-chat/releases?q=App+Store+IPA&expanded=true";
+export const NEXUS_APPSTORE_WORKFLOW_URL =
+  "https://github.com/qyopyy/nexus-chat/actions/workflows/ipa-appstore.yml";
 export const NEXUS_CAPGO_APP_URL = "https://console.capgo.app/app/hu.qyopy.nexus.B44X8B76QR";
 export const NEXUS_CAPGO_APP_ID = "hu.qyopy.nexus.B44X8B76QR";
 
-export type IpaKind = "nexus" | "wump" | "link" | "browser";
+export type IpaKind = "nexus" | "wump" | "link" | "browser" | "appstore";
 
 export const IPA_KIND_META: Record<
   IpaKind,
-  { label: string; tagPrefix: string; assetHint: string; query: string; bundleId: string }
+  { label: string; tagPrefix: string; assetHint: string; query: string; bundleId: string; transporterOk?: boolean }
 > = {
+  appstore: {
+    label: "Nexus (App Store signed)",
+    tagPrefix: "ios-appstore-",
+    assetHint: "Nexus-AppStore.ipa",
+    query: "App Store IPA",
+    bundleId: "hu.qyopy.nexus.B44X8B76QR",
+    transporterOk: true,
+  },
   nexus: {
-    label: "Nexus",
+    label: "Nexus (Sideloadly)",
     tagPrefix: "ios-",
     assetHint: "Nexus.ipa",
     query: "Nexus iOS",
@@ -52,6 +64,7 @@ export type LatestIpa = {
   url: string;
   publishedAt: string | null;
   htmlUrl: string;
+  transporterOk?: boolean;
 };
 
 /** Client helper — hits our API which reads public GitHub Releases. */

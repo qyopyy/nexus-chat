@@ -103,4 +103,8 @@ Troubleshooting
 ---------------
 • "No Apple Distribution identity" → you made a Development cert; redo step A as Apple Distribution
 • Bundle ID mismatch → profile must be for hu.qyopy.nexus.B44X8B76QR exactly
-• 90174 on old Sideloadly IPA → ignore those; only use the signed Nexus-AppStore.ipa from this workflow
+• 90174 on old Sideloadly IPA → you uploaded Nexus.ipa / tag ios-N. Only Nexus-AppStore.ipa
+  (tag ios-appstore-N) from this workflow is valid for Transporter.
+• CI fails “Missing embedded.mobileprovision” → the export step caught a bad sign; check the
+  profile is App Store Connect (not Development / Ad Hoc) and the .p12 is Apple Distribution.
+• get-task-allow=true rejected → you base64’d a Development .mobileprovision; recreate step B.

@@ -128,8 +128,18 @@ jobs:
           if [ -f "$APP/embedded.mobileprovision" ]; then
             echo "Unexpected: provisioning profile present in unsigned build"
           else
-            echo "No embedded.mobileprovision (expected for Sideloadly IPA — use Xcode Archive for ASC)"
+            echo "No embedded.mobileprovision (expected for Sideloadly IPA — use Actions → iOS App Store (signed) for ASC)"
           fi
+          cat > ../../TRANSPORTER_DO_NOT_USE.txt <<'NOTE'
+This Nexus.ipa is UNSIGNED (Sideloadly / AltStore only).
+
+Transporter will fail with:
+  Missing Provisioning Profile (90174)
+
+For App Store Connect / Transporter run:
+  Actions → “iOS App Store (signed)”
+and upload Nexus-AppStore.ipa (tag ios-appstore-N) instead.
+NOTE
 
           rm -rf Payload && mkdir Payload
           cp -R "$APP" Payload/
@@ -170,6 +180,7 @@ jobs:
           gh release create "$TAG" Nexus.ipa \
             app-store-listing.txt \
             TRANSPORTER_ISSUES.txt \
+            TRANSPORTER_DO_NOT_USE.txt \
             resources/icon-1024-opaque.png \
             --repo "$GITHUB_REPOSITORY" \
             --title "Nexus iOS build ${GITHUB_RUN_NUMBER}" \
@@ -178,8 +189,9 @@ jobs:
           Icon: opaque 1024 App Store marketing icon embedded (see icon-1024-opaque.png).
           Listing copy: app-store-listing.txt (paste into App Store Connect).
 
-          ⚠️ Sideloadly / unsigned IPA — Transporter will fail with Missing Provisioning Profile (90174).
-          For App Store: Archive + Distribute from Xcode with your Apple team (see TRANSPORTER_ISSUES.txt).
+          ⛔ Sideloadly / unsigned IPA — Transporter will fail with Missing Provisioning Profile (90174).
+          For App Store / Transporter: Actions → “iOS App Store (signed)” → Nexus-AppStore.ipa
+          (see TRANSPORTER_ISSUES.txt / TRANSPORTER_DO_NOT_USE.txt).
 
           Opens: ${NEXUS_URL}
           Live UI: Vercel web deploy (server.url) — no IPA rebuild needed for chat/features.
