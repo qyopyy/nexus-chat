@@ -26,15 +26,36 @@ import {
   type LinkBioLink,
   type LinkBioPage,
   type LinkBioStats,
+  type LinkBioStatsSeriesDay,
   type LinkBioTheme,
 } from "@/lib/linkbio";
 import { SOCIAL_VERIFY_LIST, linkVerifyReadiness } from "@/lib/linkVerify";
-import { spotifyEmbed } from "@/lib/links";
+import { resolveMusicEmbed } from "@/lib/links";
 import { studioGo } from "@/store/studio";
 import LinkBioAdmin from "@/components/linkbio/LinkBioAdmin";
 import PinToLinkPanel from "@/components/music/PinToLinkPanel";
 
 export { openLinkBio };
+
+function LinkStatsSparkline({ series }: { series: LinkBioStatsSeriesDay[] }) {
+  const max = Math.max(1, ...series.map((d) => Math.max(d.views, d.clicks)));
+  return (
+    <div className="flex h-16 items-end gap-0.5 sm:gap-1">
+      {series.map((d) => {
+        const vh = Math.max(d.views ? 8 : 0, Math.round((d.views / max) * 100));
+        const ch = Math.max(d.clicks ? 6 : 0, Math.round((d.clicks / max) * 100));
+        return (
+          <div key={d.day} className="group relative flex min-w-0 flex-1 flex-col items-center justify-end gap-0.5" title={`${d.day}: ${d.views} views · ${d.clicks} clicks`}>
+            <div className="flex w-full items-end justify-center gap-px" style={{ height: "100%" }}>
+              <span className="w-[45%] rounded-t-sm bg-[#c084fc]/80" style={{ height: `${vh}%` }} />
+              <span className="w-[45%] rounded-t-sm bg-emerald-400/80" style={{ height: `${ch}%` }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function LinkBioHub({
   mobile,
@@ -204,11 +225,11 @@ export default function LinkBioHub({
                 </div>
                 <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <div className="rounded-xl bg-black/30 p-3">
-                    <div className="text-[11px] text-white/45">Views</div>
-                    <div className="font-mono text-xl font-black tabular-nums">{(stats?.views ?? page.view_count).toLocaleString()}</div>
+                    <div className="text-[11px] text-white/45">Views ({statsDays}d)</div>
+                    <div className="font-mono text-xl font-black tabular-nums">{(stats?.views_period ?? 0).toLocaleString()}</div>
                   </div>
                   <div className="rounded-xl bg-black/30 p-3">
-                    <div className="text-[11px] text-white/45">Clicks (7d)</div>
+                    <div className="text-[11px] text-white/45">Clicks ({statsDays}d)</div>
                     <div className="font-mono text-xl font-black tabular-nums">{(stats?.clicks ?? 0).toLocaleString()}</div>
                   </div>
                   <div className="rounded-xl bg-black/30 p-3">
@@ -415,7 +436,7 @@ export default function LinkBioHub({
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <h2 className="text-sm font-bold tracking-wide text-white/70 uppercase">Analytics</h2>
                   <div className="flex gap-1">
-                    {[7, 30].map((d) => (
+                    {[7, 30, 90].map((d) => (
                       <button
                         key={d}
                         type="button"
@@ -431,17 +452,30 @@ export default function LinkBioHub({
                   <div className="text-sm text-white/40">Loading…</div>
                 ) : (
                   <>
-                    <div className="mb-4 grid grid-cols-2 gap-3">
+                    <div className="mb-4 grid grid-cols-3 gap-2 sm:gap-3">
                       <div className="rounded-xl bg-black/30 p-3">
-                        <div className="text-[11px] text-white/45">Page views</div>
-                        <div className="font-mono text-2xl font-black tabular-nums">{stats.views.toLocaleString()}</div>
+                        <div className="text-[11px] text-white/45">Views ({stats.days}d)</div>
+                        <div className="font-mono text-xl font-black tabular-nums sm:text-2xl">{stats.views_period.toLocaleString()}</div>
                       </div>
                       <div className="rounded-xl bg-black/30 p-3">
                         <div className="text-[11px] text-white/45">Clicks ({stats.days}d)</div>
-                        <div className="font-mono text-2xl font-black tabular-nums">{stats.clicks.toLocaleString()}</div>
+                        <div className="font-mono text-xl font-black tabular-nums sm:text-2xl">{stats.clicks.toLocaleString()}</div>
+                      </div>
+                      <div className="rounded-xl bg-black/30 p-3">
+                        <div className="text-[11px] text-white/45">All-time views</div>
+                        <div className="font-mono text-xl font-black tabular-nums sm:text-2xl">{stats.views_all.toLocaleString()}</div>
                       </div>
                     </div>
-                    <div className="text-xs font-bold text-white/50 uppercase">Top links</div>
+                    {stats.series.length > 0 && (
+                      <div className="mb-4 rounded-xl bg-black/25 p-3">
+                        <div className="mb-2 flex items-center justify-between text-[11px] font-bold text-white/50 uppercase">
+                          <span>Daily activity</span>
+                          <span className="font-medium normal-case tracking-normal text-white/35">Views · Clicks</span>
+                        </div>
+                        <LinkStatsSparkline series={stats.series} />
+                      </div>
+                    )}
+                    <div className="text-xs font-bold text-white/50 uppercase">Top links ({stats.days}d)</div>
                     <div className="mt-2 space-y-1.5">
                       {stats.top.length === 0 && <div className="text-sm text-white/40">No clicks yet — share your page.</div>}
                       {stats.top.map((t) => (
@@ -699,10 +733,11 @@ export default function LinkBioHub({
                   key={`mu-${page.music_url ?? ""}`}
                   onBlur={(e) => {
                     const raw = e.target.value.trim().slice(0, 800);
-                    const embed = spotifyEmbed(raw) || raw;
-                    if (embed !== (page.music_url ?? "")) void save({ music_url: embed });
+                    const resolved = resolveMusicEmbed(raw);
+                    const store = resolved && resolved.kind !== "audio" ? resolved.src : raw;
+                    if (store !== (page.music_url ?? "")) void save({ music_url: store });
                   }}
-                  placeholder="https://open.spotify.com/track/… or SoundCloud / Apple Music"
+                  placeholder="Spotify · Apple Music · SoundCloud · or upload"
                   className="mb-2 w-full rounded-xl bg-black/30 px-3 py-2 text-sm outline-none ring-1 ring-white/10 focus:ring-[#a855f7]"
                 />
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -734,20 +769,25 @@ export default function LinkBioHub({
                       Clear music
                     </button>
                   )}
-                  <span className="text-[11px] text-white/40">MP3 / WAV / M4A · up to 20 MB</span>
+                  <span className="text-[11px] text-white/40">Spotify · Apple · SoundCloud · MP3 up to 20 MB</span>
                 </div>
-                {page.music_url && spotifyEmbed(page.music_url) && (
-                  <iframe
-                    title="Spotify preview"
-                    src={spotifyEmbed(page.music_url)!}
-                    className="mb-3 h-20 w-full rounded-xl border-0"
-                    allow="encrypted-media; clipboard-write"
-                    loading="lazy"
-                  />
-                )}
-                {page.music_url && !spotifyEmbed(page.music_url) && /\.(mp3|wav|m4a|aac|ogg|flac|webm)(\?|$)/i.test(page.music_url) && (
-                  <audio controls src={page.music_url} className="mb-3 w-full" preload="metadata" />
-                )}
+                {(() => {
+                  const emb = page.music_url ? resolveMusicEmbed(page.music_url) : null;
+                  if (!emb) return null;
+                  if (emb.kind === "audio") {
+                    return <audio controls src={emb.src} className="mb-3 w-full" preload="metadata" />;
+                  }
+                  return (
+                    <iframe
+                      title={`${emb.kind} preview`}
+                      src={emb.src}
+                      className="mb-3 w-full rounded-xl border-0"
+                      style={{ height: emb.height }}
+                      allow="encrypted-media; clipboard-write; autoplay; fullscreen; picture-in-picture"
+                      loading="lazy"
+                    />
+                  );
+                })()}
                 <div className="mb-3">
                   <PinToLinkPanel compact />
                 </div>
