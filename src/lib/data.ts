@@ -473,7 +473,7 @@ export async function sendMessage(convId: string, content: string, file?: File |
         if (!/\.jpe?g$/i.test(name) && contentType.includes("jpeg")) name = name.replace(/\.[^.]+$/, "") + ".jpg";
       } else if (/^video\//.test(file.type) || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name)) {
         const { compressVideo } = await import("./compressMedia");
-        const out = await compressVideo(file, { maxEdge: 1080 });
+        const out = await compressVideo(file, { maxEdge: 1920, maxFps: 60 });
         upload = out.blob;
         contentType = out.mime || "video/mp4";
         name = name.replace(/\.[^.]+$/, "") + "." + out.ext;

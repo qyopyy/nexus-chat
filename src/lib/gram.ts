@@ -320,7 +320,7 @@ export async function uploadMedia(file: File, onStep?: (s: string) => void): Pro
     };
     let compressed;
     try {
-      compressed = await compressVideo(file, { maxEdge: 1440, maxFps: 60, onProgress: progress });
+      compressed = await compressVideo(file, { maxEdge: 1920, maxFps: 60, onProgress: progress });
     } catch {
       onStep?.("Compression failed — uploading original…");
       const ext = (file.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
@@ -742,7 +742,7 @@ export async function repairMyLiveStories(onStep?: (s: string) => void): Promise
       const raw = await res.blob();
       const file = new File([raw], s.media.path.split("/").pop() || "story.mp4", { type: raw.type || "video/mp4" });
       const compressed = await compressVideo(file, {
-        maxEdge: 1440,
+        maxEdge: 1920,
         maxFps: 60,
         force: true,
         onProgress: (label, ratio) => {

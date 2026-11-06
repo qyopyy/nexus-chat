@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, FileCode2, ImagePlus, RotateCcw, Sparkles, Trash2, Upload } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { useAppearance, setAppearance, resetAppearance } from "@/store/appearance";
+import { setPref, usePrefs } from "@/lib/prefs";
 import { BG_ANIMS, FONT_GROUPS, FONTS, THEMES, parseDiscordThemeCss, type ThemeColors } from "@/lib/theme";
 import { supabase, errorText } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -53,6 +54,7 @@ function Switch({ label, hint, checked, onChange }: { label: string; hint?: stri
 export default function AppearanceSection() {
   const a = useAppearance((s) => s);
   const me = useApp((s) => s.userId);
+  const welcomeSplash = usePrefs((s) => s.welcomeSplash !== false);
   const [bgUrl, setBgUrl] = useState(a.bgImage ?? "");
   const [bgVideo, setBgVideo] = useState(a.bgVideo ?? "");
   const [css, setCss] = useState(a.customCss);
@@ -153,6 +155,16 @@ export default function AppearanceSection() {
             <span className="msg-text">thanks! made it myself ✨</span>
           </div>
         </div>
+      </div>
+
+      <Label hint="Shown once when Nexus opens in a tab">Launch</Label>
+      <div className="mb-8">
+        <Switch
+          label="Welcome screen"
+          hint="Discord-style splash with a soft chime. Off by default — turn on if you want it."
+          checked={welcomeSplash}
+          onChange={(v) => setPref("welcomeSplash", v)}
+        />
       </div>
 
       <Label>Theme</Label>
