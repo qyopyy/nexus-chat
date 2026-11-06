@@ -5,11 +5,11 @@ import { Check, FileCode2, ImagePlus, RotateCcw, Sparkles, Trash2, Upload } from
 import { useApp, toast } from "@/store/app";
 import { useAppearance, setAppearance, resetAppearance } from "@/store/appearance";
 import { setPref, usePrefs } from "@/lib/prefs";
-import { BG_ANIMS, FONT_GROUPS, FONTS, THEMES, parseDiscordThemeCss, type ThemeColors } from "@/lib/theme";
+import { BG_ANIMS, FONT_GROUPS, FONTS, THEME_GROUPS, THEMES, parseDiscordThemeCss, type ThemeColors } from "@/lib/theme";
 import { supabase, errorText } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
-const ACCENTS = ["#2aabee", "#5865f2", "#eb459e", "#ed4245", "#faa61a", "#3ba55d", "#1abc9c", "#9b59b6", "#ff8a5b", "#ffffff"];
+const ACCENTS = ["#2aabee", "#5865f2", "#ff4da6", "#eb459e", "#ed4245", "#faa61a", "#3ba55d", "#1abc9c", "#9b59b6", "#ff8a5b", "#ff71ce", "#ffffff"];
 
 const H = ({ children }: { children: React.ReactNode }) => <h2 className="mb-5 text-xl font-bold">{children}</h2>;
 const Label = ({ children, hint }: { children: React.ReactNode; hint?: string }) => (
@@ -167,28 +167,40 @@ export default function AppearanceSection() {
         />
       </div>
 
-      <Label>Theme</Label>
-      <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {Object.entries(THEMES).map(([id, t]) => (
-          <button
-            key={id}
-            onClick={() => setAppearance({ theme: id })}
-            className={cn("group overflow-hidden rounded-xl border-2 text-left transition", a.theme === id ? "border-accent" : "border-transparent hover:border-line")}
-          >
-            <div className="flex h-16" style={{ background: t.colors.chat }}>
-              <div className="w-4" style={{ background: t.colors.rail }} />
-              <div className="w-10" style={{ background: t.colors.side }} />
-              <div className="flex flex-1 flex-col justify-center gap-1 px-2">
-                <div className="h-2.5 w-3/4 rounded-full" style={{ background: t.colors.bubble }} />
-                <div className="ml-auto h-2.5 w-1/2 rounded-full" style={{ background: t.colors.bubbleMe }} />
-                <div className="h-1.5 w-8 rounded-full" style={{ background: t.colors.accent }} />
-              </div>
+      <Label hint="Core, Vibe, and Ksubi packs — Ksubi Pink lives in the Ksubi row.">Theme</Label>
+      <div className="mb-8 space-y-5">
+        {THEME_GROUPS.map((group) => (
+          <div key={group.id}>
+            <div className="mb-2 text-[11px] font-bold tracking-wide text-faint uppercase">{group.label}</div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {group.themes.map((id) => {
+                const t = THEMES[id];
+                if (!t) return null;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setAppearance({ theme: id, ...(id === "ksubiPink" && !a.bgAnim ? { bgAnim: "ksubiPink" } : {}) })}
+                    className={cn("group overflow-hidden rounded-xl border-2 text-left transition", a.theme === id ? "border-accent" : "border-transparent hover:border-line")}
+                  >
+                    <div className="flex h-16" style={{ background: t.colors.chat }}>
+                      <div className="w-4" style={{ background: t.colors.rail }} />
+                      <div className="w-10" style={{ background: t.colors.side }} />
+                      <div className="flex flex-1 flex-col justify-center gap-1 px-2">
+                        <div className="h-2.5 w-3/4 rounded-full" style={{ background: t.colors.bubble }} />
+                        <div className="ml-auto h-2.5 w-1/2 rounded-full" style={{ background: t.colors.bubbleMe }} />
+                        <div className="h-1.5 w-8 rounded-full" style={{ background: t.colors.accent }} />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between bg-side px-2.5 py-1.5 text-sm">
+                      {t.name}
+                      {a.theme === id && <Check className="size-4 text-accent" />}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-            <div className="flex items-center justify-between bg-side px-2.5 py-1.5 text-sm">
-              {t.name}
-              {a.theme === id && <Check className="size-4 text-accent" />}
-            </div>
-          </button>
+          </div>
         ))}
       </div>
 

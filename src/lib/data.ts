@@ -468,9 +468,9 @@ export async function sendMessage(convId: string, content: string, file?: File |
           if (!/\.jpe?g$/i.test(name) && contentType.includes("jpeg")) name = name.replace(/\.[^.]+$/, "") + ".jpg";
         }
       } else if (/^video\//.test(file.type) || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name)) {
-        const { compressVideo } = await import("./compressMedia");
-        // Chat profile: 1080p / 60fps — smaller than Gram Full HD so iOS uploads finish
-        const out = await compressVideo(file, { maxEdge: 1080, maxFps: 60 });
+        const { compressVideo, FULL_HD_60 } = await import("./compressMedia");
+        // Chat attachments: Full HD / 60fps (locked platform policy)
+        const out = await compressVideo(file, { ...FULL_HD_60 });
         if (!out.skipped || out.blob !== file) {
           upload = out.blob.size <= file.size * 1.08 ? out.blob : file;
           if (upload === out.blob) {

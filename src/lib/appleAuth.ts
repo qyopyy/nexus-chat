@@ -45,7 +45,7 @@ export function appleSignInAvailable() {
 export async function signInWithApple(): Promise<{ ok: true } | { ok: false; error: string }> {
   const redirectTo =
     typeof window !== "undefined"
-      ? `${window.location.origin}${window.location.pathname.startsWith("/bump") ? "/bump/app" : "/"}`
+      ? `${window.location.origin}${window.location.pathname.startsWith("/bump") || window.location.pathname.startsWith("/wump") ? "/wump/app" : "/"}`
       : "https://nexusproject.cc/";
 
   const native = applePlugin();

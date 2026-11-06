@@ -26,7 +26,7 @@ const NAMED: Record<string, string> = {
   indigo: "#6366f1",
   violet: "#8b5cf6",
   purple: "#a855f7",
-  pink: "#ec4899",
+  pink: "#ff4da6",
   rose: "#f43f5e",
   white: "#f8fafc",
   gray: "#94a3b8",
@@ -228,14 +228,14 @@ export function FormattedText({ text, createdAt }: { text: string; createdAt?: s
 }
 
 export const FORMAT_COLORS = [
+  { id: "pink", label: "Pink", hex: NAMED.pink },
+  { id: "purple", label: "Purple", hex: NAMED.purple },
   { id: "red", label: "Red", hex: NAMED.red },
   { id: "orange", label: "Orange", hex: NAMED.orange },
   { id: "yellow", label: "Yellow", hex: NAMED.yellow },
   { id: "green", label: "Green", hex: NAMED.green },
   { id: "cyan", label: "Cyan", hex: NAMED.cyan },
   { id: "blue", label: "Blue", hex: NAMED.blue },
-  { id: "purple", label: "Purple", hex: NAMED.purple },
-  { id: "pink", label: "Pink", hex: NAMED.pink },
   { id: "white", label: "White", hex: NAMED.white },
 ];
 

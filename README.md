@@ -28,7 +28,7 @@ Next.js 16 + Supabase + WebRTC. Chat, voice/video calls, screen sharing, servers
 - **The first account that registers becomes the Owner**
 
 **Customization**
-- 10 themes (Discord, Telegram Night, AMOLED, Nord, Dracula, Catppuccin, Rosé Pine, Cyberpunk, Forest, Sunset), custom accent color
+- 20+ themes in Core / Vibe / **Ksubi** packs (including **Ksubi Pink**), custom accent color, animated wallpapers
 - Custom background image (URL or upload) with blur / brightness / see-through panels, like modded Discord
 - 12 fonts, UI zoom, message text size, compact mode, reduce motion
 - QuickCSS box for your own CSS or `@import`ed BetterDiscord-style themes

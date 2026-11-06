@@ -5,9 +5,11 @@ import {
   Activity,
   AppWindow,
   ArrowLeft,
+  Barcode,
   Binary,
   Braces,
   CaseSensitive,
+  CheckSquare,
   FileDigit,
   FilePen,
   Fingerprint,
@@ -37,6 +39,10 @@ import BpmTap from "./BpmTap";
 import JsonLab from "./JsonLab";
 import TokenGen from "./TokenGen";
 import Base64Lab from "./Base64Lab";
+import UpcGenerator from "./UpcGenerator";
+import PitchSheet from "./PitchSheet";
+import MetadataPack from "./MetadataPack";
+import ReleaseChecklist from "./ReleaseChecklist";
 import SpotifyTakedown from "@/components/music/SpotifyTakedown";
 import BumpHub from "@/components/bump/BumpHub";
 import BrowserHub from "@/components/browser/BrowserHub";
@@ -53,6 +59,10 @@ type ToolId =
   | "pdf"
   | "music"
   | "spotify-td"
+  | "upc"
+  | "pitch"
+  | "metadata"
+  | "release"
   | "qr"
   | "color"
   | "text"
@@ -138,6 +148,42 @@ const TOOLS: {
     bg: "linear-gradient(135deg,#1DB954,#0b3d24)",
     emoji: "⚡",
     Icon: ShieldAlert,
+  },
+  {
+    id: "upc",
+    name: "UPC / EAN generator",
+    tag: "Barcodes for releases",
+    desc: "Generate GS1 UPC-A or EAN-13 codes with check digits and downloadable barcode PNG.",
+    bg: "linear-gradient(135deg,#1DB954,#064e3b)",
+    emoji: "▦",
+    Icon: Barcode,
+  },
+  {
+    id: "pitch",
+    name: "Pitch one-sheet",
+    tag: "Playlists · blogs · DSP",
+    desc: "Write a short release pitch and export a one-sheet for curators.",
+    bg: "linear-gradient(135deg,#a855f7,#4c1d95)",
+    emoji: "✎",
+    Icon: FilePen,
+  },
+  {
+    id: "metadata",
+    name: "Metadata pack",
+    tag: "CSV · JSON · ISRCs",
+    desc: "Build album tracklists with ISRC/UPC fields — export DistroKid-style CSV or JSON.",
+    bg: "linear-gradient(135deg,#38bdf8,#0c4a6e)",
+    emoji: "{}",
+    Icon: Braces,
+  },
+  {
+    id: "release",
+    name: "Release checklist",
+    tag: "Ship-ready for artists",
+    desc: "Tick masters, codes, artwork, splits, and pitch before you deliver to stores.",
+    bg: "linear-gradient(135deg,#f59e0b,#7c2d12)",
+    emoji: "☑",
+    Icon: CheckSquare,
   },
   {
     id: "qr",
@@ -284,6 +330,10 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
       </div>
     );
   }
+  if (tool === "upc") return <UpcGenerator mobile={mobile} onBack={backToGrid} />;
+  if (tool === "pitch") return <PitchSheet mobile={mobile} onBack={backToGrid} />;
+  if (tool === "metadata") return <MetadataPack mobile={mobile} onBack={backToGrid} />;
+  if (tool === "release") return <ReleaseChecklist mobile={mobile} onBack={backToGrid} />;
   if (tool === "qr") return <QrMaker mobile={mobile} onBack={backToGrid} />;
   if (tool === "color") return <ColorStudio mobile={mobile} onBack={backToGrid} />;
   if (tool === "text") return <TextLab mobile={mobile} onBack={backToGrid} />;
@@ -341,7 +391,7 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
 
           <IpaDownloads />
 
-          <p className="text-sm text-sub">Creator utilities. File tools stay on-device; Music ID and Spotify takedown use server keys when connected.</p>
+          <p className="text-sm text-sub">Creator &amp; artist utilities — UPC, pitch sheets, metadata packs, and more. File tools stay on-device; Music ID and Spotify takedown use server keys when connected.</p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {TOOLS.filter((item) => item.id !== "bump").map((item) => (
               <button
