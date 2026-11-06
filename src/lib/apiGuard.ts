@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
-/** Simple sliding-window rate limit per IP (process-local). */
+/** Simple sliding-window rate limit per IP (process-local) — soft DDoS / abuse shield. */
 const hits = new Map<string, number[]>();
 
-export function clientIp(req: NextRequest) {
+type IpSource = NextRequest | Request;
+
+export function clientIp(req: IpSource) {
   return (
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     req.headers.get("x-real-ip") ||
@@ -11,7 +13,7 @@ export function clientIp(req: NextRequest) {
   );
 }
 
-export function rateLimit(req: NextRequest, key: string, limit: number, windowMs: number): NextResponse | null {
+export function rateLimit(req: IpSource, key: string, limit: number, windowMs: number): NextResponse | null {
   const id = `${key}:${clientIp(req)}`;
   const now = Date.now();
   const windowStart = now - windowMs;
@@ -19,7 +21,10 @@ export function rateLimit(req: NextRequest, key: string, limit: number, windowMs
   prev.push(now);
   hits.set(id, prev);
   if (prev.length > limit) {
-    return NextResponse.json({ error: "Too many requests — slow down" }, { status: 429, headers: { "Retry-After": "30" } });
+    return NextResponse.json(
+      { error: "Too many requests — slow down", protect: "nexus-link-ddos" },
+      { status: 429, headers: { "Retry-After": "30", "X-Nexus-Link-Protect": "rate-limit" } },
+    );
   }
   // opportunistic cleanup
   if (hits.size > 5_000) {
@@ -30,6 +35,17 @@ export function rateLimit(req: NextRequest, key: string, limit: number, windowMs
     }
   }
   return null;
+}
+
+/** Snapshot of in-memory protect counters (admin networking). */
+export function rateLimitStats() {
+  let buckets = 0;
+  let total = 0;
+  for (const times of hits.values()) {
+    buckets += 1;
+    total += times.length;
+  }
+  return { buckets, hits: total };
 }
 
 /** Authorize Vercel Cron / manual purge with CRON_SECRET (or Vercel's cron header). */
