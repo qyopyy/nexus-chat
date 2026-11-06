@@ -6,7 +6,8 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const url = process.env.NEXUS_URL || "https://nexusproject.cc";
 
 const config: CapacitorConfig = {
-  appId: "hu.qyopy.nexus",
+  // Must match App Store Connect Bundle ID (Nexus - hu.qyopy.nexus.B44X8B76QR)
+  appId: "hu.qyopy.nexus.B44X8B76QR",
   appName: "Nexus",
   webDir: "www",
   backgroundColor: "#1e1f22",
