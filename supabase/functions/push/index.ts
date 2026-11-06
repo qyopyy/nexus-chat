@@ -1,7 +1,7 @@
 // Nexus push: called by the messages trigger (pg_net) for every new message.
 // Sends Web Push (browsers, installed PWAs incl. iPhone home-screen app) and FCM (Android app, when configured).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2.119.0";
 import webpush from "npm:web-push@3.6.7";
 
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });

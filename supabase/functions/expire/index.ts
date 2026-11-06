@@ -1,7 +1,7 @@
 // Nexus — disappearing messages. Called every 15 minutes by pg_cron (x-push-secret header).
 // Removes messages older than their chat's timer, including their attachment files.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2.119.0";
 
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 

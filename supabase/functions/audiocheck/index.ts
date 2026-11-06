@@ -4,7 +4,7 @@
 // The browser sends a ~12 s, 8 kHz mono WAV clip (≈190 KB) — full files never pass through this function.
 // Credentials live server-side only (dist_settings, service role), entered by an admin in Studio → Copyright check.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2.119.0";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

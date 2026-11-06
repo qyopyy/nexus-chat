@@ -3,7 +3,7 @@
 // updating even when Nexus is closed. pg_cron calls { action: "tick" } every minute (x-push-secret).
 // Secrets used: SPOTIFY_CLIENT_ID (already set for the spotify function).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2.119.0";
 
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const CLIENT_ID = Deno.env.get("SPOTIFY_CLIENT_ID") ?? "";

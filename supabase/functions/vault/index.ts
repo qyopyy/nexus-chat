@@ -1,7 +1,7 @@
 // Nexus file vault — admins browse/open any uploaded file after entering the vault password.
 // Only a salted PBKDF2 hash of the password is stored (public.vault_config, service-role only).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2.119.0";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
