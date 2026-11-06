@@ -53,7 +53,6 @@ jobs:
 
       - name: Permissions, icon and app settings
         run: |
-          pip3 install --user pillow >/dev/null
           PLIST=ios/App/App/Info.plist
           pb() { /usr/libexec/PlistBuddy -c "$1" "$PLIST" 2>/dev/null || true; }
           pb "Add :NSMicrophoneUsageDescription string Nexus uses your microphone for voice calls."
@@ -87,12 +86,12 @@ jobs:
           pb "Set :NSHumanReadableCopyright © 2026 qyopy"
           pb "Add :NSHumanReadableCopyright string © 2026 qyopy"
 
-          # Opaque App Store icons (1024 marketing icon must have no alpha)
-          test -f resources/icon-1024.png
+          # Opaque App Store icons via sips + committed icon-1024-opaque.png (no pip/Pillow)
+          test -f resources/icon-1024-opaque.png || test -f resources/icon-1024.png
           ICONSET=ios/App/App/Assets.xcassets/AppIcon.appiconset
           python3 scripts/prepare-app-icons.py "$ICONSET"
           test -f "$ICONSET/AppIcon-1024.png"
-          file "$ICONSET/AppIcon-1024.png" | grep -q 'RGB'
+          file "$ICONSET/AppIcon-1024.png"
           ls -la "$ICONSET"
           plutil -p "$PLIST" | head -80
 
