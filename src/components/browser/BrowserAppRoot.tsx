@@ -87,7 +87,7 @@ export default function BrowserAppRoot() {
           <img src="/browser-icon.png" alt="" className="size-9 rounded-xl object-cover ring-1 ring-white/15" width={36} height={36} />
           <div className="min-w-0">
             <div className="text-[11px] font-bold tracking-[0.14em] text-[#93c5fd] uppercase">Nexus · Browser</div>
-            <div className="truncate text-sm font-semibold text-white/80">Standalone search · same account</div>
+            <div className="truncate text-sm font-semibold text-white/80">Shields · DNS · search · same account</div>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
