@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bell, BellRing, CalendarDays, CalendarPlus, Crown, Gauge, Hash, Image as ImageIcon, Link2, MapPin, ScrollText, Shield, Trash2, Trophy, X } from "lucide-react";
+import { Bell, BellRing, ShieldAlert, CalendarDays, CalendarPlus, Crown, Gauge, Hash, Image as ImageIcon, Link2, MapPin, ScrollText, Shield, Trash2, Trophy, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { createEvent, deleteEvent, events, icsFor, leaderboard, levelOf, rsvp, setInfo, setRole, setSlowmode, xpFor, type Rsvp, type SpaceEvent, type XpRow } from "@/lib/serverHub";
 import { loadEventReminders, scheduleEventReminder, useEventReminders } from "@/lib/eventReminders";
@@ -11,9 +11,10 @@ import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import { InvitesPanel, LookPanel, RolesPanel } from "./ServerStudio";
+import AutoModPanel from "./AutoModPanel";
 import type { Conversation, SpaceMember } from "@/lib/types";
 
-type Tab = "home" | "look" | "invites" | "roles" | "events" | "levels" | "members" | "channels";
+type Tab = "home" | "look" | "invites" | "roles" | "events" | "levels" | "members" | "channels" | "automod";
 const EMPTY_M: SpaceMember[] = [];
 const EMPTY_C: Conversation[] = [];
 
@@ -34,7 +35,12 @@ export default function ServerHub({ spaceId, onClose, initial = "home" }: { spac
     ["events", "Events", <CalendarDays key="e" className="size-4" />],
     ["levels", "Levels", <Trophy key="l" className="size-4" />],
     ["members", "Members", <Crown key="m" className="size-4" />],
-    ...(staff ? ([["channels", "Channels", <Gauge key="c" className="size-4" />]] as [Tab, string, React.ReactNode][]) : []),
+    ...(staff
+      ? ([
+          ["channels", "Channels", <Gauge key="c" className="size-4" />],
+          ["automod", "AutoMod", <ShieldAlert key="a" className="size-4" />],
+        ] as [Tab, string, React.ReactNode][])
+      : []),
   ];
   const headerBg = space.banner_url
     ? undefined
@@ -83,6 +89,7 @@ export default function ServerHub({ spaceId, onClose, initial = "home" }: { spac
           {tab === "levels" && <Levels spaceId={spaceId} />}
           {tab === "members" && <Members spaceId={spaceId} owner={myRole === "owner"} />}
           {tab === "channels" && staff && <Channels spaceId={spaceId} />}
+          {tab === "automod" && staff && <AutoModPanel spaceId={spaceId} />}
         </div>
       </div>
     </div>

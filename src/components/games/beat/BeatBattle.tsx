@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, FileMusic, Pause, Play, Settings2, Trophy, Upload } from "lucide-react";
+import { ArrowLeft, FileMusic, Loader2, Pause, Play, Settings2, Sparkles, Trophy, Upload } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { leaderboard, localBest, saveLocalBest, submitScore, type Row } from "@/lib/games";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import { HEALTH_GAIN, HEALTH_MISS, JUDGE, SAFE_MS, accuracy, beatAt, fcLabel, grade, judge, newStats, parseChart, type Chart, type Note, type Stats } from "./chart";
+import { analyze, buildChart, decodeFile, fitGrid, type Analysis, type Difficulty } from "./autochart";
 import { arrow, burst, drawBoombox, drawFlash, drawHex, drawSparks, drawStage, drawVolt, iconHex, iconVolt, newStage, trail, LANE_COLORS, type Pose, type Spark } from "./art";
 
 // ─────────────────────────────── songs ───────────────────────────────
@@ -140,6 +141,7 @@ export default function BeatBattle({ onBack, mobile }: { onBack: () => void; mob
                   </span>
                 </button>
               ))}
+              <AutoChart onReady={(s) => setCustom(s)} />
               <ImportChart onReady={(s) => setCustom(s)} />
             </div>
             <div className="mt-5 rounded-2xl bg-white/5 p-3 ring-1 ring-white/10">
@@ -270,6 +272,116 @@ function Results({ r, onRetry, onMenu }: { r: Result; onRetry: () => void; onMen
         </button>
         <button onClick={onMenu} className="flex-1 rounded-full bg-white/10 py-3 font-bold">
           Song list
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────── auto-chart any song ───────────────────────────────
+const DIFFS: { id: Difficulty; label: string }[] = [
+  { id: "easy", label: "Easy" },
+  { id: "normal", label: "Normal" },
+  { id: "hard", label: "Hard" },
+];
+let autoUrls: string[] = [];
+function AutoChart({ onReady }: { onReady: (s: Song) => void }) {
+  const [open, setOpen] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [prog, setProg] = useState<number | null>(null);
+  const [an, setAn] = useState<Analysis | null>(null);
+  const [diff, setDiff] = useState<Difficulty>("normal");
+
+  const pick = async (f: File | undefined) => {
+    if (!f) return;
+    if (f.size > 40 * 1024 * 1024) return toast("That file is too big (40 MB max)", "error");
+    setFile(f);
+    setAn(null);
+    setProg(0);
+    try {
+      const buf = await decodeFile(f);
+      setAn(await analyze(buf, setProg));
+    } catch (e) {
+      toast((e as Error).message, "error");
+      setFile(null);
+    } finally {
+      setProg(null);
+    }
+  };
+  const retempo = (k: number) => an && setAn({ ...an, ...fitGrid(an, an.bpm * k) });
+  const add = () => {
+    if (!an || !file) return;
+    const title = file.name.replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").trim().slice(0, 60) || "My song";
+    try {
+      const { json, playerNotes } = buildChart(an, diff, title);
+      // blob URLs live for the session (the game screen replaces this menu, so don't revoke on unmount)
+      autoUrls.forEach((u) => URL.revokeObjectURL(u));
+      const chart = URL.createObjectURL(new Blob([JSON.stringify(json)], { type: "application/json" }));
+      const inst = URL.createObjectURL(file);
+      autoUrls = [chart, inst];
+      onReady({ id: "custom", title, credit: "Auto-charted on this device", diff: `${DIFFS.find((d) => d.id === diff)?.label} · ${playerNotes} notes`, chart, inst, color: "#ff7a00", ranked: false });
+      toast(`“${title}” is ready — play it from the list`, "success");
+      setOpen(false);
+      setFile(null);
+      setAn(null);
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
+
+  if (!open)
+    return (
+      <button onClick={() => setOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-white/20 py-3 text-sm font-semibold text-white/70 hover:border-[#ff7a00] hover:text-white">
+        <Sparkles className="size-4" /> Auto-chart any song from your device
+      </button>
+    );
+  return (
+    <div className="space-y-3 rounded-2xl bg-white/5 p-3 ring-1 ring-white/10">
+      <div className="text-sm font-bold">Make a chart from any song</div>
+      <label className={cn("flex cursor-pointer items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-sm hover:bg-white/10", prog !== null && "pointer-events-none opacity-60")}>
+        <input type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac" className="hidden" onChange={(e) => void pick(e.target.files?.[0])} />
+        <span className="font-semibold">Song</span>
+        <span className="min-w-0 flex-1 truncate text-right text-white/55">{file?.name ?? "choose an MP3 / M4A…"}</span>
+      </label>
+      {prog !== null && (
+        <div>
+          <div className="mb-1 flex items-center gap-2 text-xs text-white/70">
+            <Loader2 className="size-3.5 animate-spin" /> Listening for the beat… {Math.round(prog * 100)}%
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+            <div className="h-full rounded-full bg-[#ff7a00] transition-all" style={{ width: `${Math.round(prog * 100)}%` }} />
+          </div>
+        </div>
+      )}
+      {an && (
+        <>
+          <div className="flex items-center gap-2 rounded-xl bg-black/25 px-3 py-2 text-sm">
+            <span className="text-white/60">Tempo</span>
+            <b className="tabular-nums">{an.bpm} BPM</b>
+            <span className="flex-1" />
+            <button onClick={() => retempo(0.5)} disabled={an.bpm / 2 < 50} className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-bold disabled:opacity-30">
+              ½×
+            </button>
+            <button onClick={() => retempo(2)} disabled={an.bpm * 2 > 240} className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-bold disabled:opacity-30">
+              2×
+            </button>
+          </div>
+          <div className="flex gap-1 rounded-xl bg-black/25 p-1">
+            {DIFFS.map((d) => (
+              <button key={d.id} onClick={() => setDiff(d.id)} className={cn("flex-1 rounded-lg py-2 text-sm font-bold", diff === d.id ? "bg-[#ff7a00] text-black" : "text-white/70")}>
+                {d.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      <p className="text-xs text-white/50">The chart is made on this device — your song isn&apos;t uploaded. If the arrows feel twice too busy or too slow, try ½× or 2×. Auto charts aren&apos;t ranked.</p>
+      <div className="flex gap-2">
+        <button onClick={add} disabled={!an} className="flex-1 rounded-full bg-[#ff7a00] py-2 font-bold text-black disabled:opacity-40">
+          Add song
+        </button>
+        <button onClick={() => setOpen(false)} className="rounded-full bg-white/10 px-4 font-semibold">
+          Cancel
         </button>
       </div>
     </div>

@@ -18,7 +18,7 @@ export type Section = { start: number; end: number; player: boolean; bpm: number
 export type Chart = { title: string; bpm: number; speed: number; notes: Note[]; sections: Section[]; length: number; bpmAt: (t: number) => { bpm: number; t0: number; beat0: number } };
 
 type PsychSection = { sectionNotes?: (number | string)[][]; mustHitSection?: boolean; sectionBeats?: number; lengthInSteps?: number; bpm?: number; changeBPM?: boolean; altAnim?: boolean };
-type PsychSong = { song: string; bpm: number; speed?: number; notes: PsychSection[] };
+type PsychSong = { song: string; bpm: number; speed?: number; offset?: number; notes: PsychSection[] };
 
 export function parseChart(json: unknown, fallbackTitle = "Song"): Chart {
   const root = json as { song?: PsychSong | string } & PsychSong;
@@ -27,9 +27,10 @@ export function parseChart(json: unknown, fallbackTitle = "Song"): Chart {
   const notes: Note[] = [];
   const sections: Section[] = [];
   let bpm = Number(song.bpm) || 120;
-  let t = 0;
+  // `offset` (ms, ≤ 0) is a Nexus extension used by auto-generated charts: where beat 0 falls, so bops line up
+  let t = Math.min(0, Number(song.offset) || 0);
   let beat = 0;
-  const changes: { t: number; bpm: number; beat: number }[] = [{ t: 0, bpm, beat: 0 }];
+  const changes: { t: number; bpm: number; beat: number }[] = [{ t, bpm, beat: 0 }];
   for (const sec of song.notes) {
     if (sec.changeBPM && sec.bpm && sec.bpm !== bpm) {
       bpm = sec.bpm;

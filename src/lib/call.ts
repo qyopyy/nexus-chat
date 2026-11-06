@@ -82,6 +82,19 @@ export type VoiceSettings = {
 export type IncomingCall = { conversationId: string; callerId: string; at: number };
 export type CallLayout = "gallery" | "speaker";
 export type CallQuality = "good" | "ok" | "poor" | null;
+/** Watch Together: one shared video for everyone in the call. `pos` was the position at local time `t` (performance.now()). */
+export type WatchState = {
+  kind: "youtube" | "video";
+  src: string;
+  id: string | null;
+  title: string;
+  playing: boolean;
+  pos: number;
+  t: number;
+  rate: number;
+  by: string;
+  rev: number;
+};
 
 type CallState = {
   status: "idle" | "connecting" | "connected";
@@ -124,6 +137,8 @@ type CallState = {
   facingMode: "user" | "environment";
   /** loaded AI voice-model pack (from zip) */
   voiceModel: VoiceModelPack | null;
+  /** Watch Together session (null = nothing playing) */
+  watch: WatchState | null;
 };
 
 export const DEFAULT_SETTINGS: VoiceSettings = {
@@ -180,6 +195,7 @@ export const useCall = create<CallState>(() => ({
   callPingMs: null,
   facingMode: "user",
   voiceModel: null,
+  watch: null,
 }));
 
 const get = useCall.getState;
@@ -1028,6 +1044,116 @@ function onSoundStop(msg: Envelope) {
   });
 }
 
+// ------------------------------------------------------------------ watch together
+// Everyone in the call can start, pause, seek or stop. The newest change (highest rev) wins; on a tie the
+// author id decides so every client lands on the same state. Positions travel as "where it was when sent"
+// and each client advances them with its own clock, so device clocks never need to agree.
+type WatchMsg = Envelope & { state: Omit<WatchState, "t"> | null; rev: number; by: string };
+let watchRev = 0;
+let watchBy = "";
+
+/** YouTube links (watch, youtu.be, shorts, live, embed, music) and direct video files. */
+export function parseWatchUrl(raw: string): Pick<WatchState, "kind" | "src" | "id" | "title"> | null {
+  let u: URL;
+  try {
+    u = new URL(raw.trim().startsWith("http") ? raw.trim() : `https://${raw.trim()}`);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  const host = u.hostname.replace(/^(www|m|music)\./, "");
+  let id: string | null = null;
+  if (host === "youtu.be") id = u.pathname.slice(1).split("/")[0];
+  else if (host === "youtube.com" || host === "youtube-nocookie.com") {
+    id = u.searchParams.get("v");
+    const m = u.pathname.match(/^\/(shorts|live|embed|v)\/([\w-]{11})/);
+    if (!id && m) id = m[2];
+  }
+  if (id !== null) return /^[\w-]{11}$/.test(id) ? { kind: "youtube", src: `https://www.youtube.com/watch?v=${id}`, id, title: "YouTube video" } : null;
+  if (u.protocol === "https:" && /\.(mp4|webm|m4v|mov|ogv)$/i.test(u.pathname)) {
+    const name = decodeURIComponent(u.pathname.split("/").pop() ?? "Video").replace(/\.[a-z0-9]+$/i, "");
+    return { kind: "video", src: u.toString(), id: null, title: name.slice(0, 80) || "Video" };
+  }
+  return null;
+}
+
+/** where the shared video should be right now (seconds) */
+export function watchPos(w: WatchState, now = performance.now()) {
+  return w.playing ? w.pos + ((now - w.t) / 1000) * w.rate : w.pos;
+}
+
+function sendWatch(w: WatchState | null) {
+  const state = w ? { kind: w.kind, src: w.src, id: w.id, title: w.title, playing: w.playing, pos: watchPos(w), rate: w.rate, by: w.by, rev: w.rev } : null;
+  send("watch", { state, rev: watchRev, by: watchBy });
+}
+
+/** re-announce the current video so someone who just joined catches up */
+function shareWatch() {
+  const w = get().watch;
+  if (w) sendWatch(w);
+}
+
+function onWatch(m: WatchMsg) {
+  if (!me || m.from === me || isStale(m) || typeof m.rev !== "number") return;
+  const newer = m.rev > watchRev || (m.rev === watchRev && typeof m.by === "string" && m.by > watchBy);
+  if (!newer) return;
+  watchRev = m.rev;
+  watchBy = m.by;
+  const st = m.state;
+  if (!st || (st.kind !== "youtube" && st.kind !== "video") || typeof st.src !== "string") {
+    set({ watch: null });
+    return;
+  }
+  const checked = parseWatchUrl(st.src);
+  if (!checked || checked.kind !== st.kind) return; // only links we'd accept ourselves
+  set({
+    watch: {
+      ...checked,
+      title: typeof st.title === "string" ? st.title.slice(0, 120) : checked.title,
+      playing: !!st.playing,
+      pos: Math.max(0, Number(st.pos) || 0),
+      t: performance.now(),
+      rate: Math.min(2, Math.max(0.25, Number(st.rate) || 1)),
+      by: typeof st.by === "string" ? st.by : m.from,
+      rev: m.rev,
+    },
+  });
+}
+
+function commitWatch(w: WatchState | null) {
+  watchRev += 1;
+  watchBy = me ?? "";
+  const next = w ? { ...w, rev: watchRev } : null;
+  set({ watch: next });
+  sendWatch(next);
+}
+
+export function startWatch(url: string): string | null {
+  if (get().status === "idle" || !me) return "Join the call first";
+  const p = parseWatchUrl(url);
+  if (!p) return "Paste a YouTube link or a direct .mp4 / .webm video link";
+  commitWatch({ ...p, playing: true, pos: 0, t: performance.now(), rate: 1, by: me, rev: 0 });
+  return null;
+}
+
+/** a local play / pause / seek, shared with everyone */
+export function watchControl(patch: { playing?: boolean; pos?: number; title?: string }) {
+  const w = get().watch;
+  if (!w) return;
+  const now = performance.now();
+  commitWatch({
+    ...w,
+    playing: patch.playing ?? w.playing,
+    pos: Math.max(0, patch.pos ?? watchPos(w, now)),
+    title: patch.title ?? w.title,
+    t: now,
+  });
+}
+
+export function stopWatch() {
+  if (get().watch) commitWatch(null);
+}
+
 // ------------------------------------------------------------------ reactions & raise hand
 export const REACTIONS = ["👍", "😂", "❤️", "🔥", "👏", "😮", "🎉", "💀", "🎵", "🙌", "🤯", "👀"];
 let reactSeq = 0;
@@ -1157,6 +1283,7 @@ export async function joinCall(conversationId: string, opts: { video?: boolean }
       const p = ensurePeer(msg.from, msg.session);
       attachMicToPeers();
       broadcastState();
+      shareWatch();
       // peer just came online — re-offer in case our first offer was lost pre-subscribe
       void renegotiate(p);
     })
@@ -1167,6 +1294,7 @@ export async function joinCall(conversationId: string, opts: { video?: boolean }
       if (!me || m.from === me || isStale(m) || !peers.has(m.from) || !REACTIONS.includes(m.emoji ?? "")) return;
       pushReaction(m.from, m.emoji!);
     })
+    .on("broadcast", { event: "watch" }, ({ payload }) => onWatch(payload as WatchMsg))
     .on("broadcast", { event: "bye" }, ({ payload }) => {
       const msg = payload as Envelope;
       const p = peers.get(msg.from);
@@ -1193,6 +1321,7 @@ export async function joinCall(conversationId: string, opts: { video?: boolean }
       const p = ensurePeer(key, session);
       attachMicToPeers();
       broadcastState();
+      shareWatch();
       void renegotiate(p);
     })
     .on("presence", { event: "leave" }, ({ key, currentPresences }) => {
@@ -1288,8 +1417,11 @@ export async function leaveCall() {
     recordingStartedAt: null,
     callQuality: null,
     callPingMs: null,
+    watch: null,
     layout: get().layout,
   });
+  watchRev = 0;
+  watchBy = "";
   sfx.leave();
 }
 

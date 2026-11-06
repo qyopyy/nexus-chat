@@ -37,6 +37,7 @@ import VideoTile, { type Tile } from "./VideoTile";
 import { SoundboardButton, SoundToast } from "./Soundboard";
 import { ReactButton, ReactionsOverlay } from "./Reactions";
 import { CallExtraControls, CallStatusChips } from "./CallExtras";
+import { WatchButton, WatchStage } from "./WatchTogether";
 import AvatarButton from "@/components/vavatar/AvatarButton";
 
 export default function CallStage({
@@ -57,6 +58,7 @@ export default function CallStage({
   const deafened = useCall((s) => s.deafened);
   const focused = useCall((s) => s.focused);
   const layout = useCall((s) => s.layout);
+  const watching = useCall((s) => !!s.watch);
   const status = useCall((s) => s.status);
   const error = useCall((s) => s.error);
   const ringing = useCall((s) => s.outgoingRing === conversationId);
@@ -142,6 +144,19 @@ export default function CallStage({
               ))}
             </div>
             <p className="text-lg text-white/80">Calling…</p>
+          </div>
+        ) : watching ? (
+          <div className="flex h-full flex-col gap-3">
+            <div className="min-h-0 flex-1">
+              <WatchStage />
+            </div>
+            <div className="flex h-20 shrink-0 justify-center gap-2 overflow-x-auto sm:h-24">
+              {tiles.map((t) => (
+                <div key={t.key} className="aspect-video h-full shrink-0">
+                  <VideoTile tile={t} compact onClick={() => setFocused(t.key)} />
+                </div>
+              ))}
+            </div>
           </div>
         ) : useSpotlight && focusedTile ? (
           <div className="flex h-full flex-col gap-3">
@@ -249,6 +264,7 @@ function CallControls() {
       <AvatarButton />
       <SoundboardButton />
       <ReactButton />
+      <WatchButton />
       <CallExtraControls />
       <CtlBtn label={muted ? "Unmute" : "Mute"} off={muted || deafened} onClick={toggleMute}>
         {muted || deafened ? <MicOff className="size-6" /> : <Mic className="size-6" />}

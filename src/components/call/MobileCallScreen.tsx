@@ -6,6 +6,7 @@ import { useApp, conversationTitle } from "@/store/app";
 import { SoundboardButton, SoundToast } from "./Soundboard";
 import { ReactButton, ReactionsOverlay } from "./Reactions";
 import { CallExtraControls, CallStatusChips } from "./CallExtras";
+import { WatchButton, WatchStage } from "./WatchTogether";
 import AvatarButton from "@/components/vavatar/AvatarButton";
 import { useCall, canScreenShare, leaveCall, setFocused, toggleDeafen, toggleMute, toggleScreen, toggleVideo } from "@/lib/call";
 import { haptic } from "@/lib/haptics";
@@ -25,6 +26,7 @@ export default function MobileCallScreen({ conversationId }: { conversationId: s
   const muted = useCall((s) => s.muted);
   const deafened = useCall((s) => s.deafened);
   const focused = useCall((s) => s.focused);
+  const watching = useCall((s) => !!s.watch);
   const status = useCall((s) => s.status);
   const ringing = useCall((s) => s.outgoingRing === conversationId);
   const startedAt = useCall((s) => s.startedAt);
@@ -107,7 +109,22 @@ export default function MobileCallScreen({ conversationId }: { conversationId: s
 
       {/* stage */}
       <div className="relative min-h-0 flex-1 px-3">
-        {!anyVideo || waiting ? (
+        {watching ? (
+          <div className="flex h-full flex-col gap-2 pb-2">
+            <div className="min-h-0 flex-1">
+              <WatchStage compact />
+            </div>
+            {tiles.length > 0 && (
+              <div className="no-scrollbar flex h-24 shrink-0 gap-2 overflow-x-auto">
+                {tiles.map((t) => (
+                  <div key={t.key} className="aspect-[3/4] h-full shrink-0">
+                    <VideoTile tile={t} compact onClick={() => setFocused(t.key)} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : !anyVideo || waiting ? (
           <div className="flex h-full flex-col items-center justify-center gap-6 pb-10">
             <div className={cn("flex flex-wrap items-center justify-center", (waiting ? waitingFor : remote.map((p) => p.id)).length > 1 ? "gap-5" : "")}>
               {(waiting ? waitingFor.slice(0, 4) : remote.slice(0, 6).map((p) => p.id)).map((id) => {
@@ -172,6 +189,7 @@ export default function MobileCallScreen({ conversationId }: { conversationId: s
           <AvatarButton mobile />
           <SoundboardButton mobile />
           <ReactButton mobile />
+          <WatchButton mobile />
         </div>
         <div className="flex items-center justify-around">
           <Ctl label={localCam ? "Camera off" : "Camera"} on={!!localCam} onClick={() => void toggleVideo()}>
