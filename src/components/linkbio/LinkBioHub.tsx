@@ -15,6 +15,7 @@ import {
   LINKBIO_THEMES,
   linkbioMine,
   linkbioSave,
+  linkbioUploadMusic,
   openLinkBio,
   publicLinkBioUrl,
   type LinkBioBackground,
@@ -25,6 +26,7 @@ import {
   type LinkBioPage,
   type LinkBioTheme,
 } from "@/lib/linkbio";
+import { spotifyEmbed } from "@/lib/links";
 import LinkBioAdmin from "@/components/linkbio/LinkBioAdmin";
 
 export { openLinkBio };
@@ -375,18 +377,61 @@ export default function LinkBioHub({
                   className="mb-3 w-full rounded-xl bg-black/30 px-3 py-2 text-sm outline-none ring-1 ring-white/10 focus:ring-[#a855f7]"
                 />
 
-                <label className="mb-1 block text-xs font-semibold text-white/50">Music embed URL {page.premium ? "" : "(Premium)"}</label>
+                <label className="mb-1 block text-xs font-semibold text-white/50">Spotify / music URL</label>
                 <input
                   defaultValue={page.music_url ?? ""}
                   key={`mu-${page.music_url ?? ""}`}
-                  disabled={!page.premium}
                   onBlur={(e) => {
-                    const v = e.target.value.trim().slice(0, 500);
-                    if (v !== (page.music_url ?? "")) void save({ music_url: v });
+                    const raw = e.target.value.trim().slice(0, 800);
+                    const embed = spotifyEmbed(raw) || raw;
+                    if (embed !== (page.music_url ?? "")) void save({ music_url: embed });
                   }}
-                  placeholder="Spotify / SoundCloud URL"
-                  className="mb-3 w-full rounded-xl bg-black/30 px-3 py-2 text-sm outline-none ring-1 ring-white/10 focus:ring-[#a855f7] disabled:opacity-40"
+                  placeholder="https://open.spotify.com/track/… or SoundCloud / Apple Music"
+                  className="mb-2 w-full rounded-xl bg-black/30 px-3 py-2 text-sm outline-none ring-1 ring-white/10 focus:ring-[#a855f7]"
                 />
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs font-bold hover:bg-white/15">
+                    <input
+                      type="file"
+                      accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
+                      className="hidden"
+                      disabled={busy}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = "";
+                        if (!file) return;
+                        setBusy(true);
+                        const url = await linkbioUploadMusic(file);
+                        if (url) await save({ music_url: url });
+                        setBusy(false);
+                      }}
+                    />
+                    Upload track
+                  </label>
+                  {page.music_url && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void save({ music_url: "" })}
+                      className="rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold hover:bg-dnd/30 disabled:opacity-40"
+                    >
+                      Clear music
+                    </button>
+                  )}
+                  <span className="text-[11px] text-white/40">MP3 / WAV / M4A · up to 20 MB</span>
+                </div>
+                {page.music_url && spotifyEmbed(page.music_url) && (
+                  <iframe
+                    title="Spotify preview"
+                    src={spotifyEmbed(page.music_url)!}
+                    className="mb-3 h-20 w-full rounded-xl border-0"
+                    allow="encrypted-media; clipboard-write"
+                    loading="lazy"
+                  />
+                )}
+                {page.music_url && !spotifyEmbed(page.music_url) && /\.(mp3|wav|m4a|aac|ogg|flac|webm)(\?|$)/i.test(page.music_url) && (
+                  <audio controls src={page.music_url} className="mb-3 w-full" preload="metadata" />
+                )}
 
                 <label className="mb-1 block text-xs font-semibold text-white/50">SEO title</label>
                 <input

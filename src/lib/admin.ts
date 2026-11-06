@@ -53,9 +53,20 @@ export async function revokeBadge(userId: string, badgeId: string) {
   if (r) await refreshBadges();
 }
 
-export async function createBadge(name: string, icon: string, color: string, description: string) {
-  const r = await call("admin_create_badge", { p_name: name, p_icon: icon, p_color: color, p_description: description }, "Badge created");
+export async function createBadge(name: string, icon: string, color: string, description: string, key?: string) {
+  const r = await call(
+    "admin_create_badge",
+    {
+      p_name: name,
+      p_icon: icon,
+      p_color: color,
+      p_description: description,
+      p_key: key?.trim() ? key.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 32) : null,
+    },
+    "Badge created",
+  );
   if (r) await refreshBadges();
+  return r;
 }
 
 export async function deleteBadge(id: string) {
