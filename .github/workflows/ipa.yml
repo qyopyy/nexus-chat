@@ -1,6 +1,7 @@
 name: iOS app (.ipa)
 
 # Builds an unsigned Nexus.ipa — install it with Sideloadly / AltStore using your Apple ID.
+# App Store / Transporter uploads require a separately signed Xcode Archive (embedded.mobileprovision).
 # Triggers: Actions → Run workflow, or any push to main that touches mobile/.
 on:
   workflow_dispatch:
@@ -31,6 +32,7 @@ jobs:
         working-directory: mobile
     env:
       NEXUS_URL: ${{ github.event.inputs.url || vars.NEXUS_URL || 'https://nexusproject.cc' }}
+      BUNDLE_ID: hu.qyopy.nexus.B44X8B76QR
     steps:
       - uses: actions/checkout@v4
 
@@ -44,12 +46,14 @@ jobs:
       - name: Create iOS project
         run: |
           echo "App will open: $NEXUS_URL"
+          echo "Bundle ID: $BUNDLE_ID"
           npx cap add ios
           npx cap sync ios
           ls ios/App
 
       - name: Permissions, icon and app settings
         run: |
+          pip3 install --user pillow >/dev/null
           PLIST=ios/App/App/Info.plist
           pb() { /usr/libexec/PlistBuddy -c "$1" "$PLIST" 2>/dev/null || true; }
           pb "Add :NSMicrophoneUsageDescription string Nexus uses your microphone for voice calls."
@@ -66,6 +70,10 @@ jobs:
           pb "Add :UIBackgroundModes:4 string location"
           pb "Set :CFBundleDisplayName Nexus"
           pb "Add :CFBundleDisplayName string Nexus"
+          pb "Set :CFBundleName Nexus"
+          pb "Add :CFBundleName string Nexus"
+          pb "Set :CFBundleIdentifier ${BUNDLE_ID}"
+          pb "Add :CFBundleIdentifier string ${BUNDLE_ID}"
           pb "Add :ITSAppUsesNonExemptEncryption bool false"
           pb "Add :UIStatusBarStyle string UIStatusBarStyleLightContent"
           pb "Add :UIViewControllerBasedStatusBarAppearance bool false"
@@ -75,33 +83,25 @@ jobs:
           pb "Add :CFBundleShortVersionString string 1.${GITHUB_RUN_NUMBER}"
           pb "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}"
           pb "Add :CFBundleVersion string ${GITHUB_RUN_NUMBER}"
+          # Human-readable strings (not App Store listing — paste listing from app-store-listing.txt)
+          pb "Set :NSHumanReadableCopyright © 2026 qyopy"
+          pb "Add :NSHumanReadableCopyright string © 2026 qyopy"
 
-          # App icon — resize the 1024 master into every AppIcon.appiconset slot
+          # Opaque App Store icons (1024 marketing icon must have no alpha)
           test -f resources/icon-1024.png
           ICONSET=ios/App/App/Assets.xcassets/AppIcon.appiconset
-          mkdir -p "$ICONSET"
-          cp resources/AppIcon.Contents.json "$ICONSET/Contents.json"
-          python3 - <<'PY'
-          import json, subprocess
-          from pathlib import Path
-          src = Path("resources/icon-1024.png")
-          iconset = Path("ios/App/App/Assets.xcassets/AppIcon.appiconset")
-          data = json.loads((iconset / "Contents.json").read_text())
-          for img in data["images"]:
-              w, h = img["size"].split("x")
-              scale = int(img["scale"].replace("x", ""))
-              px = int(round(float(w) * scale))
-              out = iconset / img["filename"]
-              subprocess.check_call(["sips", "-z", str(px), str(px), str(src), "--out", str(out)], stdout=subprocess.DEVNULL)
-              print(out.name, px)
-          PY
+          python3 scripts/prepare-app-icons.py "$ICONSET"
+          test -f "$ICONSET/AppIcon-1024.png"
+          file "$ICONSET/AppIcon-1024.png" | grep -q 'RGB'
           ls -la "$ICONSET"
-          plutil -p "$PLIST" | head -60
+          plutil -p "$PLIST" | head -80
 
       - name: Build (unsigned)
         run: |
           cd ios/App
           if [ -d App.xcworkspace ]; then TARGET="-workspace App.xcworkspace"; else TARGET="-project App.xcodeproj"; fi
+          # Do NOT pass PRODUCT_BUNDLE_IDENTIFIER — it stamps every framework (Sideloadly DuplicateIdentifier).
+          # Capacitor appId + post-build PlistBuddy set the App target id.
           xcodebuild $TARGET -scheme App -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' \
             -archivePath "$PWD/build/App.xcarchive" archive \
@@ -114,15 +114,43 @@ jobs:
         run: |
           cd ios/App
           APP=build/App.xcarchive/Products/Applications/App.app
-          # Match App Store Connect: Nexus - hu.qyopy.nexus.B44X8B76QR
-          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier hu.qyopy.nexus.B44X8B76QR" "$APP/Info.plist" 2>/dev/null \
-            || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string hu.qyopy.nexus.B44X8B76QR" "$APP/Info.plist"
-          # Uniquify Cordova / Capacitor plugin framework ids (Sideloadly DuplicateIdentifier)
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${BUNDLE_ID}" "$APP/Info.plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string ${BUNDLE_ID}" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Nexus" "$APP/Info.plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Nexus" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName Nexus" "$APP/Info.plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleName string Nexus" "$APP/Info.plist"
+
+          # Confirm compiled assets / marketing icon made it into the .app
+          if [ -f "$APP/Assets.car" ]; then
+            echo "Assets.car present ($(wc -c < "$APP/Assets.car") bytes)"
+          else
+            echo "WARNING: Assets.car missing — icon may not show"
+          fi
+          # Copy opaque 1024 into the bundle for visibility when asset catalog is thin
+          mkdir -p "$APP/AppIcon.appiconset"
+          cp -f ../../resources/icon-1024-opaque.png "$APP/AppIcon.appiconset/AppIcon-1024.png" 2>/dev/null || true
+          cp -f App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png "$APP/AppIcon.appiconset/AppIcon-1024.png" 2>/dev/null || true
+
+          # Sideloadly: uniquify Cordova / Capacitor plugin framework ids
+          # NOTE: Do NOT stamp PRODUCT_BUNDLE_IDENTIFIER onto frameworks here.
           bash "$GITHUB_WORKSPACE/.github/scripts/fix-ios-framework-ids.sh" "$APP"
+
+          # Explicit note: unsigned → no embedded.mobileprovision (App Store will reject 90174)
+          if [ -f "$APP/embedded.mobileprovision" ]; then
+            echo "Unexpected: provisioning profile present in unsigned build"
+          else
+            echo "No embedded.mobileprovision (expected for Sideloadly IPA — use Xcode Archive for ASC)"
+          fi
+
           rm -rf Payload && mkdir Payload
           cp -R "$APP" Payload/
           zip -qry ../../Nexus.ipa Payload
           ls -lh ../../Nexus.ipa
+          # Show identity for release notes
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' Payload/App.app/Info.plist
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Payload/App.app/Info.plist
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Payload/App.app/Info.plist
 
       - uses: actions/upload-artifact@v4
         with:
@@ -135,10 +163,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="ios-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" Nexus.ipa --repo "$GITHUB_REPOSITORY" \
+          gh release create "$TAG" Nexus.ipa \
+            app-store-listing.txt \
+            TRANSPORTER_ISSUES.txt \
+            resources/icon-1024-opaque.png \
+            --repo "$GITHUB_REPOSITORY" \
             --title "Nexus iOS build ${GITHUB_RUN_NUMBER}" \
-            --notes "Bundle ID: hu.qyopy.nexus.B44X8B76QR (App Store Connect).
+            --notes "Nexus iOS ${GITHUB_RUN_NUMBER} · bundle ${BUNDLE_ID}
 
-          Unsigned IPA → Sideloadly / AltStore with your Apple ID. Opens: ${NEXUS_URL}
+          Icon: opaque 1024 App Store marketing icon embedded (see icon-1024-opaque.png).
+          Listing copy: app-store-listing.txt (paste into App Store Connect).
 
-          App Store / Transporter uploads need a separately signed Archive from Xcode (Distribution cert) — this artifact is not App Store–signed."
+          ⚠️ Sideloadly / unsigned IPA — Transporter will fail with Missing Provisioning Profile (90174).
+          For App Store: Archive + Distribute from Xcode with your Apple team (see TRANSPORTER_ISSUES.txt).
+
+          Opens: ${NEXUS_URL}"
