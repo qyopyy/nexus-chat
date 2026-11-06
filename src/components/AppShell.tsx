@@ -154,7 +154,12 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
     const addbot = q.get("addbot");
     const bump = q.get("bump");
     const yt = q.get("yt");
-    if (yt === "linked") {
+    const watchLiveId = q.get("watchLive");
+    if (watchLiveId) {
+      window.history.replaceState(null, "", "/");
+      useApp.setState({ hub: "live", mobileTab: "videos" });
+      void import("@/lib/live").then(({ watchLive }) => watchLive(watchLiveId).catch(() => toast("Couldn't open that live stream", "error")));
+    } else if (yt === "linked") {
       window.history.replaceState(null, "", "/");
       toast("YouTube account linked — open Shorts → YouTube", "success");
       useApp.setState({ hub: "gram" });

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pause, Play, Plus, Square, Upload, Volume2, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { playSound, stopSounds, updateSettings, useCall } from "@/lib/call";
-import { BUILTINS, MAX_BYTES, MAX_SECONDS, decodeFile, deleteSound, loadMySounds, uploadSound, useSounds, type Sound } from "@/lib/soundboard";
+import { BUILTINS, MAX_BYTES, MAX_SECONDS, decodeFile, deleteSound, loadMySounds, loadPinnedSounds, togglePinnedSound, uploadSound, useSounds, type Sound } from "@/lib/soundboard";
 import { cn } from "@/lib/utils";
 
 const EMOJIS = ["🔊", "😂", "🔥", "💀", "🎉", "👏", "😱", "🤣", "🥁", "📯", "🐐", "💯", "😎", "🤡", "👀", "🚨", "🎵", "💥", "🫡", "😭"];
@@ -17,6 +17,7 @@ export function SoundboardPanel({ onClose, className }: { onClose?: () => void; 
   const [upload, setUpload] = useState(false);
   const [edit, setEdit] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  const [pins, setPins] = useState<string[]>(() => loadPinnedSounds());
   useEffect(() => void loadMySounds(), []);
 
   const fire = (s: Sound) => {
@@ -36,6 +37,17 @@ export function SoundboardPanel({ onClose, className }: { onClose?: () => void; 
       >
         <span className="text-xl leading-none">{s.emoji}</span>
         <span className="line-clamp-2 min-w-0 leading-tight">{s.name}</span>
+      </button>
+      <button
+        type="button"
+        title={pins.includes(s.id) ? "Unpin from call bar" : "Pin to call bar (max 3)"}
+        onClick={() => setPins(togglePinnedSound(s.id))}
+        className={cn(
+          "absolute -bottom-1.5 -left-1.5 grid size-6 place-items-center rounded-full text-[10px] font-black shadow",
+          pins.includes(s.id) ? "bg-accent text-white" : "bg-[#2b2d31] text-white/70 ring-1 ring-white/15",
+        )}
+      >
+        {pins.includes(s.id) ? "★" : "☆"}
       </button>
       {own && edit && (
         <button
