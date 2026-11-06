@@ -13,10 +13,12 @@ on:
     paths:
       - "mobile/**"
       - ".github/workflows/ipa.yml"
+      - ".github/scripts/fix-ios-framework-ids.sh"
   pull_request:
     paths:
       - "mobile/**"
       - ".github/workflows/ipa.yml"
+      - ".github/scripts/fix-ios-framework-ids.sh"
 
 permissions:
   contents: write
@@ -111,8 +113,13 @@ jobs:
       - name: Package IPA
         run: |
           cd ios/App
+          APP=build/App.xcarchive/Products/Applications/App.app
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier hu.qyopy.nexus" "$APP/Info.plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string hu.qyopy.nexus" "$APP/Info.plist"
+          # Uniquify Cordova / Capacitor plugin framework ids (Sideloadly DuplicateIdentifier)
+          bash "$GITHUB_WORKSPACE/.github/scripts/fix-ios-framework-ids.sh" "$APP"
           rm -rf Payload && mkdir Payload
-          cp -R build/App.xcarchive/Products/Applications/App.app Payload/
+          cp -R "$APP" Payload/
           zip -qry ../../Nexus.ipa Payload
           ls -lh ../../Nexus.ipa
 
