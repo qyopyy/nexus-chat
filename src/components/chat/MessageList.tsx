@@ -182,11 +182,19 @@ export default function MessageList({ conversationId, initialUnread }: { convers
       </div>
       {showJump && (
         <button
-          onClick={() => ref.current?.scrollTo({ top: ref.current.scrollHeight, behavior: "smooth" })}
-          className="absolute right-6 bottom-4 grid size-11 animate-pop place-items-center rounded-full bg-side text-txt shadow-xl hover:bg-hover"
-          aria-label="Jump to latest"
+          type="button"
+          onClick={() => {
+            const el = ref.current;
+            if (!el) return;
+            el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+            atBottom.current = true;
+            setShowJump(false);
+          }}
+          className="absolute right-5 bottom-4 z-10 inline-flex animate-pop items-center gap-1.5 rounded-full border border-line/80 bg-side/95 px-3.5 py-2.5 text-sm font-semibold text-txt shadow-xl backdrop-blur-md hover:bg-hover"
+          aria-label="Jump to latest messages"
         >
-          <ChevronDown className="size-6" />
+          <ChevronDown className="size-5" />
+          <span className="pr-0.5">Latest</span>
         </button>
       )}
       <HighFivePrompt />

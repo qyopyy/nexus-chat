@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { startLiveUpdates } from "@/lib/liveUpdate";
+import { startCapgo } from "@/lib/capgo";
 import { mfaNeedsChallenge } from "@/lib/mfa";
 import { useApp } from "@/store/app";
 import { loadProfiles, refreshFriends } from "@/lib/data";
@@ -22,7 +23,7 @@ import { refreshBadges } from "@/lib/admin";
 import { useRealtime } from "@/lib/realtime";
 import { useBumpMusic } from "@/lib/bumpMusic";
 import { bumpInbox } from "@/lib/bump";
-import { WUMP, WUMP_TAGLINE } from "@/lib/wumpBrand";
+import { WUMP, WUMP_GRADIENT, WUMP_TAGLINE } from "@/lib/wumpBrand";
 import AuthScreen, { ResetPasswordScreen } from "@/components/AuthScreen";
 import SetupScreen from "@/components/SetupScreen";
 import BumpHub from "@/components/bump/BumpHub";
@@ -51,6 +52,7 @@ export default function BumpAppRoot() {
   );
 
   useEffect(() => startLiveUpdates(), []);
+  useEffect(() => startCapgo(), []);
   useRealtime(bootstrapped && userId && !needsMfa ? userId : null);
 
   useEffect(() => {
@@ -114,8 +116,8 @@ export default function BumpAppRoot() {
   if (!isConfigured) return <SetupScreen />;
   if (session === undefined) {
     return (
-      <div className="grid h-full place-items-center bg-[#050d09]">
-        <div className="size-10 animate-spin rounded-full border-4 border-[#22c55a] border-t-transparent" />
+      <div className="grid h-full place-items-center bg-[#0a0610]">
+        <div className="size-10 animate-spin rounded-full border-4 border-[#ff4d6d] border-t-transparent" />
       </div>
     );
   }
@@ -124,8 +126,8 @@ export default function BumpAppRoot() {
   if (needsMfa) return <AuthScreen initialMode="mfa" />;
   if (!bootstrapped) {
     return (
-      <div className="grid h-full place-items-center bg-[#050d09]">
-        <div className="size-10 animate-spin rounded-full border-4 border-[#22c55a] border-t-transparent" />
+      <div className="grid h-full place-items-center bg-[#0a0610]">
+        <div className="size-10 animate-spin rounded-full border-4 border-[#ff4d6d] border-t-transparent" />
       </div>
     );
   }
@@ -141,13 +143,14 @@ export default function BumpAppRoot() {
   ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#050d09] text-txt">
+    <div className="flex h-full min-h-0 flex-col bg-[#0a0610] text-txt">
       <header className="relative shrink-0 overflow-hidden border-b border-white/10 pt-safe-3">
         <div
           className="pointer-events-none absolute inset-0"
           style={{
-            background:
-              "radial-gradient(ellipse 90% 120% at 10% -20%, rgba(34,197,94,.28), transparent 55%), linear-gradient(180deg,#0b3d24 0%,#071a10 100%)",
+            background: `${WUMP_GRADIENT}, linear-gradient(180deg,#1a0a14 0%,#0a0610 100%)`,
+            backgroundBlendMode: "soft-light, normal",
+            opacity: 0.95,
           }}
         />
         <div className="relative flex items-center gap-3 px-4 pb-3 pt-2">
@@ -155,7 +158,7 @@ export default function BumpAppRoot() {
           <img
             src="/wump-icon.png"
             alt=""
-            className="size-11 rounded-2xl object-cover shadow-lg shadow-emerald-900/40 ring-1 ring-white/15"
+            className="size-11 rounded-2xl object-cover shadow-lg shadow-fuchsia-900/40 ring-1 ring-white/15"
             width={44}
             height={44}
           />
@@ -163,8 +166,8 @@ export default function BumpAppRoot() {
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-extrabold tracking-tight text-white">{WUMP}</h1>
               {playing && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
-                  <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" /> Listening
+                <span className="inline-flex items-center gap-1 rounded-full bg-pink-500/25 px-2 py-0.5 text-[10px] font-bold text-pink-200">
+                  <span className="size-1.5 animate-pulse rounded-full bg-pink-300" /> Listening
                 </span>
               )}
             </div>

@@ -32,9 +32,16 @@ export const WUMP_PRIVACY_DEF: WumpPrivacy = {
 const LOCAL_KEY = "nexus.wump.privacy.v1";
 
 export function precisionLabel(p: WumpPrecision) {
-  if (p === "exact") return "Exact (~1 m)";
-  if (p === "city") return "City (~1 km)";
-  return "Approximate (~100 m)";
+  if (p === "exact") return "Exact GPS pin (most precise)";
+  if (p === "city") return "City area (~1 km radius on the map)";
+  return "Neighborhood (~100 m radius on the map)";
+}
+
+/** Meters used when fuzzing a Live pin for map publish. */
+export function precisionRadiusMeters(p: WumpPrecision) {
+  if (p === "city") return 1000;
+  if (p === "approx") return 100;
+  return 0;
 }
 
 export function loadWumpPrivacyLocal(): WumpPrivacy {

@@ -82,7 +82,9 @@ export default function WumpSettings({ userId }: { userId: string }) {
               { id: "city", label: "City" },
             ]}
           />
-          <p className="mt-1.5 text-[11px] text-sub">{precisionLabel(p.wump_precision)} grid when publishing to the map.</p>
+          <p className="mt-1.5 text-[11px] text-sub">
+            {precisionLabel(p.wump_precision)}. Friends see this fuzzed radius — not a raw GPS trail.
+          </p>
         </Field>
 
         <Toggle
@@ -124,7 +126,7 @@ export default function WumpSettings({ userId }: { userId: string }) {
           </li>
           <li>
             <span className="font-semibold text-txt">Standalone Wump app</span> — separate iOS IPA focused on the map + Live. Install from Releases; opens{" "}
-            <code className="rounded bg-black/30 px-1">/bump/app</code>.
+            <code className="rounded bg-black/30 px-1">/wump/app</code>.
           </li>
         </ul>
       </section>

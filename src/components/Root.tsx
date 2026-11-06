@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { startLiveUpdates } from "@/lib/liveUpdate";
-import { notifyCapgoAppReady } from "@/lib/capgo";
+import { startCapgo } from "@/lib/capgo";
 import { mfaNeedsChallenge } from "@/lib/mfa";
 import AuthScreen, { ResetPasswordScreen, type AuthMode } from "@/components/AuthScreen";
 import AppShell from "@/components/AppShell";
@@ -17,17 +17,16 @@ export default function Root({ mode, initialVideo, initialRelease, initialGram, 
 
   // Capacitor APK/IPA load the live site — reload when a new web deploy lands
   useEffect(() => startLiveUpdates(), []);
-  // Capgo OTA: mark the shell ready so production channel updates stick
-  useEffect(() => {
-    void notifyCapgoAppReady();
-  }, []);
+  // Capgo OTA: ready ping + background channel check
+  useEffect(() => startCapgo(), []);
 
-  // Standalone Bump IPA (UA BumpApp) always uses the slim /bump/app shell
+  // Standalone Wump IPA (UA BumpApp) always uses the slim /wump/app shell
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!/BumpApp/i.test(navigator.userAgent)) return;
-    if (window.location.pathname.startsWith("/bump/app")) return;
-    window.location.replace("/bump/app" + window.location.search);
+    const p = window.location.pathname;
+    if (p.startsWith("/wump/app") || p.startsWith("/bump/app")) return;
+    window.location.replace("/wump/app" + window.location.search);
   }, []);
 
   // Standalone Nexus Link IPA stays on /bio/app (never the main chat shell)
