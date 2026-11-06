@@ -1,13 +1,13 @@
 "use client";
 
 import { memo, useEffect, useRef, useState } from "react";
-import { Bookmark, Check, Clock, Copy, Download, FileText, Lock, Pencil, Pin, Reply, SmilePlus, Sparkles, Trash2 } from "lucide-react";
+import { Bookmark, Check, Clock, Copy, Download, FileText, Forward, Lock, Pencil, Pin, Reply, SmilePlus, Sparkles, Trash2 } from "lucide-react";
 import { usePrefs } from "@/lib/prefs";
 import { useApp, openProfileCard, toast } from "@/store/app";
 import { roleRank } from "@/lib/theme";
 import NameTag from "@/components/ui/NameTag";
 import { useChat } from "@/store/chat";
-import { deleteMessage, editMessage, toggleReaction } from "@/lib/data";
+import { deleteMessage, editMessage, parseForwarded, toggleReaction } from "@/lib/data";
 import { pinMessage, toggleSaveMessage } from "@/lib/chatDelight";
 import { refreshPins } from "./PinsBar";
 import { EFFECTS, isEffect, playEffect } from "@/lib/effects";
@@ -30,6 +30,7 @@ import { BumpPinCard, CapsuleCard, JamCard } from "./Extras";
 import { useSignedUrl } from "@/lib/storage";
 import { downloadAttachment } from "@/lib/downloadAttachment";
 import { FormattedText } from "@/lib/chatFormat";
+import ForwardPicker from "./ForwardPicker";
 import type { Message, Reaction } from "@/lib/types";
 const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|‍|️|\s)+$/u;
 const EMPTY_REACTIONS: Reaction[] = [];
@@ -181,6 +182,7 @@ function MessageBubbleImpl({
   const me = useApp((s) => s.userId);
   const [picker, setPicker] = useState(false);
   const [sheet, setSheet] = useState(false);
+  const [forwardOpen, setForwardOpen] = useState(false);
   const [burst, setBurst] = useState(0);
   const [dx, setDx] = useState(0);
   const authorRole = useApp((s) => s.profiles[m.author_id]?.site_role);
@@ -210,11 +212,18 @@ function MessageBubbleImpl({
     haptic.light();
     useChat.setState({ replyTo: m, editingId: null });
   };
+  const openForward = () => {
+    haptic.light();
+    setSheet(false);
+    setForwardOpen(true);
+  };
   const heart = () => {
     if (!grouped["❤️"]?.mine) void toggleReaction(m, "❤️");
     setBurst((b) => b + 1);
     haptic.medium();
   };
+  const forwarded = !deleted ? parseForwarded(m.content) : null;
+  const displayContent = forwarded ? forwarded.body : m.content;
 
   return (
     <div
@@ -347,31 +356,43 @@ function MessageBubbleImpl({
             <InlineEditor message={m} />
           ) : (
             <>
+              {forwarded && (
+                <div
+                  className={cn(
+                    "mb-0.5 flex items-center gap-1 text-[11px] font-medium opacity-75",
+                    mine ? "text-white/75" : "text-sub",
+                    onlyMedia && "px-2.5 pt-1.5",
+                  )}
+                >
+                  <Forward className="size-3 shrink-0" />
+                  <span className="truncate">Forwarded from {forwarded.from}</span>
+                </div>
+              )}
               <Attachment m={m} mine={mine} />
-              {POLL_RE.test(m.content) ? (
-                <PollCard id={m.content.match(POLL_RE)![1]} mine={mine} />
-              ) : JAM_RE.test(m.content) ? (
-                <JamCard id={m.content.match(JAM_RE)![1]} />
-              ) : CAPSULE_RE.test(m.content) ? (
-                <CapsuleCard id={m.content.match(CAPSULE_RE)![1]} mine={mine} />
-              ) : BUMP_PIN_RE.test(m.content) ? (
-                <BumpPinCard text={m.content} mine={mine} />
-              ) : m.content ? (
+              {POLL_RE.test(displayContent) ? (
+                <PollCard id={displayContent.match(POLL_RE)![1]} mine={mine} />
+              ) : JAM_RE.test(displayContent) ? (
+                <JamCard id={displayContent.match(JAM_RE)![1]} />
+              ) : CAPSULE_RE.test(displayContent) ? (
+                <CapsuleCard id={displayContent.match(CAPSULE_RE)![1]} mine={mine} />
+              ) : BUMP_PIN_RE.test(displayContent) ? (
+                <BumpPinCard text={displayContent} mine={mine} />
+              ) : displayContent ? (
                 <span className={cn("break-words whitespace-pre-wrap", bigEmoji ? "text-5xl leading-tight" : "msg-text", m.attachment_url && "mt-1 block")}>
-                  <Linkified text={m.content} createdAt={m.created_at} />
+                  <Linkified text={displayContent} createdAt={m.created_at} />
                 </span>
               ) : null}
               {linkEmbeds &&
-                m.content &&
-                /https?:\/\//i.test(m.content) &&
-                !POLL_RE.test(m.content) &&
-                !JAM_RE.test(m.content) &&
-                !CAPSULE_RE.test(m.content) &&
-                !BUMP_PIN_RE.test(m.content) && <LinkEmbed text={m.content} mine={mine} />}
-              {m.content.includes("/v/") && !deleted && <VideoEmbed text={m.content} />}
-              {m.content.includes("play=") && !deleted && <GameInvite text={m.content} />}
+                displayContent &&
+                /https?:\/\//i.test(displayContent) &&
+                !POLL_RE.test(displayContent) &&
+                !JAM_RE.test(displayContent) &&
+                !CAPSULE_RE.test(displayContent) &&
+                !BUMP_PIN_RE.test(displayContent) && <LinkEmbed text={displayContent} mine={mine} />}
+              {displayContent.includes("/v/") && !deleted && <VideoEmbed text={displayContent} />}
+              {displayContent.includes("play=") && !deleted && <GameInvite text={displayContent} />}
               {m.content.includes("🎯") && /Beat my score/i.test(m.content) && !deleted && <ScoreChallengeCard text={m.content} fromId={m.author_id} />}
-              {(m.content.includes("/i/") || /[?&]join=/.test(m.content)) && !deleted && <ServerInvite text={m.content} />}
+              {(displayContent.includes("/i/") || /[?&]join=/.test(displayContent)) && !deleted && <ServerInvite text={displayContent} />}
             </>
           )}
 
@@ -445,6 +466,9 @@ function MessageBubbleImpl({
           <ToolBtn label="Reply" onClick={reply}>
             <Reply className="size-[18px]" />
           </ToolBtn>
+          <ToolBtn label="Forward" onClick={openForward}>
+            <Forward className="size-[18px]" />
+          </ToolBtn>
           <ToolBtn
             label="Save"
             onClick={() => void toggleSaveMessage(m.id)}
@@ -499,6 +523,7 @@ function MessageBubbleImpl({
         </div>
         <SheetGroup>
           <SheetItem icon={<Reply className="size-5" />} label="Reply" onClick={() => (setSheet(false), reply())} />
+          <SheetItem icon={<Forward className="size-5" />} label="Forward" onClick={openForward} />
           <SheetItem
             icon={<Bookmark className="size-5" />}
             label="Save message"
@@ -544,6 +569,8 @@ function MessageBubbleImpl({
           </SheetGroup>
         )}
       </Sheet>
+
+      <ForwardPicker message={m} open={forwardOpen} onClose={() => setForwardOpen(false)} />
     </div>
   );
 }
