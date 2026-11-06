@@ -26,7 +26,8 @@ export type GameId =
   | "mines"
   | "orbit"
   | "drift"
-  | "classicstrike";
+  | "classicstrike"
+  | "globalstrike";
 export type Row = { user_id: string; best: number; at: string };
 
 export async function submitScore(game: GameId, score: number) {

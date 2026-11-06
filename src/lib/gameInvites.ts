@@ -14,6 +14,7 @@ export const GAME_NAMES: Record<RoomGame, { name: string; emoji: string; bg: str
   geo: { name: "GeoGuess", emoji: "🌍", bg: "linear-gradient(135deg,#00c96b,#0b2a5c)" },
   four: { name: "Four in a Row", emoji: "🔴", bg: "linear-gradient(135deg,#ff4d6d,#5c0b2b)" },
   classicstrike: { name: "Classic Strike", emoji: "🔫", bg: "linear-gradient(135deg,#365314,#7c2d12)" },
+  globalstrike: { name: "Global Strike", emoji: "🌐", bg: "linear-gradient(135deg,#0c4a6e,#c2410c)" },
 };
 
 /** accepted friends, online ones first */
