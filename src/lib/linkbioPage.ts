@@ -17,6 +17,18 @@ export type PublicLinkBio = {
   accent: string | null;
   premium: boolean;
   view_count: number;
+  locked?: boolean;
+  password_protected?: boolean;
+  button_style?: string;
+  layout?: string;
+  show_views?: boolean;
+  show_branding?: boolean;
+  nsfw?: boolean;
+  seo_title?: string | null;
+  seo_description?: string | null;
+  banner_url?: string | null;
+  music_url?: string | null;
+  custom_status?: string | null;
 };
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -179,10 +191,19 @@ export function renderLinkBio(p: PublicLinkBio, base: string) {
   const accent = p.accent && /^#[0-9a-f]{6}$/i.test(p.accent) ? p.accent : t.accent;
   const font = FONTS[p.font] || FONTS.glow;
   const glowOn = p.glow !== false;
-  const links = (p.links ?? []).map((l) => ({ ...l, url: safeUrl(l.url) })).filter((l) => l.url);
+  const locked = Boolean(p.locked);
+  const btn = p.button_style || "pill";
+  const radius = btn === "square" ? "12px" : btn === "pill" ? "999px" : "18px";
+  const linkBg =
+    btn === "outline" ? "transparent" : btn === "glass" ? "rgba(255,255,255,.08)" : t.card;
+  const linkBorder = btn === "outline" ? `1px solid ${accent}` : "inset 0 0 0 1px rgba(255,255,255,.08)";
+  const links = locked ? [] : (p.links ?? []).map((l) => ({ ...l, url: safeUrl(l.url) })).filter((l) => l.url);
   const av = p.avatar_url
     ? `<img class="av" src="${esc(p.avatar_url)}" alt="">`
     : `<div class="av av-ph">${esc((p.display_name || p.username).slice(0, 2).toUpperCase())}</div>`;
+  const showBrand = p.show_branding !== false;
+  const title = p.seo_title || `${p.display_name} (@${p.username}) · Nexus Link`;
+  const desc = truncate(p.seo_description || p.bio || `${p.display_name} (@${p.username}) on Nexus Link`);
 
   const css = `
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Permanent+Marker&family=Space+Grotesk:wght@500;700&display=swap');
@@ -204,6 +225,7 @@ body{background:${t.bg};overflow-x:hidden}
 @keyframes pulse{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:.9;transform:scale(1.05)}}
 @keyframes glowPulse{0%,100%{text-shadow:0 0 8px ${t.glow},0 0 24px ${t.glow},0 0 48px ${accent}88}50%{text-shadow:0 0 14px ${t.glow},0 0 36px ${accent},0 0 72px ${accent}aa}}
 .card{position:relative;z-index:1;width:100%;max-width:420px;text-align:center}
+.banner{width:100%;height:120px;object-fit:cover;border-radius:20px;margin-bottom:14px;box-shadow:0 8px 30px rgba(0,0,0,.35)}
 .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;opacity:.85}
 .brand{font-weight:800;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:${t.muted}}
 .brand b{color:${accent}}
@@ -216,29 +238,54 @@ body{background:${t.bg};overflow-x:hidden}
 .font-space .name{font-family:"Space Grotesk",sans-serif}
 .font-mono .name{font-family:ui-monospace,monospace}
 .handle{margin-top:6px;color:${t.muted};font-weight:600}
+.status{margin-top:8px;font-size:13px;color:${accent};font-weight:700}
 .prem{display:inline-flex;align-items:center;gap:4px;margin-top:10px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;background:${accent}22;color:${accent};box-shadow:inset 0 0 0 1px ${accent}55}
 .bio{margin:14px auto 0;max-width:360px;white-space:pre-wrap;color:${t.muted};font-size:14px}
+.views{margin-top:8px;font-size:12px;color:${t.muted};opacity:.7}
 .links{display:flex;flex-direction:column;gap:10px;margin-top:22px}
-.links a{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:18px;background:${t.card};backdrop-filter:blur(10px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);color:${t.text};text-decoration:none;font-weight:700;transition:transform .15s,background .15s}
+.layout-cards .links{gap:12px}
+.layout-minimal .links a{background:transparent;box-shadow:none;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;padding:12px 4px}
+.links a{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:${radius};background:${linkBg};backdrop-filter:blur(10px);box-shadow:${linkBorder};color:${t.text};text-decoration:none;font-weight:700;transition:transform .15s,background .15s}
 .links a:hover{transform:translateY(-2px);background:rgba(255,255,255,.12)}
 .links .ic{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;background:rgba(0,0,0,.25);flex:none}
 .links .nm{flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .links .arrow{opacity:.4}
+.lock{margin-top:22px;padding:18px;border-radius:20px;background:${t.card};box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.lock input{width:100%;margin-top:10px;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.35);color:${t.text};font:inherit}
+.lock button{margin-top:10px;width:100%;padding:12px;border:0;border-radius:999px;background:${accent};color:#fff;font-weight:800;cursor:pointer}
+.lock .err{margin-top:8px;color:#ff8a8c;font-size:13px;display:none}
+.nsfw{margin:14px auto 0;max-width:360px;padding:10px 12px;border-radius:12px;background:rgba(255,80,80,.12);color:#ffb4b4;font-size:12px;font-weight:700}
+.music{margin-top:18px;border-radius:16px;overflow:hidden}
 .foot{margin-top:28px;font-size:12px;color:${t.muted};opacity:.7}
 .foot a{color:${accent};font-weight:700;text-decoration:none}
 .wm{position:fixed;right:12px;bottom:10px;z-index:2;font:900 64px/1 "Bebas Neue",sans-serif;color:${accent};opacity:.12;pointer-events:none;letter-spacing:.06em}
 `;
 
-  const body = `<div class="stage font-${esc(p.font)}">
+  const unlockForm = locked
+    ? `<div class="lock"><div style="font-size:28px">🔒</div><div style="font-weight:800;margin-top:6px">Password protected</div><p style="margin-top:6px;color:${t.muted};font-size:13px">Enter the page password to view links.</p>
+<form id="unlock"><input type="password" name="pw" placeholder="Page password" required minlength="1" autocomplete="current-password"/><button type="submit">Unlock</button><div class="err" id="err">Wrong password</div></form></div>`
+    : "";
+
+  const music =
+    !locked && p.music_url && /spotify\.com|soundcloud\.com|music\.apple\.com/i.test(p.music_url)
+      ? `<div class="music"><iframe src="${esc(p.music_url.includes("embed") ? p.music_url : p.music_url.replace("open.spotify.com/", "open.spotify.com/embed/"))}" width="100%" height="80" frameborder="0" allow="encrypted-media" loading="lazy"></iframe></div>`
+      : "";
+
+  const body = `<div class="stage font-${esc(p.font)} layout-${esc(p.layout || "classic")}">
 ${bgLayer(p.background, p.animated_bg, accent)}
 ${t.watermark ? `<div class="wm">${esc(t.watermark)}</div>` : ""}
 <div class="card">
-  <div class="top"><div class="brand">Nexus <b>Link</b></div><a class="login" href="${app}">Log in · Edit</a></div>
+  <div class="top">${showBrand ? `<div class="brand">Nexus <b>Link</b></div>` : `<div></div>`}<a class="login" href="${app}">Log in · Edit</a></div>
+  ${!locked && p.banner_url ? `<img class="banner" src="${esc(p.banner_url)}" alt="">` : ""}
   ${av}
   <h1 class="name">${esc(p.display_name || p.username)}</h1>
   <div class="handle">@${esc(p.username)}</div>
+  ${!locked && p.custom_status ? `<div class="status">${esc(p.custom_status)}</div>` : ""}
   ${p.premium ? `<div class="prem">⭐ Premium</div>` : ""}
-  ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ""}
+  ${p.nsfw && !locked ? `<div class="nsfw">18+ · Sensitive content</div>` : ""}
+  ${!locked && p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ""}
+  ${!locked && p.show_views ? `<div class="views">${esc(p.view_count)} views</div>` : ""}
+  ${unlockForm}
   ${
     links.length
       ? `<div class="links">${links
@@ -249,32 +296,41 @@ ${t.watermark ? `<div class="wm">${esc(t.watermark)}</div>` : ""}
           .join("")}</div>`
       : ""
   }
-  <p class="foot">Claim yours free · <a href="${app}">Create Nexus Link</a></p>
+  ${music}
+  ${showBrand ? `<p class="foot">Claim yours with an invite · <a href="${app}">Create Nexus Link</a></p>` : ""}
 </div>
 </div>
 <script>
 ${FX_JS}
 (function(){
-  fetch(${JSON.stringify(`${base}/api/linkbio/hit?u=${encodeURIComponent(p.username)}`)}).catch(function(){});
+  ${locked ? "" : `fetch(${JSON.stringify(`${base}/api/linkbio/hit?u=${encodeURIComponent(p.username)}`)}).catch(function(){});`}
   document.querySelectorAll('.links a').forEach(function(a){
     a.addEventListener('click',function(){
       var u=a.getAttribute('data-url')||'';
-      fetch(${JSON.stringify(`${base}/api/linkbio/click`)} ,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({u:${JSON.stringify(p.username)},url:u})}).catch(function(){});
+      fetch(${JSON.stringify(`${base}/api/linkbio/click`)},{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({u:${JSON.stringify(p.username)},url:u})}).catch(function(){});
     });
   });
+  var f=document.getElementById('unlock');
+  if(f){f.addEventListener('submit',function(e){
+    e.preventDefault();
+    var pw=new FormData(f).get('pw');
+    fetch(${JSON.stringify(`${base}/api/linkbio/unlock`)},{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({u:${JSON.stringify(p.username)},password:pw}),credentials:'same-origin'})
+      .then(function(r){return r.json()})
+      .then(function(j){ if(j&&j.ok) location.reload(); else { var err=document.getElementById('err'); if(err) err.style.display='block'; } })
+      .catch(function(){ var err=document.getElementById('err'); if(err) err.style.display='block'; });
+  })}
 })();
 </script>`;
 
-  const desc = truncate(p.bio || `${p.display_name} (@${p.username}) on Nexus Link`);
   const ld = personLd({
     name: p.display_name || p.username,
     username: p.username,
     url,
     image: p.avatar_url,
-    description: p.bio,
+    description: locked ? null : p.bio,
   });
   return `<!doctype html><html lang="en"><head>
-${seoHead({ title: `${p.display_name} (@${p.username}) · Nexus Link`, description: desc, url, image: p.avatar_url, type: "profile", keywords: ["Nexus Link", "link in bio"], twitterCard: p.avatar_url ? "summary_large_image" : "summary" })}
+${seoHead({ title, description: desc, url, image: p.avatar_url, type: "profile", keywords: ["Nexus Link", "link in bio"], twitterCard: p.avatar_url ? "summary_large_image" : "summary" })}
 ${jsonLd(ld)}
 <style>${css}</style></head><body>${body}</body></html>`;
 }

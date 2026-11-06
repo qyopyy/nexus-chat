@@ -8,6 +8,7 @@ import { useApp } from "@/store/app";
 import { loadProfiles } from "@/lib/data";
 import AuthScreen, { ResetPasswordScreen } from "@/components/AuthScreen";
 import SetupScreen from "@/components/SetupScreen";
+import LinkBioAuth from "@/components/linkbio/LinkBioAuth";
 import LinkBioHub from "@/components/linkbio/LinkBioHub";
 import Toasts from "@/components/ui/Toasts";
 
@@ -65,7 +66,7 @@ export default function LinkBioAppRoot() {
     );
   }
   if (recovering && session) return <ResetPasswordScreen onDone={() => setRecovering(false)} />;
-  if (!session) return <AuthScreen initialMode="login" />;
+  if (!session) return <LinkBioAuth initialMode="login" />;
   if (needsMfa) return <AuthScreen initialMode="mfa" />;
   if (!bootstrapped) {
     return (

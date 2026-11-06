@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, ExternalLink, Link2, LogOut, Plus, Shield, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Link2, Lock, LogOut, Plus, Settings2, Shield, Sparkles, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/store/app";
 import { roleRank } from "@/lib/theme";
@@ -9,14 +9,18 @@ import { cn } from "@/lib/utils";
 import { normalizeLink, PLATFORMS } from "@/lib/links";
 import {
   LINKBIO_BACKGROUNDS,
+  LINKBIO_BUTTONS,
   LINKBIO_FONTS,
+  LINKBIO_LAYOUTS,
   LINKBIO_THEMES,
   linkbioMine,
   linkbioSave,
   openLinkBio,
   publicLinkBioUrl,
   type LinkBioBackground,
+  type LinkBioButtonStyle,
   type LinkBioFont,
+  type LinkBioLayout,
   type LinkBioLink,
   type LinkBioPage,
   type LinkBioTheme,
@@ -36,11 +40,12 @@ export default function LinkBioHub({
 }) {
   const me = useApp((s) => (s.userId ? s.profiles[s.userId] : null));
   const canAdmin = roleRank(me?.site_role) >= 2;
-  const [tab, setTab] = useState<"edit" | "admin">("edit");
+  const [tab, setTab] = useState<"edit" | "settings" | "admin">("edit");
   const [page, setPage] = useState<LinkBioPage | null>(null);
   const [busy, setBusy] = useState(false);
   const [linkInput, setLinkInput] = useState("");
   const [plat, setPlat] = useState("website");
+  const [pagePw, setPagePw] = useState("");
 
   useEffect(() => {
     void linkbioMine().then(setPage);
@@ -86,6 +91,14 @@ export default function LinkBioHub({
           <div className={cn("font-bold tracking-tight", mobile || standalone ? "text-xl" : "text-base")}>Nexus Link</div>
           <div className="truncate text-[11px] text-white/45">Link in bio · themes · 999</div>
         </div>
+        <button
+          type="button"
+          onClick={() => setTab(tab === "settings" ? "edit" : "settings")}
+          className={cn("grid size-9 place-items-center rounded-full hover:bg-white/10", tab === "settings" && "bg-white/10")}
+          title="Settings"
+        >
+          <Settings2 className="size-4 text-[#c084fc]" />
+        </button>
         {canAdmin && (
           <button type="button" onClick={() => setTab("admin")} className="grid size-9 place-items-center rounded-full hover:bg-white/10" title="Link Admin">
             <Shield className="size-4 text-[#a855f7]" />
@@ -290,6 +303,162 @@ export default function LinkBioHub({
                 </label>
               </div>
             </section>
+
+            {tab === "settings" && (
+              <section className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+                <h2 className="mb-3 flex items-center gap-2 text-sm font-bold tracking-wide text-white/70 uppercase">
+                  <Lock className="size-4 text-[#c084fc]" /> Settings
+                </h2>
+
+                <div className="mb-4 rounded-xl bg-black/25 p-3 ring-1 ring-white/10">
+                  <div className="mb-2 text-xs font-bold text-white/60 uppercase">Password protect page</div>
+                  <label className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(page.password_enabled)}
+                      onChange={(e) => {
+                        if (!e.target.checked) void save({ password_enabled: false, page_password: "" });
+                        else if (pagePw.length >= 4) void save({ page_password: pagePw });
+                      }}
+                    />
+                    Require password to view links
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={pagePw}
+                      onChange={(e) => setPagePw(e.target.value)}
+                      placeholder={page.password_enabled ? "Change page password" : "Set page password"}
+                      className="min-w-0 flex-1 rounded-xl bg-black/40 px-3 py-2 text-sm outline-none ring-1 ring-white/10 focus:ring-[#a855f7]"
+                    />
+                    <button
+                      type="button"
+                      disabled={busy || pagePw.length < 4}
+                      className="rounded-xl bg-[#a855f7] px-3 py-2 text-sm font-bold disabled:opacity-40"
+                      onClick={() => {
+                        void save({ page_password: pagePw }).then(() => setPagePw(""));
+                      }}
+                    >
+                      Save
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-white/40">Visitors unlock once; cookie lasts ~7 days. Min 4 characters.</p>
+                </div>
+
+                <label className="mb-1 block text-xs font-semibold text-white/50">Custom status</label>
+                <input
+                  defaultValue={page.custom_status ?? ""}
+                  key={`st-${page.custom_status ?? ""}`}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim().slice(0, 80);
+                    if (v !== (page.custom_status ?? "")) void save({ custom_status: v });
+                  }}
+                  placeholder="999 forever"
+                  className="mb-3 w-full rounded-xl bg-black/30 px-3 py-2 text-sm outline-none ring-1 ring-white/10 focus:ring-[#a855f7]"
+                />
+
+                <label className="mb-1 block text-xs font-semibold text-white/50">Banner image URL</label>
+                <input
+                  defaultValue={page.banner_url ?? ""}
+                  key={`bn-${page.banner_url ?? ""}`}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim().slice(0, 500);
+                    if (v !== (page.banner_url ?? "")) void save({ banner_url: v });
+                  }}
+                  placeholder="https://…"
+                  className="mb-3 w-full rounded-xl bg-black/30 px-3 py-2 text-sm outline-none ring-1 ring-white/10 focus:ring-[#a855f7]"
+                />
+
+                <label className="mb-1 block text-xs font-semibold text-white/50">Music embed URL {page.premium ? "" : "(Premium)"}</label>
+                <input
+                  defaultValue={page.music_url ?? ""}
+                  key={`mu-${page.music_url ?? ""}`}
+                  disabled={!page.premium}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim().slice(0, 500);
+                    if (v !== (page.music_url ?? "")) void save({ music_url: v });
+                  }}
+                  placeholder="Spotify / SoundCloud URL"
+                  className="mb-3 w-full rounded-xl bg-black/30 px-3 py-2 text-sm outline-none ring-1 ring-white/10 focus:ring-[#a855f7] disabled:opacity-40"
+                />
+
+                <label className="mb-1 block text-xs font-semibold text-white/50">SEO title</label>
+                <input
+                  defaultValue={page.seo_title ?? ""}
+                  key={`seot-${page.seo_title ?? ""}`}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim().slice(0, 80);
+                    if (v !== (page.seo_title ?? "")) void save({ seo_title: v });
+                  }}
+                  className="mb-3 w-full rounded-xl bg-black/30 px-3 py-2 text-sm outline-none ring-1 ring-white/10 focus:ring-[#a855f7]"
+                />
+                <label className="mb-1 block text-xs font-semibold text-white/50">SEO description</label>
+                <textarea
+                  defaultValue={page.seo_description ?? ""}
+                  key={`seod-${page.seo_description ?? ""}`}
+                  rows={2}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim().slice(0, 200);
+                    if (v !== (page.seo_description ?? "")) void save({ seo_description: v });
+                  }}
+                  className="mb-3 w-full resize-none rounded-xl bg-black/30 px-3 py-2 text-sm outline-none ring-1 ring-white/10 focus:ring-[#a855f7]"
+                />
+
+                <div className="mb-2 text-xs font-bold text-white/50 uppercase">Button style</div>
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {LINKBIO_BUTTONS.map((b) => (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => void save({ button_style: b.id as LinkBioButtonStyle })}
+                      className={cn(
+                        "rounded-full px-3 py-1.5 text-xs font-bold ring-1",
+                        (page.button_style || "pill") === b.id ? "bg-[#a855f7]/30 ring-[#a855f7]" : "bg-black/25 ring-white/10",
+                      )}
+                    >
+                      {b.name}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mb-2 text-xs font-bold text-white/50 uppercase">Layout</div>
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {LINKBIO_LAYOUTS.map((l) => (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => void save({ layout: l.id as LinkBioLayout })}
+                      className={cn(
+                        "rounded-full px-3 py-1.5 text-xs font-bold ring-1",
+                        (page.layout || "classic") === l.id ? "bg-[#a855f7]/30 ring-[#a855f7]" : "bg-black/25 ring-white/10",
+                      )}
+                    >
+                      {l.name}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center gap-2 text-sm font-semibold">
+                    <input type="checkbox" checked={Boolean(page.show_views)} onChange={(e) => void save({ show_views: e.target.checked })} />
+                    Show view count
+                  </label>
+                  <label className="flex items-center gap-2 text-sm font-semibold">
+                    <input type="checkbox" checked={Boolean(page.nsfw)} onChange={(e) => void save({ nsfw: e.target.checked })} />
+                    Mark page 18+ / NSFW
+                  </label>
+                  <label className={cn("flex items-center gap-2 text-sm font-semibold", !page.premium && "opacity-50")}>
+                    <input
+                      type="checkbox"
+                      disabled={!page.premium}
+                      checked={page.show_branding === false}
+                      onChange={(e) => void save({ show_branding: !e.target.checked })}
+                    />
+                    Hide Nexus branding (Premium)
+                  </label>
+                </div>
+              </section>
+            )}
           </div>
 
           {/* Live preview tip */}
@@ -338,8 +507,8 @@ export default function LinkBioHub({
 
             <section className="rounded-2xl bg-white/5 p-4 text-sm text-white/60 ring-1 ring-white/10">
               <p>
-                Nexus Link is a side project with its own login at <code className="text-white/80">/bio/app</code>. Public pages live at{" "}
-                <code className="text-white/80">/bio/username</code>. Juice 999 themes, 999 backgrounds, and the Juice font need Premium — grant it in Link Admin.
+                Login at <code className="text-white/80">/bio/app</code> (new accounts need an invite). Public page:{" "}
+                <code className="text-white/80">/bio/{page.username}</code>. Settings gear: password protect, SEO, layouts, NSFW, music. Juice 999 + hide branding need Premium.
               </p>
             </section>
           </div>
