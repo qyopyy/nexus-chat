@@ -1,0 +1,12 @@
+Wump — App Store / Capgo
+========================
+Bundle ID: hu.qyopy.bump.B44X8B76QR
+Capgo: https://console.capgo.app/app/hu.qyopy.bump.B44X8B76QR
+App Store Connect app id: 6831488658
+
+Build (Capgo Cloud → TestFlight):
+  cd mobile-bump
+  npm i && npx cap add ios && npx cap sync ios
+  python3 ../mobile/scripts/prepare-app-icons.py ios/App/App/Assets.xcassets/AppIcon.appiconset
+  python3 scripts/patch-ios-info-plist.py
+  npx @capgo/cli@latest build request hu.qyopy.bump.B44X8B76QR --platform ios --prescan-ignore-fatal

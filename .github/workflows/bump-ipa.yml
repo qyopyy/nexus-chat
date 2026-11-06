@@ -1,6 +1,6 @@
 name: Wump iOS app (.ipa)
 
-# Standalone Wump.ipa (bundle hu.qyopy.bump) — Sideloadly / AltStore.
+# Standalone Wump.ipa (bundle hu.qyopy.bump.B44X8B76QR) — Sideloadly / App Store.
 # Opens https://nexusproject.cc/wump/app — same Nexus account & backend.
 on:
   workflow_dispatch:
@@ -121,8 +121,8 @@ jobs:
           cd ios/App
           APP=build/App.xcarchive/Products/Applications/App.app
           # Ensure app id (Capacitor should already have set this)
-          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier hu.qyopy.bump" "$APP/Info.plist" 2>/dev/null \
-            || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string hu.qyopy.bump" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier hu.qyopy.bump.B44X8B76QR" "$APP/Info.plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string hu.qyopy.bump.B44X8B76QR" "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Wump" "$APP/Info.plist" 2>/dev/null \
             || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Wump" "$APP/Info.plist"
           bash "$GITHUB_WORKSPACE/.github/scripts/fix-ios-framework-ids.sh" "$APP"
@@ -144,7 +144,7 @@ jobs:
           TAG="wump-ios-${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" Wump.ipa --repo "$GITHUB_REPOSITORY" \
             --title "Wump iOS build ${GITHUB_RUN_NUMBER}" \
-            --notes "Standalone **Wump** IPA (bundle \`hu.qyopy.bump\`).
+            --notes "Standalone **Wump** IPA (bundle \`hu.qyopy.bump.B44X8B76QR\`).
 
           Install with Sideloadly / AltStore using your Apple ID.
           Opens: ${BUMP_URL}
