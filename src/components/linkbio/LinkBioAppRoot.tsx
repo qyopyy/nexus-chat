@@ -12,8 +12,8 @@ import LinkBioAuth from "@/components/linkbio/LinkBioAuth";
 import LinkBioHub from "@/components/linkbio/LinkBioHub";
 import Toasts from "@/components/ui/Toasts";
 
-/** Standalone Nexus Link shell (`/bio/app`) — Nexus login, then editor. */
-export default function LinkBioAppRoot() {
+/** Standalone Nexus Link shell (`/bio/app` or `/bio/admin`) — Nexus login, then editor/admin. */
+export default function LinkBioAppRoot({ initialAdmin = false }: { initialAdmin?: boolean }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [recovering, setRecovering] = useState(false);
   const [needsMfa, setNeedsMfa] = useState(false);
@@ -78,7 +78,7 @@ export default function LinkBioAppRoot() {
 
   return (
     <div className="flex h-dvh min-h-0 flex-col bg-[#07060f] text-white">
-      <LinkBioHub standalone />
+      <LinkBioHub standalone initialAdmin={initialAdmin} />
       <Toasts />
     </div>
   );

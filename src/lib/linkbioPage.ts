@@ -2,6 +2,15 @@
 
 import { jsonLd, personLd, seoHead, truncate } from "@/lib/seo";
 
+export type PublicLinkBioBadge = {
+  key: string;
+  name: string;
+  icon: string;
+  color: string;
+  description?: string | null;
+  priority?: number;
+};
+
 export type PublicLinkBio = {
   id: string;
   username: string;
@@ -29,6 +38,9 @@ export type PublicLinkBio = {
   banner_url?: string | null;
   music_url?: string | null;
   custom_status?: string | null;
+  verified?: boolean;
+  site_role?: string | null;
+  badges?: PublicLinkBioBadge[] | null;
 };
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -204,6 +216,27 @@ export function renderLinkBio(p: PublicLinkBio, base: string) {
   const showBrand = p.show_branding !== false;
   const title = p.seo_title || `${p.display_name} (@${p.username}) · Nexus Link`;
   const desc = truncate(p.seo_description || p.bio || `${p.display_name} (@${p.username}) on Nexus Link`);
+  const verifiedCheck = `<svg class="vcheck" viewBox="0 0 24 24" fill="#4cb3ff" aria-label="Verified"><path d="M12 1.5l2.6 2 3.2-.3 1 3.1 2.8 1.6-1 3.1 1 3.1-2.8 1.6-1 3.1-3.2-.3-2.6 2-2.6-2-3.2.3-1-3.1L1.4 14l1-3.1-1-3.1 2.8-1.6 1-3.1 3.2.3z"/><path d="M8 12.2l2.7 2.7L16.4 9" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const badges = (p.badges ?? []).filter((b) => b?.key);
+  const hasFounder = badges.some((b) => b.key === "founder") || p.site_role === "owner";
+  const hasVip = badges.some((b) => b.key === "vip") || p.site_role === "vip";
+  const hasPremium = Boolean(p.premium) || badges.some((b) => b.key === "premium");
+  const chips = [
+    hasFounder ? `<span class="chip founder" title="Founded Nexus">👑 Founder</span>` : "",
+    p.site_role === "owner" ? `<span class="chip owner" title="Site owner">✦ Owner</span>` : p.site_role === "admin" ? `<span class="chip staff">🛡️ Admin</span>` : "",
+    hasVip ? `<span class="chip vip" title="VIP member">💎 VIP</span>` : "",
+    hasPremium ? `<span class="chip premchip" title="Nexus Link Premium">⭐ Premium</span>` : "",
+  ]
+    .filter(Boolean)
+    .join("");
+  const badgeRow = badges
+    .filter((b) => !["verified", "premium"].includes(b.key))
+    .slice(0, 16)
+    .map(
+      (b) =>
+        `<span class="badge" title="${esc(b.description ? `${b.name} — ${b.description}` : b.name)}" style="background:${esc(b.color)}26;box-shadow:inset 0 0 0 1px ${esc(b.color)}66">${esc(b.icon)}</span>`,
+    )
+    .join("");
 
   const css = `
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Permanent+Marker&family=Space+Grotesk:wght@500;700&display=swap');
@@ -239,6 +272,17 @@ body{background:${t.bg};overflow-x:hidden}
 .font-mono .name{font-family:ui-monospace,monospace}
 .handle{margin-top:6px;color:${t.muted};font-weight:600}
 .status{margin-top:8px;font-size:13px;color:${accent};font-weight:700}
+.name-row{display:inline-flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
+.vcheck{width:26px;height:26px;flex:none;filter:drop-shadow(0 0 8px #4cb3ff88)}
+.chips{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:12px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.02em}
+.chip.founder{background:#F0B23222;color:#F0B232;box-shadow:inset 0 0 0 1px #F0B23266}
+.chip.vip{background:#EB459E22;color:#EB459E;box-shadow:inset 0 0 0 1px #EB459E66}
+.chip.premchip{background:${accent}22;color:${accent};box-shadow:inset 0 0 0 1px ${accent}55}
+.chip.owner{background:#ED424522;color:#ff8a8c;box-shadow:inset 0 0 0 1px #ED424566}
+.chip.staff{background:#a855f722;color:#c084fc;box-shadow:inset 0 0 0 1px #a855f766}
+.badges{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:12px auto 0;max-width:360px}
+.badge{display:inline-grid;place-items:center;min-width:30px;height:30px;padding:0 7px;border-radius:10px;font-size:15px;line-height:1}
 .prem{display:inline-flex;align-items:center;gap:4px;margin-top:10px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;background:${accent}22;color:${accent};box-shadow:inset 0 0 0 1px ${accent}55}
 .bio{margin:14px auto 0;max-width:360px;white-space:pre-wrap;color:${t.muted};font-size:14px}
 .views{margin-top:8px;font-size:12px;color:${t.muted};opacity:.7}
@@ -278,10 +322,11 @@ ${t.watermark ? `<div class="wm">${esc(t.watermark)}</div>` : ""}
   <div class="top">${showBrand ? `<div class="brand">Nexus <b>Link</b></div>` : `<div></div>`}<a class="login" href="${app}">Log in · Edit</a></div>
   ${!locked && p.banner_url ? `<img class="banner" src="${esc(p.banner_url)}" alt="">` : ""}
   ${av}
-  <h1 class="name">${esc(p.display_name || p.username)}</h1>
+  <h1 class="name"><span class="name-row"><span>${esc(p.display_name || p.username)}</span>${p.verified ? verifiedCheck : ""}</span></h1>
   <div class="handle">@${esc(p.username)}</div>
   ${!locked && p.custom_status ? `<div class="status">${esc(p.custom_status)}</div>` : ""}
-  ${p.premium ? `<div class="prem">⭐ Premium</div>` : ""}
+  ${chips ? `<div class="chips">${chips}</div>` : p.premium ? `<div class="prem">⭐ Premium</div>` : ""}
+  ${badgeRow ? `<div class="badges" aria-label="Badges">${badgeRow}</div>` : ""}
   ${p.nsfw && !locked ? `<div class="nsfw">18+ · Sensitive content</div>` : ""}
   ${!locked && p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ""}
   ${!locked && p.show_views ? `<div class="views">${esc(p.view_count)} views</div>` : ""}

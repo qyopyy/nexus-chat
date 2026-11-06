@@ -56,6 +56,15 @@ export type LinkBioPage = {
   updated_at?: string;
 };
 
+export type LinkBioBadge = {
+  key: string;
+  name: string;
+  icon: string;
+  color: string;
+  description?: string | null;
+  priority?: number;
+};
+
 export type LinkBioAdminRow = {
   id: string;
   owner_id: string;
@@ -67,8 +76,42 @@ export type LinkBioAdminRow = {
   published: boolean;
   view_count: number;
   owner_username: string;
+  owner_role?: string | null;
+  verified?: boolean;
+  badges?: LinkBioBadge[];
   updated_at: string;
 };
+
+/** Quick-grant badges shown in Nexus Link admin (verified is separate). */
+export const LINKBIO_ADMIN_BADGE_KEYS = [
+  "founder",
+  "vip",
+  "premium",
+  "certified",
+  "creator",
+  "legend",
+  "partner",
+  "artist",
+  "producer",
+  "streaming",
+  "label",
+  "influencer",
+  "nexus_link",
+  "staff",
+  "community",
+  "news",
+  "supporter",
+  "beta",
+  "og",
+  "early",
+  "developer",
+  "moderator",
+  "admin",
+  "friend",
+  "high_profile",
+  "booster",
+  "bughunter",
+] as const;
 
 export type LinkBioInvite = {
   id: string;
@@ -189,6 +232,20 @@ export async function linkbioAdminSetPremium(id: string, on: boolean, until?: st
     return null;
   }
   toast(on ? "Premium granted" : "Premium removed");
+  return data as LinkBioAdminRow[];
+}
+
+export async function linkbioAdminSetBadge(ownerId: string, badgeKey: string, on: boolean) {
+  const { data, error } = await supabase.rpc("linkbio_admin_set_badge", {
+    p_owner: ownerId,
+    p_badge_key: badgeKey,
+    p_on: on,
+  });
+  if (error) {
+    toast(errorText(error));
+    return null;
+  }
+  toast(on ? `${badgeKey} granted` : `${badgeKey} removed`);
   return data as LinkBioAdminRow[];
 }
 
