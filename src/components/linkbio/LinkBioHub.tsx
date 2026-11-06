@@ -46,7 +46,9 @@ export default function LinkBioHub({
 }) {
   const me = useApp((s) => (s.userId ? s.profiles[s.userId] : null));
   const canAdmin = roleRank(me?.site_role) >= 2;
-  const [tab, setTab] = useState<"edit" | "settings" | "stats" | "admin">(initialAdmin && canAdmin ? "admin" : "edit");
+  const [tab, setTab] = useState<"dashboard" | "edit" | "settings" | "stats" | "admin">(
+    initialAdmin && canAdmin ? "admin" : "dashboard",
+  );
 
   useEffect(() => {
     if (initialAdmin && canAdmin) setTab("admin");
@@ -64,7 +66,7 @@ export default function LinkBioHub({
   }, []);
 
   useEffect(() => {
-    if (tab === "stats") void linkbioStats(statsDays).then(setStats);
+    if (tab === "stats" || tab === "dashboard") void linkbioStats(statsDays).then(setStats);
   }, [tab, statsDays]);
 
   async function save(patch: Record<string, unknown>) {
@@ -74,8 +76,25 @@ export default function LinkBioHub({
     setBusy(false);
   }
 
+  async function syncFromNexus() {
+    if (!me) return;
+    setBusy(true);
+    const patch: Record<string, unknown> = {
+      display_name: (me.display_name || me.username || "").slice(0, 48),
+      avatar_url: me.avatar_url ?? "",
+      bio: (me.bio ?? "").slice(0, 280),
+      custom_status: (me.custom_status ?? "").slice(0, 80),
+    };
+    if (me.username && /^[a-z0-9_]{2,24}$/.test(me.username)) {
+      patch.username = me.username;
+    }
+    const next = await linkbioSave(patch);
+    if (next) setPage(next);
+    setBusy(false);
+  }
+
   if (tab === "admin" && canAdmin) {
-    return <LinkBioAdmin onBack={() => setTab("edit")} />;
+    return <LinkBioAdmin onBack={() => setTab("dashboard")} />;
   }
 
   if (!page) {
@@ -105,11 +124,27 @@ export default function LinkBioHub({
         <Sparkles className="size-5 text-[#c084fc]" />
         <div className="min-w-0 flex-1">
           <div className={cn("font-bold tracking-tight", mobile || standalone ? "text-xl" : "text-base")}>Nexus Link</div>
-          <div className="truncate text-[11px] text-white/45">Link in bio · themes · 999</div>
+          <div className="truncate text-[11px] text-white/45">Dashboard · online · themes</div>
         </div>
         <button
           type="button"
-          onClick={() => setTab(tab === "stats" ? "edit" : "stats")}
+          onClick={() => setTab("dashboard")}
+          className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold hover:bg-white/10", tab === "dashboard" && "bg-white/10 text-[#c084fc]")}
+          title="Dashboard"
+        >
+          Home
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("edit")}
+          className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold hover:bg-white/10", tab === "edit" && "bg-white/10 text-[#c084fc]")}
+          title="Edit profile"
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("stats")}
           className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold hover:bg-white/10", tab === "stats" && "bg-white/10 text-[#c084fc]")}
           title="Analytics"
         >
@@ -117,7 +152,7 @@ export default function LinkBioHub({
         </button>
         <button
           type="button"
-          onClick={() => setTab(tab === "settings" ? "edit" : "settings")}
+          onClick={() => setTab(tab === "settings" ? "dashboard" : "settings")}
           className={cn("grid size-9 place-items-center rounded-full hover:bg-white/10", tab === "settings" && "bg-white/10")}
           title="Settings"
         >
@@ -147,14 +182,88 @@ export default function LinkBioHub({
         <div className="mx-auto grid max-w-5xl gap-5 p-3 sm:grid-cols-2 sm:p-5">
           {/* Editor */}
           <div className="space-y-4">
+            {tab === "dashboard" && (
+              <section className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-bold tracking-wide text-white/70 uppercase">Dashboard</h2>
+                  {page.premium ? (
+                    <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-bold text-amber-300">⭐ Premium</span>
+                  ) : (
+                    <span className="text-[11px] text-white/40">Free · ask admin for Premium</span>
+                  )}
+                </div>
+                <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl bg-black/30 p-3">
+                    <div className="text-[11px] text-white/45">Views</div>
+                    <div className="font-mono text-xl font-black tabular-nums">{(stats?.views ?? page.view_count).toLocaleString()}</div>
+                  </div>
+                  <div className="rounded-xl bg-black/30 p-3">
+                    <div className="text-[11px] text-white/45">Clicks (7d)</div>
+                    <div className="font-mono text-xl font-black tabular-nums">{(stats?.clicks ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="rounded-xl bg-black/30 p-3">
+                    <div className="text-[11px] text-white/45">Links</div>
+                    <div className="font-mono text-xl font-black tabular-nums">{links.length}</div>
+                  </div>
+                  <div className="rounded-xl bg-black/30 p-3">
+                    <div className="text-[11px] text-white/45">Status</div>
+                    <div className="text-sm font-bold">{page.published !== false ? "Live" : "Draft"}</div>
+                  </div>
+                </div>
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold",
+                      page.show_presence !== false ? "bg-emerald-500/15 text-emerald-300" : "bg-white/10 text-white/45",
+                    )}
+                  >
+                    <span className={cn("size-2 rounded-full", page.show_presence !== false ? "bg-emerald-400" : "bg-white/30")} />
+                    {page.show_presence !== false ? "Online visibility on" : "Online hidden"}
+                  </span>
+                  <span className="text-[11px] text-white/40">Synced with Nexus when you&apos;re in the app</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={busy || !me}
+                    onClick={() => void syncFromNexus()}
+                    className="rounded-xl bg-[#a855f7] px-3 py-2 text-sm font-bold disabled:opacity-40"
+                  >
+                    Sync from Nexus profile
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void save({ published: page.published === false })}
+                    className="rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold hover:bg-white/15"
+                  >
+                    {page.published !== false ? "Unpublish" : "Publish page"}
+                  </button>
+                  <button type="button" onClick={() => setTab("edit")} className="rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold hover:bg-white/15">
+                    Edit profile
+                  </button>
+                  <button type="button" onClick={() => setTab("settings")} className="rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold hover:bg-white/15">
+                    Page settings
+                  </button>
+                </div>
+                <p className="mt-3 text-[11px] text-white/40">
+                  Sync copies your Nexus display name, avatar, bio, and status into this Link page. Extra Nexus usernames (up to 10) live in Settings → My Account.
+                </p>
+              </section>
+            )}
+
+            {tab === "edit" && (
             <section className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <h2 className="text-sm font-bold tracking-wide text-white/70 uppercase">Profile</h2>
-                {page.premium ? (
-                  <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-bold text-amber-300">⭐ Premium</span>
-                ) : (
-                  <span className="text-[11px] text-white/40">Free · ask admin for Premium</span>
-                )}
+                <button
+                  type="button"
+                  disabled={busy || !me}
+                  onClick={() => void syncFromNexus()}
+                  className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold hover:bg-white/15 disabled:opacity-40"
+                >
+                  Sync Nexus
+                </button>
               </div>
               <label className="mb-1 block text-xs font-semibold text-white/50">Username</label>
               <div className="mb-3 flex gap-2">
@@ -217,6 +326,7 @@ export default function LinkBioHub({
                 Published
               </label>
             </section>
+            )}
 
             {tab === "stats" && (
               <section className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
@@ -264,6 +374,7 @@ export default function LinkBioHub({
               </section>
             )}
 
+            {tab === "edit" && (
             <section className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
               <h2 className="mb-3 text-sm font-bold tracking-wide text-white/70 uppercase">Links</h2>
               <div className="mb-3 space-y-2">
@@ -349,7 +460,9 @@ export default function LinkBioHub({
                 </button>
               </div>
             </section>
+            )}
 
+            {tab === "edit" && (
             <section className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
               <h2 className="mb-3 text-sm font-bold tracking-wide text-white/70 uppercase">Theme</h2>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -431,6 +544,7 @@ export default function LinkBioHub({
                 </label>
               </div>
             </section>
+            )}
 
             {tab === "settings" && (
               <section className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
@@ -611,6 +725,15 @@ export default function LinkBioHub({
 
                 <div className="flex flex-col gap-2">
                   <label className="flex items-center gap-2 text-sm font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={page.show_presence !== false}
+                      onChange={(e) => void save({ show_presence: e.target.checked })}
+                    />
+                    Show online status (Nexus presence)
+                  </label>
+                  <p className="-mt-1 mb-1 text-[11px] text-white/40">Visitors see Online / Away / DND when you&apos;re active in Nexus. Respects Privacy → Show when I&apos;m online.</p>
+                  <label className="flex items-center gap-2 text-sm font-semibold">
                     <input type="checkbox" checked={Boolean(page.show_views)} onChange={(e) => void save({ show_views: e.target.checked })} />
                     Show view count
                   </label>
@@ -657,6 +780,12 @@ export default function LinkBioHub({
                 {page.display_name}
               </div>
               <div className="mt-1 text-center text-sm text-white/50">@{page.username}</div>
+              {page.show_presence !== false && (
+                <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
+                  <span className="size-2 rounded-full bg-emerald-400" />
+                  Online on Nexus when active
+                </div>
+              )}
               {page.bio && <p className="mx-auto mt-3 max-w-xs whitespace-pre-wrap text-center text-sm text-white/65">{page.bio}</p>}
               <div className="mt-4 space-y-2">
                 {links.slice(0, 5).map((l, i) => (
@@ -704,8 +833,8 @@ export default function LinkBioHub({
 
             <section className="rounded-2xl bg-white/5 p-4 text-sm text-white/60 ring-1 ring-white/10">
               <p>
-                Login at <code className="text-white/80">/bio/app</code> (new accounts need an invite). Public page:{" "}
-                <code className="text-white/80">/bio/{page.username}</code>. Settings gear: password protect, SEO, layouts, NSFW, music. Juice 999 + hide branding need Premium.
+                Dashboard at <code className="text-white/80">/bio/app</code> · public page{" "}
+                <code className="text-white/80">/bio/{page.username}</code>. Online status mirrors Nexus presence. Up to 10 extra usernames in Nexus Settings. Juice 999 + hide branding need Premium.
               </p>
             </section>
           </div>

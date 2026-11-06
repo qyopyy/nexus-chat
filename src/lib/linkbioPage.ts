@@ -33,6 +33,7 @@ export type PublicLinkBio = {
   layout?: string;
   show_views?: boolean;
   show_branding?: boolean;
+  show_presence?: boolean;
   nsfw?: boolean;
   seo_title?: string | null;
   seo_description?: string | null;
@@ -42,6 +43,7 @@ export type PublicLinkBio = {
   verified?: boolean;
   site_role?: string | null;
   badges?: PublicLinkBioBadge[] | null;
+  presence?: { status?: string; online_at?: string | null; hidden?: boolean } | null;
 };
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -272,6 +274,12 @@ body{background:${t.bg};overflow-x:hidden}
 .font-space .name{font-family:"Space Grotesk",sans-serif}
 .font-mono .name{font-family:ui-monospace,monospace}
 .handle{margin-top:6px;color:${t.muted};font-weight:600}
+.presence{display:inline-flex;align-items:center;gap:7px;margin-top:10px;padding:5px 12px;border-radius:999px;background:rgba(255,255,255,.08);font-size:12px;font-weight:800;letter-spacing:.02em;color:${t.muted}}
+.presence .dot{width:9px;height:9px;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.25)}
+.presence.on .dot{background:#23a559;box-shadow:0 0 10px #23a559aa}
+.presence.idle .dot{background:#f0b232;box-shadow:0 0 10px #f0b23288}
+.presence.dnd .dot{background:#f23f43;box-shadow:0 0 10px #f23f4388}
+.presence.off{display:none}
 .status{margin-top:8px;font-size:13px;color:${accent};font-weight:700}
 .name-row{display:inline-flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
 .vcheck{width:26px;height:26px;flex:none;filter:drop-shadow(0 0 8px #4cb3ff88)}
@@ -343,6 +351,17 @@ ${t.watermark ? `<div class="wm">${esc(t.watermark)}</div>` : ""}
   ${av}
   <h1 class="name"><span class="name-row"><span>${esc(p.display_name || p.username)}</span>${p.verified ? verifiedCheck : ""}</span></h1>
   <div class="handle">@${esc(p.username)}</div>
+  ${
+    !locked && p.show_presence !== false
+      ? (() => {
+          const st = (p.presence?.status || "offline").toLowerCase();
+          const live = st === "online" || st === "idle" || st === "dnd";
+          const label = st === "online" ? "Online on Nexus" : st === "idle" ? "Away on Nexus" : st === "dnd" ? "Do Not Disturb" : "Offline";
+          const cls = live ? (st === "online" ? "on" : st) : "off";
+          return `<div class="presence ${cls}" id="nx-presence" data-u="${esc(p.username)}" aria-live="polite"><span class="dot" aria-hidden="true"></span><span class="lbl">${esc(label)}</span></div>`;
+        })()
+      : ""
+  }
   ${!locked && p.custom_status ? `<div class="status">${esc(p.custom_status)}</div>` : ""}
   ${chips ? `<div class="chips">${chips}</div>` : p.premium ? `<div class="prem">⭐ Premium</div>` : ""}
   ${badgeRow ? `<div class="badges" aria-label="Badges">${badgeRow}</div>` : ""}
@@ -383,6 +402,23 @@ ${FX_JS}
       .then(function(j){ if(j&&j.ok) location.reload(); else { var err=document.getElementById('err'); if(err) err.style.display='block'; } })
       .catch(function(){ var err=document.getElementById('err'); if(err) err.style.display='block'; });
   })}
+  var pr=document.getElementById('nx-presence');
+  if(pr){
+    var poll=function(){
+      fetch(${JSON.stringify(`${base}/api/linkbio/presence?u=`)}+encodeURIComponent(pr.getAttribute('data-u')||''),{cache:'no-store'})
+        .then(function(r){return r.json()})
+        .then(function(j){
+          if(!j||j.hidden){ pr.className='presence off'; return; }
+          var st=String(j.status||'offline').toLowerCase();
+          var live=st==='online'||st==='idle'||st==='dnd';
+          pr.className='presence '+(live?(st==='online'?'on':st):'off');
+          var lbl=pr.querySelector('.lbl');
+          if(lbl) lbl.textContent=st==='online'?'Online on Nexus':st==='idle'?'Away on Nexus':st==='dnd'?'Do Not Disturb':'Offline';
+        }).catch(function(){});
+    };
+    setInterval(poll,25000);
+    setTimeout(poll,8000);
+  }
 })();
 </script>`;
 

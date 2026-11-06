@@ -586,14 +586,14 @@ export function AdvancedSection() {
 export function UsernamesField() {
   const me = useApp((s) => s.userId);
   const main = useApp((s) => (s.userId ? s.profiles[s.userId]?.username : "") ?? "");
-  const tier = useApp((s) => (s.userId ? s.profiles[s.userId]?.premium_tier : null));
   const list = useAliases((s) => (me ? s.byUser[me] : undefined));
   const [val, setVal] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (me) void loadAliases(me);
   }, [me]);
-  const limit = tier ? 10 : 5;
+  /** Up to 10 extra usernames per account (plus your main). */
+  const limit = 10;
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);
     try {
@@ -608,7 +608,7 @@ export function UsernamesField() {
   return (
     <div>
       <Label>Usernames</Label>
-      <p className="-mt-1 mb-2 text-xs text-sub">People can add you, find you and message you with any of these. Your main one shows on your profile.</p>
+      <p className="-mt-1 mb-2 text-xs text-sub">People can add you, find you and message you with any of these. Your main one shows on your profile. Add up to 10 extras under this account.</p>
       <div className="flex flex-wrap gap-1.5">
         <span className="flex items-center gap-1.5 rounded-full bg-accent/20 px-3 py-1.5 text-sm font-bold text-accent">
           @{main} <span className="rounded bg-accent px-1 text-[10px] text-white">MAIN</span>
@@ -651,7 +651,7 @@ export function UsernamesField() {
         </button>
       </form>
       <div className="mt-1 text-right text-xs text-faint">
-        {list?.length ?? 0}/{limit} extra{!tier && " · 10 with Premium"}
+        {list?.length ?? 0}/{limit} extra usernames
       </div>
     </div>
   );

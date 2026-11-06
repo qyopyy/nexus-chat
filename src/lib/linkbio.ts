@@ -53,12 +53,14 @@ export type LinkBioPage = {
   layout?: LinkBioLayout;
   show_views?: boolean;
   show_branding?: boolean;
+  show_presence?: boolean;
   nsfw?: boolean;
   seo_title?: string | null;
   seo_description?: string | null;
   banner_url?: string | null;
   music_url?: string | null;
   custom_status?: string | null;
+  presence?: { status?: string; online_at?: string | null; hidden?: boolean } | null;
   created_at?: string;
   updated_at?: string;
 };

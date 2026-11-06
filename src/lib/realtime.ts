@@ -155,6 +155,15 @@ function onCallEvent(e: CallEvent) {
 }
 
 let onlineChannel: RealtimeChannel | null = null;
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+/** Mirror Realtime presence into DB so public Link pages can show online (anon-safe). */
+function beatPresence(status?: string) {
+  const s = useApp.getState();
+  if (!s.userId) return;
+  const st = status ?? (s.myStatus === "invisible" ? "invisible" : s.myStatus);
+  void supabase.rpc("presence_heartbeat", { p_status: st });
+}
 
 function trackPresence() {
   const ch = onlineChannel;
@@ -162,6 +171,7 @@ function trackPresence() {
   if (!ch || !s.userId) return;
   if (s.myStatus === "invisible") {
     void ch.untrack();
+    beatPresence("invisible");
     return;
   }
   const c = useCall.getState();
@@ -176,6 +186,7 @@ function trackPresence() {
     online_at: new Date().toISOString(),
   };
   void ch.track(state);
+  beatPresence(s.myStatus);
 }
 
 let trackTimer: ReturnType<typeof setTimeout> | null = null;
@@ -257,6 +268,12 @@ export function useRealtime(userId: string | null) {
         if (status === "SUBSCRIBED" && !cancelled) trackPresence();
       });
     onlineChannel = online;
+    beatPresence();
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    heartbeatTimer = setInterval(() => {
+      if (document.hidden) return;
+      beatPresence();
+    }, 60_000);
 
     const unsubCall = useCall.subscribe((c, p) => {
       if (
@@ -276,6 +293,7 @@ export function useRealtime(userId: string | null) {
     // Re-sync when the tab / iPhone app comes back (sleep, backgrounded WebView…)
     const onVisible = () => {
       if (document.hidden) return;
+      beatPresence();
       const conv = useChat.getState().conversationId;
       if (conv) void markRead(conv);
       void refreshChatList();
@@ -290,6 +308,11 @@ export function useRealtime(userId: string | null) {
       unsubApp();
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
+      beatPresence("offline");
       void supabase.removeChannel(db);
       void supabase.removeChannel(online);
       onlineChannel = null;
