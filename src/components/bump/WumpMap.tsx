@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  Bell,
   Bookmark,
   BookmarkPlus,
   Compass,
@@ -12,8 +11,9 @@ import {
   MapPinned,
   Pause,
   Play,
+  MessageCircle,
   Search,
-  TriangleAlert,
+  UserPlus,
   Users,
 } from "lucide-react";
 import type { BumpNearby } from "@/lib/bump";
@@ -81,6 +81,7 @@ export default function WumpMap({
   onOpenPerson,
   onOpenProfilePage,
   onSearch,
+  onFriends,
   onScratch,
   onPlaces,
   onGoLive,
@@ -107,6 +108,7 @@ export default function WumpMap({
   onOpenPerson: (id: string) => void;
   onOpenProfilePage?: (username: string) => void;
   onSearch: () => void;
+  onFriends?: () => void;
   onScratch: () => void;
   onPlaces: () => void;
   onGoLive?: () => void;
@@ -556,11 +558,21 @@ export default function WumpMap({
         )}
         <button
           type="button"
-          onClick={onSearch}
+          onClick={() => (onFriends || onSearch)()}
           className="grid size-10 place-items-center rounded-full bg-slate-900/85 text-white shadow-lg backdrop-blur transition hover:bg-slate-900"
-          aria-label="People"
+          aria-label="Friends"
+          title="Friends"
         >
-          <Bell className="size-4" />
+          <UserPlus className="size-4" />
+        </button>
+        <button
+          type="button"
+          onClick={onScratch}
+          className="grid size-10 place-items-center rounded-full bg-emerald-600 text-white shadow-lg backdrop-blur transition hover:bg-emerald-500"
+          aria-label="Chat"
+          title="Chat"
+        >
+          <MessageCircle className="size-4" />
         </button>
         <button
           type="button"
@@ -655,19 +667,29 @@ export default function WumpMap({
         <Search className="size-5" />
       </button>
 
-      <div className="absolute inset-x-0 bottom-4 z-10 flex items-end justify-center gap-3 px-4">
+      <div className="absolute inset-x-0 bottom-4 z-10 flex items-end justify-center gap-2.5 px-3">
+        <button
+          type="button"
+          onClick={() => (onFriends || onSearch)()}
+          className="relative grid size-[3.85rem] place-items-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-xl ring-2 ring-white/40 active:scale-95"
+          aria-label="Friends"
+        >
+          <UserPlus className="size-5" />
+          <span className="absolute -bottom-0.5 text-[8px] font-black tracking-wider">FRIENDS</span>
+        </button>
         <button
           type="button"
           onClick={onScratch}
-          className="relative grid size-[4.25rem] place-items-center rounded-full bg-gradient-to-br from-[#fb7185] to-[#e11d48] text-white shadow-xl ring-2 ring-white/40 active:scale-95"
+          className="relative grid size-[3.85rem] place-items-center rounded-full bg-gradient-to-br from-[#34d399] to-[#059669] text-white shadow-xl ring-2 ring-white/40 active:scale-95"
+          aria-label="Chat"
         >
-          <TriangleAlert className="size-5" />
+          <MessageCircle className="size-5" />
           <span className="absolute -bottom-0.5 text-[8px] font-black tracking-wider">CHAT</span>
         </button>
         <button
           type="button"
           onClick={onTogglePlay}
-          className="grid size-[5rem] place-items-center rounded-full bg-gradient-to-br from-[#60a5fa] via-[#818cf8] to-[#f472b6] text-white shadow-2xl ring-4 ring-white/55 active:scale-95"
+          className="grid size-[4.75rem] place-items-center rounded-full bg-gradient-to-br from-[#38bdf8] to-[#0ea5e9] text-white shadow-2xl ring-4 ring-white/55 active:scale-95"
           aria-label={playing ? "Pause music" : "Play music"}
         >
           {playing ? <Pause className="size-7 fill-white" /> : <Play className="ml-0.5 size-7 fill-white" />}
@@ -675,7 +697,8 @@ export default function WumpMap({
         <button
           type="button"
           onClick={onPlaces}
-          className="relative grid size-[4.25rem] place-items-center rounded-full bg-gradient-to-br from-[#38bdf8] to-[#2563eb] text-white shadow-xl ring-2 ring-white/40 active:scale-95"
+          className="relative grid size-[3.85rem] place-items-center rounded-full bg-gradient-to-br from-[#38bdf8] to-[#2563eb] text-white shadow-xl ring-2 ring-white/40 active:scale-95"
+          aria-label="Places"
         >
           <span className="text-center text-[10px] leading-tight font-black">
             <Users className="mx-auto mb-0.5 size-3.5" />

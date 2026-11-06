@@ -1,8 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { ExternalLink, LogOut, MessageCircle, Music2, Radio, Shield, UserRound, Users } from "lucide-react";
+import {
+  ExternalLink,
+  LogOut,
+  MapPinned,
+  MessageCircle,
+  Music2,
+  Shield,
+  UserPlus,
+  UserRound,
+  UsersRound,
+} from "lucide-react";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { startLiveUpdates } from "@/lib/liveUpdate";
 import { mfaNeedsChallenge } from "@/lib/mfa";
@@ -11,6 +21,8 @@ import { loadProfiles, refreshFriends } from "@/lib/data";
 import { refreshBadges } from "@/lib/admin";
 import { useRealtime } from "@/lib/realtime";
 import { useBumpMusic } from "@/lib/bumpMusic";
+import { bumpInbox } from "@/lib/bump";
+import { WUMP, WUMP_TAGLINE } from "@/lib/wumpBrand";
 import AuthScreen, { ResetPasswordScreen } from "@/components/AuthScreen";
 import SetupScreen from "@/components/SetupScreen";
 import BumpHub from "@/components/bump/BumpHub";
@@ -21,15 +33,22 @@ import { cn } from "@/lib/utils";
 
 type Nav = "nearby" | "friends" | "groups" | "music" | "profile" | "messages" | "settings";
 
-/** Next-gen standalone Wump IPA shell (`/bump/app` or `/wump/app`). */
+/** Standalone Wump IPA shell (`/wump/app` or `/bump/app`). */
 export default function BumpAppRoot() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [recovering, setRecovering] = useState(false);
   const [needsMfa, setNeedsMfa] = useState(false);
   const [nav, setNav] = useState<Nav>("nearby");
+  const [unreadChat, setUnreadChat] = useState(0);
   const bootstrapped = useApp((s) => s.bootstrapped);
+  const friendships = useApp((s) => s.friendships);
   const userId = session?.user?.id ?? null;
   const playing = useBumpMusic((s) => s.playing);
+
+  const pendingFriends = useMemo(
+    () => friendships.filter((f) => f.status === "pending" && f.addressee_id === userId).length,
+    [friendships, userId],
+  );
 
   useEffect(() => startLiveUpdates(), []);
   useRealtime(bootstrapped && userId && !needsMfa ? userId : null);
@@ -71,6 +90,27 @@ export default function BumpAppRoot() {
     };
   }, [userId, needsMfa]);
 
+  useEffect(() => {
+    if (!userId || needsMfa || !bootstrapped) return;
+    let cancelled = false;
+    const tick = () => {
+      void bumpInbox()
+        .then((rows) => {
+          if (cancelled) return;
+          setUnreadChat(rows.reduce((n, r) => n + (r.unread || 0), 0));
+        })
+        .catch(() => {
+          /* ignore */
+        });
+    };
+    tick();
+    const t = setInterval(tick, 20_000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [userId, needsMfa, bootstrapped, nav]);
+
   if (!isConfigured) return <SetupScreen />;
   if (session === undefined) {
     return (
@@ -90,12 +130,13 @@ export default function BumpAppRoot() {
     );
   }
 
-  const items: { id: Nav; label: string; icon: React.ReactNode }[] = [
-    { id: "nearby", label: "Map", icon: <Radio className="size-5" /> },
-    { id: "groups", label: "Groups", icon: <Users className="size-5" /> },
+  const items: { id: Nav; label: string; icon: React.ReactNode; badge?: number }[] = [
+    { id: "nearby", label: "Map", icon: <MapPinned className="size-5" /> },
+    { id: "friends", label: "Friends", icon: <UserPlus className="size-5" />, badge: pendingFriends },
+    { id: "messages", label: "Chat", icon: <MessageCircle className="size-5" />, badge: unreadChat },
+    { id: "groups", label: "Groups", icon: <UsersRound className="size-5" /> },
     { id: "music", label: "Music", icon: <Music2 className="size-5" /> },
     { id: "profile", label: "Me", icon: <UserRound className="size-5" /> },
-    { id: "messages", label: "Chat", icon: <MessageCircle className="size-5" /> },
     { id: "settings", label: "Privacy", icon: <Shield className="size-5" /> },
   ];
 
@@ -120,18 +161,27 @@ export default function BumpAppRoot() {
           />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-extrabold tracking-tight text-white">Wump</h1>
-              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold tracking-wide text-[#86efac] uppercase">
-                Next
-              </span>
+              <h1 className="text-lg font-extrabold tracking-tight text-white">{WUMP}</h1>
               {playing && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent">
-                  <span className="size-1.5 animate-pulse rounded-full bg-accent" /> Listening
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                  <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" /> Listening
                 </span>
               )}
             </div>
-            <p className="truncate text-[12px] text-white/55">Live map · 5‑min refresh · groups · Spotify · same Nexus account</p>
+            <p className="truncate text-[12px] text-white/55">{WUMP_TAGLINE} · same Nexus account</p>
           </div>
+          <button
+            type="button"
+            onClick={() => setNav("friends")}
+            className="relative hidden items-center gap-1 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/15 sm:inline-flex"
+          >
+            <UserRound className="size-3.5" /> Friends
+            {pendingFriends > 0 && (
+              <span className="absolute -top-1 -right-1 grid min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
+                {pendingFriends}
+              </span>
+            )}
+          </button>
           <a
             href="https://nexusproject.cc"
             className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/15"
@@ -150,28 +200,54 @@ export default function BumpAppRoot() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        <BumpHub standalone hideChromeTabs initialTab={nav} />
+        <BumpHub
+          standalone
+          hideChromeTabs
+          initialTab={nav}
+          onTabChange={(t) => {
+            if (t === "social") setNav("friends");
+            else if (
+              t === "nearby" ||
+              t === "friends" ||
+              t === "groups" ||
+              t === "music" ||
+              t === "profile" ||
+              t === "messages" ||
+              t === "settings"
+            ) {
+              setNav(t);
+            }
+          }}
+        />
       </div>
 
       <BumpMiniPlayer onOpen={() => setNav("music")} />
 
       <nav className="shrink-0 border-t border-white/10 bg-[#071a10]/95 pb-safe backdrop-blur-xl">
-        <div className="mx-auto flex max-w-lg">
+        <div className="mx-auto flex max-w-3xl overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {items.map((it) => {
             const active = nav === it.id;
+            const badge = it.badge && it.badge > 0 ? it.badge : 0;
             return (
               <button
                 key={it.id}
                 type="button"
                 onClick={() => setNav(it.id)}
                 className={cn(
-                  "relative flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 pt-1.5 pb-1 transition",
+                  "relative flex min-h-12 min-w-[3.35rem] flex-1 flex-col items-center justify-center gap-0.5 px-1 pt-1.5 pb-1 transition",
                   active ? "text-[#86efac]" : "text-white/45",
                 )}
               >
-                {it.icon}
+                <span className="relative">
+                  {it.icon}
+                  {badge > 0 && (
+                    <span className="absolute -top-1.5 -right-2 grid min-w-[1rem] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none text-white">
+                      {badge > 99 ? "99+" : badge}
+                    </span>
+                  )}
+                </span>
                 <span className="text-[10px] font-semibold tracking-wide">{it.label}</span>
-                {active && <span className="absolute inset-x-6 bottom-0 h-0.5 rounded-full bg-[#86efac]" />}
+                {active && <span className="absolute inset-x-5 bottom-0 h-0.5 rounded-full bg-[#86efac]" />}
               </button>
             );
           })}

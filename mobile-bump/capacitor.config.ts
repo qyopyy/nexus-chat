@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 // Standalone Wump shell (formerly Bump) — same Supabase backend as Nexus, dedicated bundle id + icon.
-// Web deploys to /bump/app update this app without rebuilding (except native permission changes).
-const url = process.env.BUMP_URL || process.env.NEXUS_URL || "https://nexusproject.cc/bump/app";
+// Web deploys to /wump/app update this app without rebuilding (except native permission changes).
+const url = process.env.BUMP_URL || process.env.NEXUS_URL || "https://nexusproject.cc/wump/app";
 
 const config: CapacitorConfig = {
   appId: "hu.qyopy.bump",
