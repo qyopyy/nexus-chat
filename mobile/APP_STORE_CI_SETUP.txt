@@ -27,17 +27,25 @@ A) Create an Apple Distribution certificate (any computer, even Windows/Linux)
    Keep the password — it becomes APPLE_CERTIFICATE_PASSWORD.
 
 
-B) Create an App Store provisioning profile
--------------------------------------------
+B) Create an App Store provisioning profile (one per app)
+---------------------------------------------------------
+You need a separate App Store Connect profile for EACH bundle you upload:
+
+  Nexus   hu.qyopy.nexus.B44X8B76QR
+  Wump    hu.qyopy.bump.B44X8B76QR
+  Browser hu.qyopy.browser.B44X8B76QR
+  Link    hu.qyopy.link
+
 1. https://developer.apple.com/account/resources/identifiers/list
-   Confirm App ID exists for:  hu.qyopy.nexus.B44X8B76QR
-   (same as App Store Connect Bundle ID)
+   Confirm each App ID exists (same as App Store Connect Bundle ID).
 
 2. https://developer.apple.com/account/resources/profiles/list
    → + → App Store Connect → select that App ID
    → select the Apple Distribution certificate from step A
-   → name it e.g. "Nexus App Store"
-   → Download Nexus_App_Store.mobileprovision
+   → name it e.g. "Wump App Store" / "Nexus App Store"
+   → Download the .mobileprovision
+
+Repeat for every app you will put in Transporter.
 
 
 C) App Store Connect API key (for automatic upload)
@@ -65,6 +73,15 @@ Repo → Settings → Secrets and variables → Actions → New repository secre
   APPLE_PROVISION_PROFILE_BASE64
       base64 -i Nexus_App_Store.mobileprovision | pbcopy
 
+  APPLE_PROVISION_PROFILE_BASE64_WUMP
+      base64 -i Wump_App_Store.mobileprovision | pbcopy
+
+  APPLE_PROVISION_PROFILE_BASE64_BROWSER
+      base64 -i Browser_App_Store.mobileprovision | pbcopy
+
+  APPLE_PROVISION_PROFILE_BASE64_LINK
+      base64 -i Link_App_Store.mobileprovision | pbcopy
+
   APP_STORE_CONNECT_API_KEY_ID
       Key ID from step C
 
@@ -80,10 +97,14 @@ Optional variable (Settings → Variables):
 
 E) Run the cloud build
 ----------------------
-1. Merge the PR that adds workflow "iOS App Store (signed)"
-2. GitHub → Actions → "iOS App Store (signed)" → Run workflow
+1. Merge the PR that adds the signed workflows
+2. For Wump (your Transporter 90174 screenshot):
+   GitHub → Actions → "iOS App Store apps (signed)" → Run workflow
+   • app = wump
    • upload = true  → signs AND sends to App Store Connect
-   • upload = false → only produces Nexus-AppStore.ipa artifact (Transporter-ready)
+   • upload = false → only produces Wump-AppStore.ipa (Transporter-ready)
+
+   Nexus-only shortcut still exists: "iOS App Store (signed)"
 
 3. Wait ~10–15 minutes. Then App Store Connect → TestFlight should show the build
    (processing can take another few minutes).

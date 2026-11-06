@@ -1,6 +1,7 @@
 name: Wump iOS app (.ipa)
 
-# Standalone Wump.ipa (bundle hu.qyopy.bump.B44X8B76QR) — Sideloadly / App Store.
+# Standalone Wump.ipa (bundle hu.qyopy.bump.B44X8B76QR) — Sideloadly / AltStore ONLY.
+# Transporter / ASC need Actions → “iOS App Store apps (signed)” → app=wump (embedded.mobileprovision).
 # Opens https://nexusproject.cc/wump/app — same Nexus account & backend.
 on:
   workflow_dispatch:
@@ -126,6 +127,21 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Wump" "$APP/Info.plist" 2>/dev/null \
             || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Wump" "$APP/Info.plist"
           bash "$GITHUB_WORKSPACE/.github/scripts/fix-ios-framework-ids.sh" "$APP"
+          if [ -f "$APP/embedded.mobileprovision" ]; then
+            echo "Unexpected: provisioning profile present in unsigned Wump build"
+          else
+            echo "No embedded.mobileprovision (expected) — Transporter will fail 90174; use iOS App Store apps (signed) → wump"
+          fi
+          cat > ../../TRANSPORTER_DO_NOT_USE.txt <<'NOTE'
+This Wump.ipa is UNSIGNED (Sideloadly / AltStore only).
+
+Transporter will fail with:
+  Missing Provisioning Profile (90174)
+
+For App Store Connect / Transporter run:
+  Actions → “iOS App Store apps (signed)” → app = wump
+and upload Wump-AppStore.ipa (tag wump-appstore-N) instead.
+NOTE
           rm -rf Payload && mkdir Payload
           cp -R "$APP" Payload/
           zip -qry ../../Wump.ipa Payload
@@ -142,12 +158,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="wump-ios-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" Wump.ipa --repo "$GITHUB_REPOSITORY" \
+          gh release create "$TAG" Wump.ipa TRANSPORTER_DO_NOT_USE.txt --repo "$GITHUB_REPOSITORY" \
             --title "Wump iOS build ${GITHUB_RUN_NUMBER}" \
             --notes "Standalone **Wump** IPA (bundle \`hu.qyopy.bump.B44X8B76QR\`).
 
           Install with Sideloadly / AltStore using your Apple ID.
           Opens: ${BUMP_URL}
+
+          ⛔ UNSIGNED — Transporter fails with Missing Provisioning Profile (90174).
+          For App Store / Transporter: Actions → “iOS App Store apps (signed)” → app=wump
+          → Wump-AppStore.ipa (tag wump-appstore-N).
 
           Friends, chat, live map, groups — same Nexus login & backend.
           Nexus chat app stays separate — Wump is also available inside Nexus."
