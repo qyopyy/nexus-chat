@@ -336,7 +336,7 @@ export default function Composer({
             <input
               ref={fileInput}
               type="file"
-              accept="image/png,image/jpeg,image/gif,image/webp,audio/wav,audio/mpeg,audio/mp3,audio/aac,audio/mp4,audio/x-m4a,.wav,.mp3,.aac,.m4a,video/mp4,video/webm,video/quicktime,.pdf,.txt,.zip"
+              accept="image/png,image/jpeg,image/gif,image/webp,image/heic,image/heif,image/avif,audio/wav,audio/mpeg,audio/mp3,audio/aac,audio/mp4,audio/x-m4a,audio/ogg,audio/flac,.wav,.mp3,.aac,.m4a,.ogg,.flac,video/mp4,video/webm,video/quicktime,video/x-matroska,.mov,.m4v,.mkv,.pdf,.txt,.md,.csv,.json,.zip"
               hidden
               onChange={(e) => {
                 const f = e.target.files?.[0];

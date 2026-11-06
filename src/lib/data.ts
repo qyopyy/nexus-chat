@@ -423,13 +423,6 @@ export async function sendMessage(convId: string, content: string, file?: File |
     const { malwareGate } = await import("./malwareGuard");
     if (await malwareGate(file, { fileName: file.name, context: "chat" })) return;
   }
-  // Nexus Shield: protected songs can't be sent (audio / video attachments, voice notes)
-  if (file && /^(audio|video)\//.test(file.type)) {
-    const { shieldGate } = await import("./shield");
-    if (await shieldGate(file, "chat")) return;
-    const { youtubeCidGate } = await import("./audio");
-    if (await youtubeCidGate(file, "chat")) return;
-  }
   const effect = chosenEffect ?? (text ? effectForText(text) : null);
   if (effect) playEffect(effect);
   const replyTo = useChat.getState().replyTo;
@@ -463,29 +456,86 @@ export async function sendMessage(convId: string, content: string, file?: File |
   if (file) {
     let upload: Blob = file;
     let contentType = file.type || "application/octet-stream";
-    let name = file.name.replace(/[^\w.\-]+/g, "_");
+    let name = file.name.replace(/[^\w.\-]+/g, "_") || "file";
     try {
-      if (/^image\//.test(file.type) || /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name)) {
-        const { compressImage } = await import("./compressMedia");
-        const { blob } = await compressImage(file, 1600, 0.85);
-        upload = blob;
-        contentType = blob.type || "image/jpeg";
-        if (!/\.jpe?g$/i.test(name) && contentType.includes("jpeg")) name = name.replace(/\.[^.]+$/, "") + ".jpg";
+      // Compress every chat attachment type before upload (images, video, audio/voice, PDF)
+      if (/^image\//.test(file.type) || /\.(jpe?g|png|webp|heic|heif|avif|gif)$/i.test(file.name)) {
+        if (!/^image\/gif$/i.test(file.type) && !/\.gif$/i.test(file.name)) {
+          const { compressImage } = await import("./compressMedia");
+          const { blob } = await compressImage(file, 1600, 0.85);
+          upload = blob;
+          contentType = blob.type || "image/jpeg";
+          if (!/\.jpe?g$/i.test(name) && contentType.includes("jpeg")) name = name.replace(/\.[^.]+$/, "") + ".jpg";
+        }
       } else if (/^video\//.test(file.type) || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name)) {
         const { compressVideo } = await import("./compressMedia");
-        const out = await compressVideo(file, { maxEdge: 1920, maxFps: 60 });
-        upload = out.blob;
-        contentType = out.mime || "video/mp4";
-        name = name.replace(/\.[^.]+$/, "") + "." + out.ext;
+        // Chat profile: 1080p / 60fps — smaller than Gram Full HD so iOS uploads finish
+        const out = await compressVideo(file, { maxEdge: 1080, maxFps: 60 });
+        if (!out.skipped || out.blob !== file) {
+          upload = out.blob.size <= file.size * 1.08 ? out.blob : file;
+          if (upload === out.blob) {
+            contentType = out.mime || "video/mp4";
+            name = name.replace(/\.[^.]+$/, "") + "." + out.ext;
+          }
+        }
+      } else if (/^audio\//.test(file.type) || /\.(wav|mp3|aac|m4a|ogg|opus|flac)$/i.test(file.name) || /voice|recording/i.test(file.name)) {
+        const { processChatAudio, isEditableAudio } = await import("./attachAudio");
+        if (isEditableAudio(file) || /^audio\//.test(file.type)) {
+          const out = await processChatAudio(file, { compress: true, bitrate: 96_000 });
+          upload = out;
+          contentType = out.type || "audio/mp4";
+          name = out.name.replace(/[^\w.\-]+/g, "_");
+        }
+      } else if (/\.pdf$/i.test(file.name) || file.type === "application/pdf") {
+        // PDFs aren't re-encoded client-side; strip empty name / ensure MIME
+        contentType = "application/pdf";
+        if (!/\.pdf$/i.test(name)) name = `${name}.pdf`;
+      } else if (/\.(txt|md|csv|json)$/i.test(file.name) || /^text\//.test(file.type) || file.type === "application/json") {
+        // Keep text as-is but cap absurdly large paste dumps
+        if (file.size > 2 * 1024 * 1024) {
+          dropTemp(tempId);
+          return toast("Text files can be up to 2 MB", "error");
+        }
+        contentType = file.type || "text/plain";
       }
+      // zip / other allowed types: upload as-is after malware scan
     } catch {
       /* fall back to original bytes */
+      upload = file;
+      contentType = file.type || contentType;
     }
+
+    // Always send a typed File so storage MIME is never empty
+    const body = upload instanceof File ? upload : new File([upload], name, { type: contentType });
+    contentType = body.type || contentType;
+
+    // Shield / YouTube CID on the (possibly compressed) payload — cheaper on phones
+    if (/^(audio|video)\//.test(contentType) || /\.(mp3|wav|m4a|aac|ogg|mp4|mov|webm|mkv)$/i.test(name)) {
+      const { shieldGate } = await import("./shield");
+      if (await shieldGate(body, "chat")) {
+        dropTemp(tempId);
+        return;
+      }
+      const { youtubeCidGate } = await import("./audio");
+      if (await youtubeCidGate(body, "chat")) {
+        dropTemp(tempId);
+        return;
+      }
+    }
+
     const path = `${convId}/${crypto.randomUUID()}-${name}`;
-    const { error: upErr } = await supabase.storage.from("attachments").upload(path, upload, { contentType });
-    if (upErr) {
+    try {
+      const { xhrStorageUpload } = await import("./storageUpload");
+      await xhrStorageUpload({
+        bucket: "attachments",
+        path,
+        blob: body,
+        contentType,
+        timeoutMs: 5 * 60 * 1000,
+      });
+    } catch (e) {
       dropTemp(tempId);
-      return toast(`Upload failed: ${errorText(upErr)}`, "error");
+      return toast(`Upload failed: ${(e as Error).message || errorText(e)}`, "error");
     }
     attachment.attachment_name = name;
     attachment.attachment_type = contentType;
