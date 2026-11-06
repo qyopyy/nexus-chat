@@ -8,5 +8,5 @@ export default async function BumpInvitePage({ params }: { params: Promise<{ cod
   const ua = h.get("user-agent") || "";
   const standalone = /BumpApp|WumpApp/i.test(ua);
   const q = encodeURIComponent(code);
-  redirect(standalone ? `/bump/app?bump=${q}` : `/?bump=${q}`);
+  redirect(standalone ? `/wump/app?bump=${q}` : `/?bump=${q}`);
 }

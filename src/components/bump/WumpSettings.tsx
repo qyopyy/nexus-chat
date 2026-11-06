@@ -124,7 +124,7 @@ export default function WumpSettings({ userId }: { userId: string }) {
           </li>
           <li>
             <span className="font-semibold text-txt">Standalone Wump app</span> — separate iOS IPA focused on the map + Live. Install from Releases; opens{" "}
-            <code className="rounded bg-black/30 px-1">/bump/app</code>.
+            <code className="rounded bg-black/30 px-1">/wump/app</code>.
           </li>
         </ul>
       </section>

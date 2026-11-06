@@ -22,12 +22,13 @@ export default function Root({ mode, initialVideo, initialRelease, initialGram, 
     void notifyCapgoAppReady();
   }, []);
 
-  // Standalone Bump IPA (UA BumpApp) always uses the slim /bump/app shell
+  // Standalone Wump IPA (UA BumpApp) always uses the slim /wump/app shell
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!/BumpApp/i.test(navigator.userAgent)) return;
-    if (window.location.pathname.startsWith("/bump/app")) return;
-    window.location.replace("/bump/app" + window.location.search);
+    const p = window.location.pathname;
+    if (p.startsWith("/wump/app") || p.startsWith("/bump/app")) return;
+    window.location.replace("/wump/app" + window.location.search);
   }, []);
 
   // Standalone Nexus Link IPA stays on /bio/app (never the main chat shell)
