@@ -184,6 +184,13 @@ export default function LinkBioHub({
         <div className="mx-auto grid max-w-5xl gap-5 p-3 sm:grid-cols-2 sm:p-5">
           {/* Editor */}
           <div className="space-y-4">
+            {page.suspended && (
+              <section className="rounded-2xl bg-red-500/15 p-4 ring-1 ring-red-400/40">
+                <div className="font-bold text-red-200">Page suspended</div>
+                <p className="mt-1 text-sm text-red-100/80">{page.suspend_reason || "Contact Nexus Link admin — edits are locked while suspended."}</p>
+              </section>
+            )}
+
             {tab === "dashboard" && (
               <section className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
                 <div className="mb-3 flex items-center justify-between gap-2">

@@ -46,6 +46,8 @@ export type LinkBioPage = {
   premium: boolean;
   premium_until?: string | null;
   published?: boolean;
+  suspended?: boolean;
+  suspend_reason?: string | null;
   view_count: number;
   password_enabled?: boolean;
   password_protected?: boolean;
@@ -83,12 +85,27 @@ export type LinkBioAdminRow = {
   premium: boolean;
   premium_until: string | null;
   published: boolean;
+  suspended?: boolean;
+  suspend_reason?: string | null;
+  nsfw?: boolean;
+  links_count?: number;
   view_count: number;
   owner_username: string;
   owner_role?: string | null;
   verified?: boolean;
   badges?: LinkBioBadge[];
   updated_at: string;
+};
+
+export type LinkBioNetwork = {
+  pages_live: number;
+  pages_suspended: number;
+  views_total: number;
+  clicks_24h: number;
+  events: { id: number; kind: string; username: string | null; detail: string | null; created_at: string }[];
+  blocked_hosts: { host: string; reason: string | null; created_at: string }[];
+  top_pages: { username: string; view_count: number; published: boolean; suspended: boolean }[];
+  protect?: { malware?: boolean; ddos_rate_limit?: boolean; security_headers?: boolean; link_scan?: boolean };
 };
 
 /** Quick-grant badges shown in Nexus Link admin (verified is separate). */
@@ -213,6 +230,25 @@ export async function linkbioMine(): Promise<LinkBioPage | null> {
 }
 
 export async function linkbioSave(patch: Record<string, unknown>): Promise<LinkBioPage | null> {
+  if (Array.isArray(patch.links)) {
+    const { scanLinkList } = await import("./linkProtect");
+    const scan = scanLinkList(patch.links as { url?: string }[]);
+    if (!scan.ok) {
+      toast(scan.reason, "error");
+      return null;
+    }
+  }
+  for (const key of ["avatar_url", "banner_url", "music_url"] as const) {
+    const v = patch[key];
+    if (typeof v === "string" && v.trim()) {
+      const { scanLinkUrl } = await import("./linkProtect");
+      const scan = scanLinkUrl(v);
+      if (!scan.ok) {
+        toast(scan.reason, "error");
+        return null;
+      }
+    }
+  }
   const { data, error } = await supabase.rpc("linkbio_save", { p: patch });
   if (error) {
     toast(errorText(error));
@@ -320,6 +356,71 @@ export async function linkbioInviteCreate(maxUses = 1, note?: string, days = 30)
   }
   toast("Invite created");
   return data as { id: string; code: string; max_uses: number; uses: number; expires_at: string | null; note: string | null };
+}
+
+export async function linkbioAdminSuspend(id: string, on: boolean, reason?: string) {
+  const { data, error } = await supabase.rpc("linkbio_admin_suspend", {
+    p_id: id,
+    p_on: on,
+    p_reason: reason ?? null,
+  });
+  if (error) {
+    toast(errorText(error));
+    return null;
+  }
+  toast(on ? "Page suspended" : "Page unsuspended", "success");
+  return data as LinkBioAdminRow[];
+}
+
+export async function linkbioAdminSetPublished(id: string, on: boolean) {
+  const { data, error } = await supabase.rpc("linkbio_admin_set_published", { p_id: id, p_on: on });
+  if (error) {
+    toast(errorText(error));
+    return null;
+  }
+  return data as LinkBioAdminRow[];
+}
+
+export async function linkbioAdminClearLinks(id: string) {
+  const { data, error } = await supabase.rpc("linkbio_admin_clear_links", { p_id: id });
+  if (error) {
+    toast(errorText(error));
+    return null;
+  }
+  toast("Links cleared", "success");
+  return data as LinkBioAdminRow[];
+}
+
+export async function linkbioAdminNetwork(): Promise<LinkBioNetwork | null> {
+  const { data, error } = await supabase.rpc("linkbio_admin_network");
+  if (error) {
+    toast(errorText(error));
+    return null;
+  }
+  return data as LinkBioNetwork;
+}
+
+export async function linkbioAdminBlockHost(host: string, reason?: string) {
+  const { data, error } = await supabase.rpc("linkbio_admin_block_host", {
+    p_host: host,
+    p_reason: reason ?? null,
+  });
+  if (error) {
+    toast(errorText(error));
+    return null;
+  }
+  toast(`Blocked ${host}`, "success");
+  return data as LinkBioNetwork;
+}
+
+export async function linkbioAdminUnblockHost(host: string) {
+  const { data, error } = await supabase.rpc("linkbio_admin_unblock_host", { p_host: host });
+  if (error) {
+    toast(errorText(error));
+    return null;
+  }
+  toast(`Unblocked ${host}`, "success");
+  return data as LinkBioNetwork;
 }
 
 export async function linkbioInviteRevoke(id: string) {

@@ -44,6 +44,8 @@ export type PublicLinkBio = {
   site_role?: string | null;
   badges?: PublicLinkBioBadge[] | null;
   presence?: { status?: string; online_at?: string | null; hidden?: boolean } | null;
+  suspended?: boolean;
+  suspend_reason?: string | null;
 };
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -202,6 +204,16 @@ const FX_JS = `
 export function renderLinkBio(p: PublicLinkBio, base: string) {
   const url = `${base}/bio/${p.username}`;
   const app = `${base}/bio/app`;
+  if (p.suspended) {
+    const reason = esc(p.suspend_reason || "This Nexus Link was suspended for security.");
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Suspended · Nexus Link</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#07060f;color:#f4f2ff;font:15px/1.45 system-ui;text-align:center;padding:24px}
+a{display:inline-flex;margin-top:18px;padding:12px 20px;border-radius:999px;background:linear-gradient(90deg,#ff2bd6,#8b5cff);color:#fff;font-weight:800;text-decoration:none}</style></head><body>
+<div><div style="font-size:48px">🛡️</div><h1>@${esc(p.username)} is suspended</h1><p style="color:#a9a3c9;max-width:420px;margin:12px auto 0">${reason}</p>
+<p style="color:#888;font-size:12px;margin-top:14px">Protected by Nexus Link malware &amp; abuse defenses.</p>
+<a href="${app}">Nexus Link</a></div></body></html>`;
+  }
   const t = THEMES[p.theme] || THEMES.midnight;
   const accent = p.accent && /^#[0-9a-f]{6}$/i.test(p.accent) ? p.accent : t.accent;
   const font = FONTS[p.font] || FONTS.glow;
