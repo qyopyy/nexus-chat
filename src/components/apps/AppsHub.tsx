@@ -5,6 +5,7 @@ import {
   Activity,
   AppWindow,
   ArrowLeft,
+  AudioLines,
   Barcode,
   Binary,
   Braces,
@@ -19,6 +20,7 @@ import {
   Link2,
   MapPin,
   Megaphone,
+  Piano,
   Pipette,
   QrCode,
   ShieldAlert,
@@ -45,6 +47,8 @@ import PitchSheet from "./PitchSheet";
 import MetadataPack from "./MetadataPack";
 import ReleaseChecklist from "./ReleaseChecklist";
 import PromoStudio from "./PromoStudio";
+import VoiceChangerApp from "./VoiceChangerApp";
+import FlStudioLab from "./FlStudioLab";
 import SpotifyTakedown from "@/components/music/SpotifyTakedown";
 import BumpHub from "@/components/bump/BumpHub";
 import BrowserHub from "@/components/browser/BrowserHub";
@@ -66,6 +70,8 @@ type ToolId =
   | "metadata"
   | "release"
   | "promo"
+  | "voicefx"
+  | "flstudio"
   | "qr"
   | "color"
   | "text"
@@ -196,6 +202,24 @@ const TOOLS: {
     bg: "linear-gradient(135deg,#ff2bd6,#7c3aed)",
     emoji: "📣",
     Icon: Megaphone,
+  },
+  {
+    id: "voicefx",
+    name: "Voice changer",
+    tag: "Call FX · AI model zip",
+    desc: "Chipmunk, deep, robot, radio — plus attach a nexus-voice.json AI model zip for custom call FX.",
+    bg: "linear-gradient(135deg,#a855f7,#4c1d95)",
+    emoji: "🎙",
+    Icon: AudioLines,
+  },
+  {
+    id: "flstudio",
+    name: "FL Studio lab",
+    tag: "Shortcuts · scales · MIDI",
+    desc: "FL shortcuts, scale helper, 16-step → MIDI export, and mixer routing notes for producers.",
+    bg: "linear-gradient(135deg,#ff4b8b,#5b1030)",
+    emoji: "🎹",
+    Icon: Piano,
   },
   {
     id: "qr",
@@ -347,6 +371,8 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
   if (tool === "metadata") return <MetadataPack mobile={mobile} onBack={backToGrid} />;
   if (tool === "release") return <ReleaseChecklist mobile={mobile} onBack={backToGrid} />;
   if (tool === "promo") return <PromoStudio mobile={mobile} onBack={backToGrid} />;
+  if (tool === "voicefx") return <VoiceChangerApp mobile={mobile} onBack={backToGrid} />;
+  if (tool === "flstudio") return <FlStudioLab mobile={mobile} onBack={backToGrid} />;
   if (tool === "qr") return <QrMaker mobile={mobile} onBack={backToGrid} />;
   if (tool === "color") return <ColorStudio mobile={mobile} onBack={backToGrid} />;
   if (tool === "text") return <TextLab mobile={mobile} onBack={backToGrid} />;

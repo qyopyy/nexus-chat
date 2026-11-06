@@ -50,6 +50,15 @@ export function ComposerPlus({ conversationId }: { conversationId: string }) {
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute bottom-12 left-0 z-50 w-72 animate-pop rounded-2xl bg-menu p-1.5 shadow-2xl ring-1 ring-white/10">
             {item("🥁", "Start a Jam", "A beat everyone in this chat edits live", () => void startJam(conversationId))}
+            {item("🎹", "FL Studio lab", "Shortcuts, scales, MIDI export for producers", () => {
+              useApp.setState({ hub: "apps", appsTool: "flstudio", mobileTab: "apps" });
+            })}
+            {item("🎙", "Voice changer", "Call FX + attach AI model zip", () => {
+              useApp.setState({ hub: "apps", appsTool: "voicefx", mobileTab: "apps" });
+            })}
+            {item("📎", "Share voice-model zip", "Attach a nexus-voice.json pack in chat", () => {
+              toast("Use the paperclip and pick a .zip with nexus-voice.json — peers can download it", "info");
+            })}
             {item("📊", "Poll", "Ask the chat a question", () => setSheet("poll"))}
             {item("⏳", "Time capsule", "A message that stays sealed until a date", () => setSheet("capsule"))}
             {item("📍", "Share Wump location", "Send your live pin to a friend in Nexus", () => setSheet("bump"))}

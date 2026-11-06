@@ -494,21 +494,22 @@ function VoiceSection() {
 
       <div className="mt-6">
         <Label>Voice quality</Label>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {(
             [
               [64, "Standard", "64 kbps · saves data"],
               [128, "High", "128 kbps"],
-              [320, "Studio", "320 kbps stereo · 5× Discord"],
+              [320, "Studio", "320 kbps stereo"],
+              [510, "Ultra studio", "510 kbps · near Opus max"],
             ] as [VoiceQuality, string, string][]
           ).map(([q, label, hint]) => (
-            <button key={q} onClick={() => void updateSettings({ voiceQuality: q })} className={cn("rounded-xl p-3 text-left ring-2 transition", s.voiceQuality === q ? "bg-accent/15 ring-accent" : "bg-side ring-transparent hover:bg-hover")}>
+            <button key={q} onClick={() => void updateSettings({ voiceQuality: q, qualityV: 3 })} className={cn("rounded-xl p-3 text-left ring-2 transition", s.voiceQuality === q ? "bg-accent/15 ring-accent" : "bg-side ring-transparent hover:bg-hover")}>
               <span className="block font-semibold">{label}</span>
               <span className="mt-0.5 block text-xs text-sub">{hint}</span>
             </button>
           ))}
         </div>
-        <p className="mt-2 text-xs text-sub">Fullband 48 kHz Opus with packet-loss protection (FEC). Raising quality mid-call applies when the next person joins or you rejoin.</p>
+        <p className="mt-2 text-xs text-sub">Fullband 48 kHz Opus with FEC + no DTX. Ultra studio targets ~510 kbps stereo — best for music / production calls.</p>
       </div>
 
       <div className="mt-6">
@@ -518,6 +519,8 @@ function VoiceSection() {
 
       <div className="my-8 h-px bg-line" />
       <Label>Voice processing</Label>
+      <Toggle label="Stereo studio capture" hint="Capture 2 channels when quality is Studio or Ultra (music calls)." checked={!!s.stereoStudio} onChange={(v) => void updateSettings({ stereoStudio: v })} />
+      <Toggle label="Whisper mode" hint="Send at ~28% gain without hard-muting — soft asides in calls." checked={!!s.whisper} onChange={(v) => void updateSettings({ whisper: v })} />
       <Toggle label="Echo cancellation" hint="Stops others hearing themselves through your speakers." checked={s.echoCancellation} onChange={(v) => void updateSettings({ echoCancellation: v })} />
       <Toggle label="Automatic gain control" hint="Keeps your volume consistent." checked={s.autoGainControl} onChange={(v) => void updateSettings({ autoGainControl: v })} />
 
