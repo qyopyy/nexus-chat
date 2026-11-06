@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
-/** Bump invite deep link → app with ?bump= (uses /bump/ so it does not collide with bot /b/[slug]) */
+/** Invite deep link → redeem in Nexus or standalone Wump shell */
 export default async function BumpInvitePage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
-  redirect(`/?bump=${encodeURIComponent(code)}`);
+  const h = await headers();
+  const ua = h.get("user-agent") || "";
+  const standalone = /BumpApp|WumpApp/i.test(ua);
+  const q = encodeURIComponent(code);
+  redirect(standalone ? `/bump/app?bump=${q}` : `/?bump=${q}`);
 }

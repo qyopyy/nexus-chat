@@ -136,6 +136,12 @@ type Privacy = {
   show_online: boolean;
   read_receipts: boolean;
   profile_discoverable: boolean;
+  wump_default_visible: "friends" | "family" | "everyone";
+  wump_precision: "exact" | "approx" | "city";
+  wump_allow_background: boolean;
+  wump_allow_nearby_alerts: boolean;
+  wump_who_can_invite: "everyone" | "friends" | "nobody";
+  wump_share_enabled: boolean;
 };
 const PRIV_DEF: Privacy = {
   dm_from: "servers",
@@ -145,6 +151,12 @@ const PRIV_DEF: Privacy = {
   show_online: true,
   read_receipts: true,
   profile_discoverable: true,
+  wump_default_visible: "friends",
+  wump_precision: "approx",
+  wump_allow_background: true,
+  wump_allow_nearby_alerts: true,
+  wump_who_can_invite: "friends",
+  wump_share_enabled: true,
 };
 
 export function PrivacySection() {
@@ -156,7 +168,9 @@ export function PrivacySection() {
     if (!me) return;
     void supabase
       .from("user_privacy")
-      .select("dm_from,friend_requests,game_invites,show_stats,show_online,read_receipts,profile_discoverable")
+      .select(
+        "dm_from,friend_requests,game_invites,show_stats,show_online,read_receipts,profile_discoverable,wump_default_visible,wump_precision,wump_allow_background,wump_allow_nearby_alerts,wump_who_can_invite,wump_share_enabled",
+      )
       .eq("user_id", me)
       .maybeSingle()
       .then(({ data }) => {
@@ -179,7 +193,22 @@ export function PrivacySection() {
     if (error) {
       setP(p);
       toast(error.message, "error");
-    } else toast("Saved", "success");
+    } else {
+      try {
+        const { saveWumpPrivacyLocal } = await import("@/lib/wumpPrivacy");
+        saveWumpPrivacyLocal({
+          wump_default_visible: next.wump_default_visible,
+          wump_precision: next.wump_precision,
+          wump_allow_background: next.wump_allow_background,
+          wump_allow_nearby_alerts: next.wump_allow_nearby_alerts,
+          wump_who_can_invite: next.wump_who_can_invite,
+          wump_share_enabled: next.wump_share_enabled,
+        });
+      } catch {
+        /* ignore */
+      }
+      toast("Saved", "success");
+    }
   };
 
   return (
@@ -218,6 +247,47 @@ export function PrivacySection() {
           <Toggle label="Show when I'm online" hint="Off hides your green/idle/busy status from other people." checked={p.show_online} onChange={(v) => void save({ show_online: v })} />
           <Toggle label="Send read receipts" hint="When off, others won't see that you've read their DMs." checked={p.read_receipts} onChange={(v) => void save({ read_receipts: v })} />
           <Toggle label="Discoverable in search" hint="When off, your profile is harder to find from People search." checked={p.profile_discoverable} onChange={(v) => void save({ profile_discoverable: v })} />
+
+          <Hr />
+          <Label>Wump location</Label>
+          <p className="mb-2 text-sm text-sub">Live map in Nexus Apps and the standalone Wump iOS app. Same account.</p>
+          <Toggle label="Allow Wump location sharing" hint="Master switch for Live / publish." checked={p.wump_share_enabled} onChange={(v) => void save({ wump_share_enabled: v })} />
+          <div className="h-2" />
+          <Label>Default Live audience</Label>
+          <Select
+            value={p.wump_default_visible}
+            onChange={(v) => void save({ wump_default_visible: v as Privacy["wump_default_visible"] })}
+            options={[
+              { value: "friends", label: "Friends only" },
+              { value: "family", label: "Family circle" },
+              { value: "everyone", label: "Everyone nearby" },
+            ]}
+          />
+          <div className="h-3" />
+          <Label>Location precision</Label>
+          <Select
+            value={p.wump_precision}
+            onChange={(v) => void save({ wump_precision: v as Privacy["wump_precision"] })}
+            options={[
+              { value: "exact", label: "Exact (~1 m)" },
+              { value: "approx", label: "Approximate (~100 m)" },
+              { value: "city", label: "City (~1 km)" },
+            ]}
+          />
+          <div className="h-2" />
+          <Toggle label="Background Live" hint="Refresh your pin while Wump is in the background." checked={p.wump_allow_background} onChange={(v) => void save({ wump_allow_background: v })} />
+          <Toggle label="Nearby alerts" hint="Alerts when friends enter your Live radius." checked={p.wump_allow_nearby_alerts} onChange={(v) => void save({ wump_allow_nearby_alerts: v })} />
+          <div className="h-2" />
+          <Label>Who can redeem your Wump invites</Label>
+          <Select
+            value={p.wump_who_can_invite}
+            onChange={(v) => void save({ wump_who_can_invite: v as Privacy["wump_who_can_invite"] })}
+            options={[
+              { value: "everyone", label: "Anyone with the link" },
+              { value: "friends", label: "Open (creates friend request)" },
+              { value: "nobody", label: "Nobody (links disabled)" },
+            ]}
+          />
         </>
       )}
 

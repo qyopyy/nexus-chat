@@ -24,6 +24,7 @@ import {
 import { useApp, toast } from "@/store/app";
 import { useAppearance } from "@/store/appearance";
 import BumpMusicPanel from "@/components/bump/BumpMusicPanel";
+import BumpMiniPlayer from "@/components/bump/BumpMiniPlayer";
 import {
   bumpAttachAppleMaps,
   bumpClear,
@@ -34,6 +35,7 @@ import {
   bumpInbox,
   bumpInviteLink,
   bumpIpaReleasesUrl,
+  bumpJoinGroup,
   bumpListFamily,
   bumpMyPresence,
   bumpNearby,
@@ -55,20 +57,27 @@ import {
   type BumpProfile,
   type BumpVisible,
 } from "@/lib/bump";
-import { startBumpBackground, stopBumpBackground, updateBumpBackgroundOptions } from "@/lib/bumpBackground";
+import { startBumpBackground, stopBumpBackground, updateBumpBackgroundOptions, WUMP_REFRESH_MS } from "@/lib/bumpBackground";
 import { appleMapsLink } from "@/lib/appleMaps";
 import { formatMeters } from "@/lib/location";
 import { fmtClock } from "@/lib/prefs";
 import { haptic } from "@/lib/haptics";
 import { isBumpApp, isNativeApp } from "@/lib/useMobile";
 import { cn } from "@/lib/utils";
+import { updateMyProfile, uploadAvatar } from "@/lib/data";
+import { changeUsername } from "@/lib/gram";
+import { connectSpotify, startSpotifySync, useSpotifyUser } from "@/lib/spotifyUser";
+import { NowPlayingCard, liveNow } from "@/components/profile/NowPlaying";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import WumpMap from "./WumpMap";
+import WumpSettings from "./WumpSettings";
+import WumpGroups from "./WumpGroups";
 import { WUMP, WUMP_TAGLINE } from "@/lib/wumpBrand";
 import { pauseBumpMusic, playBumpTrack, useBumpMusic } from "@/lib/bumpMusic";
+import { fetchWumpPrivacy, loadWumpPrivacyLocal } from "@/lib/wumpPrivacy";
 
-type Tab = "nearby" | "friends" | "music" | "profile" | "social" | "messages";
+type Tab = "nearby" | "friends" | "music" | "profile" | "social" | "messages" | "settings" | "groups";
 
 export default function BumpHub({
   mobile,
@@ -111,10 +120,28 @@ export default function BumpHub({
   const [flashUntil, setFlashUntil] = useState<number | null>(null);
   const [shareFriendOpen, setShareFriendOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
+  const [myLat, setMyLat] = useState<number | null>(null);
+  const [myLng, setMyLng] = useState<number | null>(null);
   const bumpOnly = standalone || isBumpApp();
   const musicPlaying = useBumpMusic((s) => s.playing);
   const musicCurrentId = useBumpMusic((s) => s.currentId);
   const musicTracks = useBumpMusic((s) => s.tracks);
+
+  useEffect(() => {
+    if (!me) return;
+    void fetchWumpPrivacy(me)
+      .then((p) => {
+        setVisible(p.wump_default_visible);
+        setBgShare(p.wump_allow_background);
+        setAlerts(p.wump_allow_nearby_alerts);
+      })
+      .catch(() => {
+        const p = loadWumpPrivacyLocal();
+        setVisible(p.wump_default_visible);
+        setBgShare(p.wump_allow_background);
+        setAlerts(p.wump_allow_nearby_alerts);
+      });
+  }, [me]);
 
   const friendIds = useMemo(() => {
     if (!me) return [] as string[];
@@ -141,17 +168,21 @@ export default function BumpHub({
     if (mine) {
       setLive(true);
       if (mine.visible) setVisible(mine.visible);
+      setMyLat(mine.lat);
+      setMyLng(mine.lng);
     } else {
       setLive(false);
+      setMyLat(null);
+      setMyLng(null);
     }
   }, [me, radius]);
 
-  // Restore Live + initial nearby, then keep a slow safety poll while live
+  // Restore Live + nearby; poll often for realtime pin movement + 5-min location floor
   useEffect(() => {
     void refresh();
     const t = setInterval(() => {
       if (live) void refresh();
-    }, 45_000);
+    }, 15_000);
     return () => clearInterval(t);
   }, [refresh, live]);
 
@@ -179,7 +210,13 @@ export default function BumpHub({
     }
     if (!bgShare) {
       void stopBumpBackground({ clearServer: false });
-      const t = setInterval(() => void bumpHeartbeat(visible, liveLabel.trim() || undefined), 50_000);
+      // 5-minute scheduled refresh when background share is off (foreground poll still moves pins)
+      const t = setInterval(() => {
+        void bumpHeartbeat(visible, liveLabel.trim() || undefined).then((ok) => {
+          if (ok) void refresh();
+        });
+      }, WUMP_REFRESH_MS);
+      void bumpHeartbeat(visible, liveLabel.trim() || undefined);
       return () => clearInterval(t);
     }
     void startBumpBackground({
@@ -188,6 +225,10 @@ export default function BumpHub({
       alerts,
       autoStopMinutes: autoStopMin,
       onNearby: setNearby,
+      onLocation: (lat, lng) => {
+        setMyLat(lat);
+        setMyLng(lng);
+      },
     });
     return () => {
       void stopBumpBackground({ clearServer: false });
@@ -214,15 +255,31 @@ export default function BumpHub({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const q = new URLSearchParams(window.location.search).get("bump");
-    const pathCode = window.location.pathname.match(/^\/bump\/([a-z0-9]+)/i)?.[1];
-    const code = q || (pathCode && pathCode.toLowerCase() !== "app" ? pathCode : null);
+    const u0 = new URL(window.location.href);
+    const groupCode = u0.searchParams.get("wumpGroup");
+    if (groupCode) {
+      void bumpJoinGroup(groupCode).then(() => {
+        u0.searchParams.delete("wumpGroup");
+        window.history.replaceState(null, "", u0.pathname + u0.search);
+        setTab("groups");
+        void refresh();
+      });
+      return;
+    }
+    const q = u0.searchParams.get("bump");
+    const pathCode = window.location.pathname.match(/^\/(?:bump|wump)\/([a-z0-9]+)/i)?.[1];
+    const code = q || (pathCode && !["app", "g"].includes(pathCode.toLowerCase()) ? pathCode : null);
     if (code) {
       setRedeem(code);
       void bumpRedeemInvite(code).then(() => {
         const u = new URL(window.location.href);
         u.searchParams.delete("bump");
-        if (u.pathname.startsWith("/bump/") && !u.pathname.startsWith("/bump/app")) u.pathname = bumpOnly ? "/bump/app" : "/";
+        if (
+          (u.pathname.startsWith("/bump/") && !u.pathname.startsWith("/bump/app")) ||
+          (u.pathname.startsWith("/wump/") && !u.pathname.startsWith("/wump/app"))
+        ) {
+          u.pathname = bumpOnly ? "/bump/app" : "/";
+        }
         window.history.replaceState(null, "", u.pathname + u.search);
         void refresh();
       });
@@ -236,9 +293,15 @@ export default function BumpHub({
     setBusy(false);
     if (row) {
       setLive(true);
+      if (typeof row.lat === "number") setMyLat(row.lat);
+      if (typeof row.lng === "number") setMyLng(row.lng);
       await refresh();
-      if (bgShare) {
+      const priv = loadWumpPrivacyLocal();
+      if (bgShare && priv.wump_allow_background) {
         toast(isNativeApp() ? "Live — background sharing on" : `Live — keep ${WUMP} open for updates`, "success");
+      } else if (bgShare && !priv.wump_allow_background) {
+        setBgShare(false);
+        toast("Background Live is off in privacy — pin updates while the app is open", "info");
       }
     }
   }
@@ -250,6 +313,8 @@ export default function BumpHub({
     setBusy(false);
     setLive(false);
     setNearby([]);
+    setMyLat(null);
+    setMyLng(null);
     setFlashUntil(null);
   }
 
@@ -289,10 +354,12 @@ export default function BumpHub({
   const tabs: { id: Tab; label: string }[] = [
     { id: "nearby", label: "Nearby" },
     { id: "friends", label: "Friends" },
+    { id: "groups", label: "Groups" },
     { id: "music", label: "Music" },
     { id: "profile", label: "Profile" },
     { id: "social", label: "People" },
     { id: "messages", label: "Messages" },
+    { id: "settings", label: "Privacy" },
   ];
 
   const flashLeft =
@@ -431,6 +498,8 @@ export default function BumpHub({
           <div className="mx-auto max-w-xl space-y-4">
             <WumpMap
               me={me}
+              myLat={myLat}
+              myLng={myLng}
               nearby={nearby}
               live={live}
               viewsToday={friendIds.length + nearby.length + (live ? 1 : 0)}
@@ -448,6 +517,7 @@ export default function BumpHub({
               onOpenPerson={(id) => openPerson(id)}
               onSearch={() => setTab("social")}
               onScratch={() => setTab("messages")}
+              onGoLive={() => void goLive()}
               onPlaces={() => {
                 if (!live) void goLive();
                 else toast(`${nearby.length} places nearby on ${WUMP}`, "info");
@@ -462,8 +532,8 @@ export default function BumpHub({
               >
                 <span className="grid size-10 place-items-center rounded-xl bg-black/25 text-lg">📍</span>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold text-white">Get the {WUMP} iOS app</div>
-                  <div className="truncate text-[11px] text-white/70">Separate IPA · background Live · Sideloadly</div>
+                  <div className="text-sm font-bold text-white">Get the standalone {WUMP} app</div>
+                  <div className="truncate text-[11px] text-white/70">Separate IPA · same Nexus login · OSM map + background Live</div>
                 </div>
                 <Download className="size-4 shrink-0 text-[#86efac]" />
               </a>
@@ -475,8 +545,8 @@ export default function BumpHub({
                   <Radio className="size-4 text-accent" /> Share location
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-sub">
-                  Rounded to ~100 m, expires after 20 minutes. Background sharing keeps your pin fresh while Live
-                  {isNativeApp() ? " (Allow Location → Always)." : "."}
+                  Realtime OpenStreetMap pins that move as you do. Location republishes at least every 5 minutes while Live. Precision &amp; audience come from Privacy.
+                  {isNativeApp() ? " Background Live needs Location → Always." : ""}
                 </p>
               </div>
               <div className="space-y-3 p-4">
@@ -625,10 +695,13 @@ export default function BumpHub({
 
             <section className="rounded-2xl bg-side p-4 ring-1 ring-white/5">
               <div className="mb-2 flex items-center gap-2 text-sm font-bold">
-                <Users className="size-4 text-accent" /> Family circle
+                <Users className="size-4 text-accent" /> Family &amp; invite links
               </div>
+              <p className="mb-3 text-xs text-sub">
+                Create a link friends can open in Nexus or the standalone {WUMP} app. Family joins your circle; Friend sends a Nexus friend request; Nearby soft-follows on Wump.
+              </p>
               {!family.length ? (
-                <p className="mb-3 text-xs text-sub">Invite family so you can find each other when Wump is on.</p>
+                <p className="mb-3 text-xs text-sub">No family members yet — share a Family invite.</p>
               ) : (
                 <ul className="mb-3 space-y-1">
                   {family.map((id) => (
@@ -648,35 +721,54 @@ export default function BumpHub({
               )}
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => void makeInvite("family")} className="inline-flex items-center gap-1.5 rounded-full bg-accent/20 px-3 py-1.5 text-xs font-bold text-accent">
-                  <Share2 className="size-3.5" /> Family invite
+                  <Share2 className="size-3.5" /> Family invite link
                 </button>
                 <button type="button" onClick={() => void makeInvite("friend")} className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold">
-                  <Link2 className="size-3.5" /> Friend invite
+                  <Link2 className="size-3.5" /> Friend invite link
                 </button>
                 <button type="button" onClick={() => void makeInvite("nearby")} className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold">
-                  Nearby invite
+                  Nearby invite link
                 </button>
               </div>
               {invite && (
-                <div className="mt-3 flex items-center gap-2 rounded-xl bg-black/25 px-3 py-2">
-                  <code className="min-w-0 flex-1 truncate text-[11px]">{bumpInviteLink(invite)}</code>
-                  <button
-                    type="button"
-                    className="grid size-8 place-items-center rounded-full hover:bg-white/10"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(bumpInviteLink(invite));
-                      toast("Copied", "success");
-                    }}
-                  >
-                    <Copy className="size-4" />
-                  </button>
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center gap-2 rounded-xl bg-black/25 px-3 py-2">
+                    <code className="min-w-0 flex-1 truncate text-[11px]">{bumpInviteLink(invite)}</code>
+                    <button
+                      type="button"
+                      className="grid size-8 place-items-center rounded-full hover:bg-white/10"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(bumpInviteLink(invite));
+                        toast("Copied", "success");
+                      }}
+                      aria-label="Copy invite"
+                    >
+                      <Copy className="size-4" />
+                    </button>
+                    {typeof navigator !== "undefined" && "share" in navigator && (
+                      <button
+                        type="button"
+                        className="rounded-full bg-accent px-3 py-1.5 text-xs font-bold text-white"
+                        onClick={() => {
+                          void navigator.share({
+                            title: `Join me on ${WUMP}`,
+                            text: `Add me on ${WUMP} / Nexus`,
+                            url: bumpInviteLink(invite),
+                          }).catch(() => {});
+                        }}
+                      >
+                        Share
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-sub">Link works in Nexus and the standalone {WUMP} app · expires in 7 days</p>
                 </div>
               )}
               <div className="mt-3 flex gap-2">
                 <input
                   value={redeem}
                   onChange={(e) => setRedeem(e.target.value)}
-                  placeholder="Redeem code or paste /bump/… link"
+                  placeholder="Paste invite link or code"
                   className="min-w-0 flex-1 rounded-xl bg-black/30 px-3 py-2 text-sm outline-none ring-1 ring-transparent focus:ring-accent"
                 />
                 <button
@@ -694,6 +786,10 @@ export default function BumpHub({
             </section>
           </div>
         )}
+
+        {tab === "settings" && me && <WumpSettings userId={me} />}
+
+        {tab === "groups" && <WumpGroups friendIds={friendIds} />}
 
         {tab === "music" && (
           <div className="mx-auto h-full max-w-xl">
@@ -737,6 +833,7 @@ export default function BumpHub({
           <BumpMessagesPane me={me} focusUser={threadUser} onFocusUser={setThreadUser} onOpenProfile={openPerson} friendIds={friendIds} />
         )}
       </div>
+      {!hideChromeTabs && <BumpMiniPlayer onOpen={() => setTab("music")} />}
     </div>
     </>
   );
@@ -827,6 +924,8 @@ function BumpProfileEditor({ userId }: { userId: string }) {
   const nexus = useApp((s) => s.profiles[userId]);
   const [prof, setProf] = useState<BumpProfile | null>(null);
   const [bio, setBio] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
   const [spotify, setSpotify] = useState("");
   const [mapsUrl, setMapsUrl] = useState("");
   const [placeName, setPlaceName] = useState("");
@@ -835,6 +934,13 @@ function BumpProfileEditor({ userId }: { userId: string }) {
   const [placeLng, setPlaceLng] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [scraping, setScraping] = useState(false);
+  const avatarRef = useRef<HTMLInputElement>(null);
+  const sp = useSpotifyUser();
+  const liveNp = liveNow(nexus?.now_playing);
+
+  useEffect(() => {
+    startSpotifySync();
+  }, []);
 
   useEffect(() => {
     void bumpGetProfile(userId).then((p) => {
@@ -849,6 +955,11 @@ function BumpProfileEditor({ userId }: { userId: string }) {
       setPlaceLng(p.place_lng);
     });
   }, [userId]);
+
+  useEffect(() => {
+    setDisplayName(nexus?.display_name || "");
+    setUsername(nexus?.username || "");
+  }, [nexus?.display_name, nexus?.username]);
 
   const embed = bumpSpotifyTrackEmbed(spotify);
 
@@ -871,6 +982,12 @@ function BumpProfileEditor({ userId }: { userId: string }) {
       return;
     }
     setBusy(true);
+    if (displayName.trim() && displayName.trim() !== nexus?.display_name) {
+      await updateMyProfile({ display_name: displayName.trim() }, true);
+    }
+    if (username.trim() && username.trim().toLowerCase() !== nexus?.username?.toLowerCase()) {
+      await changeUsername(username.trim());
+    }
     const saved = await bumpSaveProfile({
       bio: bio.trim() || null,
       spotify_track: spotify.trim() || null,
@@ -894,16 +1011,46 @@ function BumpProfileEditor({ userId }: { userId: string }) {
           }}
         />
         <div className="-mt-10 flex items-end gap-3 px-4 pb-4">
-          <Avatar userId={userId} size={72} className="ring-[4px] ring-side" />
+          <button type="button" onClick={() => avatarRef.current?.click()} className="relative shrink-0" aria-label="Change profile picture">
+            <Avatar userId={userId} size={72} className="ring-[4px] ring-side" />
+            <span className="absolute inset-x-0 bottom-0 rounded-b-full bg-black/55 py-0.5 text-center text-[9px] font-bold text-white">Edit</span>
+          </button>
+          <input
+            ref={avatarRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void uploadAvatar(f);
+              e.target.value = "";
+            }}
+          />
           <div className="min-w-0 flex-1 pb-1">
-            <div className="truncate text-lg font-extrabold">{nexus?.display_name || "You"}</div>
-            <div className="truncate text-sm text-sub">@{nexus?.username || "…"}</div>
+            <div className="truncate text-lg font-extrabold">{displayName || nexus?.display_name || "You"}</div>
+            <div className="truncate text-sm text-sub">@{username || nexus?.username || "…"}</div>
             <div className="mt-1 text-[11px] text-sub">{prof ? `${prof.followers} followers · ${prof.following} following` : "Loading…"}</div>
           </div>
         </div>
       </section>
 
       <section className="space-y-4 rounded-2xl bg-side p-4 ring-1 ring-white/5">
+        <label className="block text-xs font-bold tracking-wide text-sub uppercase">
+          Display name
+          <input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value.slice(0, 40))}
+            className="mt-1.5 w-full rounded-xl bg-black/30 px-3 py-2.5 text-sm normal-case tracking-normal outline-none ring-1 ring-transparent focus:ring-accent"
+          />
+        </label>
+        <label className="block text-xs font-bold tracking-wide text-sub uppercase">
+          Username
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 24))}
+            className="mt-1.5 w-full rounded-xl bg-black/30 px-3 py-2.5 text-sm normal-case tracking-normal outline-none ring-1 ring-transparent focus:ring-accent"
+          />
+        </label>
         <label className="block text-xs font-bold tracking-wide text-sub uppercase">
           Bio
           <textarea
@@ -916,15 +1063,25 @@ function BumpProfileEditor({ userId }: { userId: string }) {
           <span className="mt-0.5 block text-right text-[10px] font-medium normal-case tracking-normal opacity-60">{bio.length}/280</span>
         </label>
 
-        <label className="block text-xs font-bold tracking-wide text-sub uppercase">
-          Spotify track
-          <input
-            value={spotify}
-            onChange={(e) => setSpotify(e.target.value)}
-            placeholder="https://open.spotify.com/track/…"
-            className="mt-1.5 w-full rounded-xl bg-black/30 px-3 py-2.5 text-sm normal-case tracking-normal outline-none ring-1 ring-transparent focus:ring-accent"
-          />
-        </label>
+        <div>
+          <div className="mb-1.5 text-xs font-bold tracking-wide text-sub uppercase">Spotify</div>
+          {sp.connected ? (
+            liveNp ? <NowPlayingCard np={liveNp} /> : <p className="mb-2 text-[11px] text-sub">Connected — play a song to show Now Playing.</p>
+          ) : (
+            <button type="button" onClick={() => void connectSpotify()} className="mb-2 rounded-full bg-[#1DB954] px-3 py-1.5 text-xs font-bold text-black">
+              Connect Spotify
+            </button>
+          )}
+          <label className="block text-[11px] font-semibold text-sub">
+            Pinned track link
+            <input
+              value={spotify}
+              onChange={(e) => setSpotify(e.target.value)}
+              placeholder="https://open.spotify.com/track/…"
+              className="mt-1 w-full rounded-xl bg-black/30 px-3 py-2.5 text-sm font-normal text-txt outline-none ring-1 ring-transparent focus:ring-accent"
+            />
+          </label>
+        </div>
         {embed && <iframe src={embed} title="Wump Spotify track" loading="lazy" allow="encrypted-media; clipboard-write" className="h-[80px] w-full rounded-xl border-0" />}
 
         <div>
