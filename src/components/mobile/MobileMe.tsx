@@ -10,7 +10,8 @@ import { openLiveHub } from "@/lib/live";
 import { openPulse } from "@/lib/pulse";
 import { bumpIpaReleasesUrl, openBump } from "@/lib/bump";
 import { browserIpaReleasesUrl, openBrowser } from "@/lib/browser";
-import { isBrowserApp, isBumpApp } from "@/lib/useMobile";
+import { NEXUS_IPA_RELEASES_URL, fetchLatestIpa } from "@/lib/ipaDownloads";
+import { isBrowserApp, isBumpApp, isNativeApp } from "@/lib/useMobile";
 import { openStaffDesk } from "@/lib/privileges";
 import { leaveCall } from "@/lib/call";
 import { supabase } from "@/lib/supabase";
@@ -159,6 +160,12 @@ export default function MobileMe() {
         {row(<Gamepad2 className="size-[18px]" />, "#ff2bd6", "Games", () => useApp.setState({ mobileTab: "games" }))}
         {row(<AppWindow className="size-[18px]" />, "#00a8fc", "Apps — image studio & docs", () => useApp.setState({ mobileTab: "apps", hub: "apps", appsTool: null }))}
         {row(<Globe className="size-[18px]" />, "#60a5fa", "Browser — Google search", () => openBrowser())}
+        {!isNativeApp() &&
+          row(<Download className="size-[18px]" />, "#5865f2", "Download Nexus iOS app (IPA)", () => {
+            void fetchLatestIpa("nexus").then((hit) => {
+              window.open(hit?.url || NEXUS_IPA_RELEASES_URL, "_blank", "noopener,noreferrer");
+            });
+          })}
         {!isBrowserApp() &&
           row(<Download className="size-[18px]" />, "#2563eb", "Download Browser iOS app (IPA)", () => {
             window.open(browserIpaReleasesUrl(), "_blank", "noopener,noreferrer");

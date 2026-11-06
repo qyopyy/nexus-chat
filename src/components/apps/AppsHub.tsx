@@ -41,6 +41,7 @@ import SpotifyTakedown from "@/components/music/SpotifyTakedown";
 import BumpHub from "@/components/bump/BumpHub";
 import BrowserHub from "@/components/browser/BrowserHub";
 import LinkBioHub, { openLinkBio } from "@/components/linkbio/LinkBioHub";
+import IpaDownloads from "@/components/apps/IpaDownloads";
 import { openBump } from "@/lib/bump";
 import { openBrowser } from "@/lib/browser";
 
@@ -337,6 +338,8 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
               </span>
             </div>
           </button>
+
+          <IpaDownloads />
 
           <p className="text-sm text-sub">Creator utilities. File tools stay on-device; Music ID and Spotify takedown use server keys when connected.</p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
