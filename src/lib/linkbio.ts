@@ -171,11 +171,22 @@ export const LINKBIO_LAYOUTS: { id: LinkBioLayout; name: string }[] = [
 ];
 
 export function openLinkBio() {
+  if (typeof window !== "undefined" && /LinkBioApp|NexusLink/i.test(navigator.userAgent)) {
+    if (!window.location.pathname.startsWith("/bio/app") && !window.location.pathname.startsWith("/bio/admin")) {
+      window.location.href = "/bio/app";
+      return;
+    }
+  }
   useApp.setState(
     typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches
       ? { mobileTab: "apps", hub: "apps", appsTool: "linkbio", mobileSidebar: true }
       : { hub: "apps", appsTool: "linkbio" },
   );
+}
+
+/** Sideloadly / AltStore releases for the standalone Nexus Link IPA. */
+export function linkBioIpaReleasesUrl() {
+  return "https://github.com/qyopyy/nexus-chat/releases?q=Nexus+Link+iOS&expanded=true";
 }
 
 export function publicLinkBioUrl(username: string) {

@@ -46,3 +46,14 @@ export function isBrowserApp() {
     return false;
   }
 }
+
+/** Standalone Nexus Link IPA (`hu.qyopy.link`, UA includes LinkBioApp / NexusLink). */
+export function isLinkBioApp() {
+  if (typeof window === "undefined") return false;
+  if (/LinkBioApp|NexusLink/i.test(navigator.userAgent)) return true;
+  try {
+    return window.location.pathname.startsWith("/bio/app") || window.location.pathname.startsWith("/bio/admin");
+  } catch {
+    return false;
+  }
+}
