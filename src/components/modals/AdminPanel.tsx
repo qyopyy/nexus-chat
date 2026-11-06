@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Activity, Award, Ban, Bell, ChevronRight, Clock, Construction, Gift, Lock, MessageSquare, Mic, RotateCcw, Search, Shield, Trash2, Users } from "lucide-react";
 import { ClaimsTab, VaultTab } from "@/components/admin/AdminExtras";
 import GiftLinksPanel from "@/components/admin/GiftLinksPanel";
+import DevelopmentModePanel from "@/components/admin/DevelopmentModePanel";
 import { ModerationControls } from "@/components/admin/ModTools";
 import { useApp } from "@/store/app";
 import {
@@ -20,7 +21,7 @@ import {
 } from "@/lib/admin";
 import { loadProfiles } from "@/lib/data";
 import { ROLE_INFO, roleRank, type SiteRole } from "@/lib/theme";
-import { can, fetchMaintenance, openStaffDesk, setMaintenance, type SiteNotice } from "@/lib/privileges";
+import { openStaffDesk } from "@/lib/privileges";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
@@ -84,71 +85,12 @@ export default function AdminPanel({ focusUser }: { focusUser: string | null }) 
       {tab === "overview" && <Overview />}
       {tab === "members" && <Members rank={rank} focusUser={focusUser} />}
       {tab === "gifts" && rank >= 2 && <GiftLinksPanel />}
-      {tab === "dev" && rank >= 3 && <DevModeTab />}
+      {tab === "dev" && rank >= 3 && <DevelopmentModePanel variant="admin" />}
       {tab === "badges" && rank >= 3 && <BadgesTab />}
       {tab === "claims" && rank >= 3 && <ClaimsTab />}
       {tab === "vault" && rank >= 3 && <VaultTab />}
       {tab === "audit" && <Audit />}
     </>
-  );
-}
-
-function DevModeTab() {
-  const [maint, setMaint] = useState<SiteNotice | null>(null);
-  const [body, setBody] = useState("");
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    void fetchMaintenance().then((n) => {
-      setMaint(n);
-      setBody(n?.body || "");
-    });
-  }, []);
-  if (!can.maintenance()) return <p className="text-sm text-sub">Admins only.</p>;
-  return (
-    <div className="max-w-xl space-y-4">
-      <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-4">
-        <div className="flex items-center gap-2 font-bold text-amber-100">
-          <Construction className="size-5" /> Development / updating mode
-        </div>
-        <p className="mt-1 text-sm text-white/70">
-          When ON, members see a full-screen “we&apos;ll be back soon” message. Staff (mods+) can still use Nexus and turn it off.
-        </p>
-        <p className="mt-2 text-xs font-semibold text-white/50">{maint?.active ? "Currently ON" : "Currently OFF"}</p>
-      </div>
-      <textarea
-        value={body}
-        onChange={(e) => setBody(e.target.value.slice(0, 280))}
-        rows={4}
-        placeholder="We'll be back soon — Nexus is updating…"
-        className="w-full resize-none rounded-xl border border-line bg-side px-3 py-2.5 text-sm outline-none focus:border-accent"
-      />
-      <div className="flex flex-wrap gap-2">
-        <button
-          disabled={busy}
-          type="button"
-          className="rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-black disabled:opacity-40"
-          onClick={async () => {
-            setBusy(true);
-            if (await setMaintenance(true, body)) setMaint((n) => (n ? { ...n, body, active: true } : n));
-            setBusy(false);
-          }}
-        >
-          Turn ON
-        </button>
-        <button
-          disabled={busy}
-          type="button"
-          className="rounded-full bg-hover px-4 py-2 text-sm font-semibold disabled:opacity-40"
-          onClick={async () => {
-            setBusy(true);
-            if (await setMaintenance(false, body)) setMaint((n) => (n ? { ...n, active: false } : n));
-            setBusy(false);
-          }}
-        >
-          Turn OFF
-        </button>
-      </div>
-    </div>
   );
 }
 

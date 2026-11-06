@@ -69,11 +69,12 @@ export default function MaintenanceGate({ children }: { children: React.ReactNod
         <div className="mx-auto mb-5 grid size-16 place-items-center rounded-3xl bg-white/10 ring-1 ring-white/15">
           <Sparkles className="size-8 text-[#c084fc]" />
         </div>
+        <p className="mb-2 text-[11px] font-black tracking-[0.18em] text-[#c084fc] uppercase">Updating</p>
         <h1 className="text-3xl font-black tracking-tight">We&apos;ll be back soon</h1>
         <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-white/70">
-          {maint?.body?.trim() || "Nexus is updating. Hang tight."}
+          {maint?.body?.trim() || "Nexus is updating. Hang tight — thanks for your patience."}
         </p>
-        <p className="mt-6 text-[11px] font-semibold tracking-[0.14em] text-white/35 uppercase">Nexus · updating</p>
+        <p className="mt-6 text-[11px] font-semibold tracking-[0.14em] text-white/35 uppercase">Nexus · we&apos;ll be back soon</p>
         {userId && (
           <p className={cn("mt-8 text-xs text-white/40")}>Signed in — staff can still open the app once development mode is off.</p>
         )}

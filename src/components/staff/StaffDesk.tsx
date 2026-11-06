@@ -16,12 +16,13 @@ import {
 import { create } from "zustand";
 import { useApp, openModal, toast } from "@/store/app";
 import { myRank, listUsers, setRole, auditLog } from "@/lib/admin";
-import { ROLE_PERKS, can, fetchMaintenance, fetchSiteNotice, perksForRank, setMaintenance, setSiteNotice, type SiteNotice } from "@/lib/privileges";
+import { ROLE_PERKS, can, fetchSiteNotice, perksForRank, setSiteNotice, type SiteNotice } from "@/lib/privileges";
 import { ROLE_INFO, type SiteRole } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { openGram } from "@/lib/gram";
 import { openPulse } from "@/lib/pulse";
 import Avatar from "@/components/ui/Avatar";
+import DevelopmentModePanel from "@/components/admin/DevelopmentModePanel";
 import GiftLinksPanel from "@/components/admin/GiftLinksPanel";
 import type { AdminAction, AdminUserRow } from "@/lib/types";
 
@@ -112,7 +113,7 @@ export default function StaffDesk({ mobile }: { mobile?: boolean }) {
           {tab === "gifts" && rank >= 2 && <GiftLinksPanel />}
           {tab === "members" && rank >= 3 && <Promote rank={rank} />}
           {tab === "announce" && rank >= 3 && <Announce />}
-          {tab === "dev" && rank >= 3 && <DevMode />}
+          {tab === "dev" && rank >= 3 && <DevelopmentModePanel variant="staff" />}
           {tab === "audit" && rank >= 2 && <Audit />}
         </div>
       </div>
@@ -354,59 +355,6 @@ function Promote({ rank }: { rank: number }) {
         ))}
         {rows && !rows.length && <p className="px-4 py-8 text-center text-sm text-white/40">No matches</p>}
         {!rows && <p className="px-4 py-8 text-center text-sm text-white/40">Loading…</p>}
-      </div>
-    </div>
-  );
-}
-
-function DevMode() {
-  const [maint, setMaint] = useState<SiteNotice | null>(null);
-  const [body, setBody] = useState("");
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    void fetchMaintenance().then((n) => {
-      setMaint(n);
-      setBody(n?.body ?? "");
-    });
-  }, []);
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-white/55">
-        Development / updating mode — members see a full-screen “we&apos;ll be back soon” page. Staff can still use Nexus.
-      </p>
-      <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-100">
-        Status: {maint?.active ? "ON" : "OFF"}
-      </div>
-      <textarea
-        value={body}
-        onChange={(e) => setBody(e.target.value.slice(0, 280))}
-        rows={4}
-        placeholder="We'll be back soon — Nexus is updating…"
-        className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm outline-none focus:border-white/25"
-      />
-      <div className="flex flex-wrap gap-2">
-        <button
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            if (await setMaintenance(true, body)) setMaint((n) => (n ? { ...n, body, active: true } : n));
-            setBusy(false);
-          }}
-          className="rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-black disabled:opacity-40"
-        >
-          Turn ON
-        </button>
-        <button
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            if (await setMaintenance(false, body)) setMaint((n) => (n ? { ...n, active: false } : n));
-            setBusy(false);
-          }}
-          className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold"
-        >
-          Turn OFF
-        </button>
       </div>
     </div>
   );
