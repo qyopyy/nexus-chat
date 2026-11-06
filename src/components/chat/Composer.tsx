@@ -524,17 +524,21 @@ export default function Composer({
       </Sheet>
 
       <Sheet open={colorOpen} onClose={() => setColorOpen(false)} title="Colored text">
-        <p className="mb-3 text-sm text-sub">Select text first (or place the cursor), then pick a color.</p>
+        <p className="mb-3 text-sm text-sub">Select text first (or place the cursor), then pick a color. Pink leads for Ksubi Pink vibes.</p>
         <div className="grid grid-cols-3 gap-2 pb-2">
           {FORMAT_COLORS.map((c) => (
             <button
               key={c.id}
               type="button"
+              title={c.label}
               onClick={() => {
                 setColorOpen(false);
                 applyWrap(`{c:${c.id}}`, "{/c}");
               }}
-              className="flex items-center gap-2 rounded-2xl bg-white/[.06] px-3 py-3 text-left active:scale-[.98]"
+              className={cn(
+                "flex items-center gap-2 rounded-2xl bg-white/[.06] px-3 py-3 text-left transition active:scale-[.98] hover:bg-white/[.1]",
+                c.id === "pink" && "ring-1 ring-[#ff4da6]/55",
+              )}
             >
               <span className="size-5 rounded-full ring-2 ring-white/20" style={{ background: c.hex }} />
               <span className="font-semibold" style={{ color: c.hex }}>
