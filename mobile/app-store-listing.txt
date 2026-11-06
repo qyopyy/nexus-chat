@@ -1,0 +1,47 @@
+Nexus — App Store Connect listing copy
+=====================================
+Paste these into App Store Connect → App Store → iOS version → Description / keywords.
+(The App Store description is NOT stored inside the .ipa file.)
+
+Name (under 30 chars)
+  Nexus
+
+Subtitle (under 30 chars)
+  Chat · friends · places
+
+Promotional text (optional, under 170 chars)
+  Stay close to friends with chat, voice, Live location on Wump, music, and more — all in one Nexus home.
+
+Description
+  Nexus is your social home for chatting with friends, sharing moments, and staying nearby.
+
+  • Instant messaging with friends and communities
+  • Voice & video calls
+  • Wump Live map — share your pin with friends and family when you choose
+  • Music, browser, and more built-in apps
+  • Same account on web, iPhone, and Android
+
+  Location is only shared while you turn Live on, and you can stop anytime.
+  Privacy controls let you choose friends, family, or a short everyone flash.
+
+Keywords (comma-separated, under 100 chars)
+  chat,friends,messaging,map,location,social,music,calls,community
+
+Support URL
+  https://nexusproject.cc
+
+Marketing URL
+  https://nexusproject.cc
+
+Privacy Policy URL
+  https://nexusproject.cc/privacy
+
+Category
+  Primary: Social Networking
+  Secondary: Lifestyle
+
+Copyright
+  © 2026 qyopy
+
+Age rating
+  Complete the Age Ratings questionnaire in App Store Connect (chat + location).
