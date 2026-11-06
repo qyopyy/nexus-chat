@@ -1,0 +1,65 @@
+name: NexusSafariManager
+options:
+  bundleIdPrefix: hu.qyopy.nexus
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_TEAM: B44X8B76QR
+    CODE_SIGN_STYLE: Automatic
+packages: {}
+targets:
+  NexusSafariManager:
+    type: application
+    platform: macOS
+    sources:
+      - path: NexusSafariManager
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: hu.qyopy.nexus.safari
+        PRODUCT_NAME: Nexus Safari Manager
+        INFOPLIST_FILE: NexusSafariManager/Info.plist
+        GENERATE_INFOPLIST_FILE: false
+        CODE_SIGN_ENTITLEMENTS: NexusSafariManager/NexusSafariManager.entitlements
+        LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
+        ENABLE_HARDENED_RUNTIME: true
+        COMBINE_HIDPI_IMAGES: true
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies:
+      - target: NexusSafariExtension
+        embed: true
+        codeSign: true
+        copy:
+          destination: plugins
+          path: ""
+    scheme:
+      testTargets: []
+      archive:
+        config: Release
+
+  NexusSafariExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: NexusSafariExtension
+        excludes:
+          - Resources/**
+      - path: NexusSafariExtension/Resources
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: hu.qyopy.nexus.safari.extension
+        PRODUCT_NAME: NexusSafariExtension
+        INFOPLIST_FILE: NexusSafariExtension/Info.plist
+        GENERATE_INFOPLIST_FILE: false
+        CODE_SIGN_ENTITLEMENTS: NexusSafariExtension/NexusSafariExtension.entitlements
+        LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks @executable_path/../../../../Frameworks"
+        SKIP_INSTALL: true
+        ENABLE_HARDENED_RUNTIME: true
+        MACOSX_DEPLOYMENT_TARGET: "14.0"

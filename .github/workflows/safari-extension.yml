@@ -1,0 +1,81 @@
+name: Safari Extension (validate)
+
+on:
+  push:
+    paths:
+      - "safari-extension/**"
+      - "ci_scripts/**"
+      - ".github/workflows/safari-extension.yml"
+  pull_request:
+    paths:
+      - "safari-extension/**"
+      - "ci_scripts/**"
+      - ".github/workflows/safari-extension.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate manifest + rules JSON
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, sys
+          root = pathlib.Path("safari-extension/NexusSafariExtension/Resources")
+          manifest = json.loads((root / "manifest.json").read_text())
+          assert manifest["manifest_version"] == 3
+          for key in ("background", "content_scripts", "action", "permissions"):
+              assert key in manifest, f"missing {key}"
+          rules = json.loads((root / "rules/tracker_block.json").read_text())
+          assert isinstance(rules, list) and len(rules) >= 1
+          for required in (
+              "background.js",
+              "content.js",
+              "popup.html",
+              "popup.js",
+              "popup.css",
+          ):
+              assert (root / required).is_file(), required
+          print("extension resources OK")
+          PY
+
+      - name: Validate Swift sources + XcodeGen spec
+        run: |
+          test -f safari-extension/project.yml
+          test -f safari-extension/NexusSafariManager/NexusSafariManagerApp.swift
+          test -f safari-extension/NexusSafariManager/ExtensionSettingsStore.swift
+          test -f safari-extension/NexusSafariExtension/SafariWebExtensionHandler.swift
+          test -f safari-extension/NexusSafariManager/NexusSafariManager.entitlements
+          test -f safari-extension/NexusSafariExtension/NexusSafariExtension.entitlements
+          grep -q "hu.qyopy.nexus.safari" safari-extension/project.yml
+          grep -q "hu.qyopy.nexus.safari.extension" safari-extension/project.yml
+          grep -q "B44X8B76QR" safari-extension/project.yml
+
+      - name: Validate Xcode Cloud scripts are executable-ready
+        run: |
+          for f in \
+            ci_scripts/ci_post_clone.sh \
+            ci_scripts/ci_pre_xcodebuild.sh \
+            ci_scripts/ci_post_xcodebuild.sh \
+            safari-extension/ci_scripts/ci_post_clone.sh \
+            safari-extension/ci_scripts/ci_pre_xcodebuild.sh \
+            safari-extension/ci_scripts/ci_post_xcodebuild.sh
+          do
+            test -f "$f"
+            head -n 1 "$f" | grep -q '^#!'
+          done
+          # Shell syntax check
+          for f in safari-extension/ci_scripts/*.sh ci_scripts/*.sh; do
+            sh -n "$f"
+          done
+          echo "ci_scripts OK"
+
+      - name: Check extension icons exist
+        run: |
+          for size in 48 96 128 256 512; do
+            test -f "safari-extension/NexusSafariExtension/Resources/images/icon-${size}.png"
+          done
+          for size in 16 19 32 38; do
+            test -f "safari-extension/NexusSafariExtension/Resources/images/toolbar-icon-${size}.png"
+          done
