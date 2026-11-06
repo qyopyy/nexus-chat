@@ -1,6 +1,14 @@
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import LinkBioLanding from "@/components/linkbio/LinkBioLanding";
+import { SITE } from "@/lib/seo";
 
-/** Nexus Link landing → editor (login if needed). */
-export default function BioLanding() {
-  redirect("/bio/app");
+export const metadata: Metadata = {
+  title: "Nexus Link",
+  description: "Invite-only link in bio — themes, Premium, verified checkmarks & badges.",
+  alternates: { canonical: `${SITE.url}/bio` },
+};
+
+/** Nexus Link landing — editor at /bio/app, staff admin at /bio/admin. */
+export default function BioLandingPage() {
+  return <LinkBioLanding />;
 }

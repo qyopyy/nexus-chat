@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Crown, Link2, RefreshCw, Shield, Star, Ticket } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { BadgeCheck, Crown, Link2, RefreshCw, Shield, Star, Ticket } from "lucide-react";
 import {
+  LINKBIO_ADMIN_BADGE_KEYS,
   linkbioAdminList,
+  linkbioAdminSetBadge,
   linkbioAdminSetPremium,
   linkbioAdminSetUsername,
   linkbioInviteCreate,
@@ -12,12 +14,14 @@ import {
   type LinkBioAdminRow,
   type LinkBioInvite,
 } from "@/lib/linkbio";
+import { refreshBadges } from "@/lib/admin";
 import { cn } from "@/lib/utils";
 import { roleRank } from "@/lib/theme";
 import { useApp } from "@/store/app";
 
 export default function LinkBioAdmin({ onBack }: { onBack?: () => void }) {
   const me = useApp((s) => (s.userId ? s.profiles[s.userId] : null));
+  const catalog = useApp((s) => s.badges);
   const canMint = roleRank(me?.site_role) >= 3;
   const [rows, setRows] = useState<LinkBioAdminRow[]>([]);
   const [invites, setInvites] = useState<LinkBioInvite[]>([]);
@@ -26,9 +30,22 @@ export default function LinkBioAdmin({ onBack }: { onBack?: () => void }) {
   const [uname, setUname] = useState("");
   const [inviteNote, setInviteNote] = useState("");
   const [inviteUses, setInviteUses] = useState(1);
+  const [expandBadges, setExpandBadges] = useState<string | null>(null);
+
+  const badgeOptions = useMemo(() => {
+    const byKey = Object.values(catalog).filter((b) => b.key);
+    const preferred = LINKBIO_ADMIN_BADGE_KEYS.map((k) => byKey.find((b) => b.key === k)).filter(
+      (b): b is (typeof byKey)[number] => !!b,
+    );
+    const extras = byKey
+      .filter((b) => b.key !== "verified" && !LINKBIO_ADMIN_BADGE_KEYS.includes(b.key as (typeof LINKBIO_ADMIN_BADGE_KEYS)[number]))
+      .sort((a, b) => b.priority - a.priority);
+    return [...preferred, ...extras];
+  }, [catalog]);
 
   async function reload() {
     setLoading(true);
+    await refreshBadges();
     const [pages, inv] = await Promise.all([linkbioAdminList(), linkbioInviteList()]);
     setRows(pages);
     setInvites(inv);
@@ -50,7 +67,7 @@ export default function LinkBioAdmin({ onBack }: { onBack?: () => void }) {
         <Shield className="size-5 text-[#a855f7]" />
         <div className="min-w-0 flex-1">
           <div className="font-bold">Nexus Link Admin</div>
-          <div className="text-xs text-white/50">Invites · Usernames · Premium</div>
+          <div className="text-xs text-white/50">Invites · Usernames · Premium · Badges · Verified</div>
         </div>
         <button type="button" onClick={() => void reload()} className="grid size-9 place-items-center rounded-full hover:bg-white/10" aria-label="Refresh">
           <RefreshCw className={cn("size-4", loading && "animate-spin")} />
@@ -127,96 +144,179 @@ export default function LinkBioAdmin({ onBack }: { onBack?: () => void }) {
 
           {loading && <p className="text-sm text-white/50">Loading pages…</p>}
           {!loading && !rows.length && <p className="text-sm text-white/50">No Link pages yet.</p>}
-          {rows.map((r) => (
-            <div key={r.id} className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-              <div className="flex flex-wrap items-start gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-bold">@{r.username}</span>
-                    {r.premium && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-bold text-amber-300">
-                        <Star className="size-3" /> Premium
-                      </span>
+          {rows.map((r) => {
+            const ownerKeys = new Set((r.badges ?? []).map((b) => b.key));
+            const showBadges = expandBadges === r.id;
+            return (
+              <div key={r.id} className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+                <div className="flex flex-wrap items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold">@{r.username}</span>
+                      {r.verified && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#2AABEE]/20 px-2 py-0.5 text-[11px] font-bold text-[#7dd3fc]">
+                          <BadgeCheck className="size-3.5" /> Verified
+                        </span>
+                      )}
+                      {r.premium && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-bold text-amber-300">
+                          <Star className="size-3" /> Premium
+                        </span>
+                      )}
+                      {!r.published && <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-bold text-white/50">Draft</span>}
+                    </div>
+                    <div className="mt-1 text-sm text-white/60">
+                      {r.display_name} · owner @{r.owner_username}
+                      {r.owner_role ? ` · ${r.owner_role}` : ""} · {r.theme} · {r.view_count} views
+                    </div>
+                    {(r.badges?.length ?? 0) > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {r.badges!.slice(0, 10).map((b) => (
+                          <span
+                            key={b.key}
+                            title={b.name}
+                            className="inline-grid size-7 place-items-center rounded-lg text-sm"
+                            style={{ background: `${b.color}26`, boxShadow: `inset 0 0 0 1px ${b.color}66` }}
+                          >
+                            {b.icon}
+                          </span>
+                        ))}
+                      </div>
                     )}
-                    {!r.published && <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-bold text-white/50">Draft</span>}
                   </div>
-                  <div className="mt-1 text-sm text-white/60">
-                    {r.display_name} · owner @{r.owner_username} · {r.theme} · {r.view_count} views
-                  </div>
+                  <a
+                    href={`/bio/${encodeURIComponent(r.username)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold hover:bg-white/15"
+                  >
+                    <Link2 className="size-3.5" /> Open
+                  </a>
                 </div>
-                <a
-                  href={`/bio/${encodeURIComponent(r.username)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold hover:bg-white/15"
-                >
-                  <Link2 className="size-3.5" /> Open
-                </a>
-              </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                {editId === r.id ? (
-                  <>
-                    <input
-                      value={uname}
-                      onChange={(e) => setUname(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 24))}
-                      className="min-w-[140px] flex-1 rounded-xl bg-black/40 px-3 py-2 text-sm outline-none ring-1 ring-white/15 focus:ring-[#a855f7]"
-                      placeholder="new_username"
-                    />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {editId === r.id ? (
+                    <>
+                      <input
+                        value={uname}
+                        onChange={(e) => setUname(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 24))}
+                        className="min-w-[140px] flex-1 rounded-xl bg-black/40 px-3 py-2 text-sm outline-none ring-1 ring-white/15 focus:ring-[#a855f7]"
+                        placeholder="new_username"
+                      />
+                      <button
+                        type="button"
+                        className="rounded-xl bg-[#a855f7] px-3 py-2 text-sm font-bold text-white"
+                        onClick={async () => {
+                          const next = await linkbioAdminSetUsername(r.id, uname);
+                          if (next) setRows(next);
+                          setEditId(null);
+                        }}
+                      >
+                        Save name
+                      </button>
+                      <button type="button" className="rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold" onClick={() => setEditId(null)}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
                     <button
                       type="button"
-                      className="rounded-xl bg-[#a855f7] px-3 py-2 text-sm font-bold text-white"
-                      onClick={async () => {
-                        const next = await linkbioAdminSetUsername(r.id, uname);
-                        if (next) setRows(next);
-                        setEditId(null);
+                      className="rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold hover:bg-white/15"
+                      onClick={() => {
+                        setEditId(r.id);
+                        setUname(r.username);
                       }}
                     >
-                      Save name
+                      Change username
                     </button>
-                    <button type="button" className="rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold" onClick={() => setEditId(null)}>
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    className="rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold hover:bg-white/15"
-                    onClick={() => {
-                      setEditId(r.id);
-                      setUname(r.username);
-                    }}
-                  >
-                    Change username
-                  </button>
-                )}
+                  )}
 
-                {r.premium ? (
-                  <button
-                    type="button"
-                    className="rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold hover:bg-white/15"
-                    onClick={async () => {
-                      const next = await linkbioAdminSetPremium(r.id, false);
-                      if (next) setRows(next);
-                    }}
-                  >
-                    Remove Premium
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded-xl bg-amber-400/20 px-3 py-2 text-sm font-bold text-amber-200 hover:bg-amber-400/30"
-                    onClick={async () => {
-                      const next = await linkbioAdminSetPremium(r.id, true);
-                      if (next) setRows(next);
-                    }}
-                  >
-                    <Crown className="size-3.5" /> Grant Premium
-                  </button>
+                  {r.premium ? (
+                    <button
+                      type="button"
+                      className="rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold hover:bg-white/15"
+                      onClick={async () => {
+                        const next = await linkbioAdminSetPremium(r.id, false);
+                        if (next) setRows(next);
+                      }}
+                    >
+                      Remove Premium
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-xl bg-amber-400/20 px-3 py-2 text-sm font-bold text-amber-200 hover:bg-amber-400/30"
+                      onClick={async () => {
+                        const next = await linkbioAdminSetPremium(r.id, true);
+                        if (next) setRows(next);
+                      }}
+                    >
+                      <Crown className="size-3.5" /> Grant Premium
+                    </button>
+                  )}
+
+                  {canMint && (
+                    <button
+                      type="button"
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm font-bold",
+                        r.verified ? "bg-[#2AABEE]/20 text-[#7dd3fc] hover:bg-[#2AABEE]/30" : "bg-white/10 hover:bg-white/15",
+                      )}
+                      onClick={async () => {
+                        const next = await linkbioAdminSetBadge(r.owner_id, "verified", !r.verified);
+                        if (next) setRows(next);
+                      }}
+                    >
+                      <BadgeCheck className="size-3.5" /> {r.verified ? "Remove verified" : "Verify ✓"}
+                    </button>
+                  )}
+
+                  {canMint && (
+                    <button
+                      type="button"
+                      className="rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold hover:bg-white/15"
+                      onClick={() => setExpandBadges(showBadges ? null : r.id)}
+                    >
+                      {showBadges ? "Hide badges" : "More badges"}
+                    </button>
+                  )}
+                </div>
+
+                {canMint && showBadges && (
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {badgeOptions.map((b) => {
+                      if (!b?.key) return null;
+                      const on = ownerKeys.has(b.key);
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          title={b.description || b.name}
+                          onClick={async () => {
+                            const next = await linkbioAdminSetBadge(r.owner_id, b.key!, !on);
+                            if (next) setRows(next);
+                          }}
+                          className={cn(
+                            "flex items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold ring-1 transition",
+                            on ? "bg-white/15 ring-white/25" : "bg-black/20 ring-white/10 hover:bg-white/10",
+                          )}
+                        >
+                          <span
+                            className="grid size-7 place-items-center rounded-lg text-sm"
+                            style={{ background: `${b.color}33`, boxShadow: `inset 0 0 0 1px ${b.color}66` }}
+                          >
+                            {b.icon}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate">{b.name}</span>
+                          <span className={cn("text-[10px] uppercase", on ? "text-ok" : "text-white/35")}>{on ? "On" : "Off"}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

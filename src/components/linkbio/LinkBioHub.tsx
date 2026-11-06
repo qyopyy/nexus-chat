@@ -33,14 +33,20 @@ export default function LinkBioHub({
   mobile,
   onBack,
   standalone,
+  initialAdmin,
 }: {
   mobile?: boolean;
   onBack?: () => void;
   standalone?: boolean;
+  initialAdmin?: boolean;
 }) {
   const me = useApp((s) => (s.userId ? s.profiles[s.userId] : null));
   const canAdmin = roleRank(me?.site_role) >= 2;
-  const [tab, setTab] = useState<"edit" | "settings" | "admin">("edit");
+  const [tab, setTab] = useState<"edit" | "settings" | "admin">(initialAdmin && canAdmin ? "admin" : "edit");
+
+  useEffect(() => {
+    if (initialAdmin && canAdmin) setTab("admin");
+  }, [initialAdmin, canAdmin]);
   const [page, setPage] = useState<LinkBioPage | null>(null);
   const [busy, setBusy] = useState(false);
   const [linkInput, setLinkInput] = useState("");
