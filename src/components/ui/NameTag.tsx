@@ -23,7 +23,7 @@ export function Badges({ userId, size = "sm", max = 6, className }: { userId: st
     }
     ids
       .map((id) => catalog[id])
-      .filter((b) => b && b.key !== "verified")
+      .filter((b) => b && b.key !== "verified" && b.key !== "premium")
       .sort((a, b) => b.priority - a.priority)
       .filter((b) => !out.some((o) => o.icon === b.icon))
       .forEach((b) => out.push({ key: b.id, name: b.name, icon: b.icon, color: b.color, description: b.description }));
@@ -93,11 +93,19 @@ export default function NameTag({
       {p?.is_bot && <span className="shrink-0 rounded bg-accent px-1 text-[9px] leading-[14px] font-black text-white">BOT</span>}
       {badges && (() => {
         const plan = activePlan(p);
-        return plan ? (
-          <span className="shrink-0 text-[0.85em]" title={plan.name} style={{ filter: `drop-shadow(0 0 4px ${plan.color})` }}>
-            {plan.emoji}
-          </span>
-        ) : null;
+        if (!plan) return null;
+        return (
+          <>
+            <span className="shrink-0 text-[0.9em]" title="Nexus Lighting Premium" style={{ filter: "drop-shadow(0 0 6px #faa61a)" }}>
+              ⭐
+            </span>
+            {plan.emoji !== "⭐" && (
+              <span className="shrink-0 text-[0.85em]" title={plan.name} style={{ filter: `drop-shadow(0 0 4px ${plan.color})` }}>
+                {plan.emoji}
+              </span>
+            )}
+          </>
+        );
       })()}
       {badges && <Badges userId={userId} size={badgeSize} max={maxBadges} />}
     </span>
