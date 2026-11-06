@@ -274,35 +274,14 @@ function mimeFor(file: File, kind: "video" | "image") {
 /** XHR upload — fetch-based supabase.storage.upload hangs after CORS OPTIONS on iOS for large .mov/.mp4 */
 async function put(blob: Blob, ext: string, type: string, onProgress?: (p: number) => void) {
   const path = `${me()}/${crypto.randomUUID()}.${ext}`;
-  const { data: s } = await supabase.auth.getSession();
-  const token = s.session?.access_token;
-  if (!token) throw new Error("Sign in again to upload");
-  await new Promise<void>((res, rej) => {
-    const x = new XMLHttpRequest();
-    x.open("POST", `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/gram/${path.split("/").map(encodeURIComponent).join("/")}`);
-    x.setRequestHeader("Authorization", `Bearer ${token}`);
-    x.setRequestHeader("apikey", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "");
-    x.setRequestHeader("Content-Type", type || "application/octet-stream");
-    x.setRequestHeader("x-upsert", "false");
-    x.setRequestHeader("cache-control", "31536000");
-    x.upload.onprogress = (e) => {
-      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
-    };
-    x.onload = () => {
-      if (x.status < 300) return res();
-      let msg = `Upload failed (${x.status})`;
-      try {
-        const j = JSON.parse(x.responseText) as { message?: string; error?: string };
-        msg = j.message || j.error || msg;
-      } catch {
-        /* */
-      }
-      rej(new Error(msg));
-    };
-    x.onerror = () => rej(new Error("Network error while uploading — check your connection and try again"));
-    x.ontimeout = () => rej(new Error("Upload timed out — try a shorter clip"));
-    x.timeout = 5 * 60 * 1000;
-    x.send(blob);
+  const { xhrStorageUpload } = await import("./storageUpload");
+  await xhrStorageUpload({
+    bucket: "gram",
+    path,
+    blob,
+    contentType: type || "application/octet-stream",
+    timeoutMs: 5 * 60 * 1000,
+    onProgress,
   });
   return path;
 }
