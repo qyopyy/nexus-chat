@@ -1,0 +1,102 @@
+Nexus App Store upload WITHOUT local Xcode
+=========================================
+
+Your Mac is too old for current Xcode — that’s fine.
+GitHub Actions runs a modern Mac in the cloud and signs + uploads for you.
+
+
+A) Create an Apple Distribution certificate (any computer, even Windows/Linux)
+-----------------------------------------------------------------------------
+1. Open a terminal and run:
+
+   openssl genrsa -out NexusDistribution.key 2048
+   openssl req -new -key NexusDistribution.key -out NexusDistribution.csr \
+     -subj "/emailAddress=owner@qyopy.hu/CN=Nexus Distribution/C=HU"
+
+2. Browser → https://developer.apple.com/account/resources/certificates/list
+   → + → Apple Distribution → Continue → upload NexusDistribution.csr
+   → Download distribution.cer
+
+3. Convert to .p12 (you’ll need the .cer + .key together):
+
+   openssl x509 -in distribution.cer -inform DER -out distribution.pem
+   openssl pkcs12 -export -out NexusDistribution.p12 \
+     -inkey NexusDistribution.key -in distribution.pem \
+     -passout pass:CHOOSE_A_STRONG_PASSWORD
+
+   Keep the password — it becomes APPLE_CERTIFICATE_PASSWORD.
+
+
+B) Create an App Store provisioning profile
+-------------------------------------------
+1. https://developer.apple.com/account/resources/identifiers/list
+   Confirm App ID exists for:  hu.qyopy.nexus.B44X8B76QR
+   (same as App Store Connect Bundle ID)
+
+2. https://developer.apple.com/account/resources/profiles/list
+   → + → App Store Connect → select that App ID
+   → select the Apple Distribution certificate from step A
+   → name it e.g. "Nexus App Store"
+   → Download Nexus_App_Store.mobileprovision
+
+
+C) App Store Connect API key (for automatic upload)
+---------------------------------------------------
+1. https://appstoreconnect.apple.com/access/integrations/api
+   → Generate API Key → role: App Manager (or Admin)
+   → Download AuthKey_XXXXXX.p8  (only once!)
+   → note Key ID + Issuer ID
+
+
+D) Add GitHub repository Secrets
+--------------------------------
+Repo → Settings → Secrets and variables → Actions → New repository secret:
+
+  APPLE_TEAM_ID
+      Your 10-character Team ID (developer.apple.com → Membership details)
+
+  APPLE_CERTIFICATE_BASE64
+      macOS/Linux:  base64 -i NexusDistribution.p12 | pbcopy
+      (paste the whole base64 string)
+
+  APPLE_CERTIFICATE_PASSWORD
+      The password you chose when exporting the .p12
+
+  APPLE_PROVISION_PROFILE_BASE64
+      base64 -i Nexus_App_Store.mobileprovision | pbcopy
+
+  APP_STORE_CONNECT_API_KEY_ID
+      Key ID from step C
+
+  APP_STORE_CONNECT_ISSUER_ID
+      Issuer ID from step C
+
+  APP_STORE_CONNECT_API_KEY_BASE64
+      base64 -i AuthKey_XXXXXX.p8 | pbcopy
+
+Optional variable (Settings → Variables):
+  IOS_BUNDLE_ID = hu.qyopy.nexus.B44X8B76QR
+
+
+E) Run the cloud build
+----------------------
+1. Merge the PR that adds workflow "iOS App Store (signed)"
+2. GitHub → Actions → "iOS App Store (signed)" → Run workflow
+   • upload = true  → signs AND sends to App Store Connect
+   • upload = false → only produces Nexus-AppStore.ipa artifact (Transporter-ready)
+
+3. Wait ~10–15 minutes. Then App Store Connect → TestFlight should show the build
+   (processing can take another few minutes).
+
+
+F) Still paste listing text in App Store Connect
+------------------------------------------------
+Icon is in the IPA. Description is NOT — paste from:
+  mobile/app-store-listing.txt
+
+
+Troubleshooting
+---------------
+• "No Apple Distribution identity" → you made a Development cert; redo step A as Apple Distribution
+• Bundle ID mismatch → profile must be for hu.qyopy.nexus.B44X8B76QR exactly
+• 90174 on old Sideloadly IPA → ignore those; only use the signed Nexus-AppStore.ipa from this workflow

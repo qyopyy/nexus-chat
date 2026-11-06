@@ -1,62 +1,38 @@
-Transporter / App Store Connect — current issues
-================================================
+Transporter / App Store Connect — issues & fix (no local Xcode)
+===============================================================
 
-What you saw
-------------
+Issues you hit
+--------------
 1) ERROR 90174 — Missing Provisioning Profile
-   "Apps must contain a provisioning profile in a file named embedded.mobileprovision."
+   Unsigned Sideloadly IPA has no embedded.mobileprovision.
 
-2) No app icon in Transporter
-   Placeholder App Store “A” icon while verification fails / unsigned IPA.
+2) No icon in Transporter
+   Placeholder while verification fails; marketing icon must be opaque RGB.
 
 3) No App Store description
-   Description lives in App Store Connect listing, not inside the .ipa.
+   Description is edited in App Store Connect (see app-store-listing.txt).
+
+4) Xcode “not compatible” on your Mac
+   Current Xcode needs a newer macOS. You do NOT need Xcode locally.
 
 
-Why Transporter rejects the GitHub Nexus.ipa
---------------------------------------------
-GitHub Actions builds an UNSIGNED Sideloadly IPA on purpose
-(CODE_SIGNING_ALLOWED=NO). That package never contains:
+Fix: sign + upload on GitHub’s Mac (cloud)
+-----------------------------------------
+Follow:  mobile/APP_STORE_CI_SETUP.txt
 
-  • embedded.mobileprovision  (App Store Distribution profile)
-  • valid Apple Distribution code signature
+Workflow:  Actions → “iOS App Store (signed)”
 
-Matching the bundle ID (hu.qyopy.nexus.B44X8B76QR) is required but NOT enough.
-Transporter will always fail 90174 on the Sideloadly IPA.
+That produces a real App Store IPA with:
+  • embedded.mobileprovision
+  • Apple Distribution signature
+  • opaque App Store icons
 
-
-How to upload correctly (Mac + Xcode)
-------------------------------------
-1. Open https://nexusproject.cc (or this repo) on your Mac.
-2. In Terminal:
-
-     cd mobile
-     npm i
-     npx cap add ios   # first time only
-     npx cap sync ios
-     npx cap open ios
-
-3. In Xcode → App target → Signing & Capabilities
-   • Team: BARBARA EVA CSATTOS / owner@qyopy.hu
-   • Bundle Identifier: hu.qyopy.nexus.B44X8B76QR
-   • Automatically manage signing
-
-4. Product → Archive → Distribute App → App Store Connect → Upload
-
-That signed archive embeds the provisioning profile + icons properly.
+Then either:
+  • upload=true in the workflow (API key), or
+  • download Nexus-AppStore.ipa and drop it into Transporter
 
 
-What we fixed in the repo for icons / metadata
-----------------------------------------------
-• App Store 1024 marketing icon is now opaque RGB (alpha rejected by Apple)
-• Full AppIcon set generated into the IPA asset catalog
-• Info.plist display name / bundle metadata for Nexus
-• Listing text ready to paste: mobile/app-store-listing.txt
-
-
-Still do in App Store Connect (website)
----------------------------------------
-• App Privacy questionnaire
-• Screenshots (6.7" / 6.5" / 5.5" as required)
-• Paste Description / Subtitle / Keywords from app-store-listing.txt
-• Age Ratings
+Do NOT upload
+-------------
+GitHub releases named “Nexus iOS build N” / Sideloadly Nexus.ipa
+→ always 90174.
