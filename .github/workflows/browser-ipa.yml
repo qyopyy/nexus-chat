@@ -13,10 +13,12 @@ on:
     paths:
       - "mobile-browser/**"
       - ".github/workflows/browser-ipa.yml"
+      - ".github/scripts/fix-ios-framework-ids.sh"
   pull_request:
     paths:
       - "mobile-browser/**"
       - ".github/workflows/browser-ipa.yml"
+      - ".github/scripts/fix-ios-framework-ids.sh"
 
 permissions:
   contents: write
@@ -85,12 +87,13 @@ jobs:
       - name: Build (unsigned)
         run: |
           cd ios/App
+          # Do NOT pass PRODUCT_BUNDLE_IDENTIFIER — it stamps every framework with the
+          # same id (Sideloadly DuplicateIdentifier). Capacitor appId sets the App target.
           if [ -d App.xcworkspace ]; then TARGET="-workspace App.xcworkspace"; else TARGET="-project App.xcodeproj"; fi
           xcodebuild $TARGET -scheme App -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' \
             -archivePath "$PWD/build/App.xcarchive" archive \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
-            PRODUCT_BUNDLE_IDENTIFIER="hu.qyopy.browser" \
             MARKETING_VERSION="1.${GITHUB_RUN_NUMBER}" CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
             | tail -40
           test -d build/App.xcarchive/Products/Applications/App.app
@@ -98,8 +101,12 @@ jobs:
       - name: Package IPA
         run: |
           cd ios/App
+          APP=build/App.xcarchive/Products/Applications/App.app
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier hu.qyopy.browser" "$APP/Info.plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string hu.qyopy.browser" "$APP/Info.plist"
+          bash "$GITHUB_WORKSPACE/.github/scripts/fix-ios-framework-ids.sh" "$APP"
           rm -rf Payload && mkdir Payload
-          cp -R build/App.xcarchive/Products/Applications/App.app Payload/
+          cp -R "$APP" Payload/
           zip -qry ../../NexusBrowser.ipa Payload
           ls -lh ../../NexusBrowser.ipa
 
