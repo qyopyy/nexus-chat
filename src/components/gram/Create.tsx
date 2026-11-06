@@ -158,6 +158,28 @@ export default function Create() {
           />
 
           {kind !== "story" && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {["nexus", "newmusic", "fyp", "producer", "release", ...(mood ? [mood] : []), ...(genre ? [GRAM_GENRES.find((g) => g.id === genre)?.tag || genre] : [])].map((tag) => {
+                const hash = `#${tag}`;
+                const on = caption.toLowerCase().includes(hash.toLowerCase());
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => {
+                      if (on) setCaption((c) => c.replace(new RegExp(`\\s*${hash}\\b`, "gi"), "").replace(/\s{2,}/g, " ").trim());
+                      else setCaption((c) => `${c.trim()}${c.trim() ? " " : ""}${hash}`.slice(0, 2200));
+                    }}
+                    className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", on ? "bg-accent text-white" : "bg-white/5 text-white/70 hover:bg-white/10")}
+                  >
+                    {hash}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {kind !== "story" && (
             <>
               <div className="mt-3">
                 <p className="mb-1.5 text-xs font-semibold text-sub">Genre / style</p>

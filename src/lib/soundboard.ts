@@ -278,6 +278,39 @@ const SYNTH: Record<string, { name: string; emoji: string; secs: number; make: S
 export const BUILTINS: Sound[] = Object.entries(SYNTH).map(([id, s]) => ({ id: `b:${id}`, builtin: id, name: s.name, emoji: s.emoji, volume: 1, duration: s.secs }));
 export const builtinMeta = (id: string) => SYNTH[id];
 
+const PIN_KEY = "nexus.soundboard.pins";
+const DEFAULT_PINS = BUILTINS.slice(0, 3).map((s) => s.id);
+
+/** Up to 3 quick-fire sound IDs for the call bar. */
+export function loadPinnedSounds(): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PIN_KEY) || "null") as string[] | null;
+    if (Array.isArray(raw) && raw.length) return raw.filter(Boolean).slice(0, 3);
+  } catch {
+    /* ignore */
+  }
+  return [...DEFAULT_PINS];
+}
+
+export function savePinnedSounds(ids: string[]) {
+  try {
+    localStorage.setItem(PIN_KEY, JSON.stringify(ids.filter(Boolean).slice(0, 3)));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function togglePinnedSound(id: string): string[] {
+  const cur = loadPinnedSounds();
+  const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur.filter((x) => x !== id), id].slice(-3);
+  savePinnedSounds(next);
+  return next;
+}
+
+export function resolveSoundById(id: string, mine: Sound[] | null | undefined): Sound | null {
+  return BUILTINS.find((s) => s.id === id) || mine?.find((s) => s.id === id) || null;
+}
+
 export async function renderBuiltin(id: string): Promise<AudioBuffer | null> {
   const s = SYNTH[id];
   if (!s) return null;

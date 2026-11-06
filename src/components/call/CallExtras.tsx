@@ -20,6 +20,7 @@ import {
   cycleVoiceFx,
   flipCamera,
   noiseModeLabel,
+  playSound,
   ringAgain,
   setCallLayout,
   startCallRecording,
@@ -29,6 +30,7 @@ import {
   useCall,
   voiceQualityLabel,
 } from "@/lib/call";
+import { loadMySounds, loadPinnedSounds, resolveSoundById, useSounds } from "@/lib/soundboard";
 import { cn } from "@/lib/utils";
 
 /** Compact quality + recording + layout tools for the call chrome */
@@ -94,6 +96,39 @@ export function CallStatusChips() {
   );
 }
 
+function PinnedSoundPads({ mobile }: { mobile?: boolean }) {
+  const mine = useSounds((s) => s.mine);
+  const [pins, setPins] = useState(() => loadPinnedSounds());
+  useEffect(() => {
+    void loadMySounds();
+    const onFocus = () => setPins(loadPinnedSounds());
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+  const sounds = pins.map((id) => resolveSoundById(id, mine)).filter(Boolean);
+  if (!sounds.length) return null;
+  if (mobile) {
+    return (
+      <>
+        {sounds.map((s) => (
+          <Mini key={s!.id} label={s!.emoji} onClick={() => void playSound(s!)}>
+            <span className="text-lg leading-none">{s!.emoji}</span>
+          </Mini>
+        ))}
+      </>
+    );
+  }
+  return (
+    <>
+      {sounds.map((s) => (
+        <Icon key={s!.id} title={`Play ${s!.name}`} onClick={() => void playSound(s!)}>
+          <span className="text-base leading-none">{s!.emoji}</span>
+        </Icon>
+      ))}
+    </>
+  );
+}
+
 export function CallExtraControls({ mobile }: { mobile?: boolean }) {
   const layout = useCall((s) => s.layout);
   const recording = useCall((s) => s.recording);
@@ -134,6 +169,7 @@ export function CallExtraControls({ mobile }: { mobile?: boolean }) {
         <Mini label="Whisper" onClick={() => toggleWhisper()}>
           <MicOff className="size-5" />
         </Mini>
+        <PinnedSoundPads mobile />
         {alone && (
           <Mini label="Ring" onClick={() => void ringAgain()}>
             <PhoneCall className="size-5" />
@@ -171,6 +207,7 @@ export function CallExtraControls({ mobile }: { mobile?: boolean }) {
       <Icon title={whisper ? "Whisper on (W)" : "Whisper (W)"} on={whisper} onClick={() => toggleWhisper()}>
         <MicOff className="size-5" />
       </Icon>
+      <PinnedSoundPads />
       {canRecordCall() && (
         <Icon
           title={recording ? "Stop & download recording (Shift+R)" : "Record call audio (Shift+R)"}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -14,6 +14,7 @@ import {
   Search,
   Settings2,
   Shield,
+  TextSearch,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -84,6 +85,32 @@ export default function BrowserHub({
   const stack = useRef<View[]>([{ kind: "home" }]);
   const [stackI, setStackI] = useState(0);
   const input = useRef<HTMLInputElement>(null);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQ, setFindQ] = useState("");
+  const [findIdx, setFindIdx] = useState(0);
+  const findInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f" && view.kind === "page") {
+        e.preventDefault();
+        setFindOpen(true);
+        requestAnimationFrame(() => findInput.current?.focus());
+      }
+      if (e.key === "Escape" && findOpen) setFindOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [view.kind, findOpen]);
+
+  useEffect(() => {
+    setFindIdx(0);
+  }, [findQ, view.kind === "page" ? view.url : ""]);
+
+  useEffect(() => {
+    if (!findOpen || !findQ.trim()) return;
+    requestAnimationFrame(() => document.getElementById("browser-find-active")?.scrollIntoView({ block: "center", behavior: "smooth" }));
+  }, [findIdx, findQ, findOpen, view]);
 
   useEffect(() => {
     setPrefs(loadBrowserPrefs());
@@ -568,6 +595,18 @@ export default function BrowserHub({
               <span className="rounded-full bg-orange-500/15 px-2.5 py-1 text-[10px] font-bold text-orange-200">
                 {summarizeShields(view.shields || emptyShieldStats())}
               </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setFindOpen(true);
+                  requestAnimationFrame(() => findInput.current?.focus());
+                }}
+                className="grid size-8 place-items-center rounded-full hover:bg-white/10"
+                aria-label="Find in page"
+                title="Find in page (⌘/Ctrl+F)"
+              >
+                <TextSearch className="size-4" />
+              </button>
               <button type="button" onClick={() => void openLive(view.url)} className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">
                 Live view
               </button>
@@ -579,8 +618,60 @@ export default function BrowserHub({
               </button>
             </div>
             <p className="mb-3 truncate text-[11px] text-white/40">{view.url}</p>
+            {findOpen && (
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
+                <TextSearch className="size-4 text-white/60" />
+                <input
+                  ref={findInput}
+                  value={findQ}
+                  onChange={(e) => setFindQ(e.target.value)}
+                  placeholder="Find in page…"
+                  className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                />
+                {(() => {
+                  const q = findQ.trim().toLowerCase();
+                  const hay = (view.text || "").toLowerCase();
+                  const matches: number[] = [];
+                  if (q) {
+                    let from = 0;
+                    while (from < hay.length) {
+                      const i = hay.indexOf(q, from);
+                      if (i < 0) break;
+                      matches.push(i);
+                      from = i + q.length;
+                    }
+                  }
+                  const total = matches.length;
+                  const cur = total ? ((findIdx % total) + total) % total : 0;
+                  return (
+                    <>
+                      <span className="text-[11px] tabular-nums text-white/50">{total ? `${cur + 1}/${total}` : "0/0"}</span>
+                      <button
+                        type="button"
+                        disabled={!total}
+                        className="rounded-full bg-white/10 px-2 py-1 text-xs font-bold disabled:opacity-40"
+                        onClick={() => setFindIdx((i) => i - 1)}
+                      >
+                        Prev
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!total}
+                        className="rounded-full bg-white/10 px-2 py-1 text-xs font-bold disabled:opacity-40"
+                        onClick={() => setFindIdx((i) => i + 1)}
+                      >
+                        Next
+                      </button>
+                      <button type="button" className="grid size-7 place-items-center rounded-full hover:bg-white/10" onClick={() => setFindOpen(false)} aria-label="Close find">
+                        <X className="size-3.5" />
+                      </button>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
             <article className="whitespace-pre-wrap rounded-2xl bg-white/[0.04] p-4 text-[15px] leading-relaxed text-white/85 ring-1 ring-white/10">
-              {view.text || "No readable text extracted."}
+              {highlightFind(view.text || "No readable text extracted.", findOpen ? findQ : "", findIdx)}
             </article>
           </div>
         )}
@@ -607,4 +698,41 @@ export default function BrowserHub({
       </div>
     </div>
   );
+}
+
+function highlightFind(raw: string, query: string, findIdx: number): ReactNode {
+  const q = query.trim();
+  if (!q) return raw;
+  const lower = raw.toLowerCase();
+  const needle = q.toLowerCase();
+  const parts: ReactNode[] = [];
+  const matches: number[] = [];
+  let scan = 0;
+  while (scan < lower.length) {
+    const i = lower.indexOf(needle, scan);
+    if (i < 0) break;
+    matches.push(i);
+    scan = i + needle.length;
+  }
+  const active = matches.length ? ((findIdx % matches.length) + matches.length) % matches.length : -1;
+  let from = 0;
+  let mi = 0;
+  while (from < raw.length) {
+    const i = lower.indexOf(needle, from);
+    if (i < 0) {
+      parts.push(raw.slice(from));
+      break;
+    }
+    if (i > from) parts.push(raw.slice(from, i));
+    const hit = raw.slice(i, i + q.length);
+    const isActive = mi === active;
+    parts.push(
+      <mark key={`${i}-${mi}`} id={isActive ? "browser-find-active" : undefined} className={cn("rounded px-0.5", isActive ? "bg-amber-300 text-black" : "bg-amber-300/40 text-white")}>
+        {hit}
+      </mark>,
+    );
+    mi += 1;
+    from = i + q.length;
+  }
+  return parts;
 }

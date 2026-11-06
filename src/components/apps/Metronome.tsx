@@ -5,13 +5,19 @@ import { Minus, Plus, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AppFrame from "./AppFrame";
 
+type Subdiv = "none" | "8th" | "triplet";
+
 export default function Metronome({ onBack, mobile }: { onBack: () => void; mobile?: boolean }) {
   const [bpm, setBpm] = useState(120);
   const [beats, setBeats] = useState(4);
+  const [subdiv, setSubdiv] = useState<Subdiv>("none");
+  const [muteOffbeats, setMuteOffbeats] = useState(false);
   const [running, setRunning] = useState(false);
   const [beat, setBeat] = useState(0);
   const bpmRef = useRef(bpm);
   const beatsRef = useRef(beats);
+  const subdivRef = useRef(subdiv);
+  const muteRef = useRef(muteOffbeats);
   const ctxRef = useRef<AudioContext | null>(null);
   const nextRef = useRef(0);
   const beatRef = useRef(0);
@@ -23,6 +29,12 @@ export default function Metronome({ onBack, mobile }: { onBack: () => void; mobi
   useEffect(() => {
     beatsRef.current = beats;
   }, [beats]);
+  useEffect(() => {
+    subdivRef.current = subdiv;
+  }, [subdiv]);
+  useEffect(() => {
+    muteRef.current = muteOffbeats;
+  }, [muteOffbeats]);
 
   useEffect(() => {
     return () => {
@@ -31,16 +43,17 @@ export default function Metronome({ onBack, mobile }: { onBack: () => void; mobi
     };
   }, []);
 
-  function click(accent: boolean, time: number) {
+  function click(kind: "accent" | "beat" | "sub", time: number) {
     const ctx = ctxRef.current;
     if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "square";
-    osc.frequency.value = accent ? 1200 : 800;
+    osc.frequency.value = kind === "accent" ? 1200 : kind === "beat" ? 800 : 560;
+    const peak = kind === "sub" ? 0.08 : 0.18;
     gain.gain.setValueAtTime(0.0001, time);
-    gain.gain.exponentialRampToValueAtTime(0.18, time + 0.001);
-    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.06);
+    gain.gain.exponentialRampToValueAtTime(peak, time + 0.001);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + (kind === "sub" ? 0.035 : 0.06));
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start(time);
@@ -68,19 +81,29 @@ export default function Metronome({ onBack, mobile }: { onBack: () => void; mobi
       const now = ctx.currentTime;
       const interval = 60 / bpmRef.current;
       const bar = beatsRef.current;
+      const parts = subdivRef.current === "8th" ? 2 : subdivRef.current === "triplet" ? 3 : 1;
+      const step = interval / parts;
       while (nextRef.current < now + 0.12) {
-        const accent = beatRef.current % bar === 0;
-        click(accent, nextRef.current);
-        setBeat(beatRef.current % bar);
+        const total = beatRef.current;
+        const beatIdx = Math.floor(total / parts) % bar;
+        const part = total % parts;
+        const accent = beatIdx === 0 && part === 0;
+        if (part === 0) {
+          if (accent) click("accent", nextRef.current);
+          else if (!muteRef.current) click("beat", nextRef.current);
+          setBeat(beatIdx);
+        } else {
+          click("sub", nextRef.current);
+        }
         beatRef.current += 1;
-        nextRef.current += interval;
+        nextRef.current += step;
       }
     }, 25);
   }
 
   return (
     <AppFrame title="Metronome" Icon={Timer} iconClass="text-[#f23f42]" mobile={mobile} onBack={onBack}>
-      <p className="text-sm text-sub">Keep time while you write or practice. Clicks use Web Audio in this tab only.</p>
+      <p className="text-sm text-sub">Keep time while you write or practice. Optional 8th / triplet subdivisions stay in this tab.</p>
       <div className="rounded-2xl bg-side p-5">
         <div className="flex items-center justify-center gap-4">
           <button onClick={() => setBpm((v) => Math.max(40, v - 1))} className="grid size-12 place-items-center rounded-full bg-black/25 hover:bg-black/35" aria-label="Slower">
@@ -107,6 +130,23 @@ export default function Metronome({ onBack, mobile }: { onBack: () => void; mobi
             </button>
           ))}
         </div>
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          {(
+            [
+              ["none", "Quarter"],
+              ["8th", "8ths"],
+              ["triplet", "Triplets"],
+            ] as [Subdiv, string][]
+          ).map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setSubdiv(id)} className={cn("rounded-xl px-3 py-2 text-sm font-semibold", subdiv === id ? "bg-accent text-white" : "bg-black/25 hover:bg-black/35")}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 text-sm text-sub">
+          <input type="checkbox" checked={muteOffbeats} onChange={(e) => setMuteOffbeats(e.target.checked)} className="size-4 accent-accent" />
+          Mute offbeats (accent only)
+        </label>
         <button onClick={() => (running ? stop() : void start())} className={cn("mt-6 w-full rounded-xl py-3 text-sm font-bold text-white", running ? "bg-[#f23f42]" : "bg-accent")}>
           {running ? "Stop" : "Start"}
         </button>

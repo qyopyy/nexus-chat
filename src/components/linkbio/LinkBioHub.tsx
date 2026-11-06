@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, BadgeCheck, ChevronDown, ChevronUp, Copy, ExternalLink, Link2, Lock, LogOut, Plus, QrCode, Settings2, Shield, Sparkles, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, BadgeCheck, ChevronDown, ChevronUp, Copy, Download, ExternalLink, Link2, Lock, LogOut, Plus, Settings2, Shield, Sparkles, Star, Trash2 } from "lucide-react";
+import QRCode from "qrcode";
 import { supabase } from "@/lib/supabase";
 import { useApp, toast } from "@/store/app";
 import { roleRank } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { sanitizeDownloadName } from "@/lib/fileSafety";
 import { normalizeLink, PLATFORMS } from "@/lib/links";
 import {
   LINKBIO_BACKGROUNDS,
@@ -943,15 +945,32 @@ export default function LinkBioHub({
                 >
                   <Copy className="size-4" />
                 </button>
-                <a
-                  href={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(publicUrl)}`}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
                   className="grid size-11 place-items-center rounded-full bg-white/15 hover:bg-white/25"
-                  title="QR code"
+                  title="Download themed QR"
+                  onClick={() => {
+                    const accent = page.accent && /^#[0-9A-Fa-f]{6}$/.test(page.accent) ? page.accent : "#a855f7";
+                    const canvas = document.createElement("canvas");
+                    void QRCode.toCanvas(canvas, publicUrl, {
+                      width: 512,
+                      margin: 2,
+                      color: { dark: accent, light: "#0b0614" },
+                      errorCorrectionLevel: "M",
+                    })
+                      .then(() => {
+                        const a = document.createElement("a");
+                        a.href = canvas.toDataURL("image/png");
+                        a.download = `${sanitizeDownloadName(page.username || "nexus-link", "link-qr")}.png`;
+                        a.click();
+                        toast("QR downloaded", "success");
+                      })
+                      .catch(() => toast("Couldn't make QR", "error"));
+                  }}
                 >
-                  <QrCode className="size-4" />
-                </a>
+                  <Download className="size-4" />
+                  <span className="sr-only">QR</span>
+                </button>
               </div>
               <p className="mt-3 text-center text-[11px] text-white/40">{page.view_count} views · theme {page.theme} · bg {page.background}</p>
             </section>
