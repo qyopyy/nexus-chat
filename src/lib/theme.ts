@@ -284,6 +284,25 @@ export const FONT_GROUPS: { id: string; label: string; fonts: string[] }[] = [
   { id: "mono", label: "Mono & fun", fonts: ["mono", "ibmMono", "comic", "pixel"] },
 ];
 
+/** Groups for Appearance → Theme picker (keeps Ksubi Pink discoverable) */
+export const THEME_GROUPS: { id: string; label: string; themes: string[] }[] = [
+  {
+    id: "core",
+    label: "Core",
+    themes: ["discord", "telegram", "midnight", "nord", "dracula", "catppuccin", "rosepine", "light", "graphite"],
+  },
+  {
+    id: "vibe",
+    label: "Vibe",
+    themes: ["cyberpunk", "forest", "sunset", "ocean", "vaporwave", "ember", "juice999"],
+  },
+  {
+    id: "ksubi",
+    label: "Ksubi",
+    themes: ["ksubi", "ksubiDenim", "ksubiBlood", "ksubiBone", "ksubiAcid", "ksubiPink"],
+  },
+];
+
 export type Appearance = {
   theme: string;
   accent: string | null;
@@ -373,6 +392,17 @@ export const BG_ANIMS: Record<string, { name: string; css: string }> = {
       radial-gradient(circle at 50% 20%,#e11d48aa 0 14%,transparent 38%),
       #1a0a08!important;background-size:160% 160%!important;animation:nexusLava 16s ease-in-out infinite alternate!important;filter:brightness(var(--app-bg-dim,.75)) blur(calc(var(--app-bg-blur,0px) + 8px))!important}
 @keyframes nexusLava{from{background-position:0% 30%}to{background-position:100% 70%}}`,
+  },
+  ksubiPink: {
+    name: "Ksubi Pink",
+    css: `html.bg-anim-ksubiPink body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background:
+      radial-gradient(ellipse 90% 55% at 50% -15%,rgba(255,77,166,.42),transparent 58%),
+      radial-gradient(circle at 12% 78%,rgba(255,122,184,.18),transparent 42%),
+      radial-gradient(circle at 88% 30%,rgba(236,72,153,.14),transparent 38%),
+      repeating-linear-gradient(0deg,transparent,transparent 52px,rgba(255,77,166,.045) 52px,rgba(255,77,166,.045) 53px);
+      animation:ksubiPinkPulse 9s ease-in-out infinite alternate}
+      @keyframes ksubiPinkPulse{from{opacity:.78;filter:saturate(1) hue-rotate(0deg)}to{opacity:1;filter:saturate(1.28) hue-rotate(-6deg)}}
+      html.bg-anim-ksubiPink body::after{content:"♡";position:fixed;left:6%;bottom:10%;z-index:0;pointer-events:none;font-size:clamp(72px,16vw,160px);font-weight:700;color:rgba(255,77,166,.09);line-height:1}`,
   },
 };
 
