@@ -12,8 +12,9 @@ import { roomLink } from "@/lib/room";
 import { sendGameInvites } from "@/lib/gameInvites";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
-import ClassicStrike, { type StrikeEdition, type StrikeEngine } from "../ClassicStrike";
+import ClassicStrike, { type StrikeEdition, type StrikeEngine, type StrikePlayMode } from "../ClassicStrike";
 import { joinRoom, newCode, validCode, type CsNet, type Team } from "./net";
+import { STRIKE_MAPS, type StrikeMapId } from "./maps";
 import type { GameId } from "@/lib/games";
 import type { RoomGame } from "@/store/games";
 
@@ -38,6 +39,8 @@ export default function ClassicStrikeLauncher({
   const [result, setResult] = useState<{ score: number; best: number } | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [engine, setEngine] = useState<StrikeEngine>(edition === "global" ? "hq" : "raycast");
+  const [playMode, setPlayMode] = useState<StrikePlayMode>("bomb");
+  const [mapId, setMapId] = useState<StrikeMapId>("dust");
   const title = edition === "global" ? "Global Strike" : "Classic Strike";
   const prefix = edition === "global" ? "globalstrike" : "classicstrike";
 
@@ -97,13 +100,15 @@ export default function ClassicStrikeLauncher({
           )}
         </div>
         <ClassicStrike
-          key={`${play.run}-${engine}`}
+          key={`${play.run}-${engine}-${playMode}-${mapId}`}
           mode={play.mode}
           net={play.net}
           playerName={myName}
           initialTeam={team}
           edition={edition}
           engine={engine}
+          playMode={playMode}
+          mapId={mapId}
           onOver={onOver}
           onScore={() => {}}
         />
@@ -156,6 +161,36 @@ export default function ClassicStrikeLauncher({
                 </button>
               </div>
             )}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-white/70">Mode</span>
+              <button
+                type="button"
+                onClick={() => setPlayMode("bomb")}
+                className={cn("rounded-full px-3 py-1 text-xs font-black", playMode === "bomb" ? "bg-amber-400 text-black" : "bg-white/10")}
+              >
+                Bomb defuse
+              </button>
+              <button
+                type="button"
+                onClick={() => setPlayMode("dm")}
+                className={cn("rounded-full px-3 py-1 text-xs font-black", playMode === "dm" ? "bg-red-400 text-black" : "bg-white/10")}
+              >
+                Deathmatch
+              </button>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-white/70">Map</span>
+              {(Object.keys(STRIKE_MAPS) as StrikeMapId[]).map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setMapId(id)}
+                  className={cn("rounded-full px-3 py-1 text-xs font-black", mapId === id ? "bg-lime-400 text-black" : "bg-white/10")}
+                >
+                  {STRIKE_MAPS[id].name}
+                </button>
+              ))}
+            </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="text-xs font-bold text-white/70">Your team</span>
               <button

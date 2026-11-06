@@ -27,6 +27,14 @@ export type HqFrame = {
   bomb: { x: number; y: number; t: number } | null;
   flash: number;
   wep: string;
+  /** camera pitch kick (radians, negative = up) */
+  pitch?: number;
+  /** FOV override (AWP zoom) */
+  fov?: number;
+  /** viewmodel kick 0..1 */
+  recoil?: number;
+  /** damage screen shake */
+  shake?: number;
 };
 
 export type HqEngine = {
@@ -64,8 +72,16 @@ export async function createHqEngine(
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x9eb6c9, mobile ? 0.045 : 0.028);
 
-  const camera = new THREE.PerspectiveCamera(72, 1, 0.08, mobile ? 48 : 80);
+  const baseFov = 72;
+  const camera = new THREE.PerspectiveCamera(baseFov, 1, 0.08, mobile ? 48 : 80);
   camera.rotation.order = "YXZ";
+
+  // Muzzle flash sprite
+  const muzzle = new THREE.Mesh(
+    new THREE.SphereGeometry(0.06, 6, 6),
+    new THREE.MeshBasicMaterial({ color: 0xffcc66, transparent: true, opacity: 0 }),
+  );
+  muzzle.position.set(0.28, -0.22, -1.25);
 
   // Lights
   const hemi = new THREE.HemisphereLight(0xcfe8ff, 0x3d4a3a, mobile ? 0.85 : 1.05);
@@ -188,6 +204,7 @@ export async function createHqEngine(
   barrel.rotation.x = Math.PI / 2;
   barrel.position.set(0.28, -0.22, -0.95);
   gun.add(barrel);
+  gun.add(muzzle);
   camera.add(gun);
   scene.add(camera);
 
@@ -215,11 +232,22 @@ export async function createHqEngine(
     },
     frame(f: HqFrame) {
       if (disposed) return;
+      const shake = f.shake ?? 0;
       const p = toWorld(f.player.x, f.player.y);
-      camera.position.set(p.x, EYE, p.z);
-      // Map angle: 0 = +X in 2D raycaster (cos/sin). Three yaw: -a + π so forward matches.
+      camera.position.set(
+        p.x + (Math.random() - 0.5) * shake * 0.08,
+        EYE + (Math.random() - 0.5) * shake * 0.05,
+        p.z + (Math.random() - 0.5) * shake * 0.08,
+      );
+      // Map angle: 0 = +X in 2D raycaster (cos/sin). Three yaw matches forward.
       camera.rotation.y = -f.player.a + Math.PI / 2;
-      camera.rotation.x = 0;
+      camera.rotation.x = f.pitch ?? 0;
+
+      const wantFov = f.fov ?? baseFov;
+      if (Math.abs(camera.fov - wantFov) > 0.1) {
+        camera.fov = wantFov;
+        camera.updateProjectionMatrix();
+      }
 
       // Bots
       let bi = 0;
@@ -247,10 +275,13 @@ export async function createHqEngine(
       }
 
       flashMat.opacity = Math.min(0.92, Math.max(0, f.flash));
-      // Subtle gun bob
+      const recoil = f.recoil ?? 0;
       const t = performance.now() * 0.001;
-      gun.position.y = Math.sin(t * 6) * 0.004;
+      gun.position.y = Math.sin(t * 6) * 0.004 + recoil * 0.04;
+      gun.position.z = recoil * 0.08;
       gun.rotation.z = Math.sin(t * 3) * 0.01;
+      gun.rotation.x = -recoil * 0.35;
+      (muzzle.material as Any).opacity = Math.min(1, recoil * 2.2);
 
       renderer.render(scene, camera);
     },

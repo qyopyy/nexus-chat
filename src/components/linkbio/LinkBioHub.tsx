@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, ExternalLink, Link2, Lock, LogOut, Plus, Settings2, Shield, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Copy, ExternalLink, Link2, Lock, LogOut, Plus, QrCode, Settings2, Shield, Sparkles, Star, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { useApp } from "@/store/app";
+import { useApp, toast } from "@/store/app";
 import { roleRank } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { normalizeLink, PLATFORMS } from "@/lib/links";
@@ -15,6 +15,7 @@ import {
   LINKBIO_THEMES,
   linkbioMine,
   linkbioSave,
+  linkbioStats,
   linkbioUploadMusic,
   openLinkBio,
   publicLinkBioUrl,
@@ -24,6 +25,7 @@ import {
   type LinkBioLayout,
   type LinkBioLink,
   type LinkBioPage,
+  type LinkBioStats,
   type LinkBioTheme,
 } from "@/lib/linkbio";
 import { spotifyEmbed } from "@/lib/links";
@@ -44,7 +46,7 @@ export default function LinkBioHub({
 }) {
   const me = useApp((s) => (s.userId ? s.profiles[s.userId] : null));
   const canAdmin = roleRank(me?.site_role) >= 2;
-  const [tab, setTab] = useState<"edit" | "settings" | "admin">(initialAdmin && canAdmin ? "admin" : "edit");
+  const [tab, setTab] = useState<"edit" | "settings" | "stats" | "admin">(initialAdmin && canAdmin ? "admin" : "edit");
 
   useEffect(() => {
     if (initialAdmin && canAdmin) setTab("admin");
@@ -54,10 +56,16 @@ export default function LinkBioHub({
   const [linkInput, setLinkInput] = useState("");
   const [plat, setPlat] = useState("website");
   const [pagePw, setPagePw] = useState("");
+  const [stats, setStats] = useState<LinkBioStats | null>(null);
+  const [statsDays, setStatsDays] = useState(7);
 
   useEffect(() => {
     void linkbioMine().then(setPage);
   }, []);
+
+  useEffect(() => {
+    if (tab === "stats") void linkbioStats(statsDays).then(setStats);
+  }, [tab, statsDays]);
 
   async function save(patch: Record<string, unknown>) {
     setBusy(true);
@@ -99,6 +107,14 @@ export default function LinkBioHub({
           <div className={cn("font-bold tracking-tight", mobile || standalone ? "text-xl" : "text-base")}>Nexus Link</div>
           <div className="truncate text-[11px] text-white/45">Link in bio · themes · 999</div>
         </div>
+        <button
+          type="button"
+          onClick={() => setTab(tab === "stats" ? "edit" : "stats")}
+          className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold hover:bg-white/10", tab === "stats" && "bg-white/10 text-[#c084fc]")}
+          title="Analytics"
+        >
+          Stats
+        </button>
         <button
           type="button"
           onClick={() => setTab(tab === "settings" ? "edit" : "settings")}
@@ -175,19 +191,123 @@ export default function LinkBioHub({
                 }}
                 className="w-full resize-none rounded-xl bg-black/30 px-3 py-2 text-sm outline-none ring-1 ring-white/10 focus:ring-[#a855f7]"
               />
-              <label className="mt-3 mb-1 flex items-center gap-2 text-sm font-semibold">
+              <label className="mt-3 mb-1 block text-xs font-semibold text-white/50">Avatar URL</label>
+              <input
+                defaultValue={page.avatar_url ?? ""}
+                key={`av-${page.avatar_url ?? ""}`}
+                placeholder="https://…"
+                onBlur={(e) => {
+                  const v = e.target.value.trim().slice(0, 500);
+                  if (v !== (page.avatar_url ?? "")) void save({ avatar_url: v });
+                }}
+                className="mb-3 w-full rounded-xl bg-black/30 px-3 py-2 text-sm outline-none ring-1 ring-white/10 focus:ring-[#a855f7]"
+              />
+              <label className="mb-1 block text-xs font-semibold text-white/50">Accent color</label>
+              <div className="mb-3 flex items-center gap-2">
+                <input
+                  type="color"
+                  value={page.accent && /^#[0-9A-Fa-f]{6}$/.test(page.accent) ? page.accent : "#a855f7"}
+                  onChange={(e) => void save({ accent: e.target.value })}
+                  className="size-10 cursor-pointer rounded-lg border-0 bg-transparent"
+                />
+                <span className="font-mono text-xs text-white/50">{page.accent || "#a855f7"}</span>
+              </div>
+              <label className="mt-1 mb-1 flex items-center gap-2 text-sm font-semibold">
                 <input type="checkbox" checked={page.published !== false} onChange={(e) => void save({ published: e.target.checked })} />
                 Published
               </label>
             </section>
 
+            {tab === "stats" && (
+              <section className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-bold tracking-wide text-white/70 uppercase">Analytics</h2>
+                  <div className="flex gap-1">
+                    {[7, 30].map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setStatsDays(d)}
+                        className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-bold", statsDays === d ? "bg-[#a855f7] text-white" : "bg-white/10 text-white/60")}
+                      >
+                        {d}d
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {!stats ? (
+                  <div className="text-sm text-white/40">Loading…</div>
+                ) : (
+                  <>
+                    <div className="mb-4 grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-black/30 p-3">
+                        <div className="text-[11px] text-white/45">Page views</div>
+                        <div className="font-mono text-2xl font-black tabular-nums">{stats.views.toLocaleString()}</div>
+                      </div>
+                      <div className="rounded-xl bg-black/30 p-3">
+                        <div className="text-[11px] text-white/45">Clicks ({stats.days}d)</div>
+                        <div className="font-mono text-2xl font-black tabular-nums">{stats.clicks.toLocaleString()}</div>
+                      </div>
+                    </div>
+                    <div className="text-xs font-bold text-white/50 uppercase">Top links</div>
+                    <div className="mt-2 space-y-1.5">
+                      {stats.top.length === 0 && <div className="text-sm text-white/40">No clicks yet — share your page.</div>}
+                      {stats.top.map((t) => (
+                        <div key={t.url} className="flex items-center gap-2 rounded-lg bg-black/25 px-2.5 py-1.5 text-sm">
+                          <span className="min-w-0 flex-1 truncate text-white/80">{t.url}</span>
+                          <span className="font-mono text-xs font-bold text-[#c084fc]">{t.hits}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </section>
+            )}
+
             <section className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
               <h2 className="mb-3 text-sm font-bold tracking-wide text-white/70 uppercase">Links</h2>
               <div className="mb-3 space-y-2">
                 {links.map((l, i) => (
-                  <div key={`${l.url}-${i}`} className="flex items-center gap-2 rounded-xl bg-black/25 px-3 py-2">
+                  <div key={`${l.url}-${i}`} className="flex items-center gap-1.5 rounded-xl bg-black/25 px-2 py-2">
                     <Link2 className="size-4 shrink-0 text-white/40" />
                     <div className="min-w-0 flex-1 truncate text-sm">{l.label || l.url}</div>
+                    <button
+                      type="button"
+                      title={l.featured ? "Unfeature" : "Feature as CTA"}
+                      className="grid size-8 place-items-center rounded-full hover:bg-white/10"
+                      onClick={() => {
+                        const next = links.map((x, j) => ({ ...x, featured: j === i ? !l.featured : false }));
+                        void save({ links: next });
+                      }}
+                    >
+                      <Star className={cn("size-3.5", l.featured ? "fill-amber-300 text-amber-300" : "text-white/40")} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={i === 0}
+                      className="grid size-8 place-items-center rounded-full hover:bg-white/10 disabled:opacity-30"
+                      onClick={() => {
+                        const next = [...links];
+                        [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                        void save({ links: next });
+                      }}
+                      aria-label="Move up"
+                    >
+                      <ChevronUp className="size-3.5 text-white/50" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={i === links.length - 1}
+                      className="grid size-8 place-items-center rounded-full hover:bg-white/10 disabled:opacity-30"
+                      onClick={() => {
+                        const next = [...links];
+                        [next[i + 1], next[i]] = [next[i], next[i + 1]];
+                        void save({ links: next });
+                      }}
+                      aria-label="Move down"
+                    >
+                      <ChevronDown className="size-3.5 text-white/50" />
+                    </button>
                     <button
                       type="button"
                       className="grid size-8 place-items-center rounded-full hover:bg-white/10"
@@ -540,19 +660,45 @@ export default function LinkBioHub({
               {page.bio && <p className="mx-auto mt-3 max-w-xs whitespace-pre-wrap text-center text-sm text-white/65">{page.bio}</p>}
               <div className="mt-4 space-y-2">
                 {links.slice(0, 5).map((l, i) => (
-                  <div key={i} className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-semibold">
+                  <div
+                    key={i}
+                    className={cn("rounded-2xl px-4 py-3 text-sm font-semibold", l.featured ? "bg-amber-400/25 ring-1 ring-amber-300/50" : "bg-white/10")}
+                  >
+                    {l.featured ? "★ " : ""}
                     {l.label || l.url}
                   </div>
                 ))}
               </div>
-              <a
-                href={publicUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-bold text-[#1a0533]"
-              >
-                Open /bio/{page.username} <ExternalLink className="size-4" />
-              </a>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <a
+                  href={publicUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-bold text-[#1a0533]"
+                >
+                  Open /bio/{page.username} <ExternalLink className="size-4" />
+                </a>
+                <button
+                  type="button"
+                  className="grid size-11 place-items-center rounded-full bg-white/15 hover:bg-white/25"
+                  title="Copy link"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(publicUrl);
+                    toast("Link copied", "success");
+                  }}
+                >
+                  <Copy className="size-4" />
+                </button>
+                <a
+                  href={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(publicUrl)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="grid size-11 place-items-center rounded-full bg-white/15 hover:bg-white/25"
+                  title="QR code"
+                >
+                  <QrCode className="size-4" />
+                </a>
+              </div>
               <p className="mt-3 text-center text-[11px] text-white/40">{page.view_count} views · theme {page.theme} · bg {page.background}</p>
             </section>
 
