@@ -301,6 +301,7 @@ function BadgesTab() {
   const [icon, setIcon] = useState("⭐");
   const [color, setColor] = useState("#FAA61A");
   const [desc, setDesc] = useState("");
+  const [key, setKey] = useState("");
   const holders = useMemo(() => {
     const m: Record<string, number> = {};
     for (const ids of Object.values(userBadges)) for (const id of ids) m[id] = (m[id] ?? 0) + 1;
@@ -321,6 +322,16 @@ function BadgesTab() {
             <span className="mb-1 block text-xs text-sub">Name</span>
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={32} placeholder="Beatmaker" className="w-full rounded-md bg-rail px-3 py-2 outline-none" />
           </label>
+          <label className="min-w-32 flex-1">
+            <span className="mb-1 block text-xs text-sub">Key (optional)</span>
+            <input
+              value={key}
+              onChange={(e) => setKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 32))}
+              maxLength={32}
+              placeholder="beatmaker"
+              className="w-full rounded-md bg-rail px-3 py-2 font-mono text-sm outline-none"
+            />
+          </label>
           <label>
             <span className="mb-1 block text-xs text-sub">Color</span>
             <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-10 w-14 cursor-pointer rounded-md bg-rail" />
@@ -332,9 +343,10 @@ function BadgesTab() {
           <button
             disabled={!name.trim() || !icon.trim()}
             onClick={async () => {
-              await createBadge(name, icon, color, desc);
+              await createBadge(name, icon, color, desc, key || undefined);
               setName("");
               setDesc("");
+              setKey("");
             }}
             className="rounded-md bg-accent px-4 py-2 font-semibold text-white hover:bg-accent-2 disabled:opacity-40"
           >
@@ -347,6 +359,7 @@ function BadgesTab() {
             <span className="flex items-center gap-1 rounded-md px-2 py-0.5" style={{ background: `${color}26`, color }}>
               {icon} {name}
             </span>
+            {(key || name) && <span className="font-mono text-[11px] text-faint">key: {key || name.toLowerCase().replace(/[^a-z0-9]+/g, "_")}</span>}
           </div>
         )}
       </div>
@@ -359,6 +372,7 @@ function BadgesTab() {
             <div className="min-w-0 flex-1">
               <div className="font-semibold" style={{ color: b.color }}>
                 {b.name}
+                {b.key ? <span className="ml-2 font-mono text-[11px] font-normal text-sub">{b.key}</span> : null}
               </div>
               <div className="truncate text-xs text-sub">{b.description || "—"}</div>
             </div>

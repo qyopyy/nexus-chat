@@ -307,3 +307,74 @@ export async function linkbioInviteRevoke(id: string) {
   toast("Invite revoked");
   return data as LinkBioInvite[];
 }
+
+const MUSIC_MAX = 20 * 1024 * 1024;
+
+function linkbioAudioType(file: File) {
+  const t = (file.type || "").toLowerCase();
+  if (t.startsWith("audio/")) return t === "audio/mp3" ? "audio/mpeg" : t;
+  const n = file.name.toLowerCase();
+  if (n.endsWith(".mp3")) return "audio/mpeg";
+  if (n.endsWith(".wav")) return "audio/wav";
+  if (n.endsWith(".m4a") || n.endsWith(".mp4")) return "audio/mp4";
+  if (n.endsWith(".aac")) return "audio/aac";
+  if (n.endsWith(".ogg")) return "audio/ogg";
+  if (n.endsWith(".flac")) return "audio/flac";
+  if (n.endsWith(".webm")) return "audio/webm";
+  return "";
+}
+
+/** Upload an audio file for the Link page and return a public HTTPS URL. */
+export async function linkbioUploadMusic(file: File): Promise<string | null> {
+  const me = useApp.getState().userId;
+  if (!me) {
+    toast("Sign in to upload music", "error");
+    return null;
+  }
+  const contentType = linkbioAudioType(file);
+  if (!contentType && !/\.(mp3|wav|m4a|aac|ogg|flac|webm)$/i.test(file.name)) {
+    toast("Pick an audio file (mp3, wav, m4a…)", "error");
+    return null;
+  }
+  if (file.size <= 0) {
+    toast("That file is empty", "error");
+    return null;
+  }
+  if (file.size > MUSIC_MAX) {
+    toast("Music uploads can be up to 20 MB", "error");
+    return null;
+  }
+  try {
+    const { malwareGate } = await import("./malwareGuard");
+    if (await malwareGate(file, { fileName: file.name, context: "audio" })) return null;
+  } catch {
+    /* optional */
+  }
+  const mime = contentType || "audio/mpeg";
+  const safe = (file.name || "track.mp3").replace(/[^\w.\-]+/g, "_").slice(-80) || "track.mp3";
+  const path = `${me}/${crypto.randomUUID()}-${safe}`;
+  const body = (() => {
+    try {
+      return new File([file], safe, { type: mime, lastModified: file.lastModified || Date.now() });
+    } catch {
+      return file;
+    }
+  })();
+  const { error } = await supabase.storage.from("linkbio-music").upload(path, body, {
+    contentType: mime,
+    upsert: false,
+    cacheControl: "3600",
+  });
+  if (error) {
+    toast(errorText(error) || "Music upload failed", "error");
+    return null;
+  }
+  const { data } = supabase.storage.from("linkbio-music").getPublicUrl(path);
+  const url = data?.publicUrl ?? null;
+  if (!url) {
+    toast("Couldn't get public URL for upload", "error");
+    return null;
+  }
+  toast("Music uploaded", "success");
+  return url;
+}

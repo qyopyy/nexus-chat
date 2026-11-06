@@ -1,6 +1,7 @@
 // Server-only: public Nexus Link page (/bio/<username>).
 
 import { jsonLd, personLd, seoHead, truncate } from "@/lib/seo";
+import { spotifyEmbed } from "@/lib/links";
 
 export type PublicLinkBioBadge = {
   key: string;
@@ -300,6 +301,7 @@ body{background:${t.bg};overflow-x:hidden}
 .lock .err{margin-top:8px;color:#ff8a8c;font-size:13px;display:none}
 .nsfw{margin:14px auto 0;max-width:360px;padding:10px 12px;border-radius:12px;background:rgba(255,80,80,.12);color:#ffb4b4;font-size:12px;font-weight:700}
 .music{margin-top:18px;border-radius:16px;overflow:hidden}
+.music audio{width:100%;display:block;border-radius:16px;background:rgba(0,0,0,.35)}
 .foot{margin-top:28px;font-size:12px;color:${t.muted};opacity:.7}
 .foot a{color:${accent};font-weight:700;text-decoration:none}
 .wm{position:fixed;right:12px;bottom:10px;z-index:2;font:900 64px/1 "Bebas Neue",sans-serif;color:${accent};opacity:.12;pointer-events:none;letter-spacing:.06em}
@@ -310,10 +312,26 @@ body{background:${t.bg};overflow-x:hidden}
 <form id="unlock"><input type="password" name="pw" placeholder="Page password" required minlength="1" autocomplete="current-password"/><button type="submit">Unlock</button><div class="err" id="err">Wrong password</div></form></div>`
     : "";
 
-  const music =
-    !locked && p.music_url && /spotify\.com|soundcloud\.com|music\.apple\.com/i.test(p.music_url)
-      ? `<div class="music"><iframe src="${esc(p.music_url.includes("embed") ? p.music_url : p.music_url.replace("open.spotify.com/", "open.spotify.com/embed/"))}" width="100%" height="80" frameborder="0" allow="encrypted-media" loading="lazy"></iframe></div>`
-      : "";
+  const spotify = !locked && p.music_url ? spotifyEmbed(p.music_url) : null;
+  const audioDirect =
+    !locked &&
+    p.music_url &&
+    !spotify &&
+    (/^https?:\/\//i.test(p.music_url) &&
+      (/\.(mp3|wav|m4a|aac|ogg|flac|webm)(\?|$)/i.test(p.music_url) || /linkbio-music/i.test(p.music_url)));
+  const scOrApple =
+    !locked &&
+    p.music_url &&
+    !spotify &&
+    !audioDirect &&
+    /soundcloud\.com|music\.apple\.com/i.test(p.music_url);
+  const music = spotify
+    ? `<div class="music"><iframe src="${esc(spotify)}" width="100%" height="152" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe></div>`
+    : audioDirect
+      ? `<div class="music"><audio controls preload="metadata" src="${esc(p.music_url!)}"><a href="${esc(p.music_url!)}">Play track</a></audio></div>`
+      : scOrApple
+        ? `<div class="music"><iframe src="${esc(p.music_url!.includes("embed") ? p.music_url! : p.music_url!)}" width="100%" height="120" frameborder="0" allow="encrypted-media" loading="lazy"></iframe></div>`
+        : "";
 
   const body = `<div class="stage font-${esc(p.font)} layout-${esc(p.layout || "classic")}">
 ${bgLayer(p.background, p.animated_bg, accent)}

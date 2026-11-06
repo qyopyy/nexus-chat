@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BadgeCheck, Crown, Link2, RefreshCw, Shield, Star, Ticket } from "lucide-react";
+import { Award, BadgeCheck, Crown, Link2, RefreshCw, Shield, Star, Ticket } from "lucide-react";
 import {
   LINKBIO_ADMIN_BADGE_KEYS,
   linkbioAdminList,
@@ -14,7 +14,7 @@ import {
   type LinkBioAdminRow,
   type LinkBioInvite,
 } from "@/lib/linkbio";
-import { refreshBadges } from "@/lib/admin";
+import { createBadge, refreshBadges } from "@/lib/admin";
 import { cn } from "@/lib/utils";
 import { roleRank } from "@/lib/theme";
 import { useApp } from "@/store/app";
@@ -31,6 +31,11 @@ export default function LinkBioAdmin({ onBack }: { onBack?: () => void }) {
   const [inviteNote, setInviteNote] = useState("");
   const [inviteUses, setInviteUses] = useState(1);
   const [expandBadges, setExpandBadges] = useState<string | null>(null);
+  const [newBadgeName, setNewBadgeName] = useState("");
+  const [newBadgeIcon, setNewBadgeIcon] = useState("✨");
+  const [newBadgeColor, setNewBadgeColor] = useState("#A855F7");
+  const [newBadgeKey, setNewBadgeKey] = useState("");
+  const [newBadgeDesc, setNewBadgeDesc] = useState("");
 
   const badgeOptions = useMemo(() => {
     const byKey = Object.values(catalog).filter((b) => b.key);
@@ -141,6 +146,74 @@ export default function LinkBioAdmin({ onBack }: { onBack?: () => void }) {
               ))}
             </div>
           </section>
+
+          {canMint && (
+            <section className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+              <div className="mb-3 flex items-center gap-2">
+                <Award className="size-4 text-[#c084fc]" />
+                <h2 className="font-bold">Add badge</h2>
+              </div>
+              <p className="mb-3 text-xs text-white/50">Create a catalog badge (with a stable key) then grant it on any Link page below.</p>
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="w-14">
+                  <span className="mb-1 block text-[10px] font-semibold text-white/45 uppercase">Icon</span>
+                  <input
+                    value={newBadgeIcon}
+                    onChange={(e) => setNewBadgeIcon(e.target.value.slice(0, 4))}
+                    className="w-full rounded-xl bg-black/30 px-2 py-2 text-center text-lg outline-none ring-1 ring-white/10"
+                  />
+                </label>
+                <label className="min-w-[120px] flex-1">
+                  <span className="mb-1 block text-[10px] font-semibold text-white/45 uppercase">Name</span>
+                  <input
+                    value={newBadgeName}
+                    onChange={(e) => setNewBadgeName(e.target.value.slice(0, 32))}
+                    placeholder="Creator"
+                    className="w-full rounded-xl bg-black/30 px-3 py-2 text-sm outline-none ring-1 ring-white/10"
+                  />
+                </label>
+                <label className="min-w-[100px] flex-1">
+                  <span className="mb-1 block text-[10px] font-semibold text-white/45 uppercase">Key</span>
+                  <input
+                    value={newBadgeKey}
+                    onChange={(e) => setNewBadgeKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 32))}
+                    placeholder="creator"
+                    className="w-full rounded-xl bg-black/30 px-3 py-2 font-mono text-sm outline-none ring-1 ring-white/10"
+                  />
+                </label>
+                <label>
+                  <span className="mb-1 block text-[10px] font-semibold text-white/45 uppercase">Color</span>
+                  <input type="color" value={newBadgeColor} onChange={(e) => setNewBadgeColor(e.target.value)} className="h-10 w-12 cursor-pointer rounded-xl bg-black/30" />
+                </label>
+                <label className="min-w-full flex-1 sm:min-w-[180px]">
+                  <span className="mb-1 block text-[10px] font-semibold text-white/45 uppercase">Description</span>
+                  <input
+                    value={newBadgeDesc}
+                    onChange={(e) => setNewBadgeDesc(e.target.value.slice(0, 120))}
+                    placeholder="Optional"
+                    className="w-full rounded-xl bg-black/30 px-3 py-2 text-sm outline-none ring-1 ring-white/10"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={!newBadgeName.trim() || !newBadgeIcon.trim()}
+                  className="rounded-xl bg-[#a855f7] px-3 py-2 text-sm font-bold disabled:opacity-40"
+                  onClick={async () => {
+                    const id = await createBadge(newBadgeName, newBadgeIcon, newBadgeColor, newBadgeDesc, newBadgeKey || undefined);
+                    if (id) {
+                      setNewBadgeName("");
+                      setNewBadgeDesc("");
+                      setNewBadgeKey("");
+                      setNewBadgeIcon("✨");
+                      await refreshBadges();
+                    }
+                  }}
+                >
+                  Create badge
+                </button>
+              </div>
+            </section>
+          )}
 
           {loading && <p className="text-sm text-white/50">Loading pages…</p>}
           {!loading && !rows.length && <p className="text-sm text-white/50">No Link pages yet.</p>}
