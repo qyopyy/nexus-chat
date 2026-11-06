@@ -119,7 +119,41 @@ export const useUntitled = create<{
   stack: UntitledRoute[];
   playing: PlayingState | null;
   rate: number;
-}>(() => ({ stack: [{ view: "home" }], playing: null, rate: 1 }));
+  /** A–B loop start (seconds), or null when unset. */
+  loopA: number | null;
+  /** A–B loop end (seconds), or null when unset. */
+  loopB: number | null;
+  /** When true and both points set, seek to A when currentTime >= B. */
+  loopOn: boolean;
+}>(() => ({ stack: [{ view: "home" }], playing: null, rate: 1, loopA: null, loopB: null, loopOn: false }));
+
+export function clearLoopPoints() {
+  useUntitled.setState({ loopA: null, loopB: null, loopOn: false });
+}
+
+export function setLoopA(t: number | null) {
+  useUntitled.setState((s) => {
+    const loopA = t == null || !Number.isFinite(t) ? null : Math.max(0, t);
+    const loopB = s.loopB != null && loopA != null && s.loopB <= loopA ? null : s.loopB;
+    const loopOn = loopA != null && loopB != null ? s.loopOn : false;
+    return { loopA, loopB, loopOn };
+  });
+}
+
+export function setLoopB(t: number | null) {
+  useUntitled.setState((s) => {
+    const loopB = t == null || !Number.isFinite(t) ? null : Math.max(0, t);
+    const loopA = s.loopA != null && loopB != null && s.loopA >= loopB ? null : s.loopA;
+    const loopOn = loopA != null && loopB != null ? s.loopOn : false;
+    return { loopA, loopB, loopOn };
+  });
+}
+
+export function setLoopOn(on: boolean) {
+  useUntitled.setState((s) => ({
+    loopOn: on && s.loopA != null && s.loopB != null && s.loopB > s.loopA,
+  }));
+}
 
 export const untitledGo = (r: UntitledRoute) => useUntitled.setState((s) => ({ stack: [...s.stack, r].slice(-20) }));
 export const untitledBack = () => useUntitled.setState((s) => ({ stack: s.stack.length > 1 ? s.stack.slice(0, -1) : s.stack }));
@@ -611,7 +645,12 @@ export async function playTrack(projectId: string, track: UntitledTrack, queue?:
     toast("Couldn't load this track — try again or re-upload", "error");
     return;
   }
-  useUntitled.setState({ playing: { projectId, trackId: track.id, title: track.title, url, queue: q } });
+  useUntitled.setState({
+    playing: { projectId, trackId: track.id, title: track.title, url, queue: q },
+    loopA: null,
+    loopB: null,
+    loopOn: false,
+  });
   void recordListen(projectId, track.id);
 }
 
