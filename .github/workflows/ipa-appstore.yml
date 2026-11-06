@@ -97,7 +97,6 @@ jobs:
 
       - name: App icons + Info.plist
         run: |
-          pip3 install --user pillow >/dev/null
           PLIST=ios/App/App/Info.plist
           pb() { /usr/libexec/PlistBuddy -c "$1" "$PLIST" 2>/dev/null || true; }
           pb "Add :NSMicrophoneUsageDescription string Nexus uses your microphone for voice calls."
