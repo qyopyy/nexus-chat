@@ -1,7 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, Crosshair, Layers, LocateFixed, MapPinned, Pause, Play, Search, TriangleAlert, Users } from "lucide-react";
+import {
+  Bell,
+  Bookmark,
+  BookmarkPlus,
+  Compass,
+  Crosshair,
+  ExternalLink,
+  Layers,
+  LocateFixed,
+  MapPinned,
+  Pause,
+  Play,
+  Search,
+  TriangleAlert,
+  Users,
+} from "lucide-react";
 import type { BumpNearby } from "@/lib/bump";
 import {
   loadLeaflet,
@@ -15,6 +30,8 @@ import {
 } from "@/lib/geo";
 import { formatMeters } from "@/lib/location";
 import { wumpGeocode, wumpPlaceShort } from "@/lib/wumpGeocode";
+import type { WumpSavedPlace } from "@/lib/wumpPlaces";
+import { wumpProfileUrl } from "@/lib/wumpPlaces";
 import { useApp } from "@/store/app";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
@@ -25,6 +42,13 @@ type MarkerHandle = {
   getLatLng?: () => { lat: number; lng: number };
   setIcon?: (icon: unknown) => void;
   on?: (ev: string, fn: () => void) => void;
+};
+
+type TapSave = {
+  lat: number;
+  lng: number;
+  name: string;
+  locality: string | null;
 };
 
 function ageLabel(ageSec?: number | null) {
@@ -43,17 +67,25 @@ export default function WumpMap({
   myHeading,
   myAccuracy,
   myPlaceName,
+  myUsername,
   nearby,
   live,
   viewsToday,
   placesCount,
+  savedPlaces = [],
+  explorePercent = 0,
+  exploreLocal = 0,
+  exploreTotal = 0,
+  exploreAll = 0,
   playing,
   onTogglePlay,
   onOpenPerson,
+  onOpenProfilePage,
   onSearch,
   onScratch,
   onPlaces,
   onGoLive,
+  onSavePlace,
 }: {
   me: string | null;
   myLat: number | null;
@@ -61,17 +93,25 @@ export default function WumpMap({
   myHeading?: number | null;
   myAccuracy?: number | null;
   myPlaceName?: string | null;
+  myUsername?: string | null;
   nearby: BumpNearby[];
   live: boolean;
   viewsToday: number;
   placesCount: number;
+  savedPlaces?: WumpSavedPlace[];
+  explorePercent?: number;
+  exploreLocal?: number;
+  exploreTotal?: number;
+  exploreAll?: number;
   playing: boolean;
   onTogglePlay: () => void;
   onOpenPerson: (id: string) => void;
+  onOpenProfilePage?: (username: string) => void;
   onSearch: () => void;
   onScratch: () => void;
   onPlaces: () => void;
   onGoLive?: () => void;
+  onSavePlace?: (place: { name: string; lat: number; lng: number; locality?: string | null; source: "map" | "live" | "tap" }) => void | Promise<void>;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LMap | null>(null);
@@ -79,6 +119,7 @@ export default function WumpMap({
   const setStyleRef = useRef<((s: WumpMapStyle) => void) | null>(null);
   const markersRef = useRef<Map<string, MarkerHandle>>(new Map());
   const placeMarkersRef = useRef<Map<string, MarkerHandle>>(new Map());
+  const savedMarkersRef = useRef<Map<string, MarkerHandle>>(new Map());
   const accuracyRef = useRef<LCircle | null>(null);
   const trailRef = useRef<{ remove: () => void; setLatLngs?: (c: [number, number][]) => void } | null>(null);
   const trailPts = useRef<[number, number][]>([]);
@@ -89,6 +130,8 @@ export default function WumpMap({
   const [follow, setFollow] = useState(true);
   const [mapStyle, setMapStyle] = useState<WumpMapStyle>("streets");
   const [tapPlace, setTapPlace] = useState<string | null>(null);
+  const [tapSave, setTapSave] = useState<TapSave | null>(null);
+  const [saving, setSaving] = useState(false);
   const [resolvedMine, setResolvedMine] = useState<string | null>(null);
   const profiles = useApp((s) => s.profiles);
 
@@ -119,8 +162,16 @@ export default function WumpMap({
         map.on("click", (e) => {
           const { lat, lng } = e.latlng;
           setTapPlace("Looking up…");
+          setTapSave(null);
           void wumpGeocode(lat, lng).then((p) => {
-            setTapPlace(wumpPlaceShort(p) || p?.display || "Unknown place");
+            const name = wumpPlaceShort(p) || p?.display || "Unknown place";
+            setTapPlace(name);
+            setTapSave({
+              lat,
+              lng,
+              name,
+              locality: p?.locality || p?.city || null,
+            });
           });
         });
         setReady(true);
@@ -135,6 +186,8 @@ export default function WumpMap({
       markersRef.current.clear();
       for (const m of placeMarkersRef.current.values()) m.remove();
       placeMarkersRef.current.clear();
+      for (const m of savedMarkersRef.current.values()) m.remove();
+      savedMarkersRef.current.clear();
       accuracyRef.current?.remove();
       accuracyRef.current = null;
       trailRef.current?.remove();
@@ -156,7 +209,7 @@ export default function WumpMap({
     if (!ready || !mapRef.current) return;
     const t = setTimeout(() => mapRef.current?.invalidateSize(), 80);
     return () => clearTimeout(t);
-  }, [ready, live, nearby.length]);
+  }, [ready, live, nearby.length, savedPlaces.length]);
 
   // Sync pins + accuracy + trail
   useEffect(() => {
@@ -175,6 +228,7 @@ export default function WumpMap({
         me?: boolean;
         label?: string;
         place?: string | null;
+        username?: string | null;
         heading?: number | null;
         stale?: boolean;
       },
@@ -205,7 +259,11 @@ export default function WumpMap({
       existing?.remove();
       const marker = L.marker([lat, lng], { icon }).addTo(map) as unknown as MarkerHandle;
       marker.on?.("click", () => {
-        if (!opts.me) onOpenPerson(id);
+        if (opts.me) {
+          if (opts.username && onOpenProfilePage) onOpenProfilePage(opts.username);
+          return;
+        }
+        onOpenPerson(id);
       });
       markersRef.current.set(id, marker);
     };
@@ -213,12 +271,14 @@ export default function WumpMap({
     if (live && myLat != null && myLng != null && me) {
       const name = profiles[me]?.display_name || profiles[me]?.username || "You";
       const place = myPlaceName || resolvedMine;
+      const username = myUsername || profiles[me]?.username || null;
       upsert(me, myLat, myLng, {
         color: "#0ea5e9",
         initial: name.slice(0, 1),
         me: true,
         label: "You",
         place,
+        username,
         heading: myHeading ?? null,
       });
 
@@ -266,7 +326,8 @@ export default function WumpMap({
 
     for (const n of nearby) {
       const p = profiles[n.user_id];
-      const name = p?.display_name || p?.username || "?";
+      const username = n.username || p?.username || null;
+      const name = n.display_name || p?.display_name || username || "?";
       const age = n.age_seconds ?? (n.updated_at ? (Date.now() - new Date(n.updated_at).getTime()) / 1000 : null);
       const stale = age != null && age > 90;
       const dist = formatMeters(n.meters);
@@ -277,6 +338,7 @@ export default function WumpMap({
         initial: name.slice(0, 1),
         label: ageTxt ? `${dist} · ${ageTxt}` : dist,
         place,
+        username,
         heading: n.heading ?? null,
         stale,
       });
@@ -314,6 +376,29 @@ export default function WumpMap({
       }
     }
 
+    // User-saved places
+    const wantSaved = new Set<string>();
+    for (const s of savedPlaces) {
+      const id = `saved:${s.id}`;
+      wantSaved.add(id);
+      const existing = savedMarkersRef.current.get(id);
+      if (existing?.setLatLng) {
+        existing.setLatLng([s.lat, s.lng]);
+        continue;
+      }
+      existing?.remove();
+      const marker = L.marker([s.lat, s.lng], {
+        icon: wumpPlaceIcon(L, { title: s.name, color: "#38bdf8" }),
+      }).addTo(map) as unknown as MarkerHandle;
+      savedMarkersRef.current.set(id, marker);
+    }
+    for (const [id, m] of [...savedMarkersRef.current.entries()]) {
+      if (!wantSaved.has(id)) {
+        m.remove();
+        savedMarkersRef.current.delete(id);
+      }
+    }
+
     // Camera: follow me OR one-shot fit when first going live (not after user pans)
     if (followRef.current && live && myLat != null && myLng != null) {
       map.setView([myLat, myLng], Math.max(map.getZoom?.() ?? 15, 15));
@@ -325,7 +410,24 @@ export default function WumpMap({
         /* empty */
       }
     }
-  }, [ready, live, myLat, myLng, myHeading, myAccuracy, myPlaceName, resolvedMine, me, nearby, profiles, onOpenPerson, follow]);
+  }, [
+    ready,
+    live,
+    myLat,
+    myLng,
+    myHeading,
+    myAccuracy,
+    myPlaceName,
+    myUsername,
+    resolvedMine,
+    me,
+    nearby,
+    profiles,
+    savedPlaces,
+    onOpenPerson,
+    onOpenProfilePage,
+    follow,
+  ]);
 
   // Resolve my place name on the client when server hasn't filled it yet
   useEffect(() => {
@@ -360,8 +462,43 @@ export default function WumpMap({
     setMapStyle(next);
   };
 
+  const saveTap = async () => {
+    if (!tapSave || !onSavePlace) return;
+    setSaving(true);
+    await onSavePlace({
+      name: tapSave.name,
+      lat: tapSave.lat,
+      lng: tapSave.lng,
+      locality: tapSave.locality,
+      source: "tap",
+    });
+    setSaving(false);
+    setTapSave(null);
+  };
+
+  const saveHere = async () => {
+    if (!onSavePlace || myLat == null || myLng == null) return;
+    const name = myPlaceName || resolvedMine || "Saved place";
+    setSaving(true);
+    await onSavePlace({
+      name,
+      lat: myLat,
+      lng: myLng,
+      locality: null,
+      source: "live",
+    });
+    setSaving(false);
+  };
+
   const liveFriends = nearby.filter((n) => (n.age_seconds ?? 0) < 90).length;
   const shownPlace = myPlaceName || resolvedMine;
+  const profileHref = myUsername ? wumpProfileUrl(myUsername) : null;
+  const exploreLabel =
+    exploreTotal > 0
+      ? `${explorePercent}% explored · ${exploreLocal}/${exploreTotal} cells`
+      : exploreAll > 0
+        ? `${exploreAll} cells explored`
+        : "Explore the map while Live";
 
   return (
     <div className="relative mx-auto aspect-[9/14] w-full max-w-md overflow-hidden rounded-[2rem] shadow-2xl ring-1 ring-black/10">
@@ -375,10 +512,19 @@ export default function WumpMap({
 
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-24 bg-gradient-to-b from-black/25 to-transparent" />
 
-      <div className="absolute top-3 left-1/2 z-10 flex max-w-[70%] -translate-x-1/2 flex-col items-center gap-1">
+      <div className="absolute top-3 left-1/2 z-10 flex max-w-[78%] -translate-x-1/2 flex-col items-center gap-1">
         <div className="flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-slate-600 shadow backdrop-blur">
           <span className={cn("size-1.5 rounded-full", live ? "animate-pulse bg-emerald-500" : "bg-slate-300")} />
           {live ? `${liveFriends} live · ${nearby.length} nearby` : `${viewsToday} on map`}
+        </div>
+        <div
+          className="flex max-w-full items-center gap-1.5 truncate rounded-full bg-emerald-950/85 px-2.5 py-1 text-[10px] font-bold text-emerald-100 shadow backdrop-blur"
+          title={exploreLabel}
+        >
+          <Compass className="size-3 shrink-0 text-emerald-300" />
+          <span className="truncate">
+            {explorePercent}% map · {exploreAll} cells
+          </span>
         </div>
         {(shownPlace || tapPlace) && (
           <div className="flex max-w-full items-center gap-1 truncate rounded-full bg-slate-900/85 px-2.5 py-1 text-[10px] font-bold text-white shadow backdrop-blur">
@@ -386,14 +532,32 @@ export default function WumpMap({
             <span className="truncate">{tapPlace || shownPlace}</span>
           </div>
         )}
+        {myUsername && (
+          <button
+            type="button"
+            onClick={() => (onOpenProfilePage ? onOpenProfilePage(myUsername) : undefined)}
+            className="pointer-events-auto flex max-w-full items-center gap-1 truncate rounded-full bg-sky-950/80 px-2.5 py-1 text-[10px] font-bold text-sky-100 shadow backdrop-blur"
+          >
+            @{myUsername}
+            <ExternalLink className="size-2.5 shrink-0 opacity-80" />
+          </button>
+        )}
       </div>
 
       <div className="absolute top-3 right-3 z-10 flex flex-col items-center gap-2">
         {me && (
-          <div className="relative">
+          <button
+            type="button"
+            onClick={() => {
+              if (myUsername && onOpenProfilePage) onOpenProfilePage(myUsername);
+            }}
+            className="relative"
+            aria-label={myUsername ? `Open @${myUsername}` : "Profile"}
+            title={myUsername ? `@${myUsername}` : "Profile"}
+          >
             <Avatar userId={me} size={40} className="ring-2 ring-white shadow" />
             <span className={cn("absolute -top-0.5 -right-0.5 size-2.5 rounded-full ring-2 ring-white", live ? "bg-ok" : "bg-faint")} />
-          </div>
+          </button>
         )}
         <button
           type="button"
@@ -412,6 +576,18 @@ export default function WumpMap({
         >
           <Layers className="size-4" />
         </button>
+        {live && myLat != null && myLng != null && onSavePlace && (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => void saveHere()}
+            className="grid size-10 place-items-center rounded-full bg-amber-400 text-amber-950 shadow-lg disabled:opacity-60"
+            aria-label="Save this place"
+            title="Save this place"
+          >
+            <BookmarkPlus className="size-4" />
+          </button>
+        )}
       </div>
 
       {!live && (
@@ -420,8 +596,42 @@ export default function WumpMap({
           onClick={() => onGoLive?.()}
           className="absolute inset-x-6 top-[40%] z-10 rounded-2xl bg-white/95 p-4 text-center text-sm font-semibold text-slate-700 shadow-lg backdrop-blur"
         >
-          Go live to drop your pin on the real map
+          Go live to explore the map and drop your pin
         </button>
+      )}
+
+      {tapSave && onSavePlace && (
+        <div className="absolute inset-x-4 top-[38%] z-20 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur">
+          <div className="flex items-start gap-2">
+            <Bookmark className="mt-0.5 size-4 shrink-0 text-sky-600" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-bold text-slate-800">{tapSave.name}</div>
+              <div className="text-[11px] text-slate-500">
+                {tapSave.lat.toFixed(5)}, {tapSave.lng.toFixed(5)}
+              </div>
+            </div>
+          </div>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void saveTap()}
+              className="flex-1 rounded-xl bg-sky-600 py-2 text-xs font-bold text-white disabled:opacity-60"
+            >
+              {saving ? "Saving…" : "Save place"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTapSave(null);
+                setTapPlace(null);
+              }}
+              className="rounded-xl bg-slate-200 px-3 py-2 text-xs font-bold text-slate-600"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
       )}
 
       <button
@@ -469,10 +679,16 @@ export default function WumpMap({
         >
           <span className="text-center text-[11px] leading-tight font-black">
             <Users className="mx-auto mb-0.5 size-4" />
-            +{Math.max(placesCount, nearby.length)}
+            +{Math.max(placesCount, nearby.length, savedPlaces.length)}
           </span>
         </button>
       </div>
+
+      {profileHref && (
+        <a href={profileHref} className="sr-only">
+          Profile @{myUsername}
+        </a>
+      )}
     </div>
   );
 }
