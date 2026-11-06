@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, Award, Ban, Bell, ChevronRight, Clock, Lock, MessageSquare, Mic, RotateCcw, Search, Shield, Trash2, Users } from "lucide-react";
+import { Activity, Award, Ban, Bell, ChevronRight, Clock, Construction, Gift, Lock, MessageSquare, Mic, RotateCcw, Search, Shield, Trash2, Users } from "lucide-react";
 import { ClaimsTab, VaultTab } from "@/components/admin/AdminExtras";
+import GiftLinksPanel from "@/components/admin/GiftLinksPanel";
+import DevelopmentModePanel from "@/components/admin/DevelopmentModePanel";
 import { ModerationControls } from "@/components/admin/ModTools";
 import { useApp } from "@/store/app";
 import {
@@ -25,7 +27,7 @@ import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import type { AdminAction, AdminUserRow, Profile } from "@/lib/types";
 
-type Tab = "overview" | "members" | "badges" | "claims" | "vault" | "audit";
+type Tab = "overview" | "members" | "gifts" | "badges" | "claims" | "vault" | "audit" | "dev";
 const EMPTY: string[] = [];
 
 export default function AdminPanel({ focusUser }: { focusUser: string | null }) {
@@ -38,6 +40,8 @@ export default function AdminPanel({ focusUser }: { focusUser: string | null }) 
   const tabs: { id: Tab; label: string; icon: React.ReactNode; min: number }[] = [
     { id: "overview", label: "Overview", icon: <Activity className="size-4" />, min: 2 },
     { id: "members", label: "Members", icon: <Users className="size-4" />, min: 2 },
+    { id: "gifts", label: "Gift links", icon: <Gift className="size-4" />, min: 2 },
+    { id: "dev", label: "Dev mode", icon: <Construction className="size-4" />, min: 3 },
     { id: "badges", label: "Badges", icon: <Award className="size-4" />, min: 3 },
     { id: "claims", label: "Artist claims", icon: <Mic className="size-4" />, min: 3 },
     { id: "vault", label: "File vault", icon: <Lock className="size-4" />, min: 3 },
@@ -80,6 +84,8 @@ export default function AdminPanel({ focusUser }: { focusUser: string | null }) 
       </div>
       {tab === "overview" && <Overview />}
       {tab === "members" && <Members rank={rank} focusUser={focusUser} />}
+      {tab === "gifts" && rank >= 2 && <GiftLinksPanel />}
+      {tab === "dev" && rank >= 3 && <DevelopmentModePanel variant="admin" />}
       {tab === "badges" && rank >= 3 && <BadgesTab />}
       {tab === "claims" && rank >= 3 && <ClaimsTab />}
       {tab === "vault" && rank >= 3 && <VaultTab />}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Accessibility, Bell, Camera, Crown, Database, Keyboard, Link2, ShieldCheck, LogOut, Mic, Palette, Shield, Sparkles, Upload, User, X } from "lucide-react";
+import { Accessibility, Bell, Camera, Construction, Crown, Database, Keyboard, Link2, ShieldCheck, LogOut, Mic, Palette, Shield, Sparkles, Upload, User, X } from "lucide-react";
 import { LIVE_STYLES, TYPING_STYLES, setChatFx, useChatFx } from "@/lib/chatFx";
 import { LiveText, TypingAnim } from "@/components/chat/TypingBubbles";
 import { useApp, closeModal, openModal, toast } from "@/store/app";
@@ -9,6 +9,7 @@ import { detectPush, disablePush, enablePush, usePush } from "@/lib/push";
 import { isNativeApp } from "@/lib/useMobile";
 import { useCall, leaveCall, micConstraints, updateSettings, type NoiseMode, type ScreenQuality, type VoiceQuality } from "@/lib/call";
 import AvatarStudio from "@/components/vavatar/AvatarStudio";
+import DevelopmentModePanel from "@/components/admin/DevelopmentModePanel";
 import { updateMyProfile, uploadAvatar } from "@/lib/data";
 import { DECORATIONS, roleRank } from "@/lib/theme";
 import AppearanceSection from "./AppearanceSection";
@@ -22,9 +23,9 @@ import { H, Label, Select, Slider, Toggle } from "./settingsUi";
 import { AccessibilitySection, AdvancedSection, ChatPrefsBlock, ConnectionsSection, PrivacySection, UsernamesField } from "./MoreSettings";
 import TwoFactorSection from "./TwoFactorSection";
 
-type Section = "account" | "connections" | "privacy" | "appearance" | "accessibility" | "chat" | "voice" | "vavatar" | "notifications" | "advanced" | "admin";
-const ALL: Section[] = ["account", "connections", "privacy", "appearance", "accessibility", "chat", "voice", "vavatar", "notifications", "advanced", "admin"];
-const MOBILE_LABEL: Partial<Record<Section, string>> = { vavatar: "V-Avatar", chat: "Chat", privacy: "Privacy", advanced: "Data" };
+type Section = "account" | "connections" | "privacy" | "appearance" | "accessibility" | "chat" | "voice" | "vavatar" | "notifications" | "advanced" | "admin" | "devmode";
+const ALL: Section[] = ["account", "connections", "privacy", "appearance", "accessibility", "chat", "voice", "vavatar", "notifications", "advanced", "admin", "devmode"];
+const MOBILE_LABEL: Partial<Record<Section, string>> = { vavatar: "V-Avatar", chat: "Chat", privacy: "Privacy", advanced: "Data", devmode: "Dev mode" };
 
 export default function SettingsModal({ initial }: { initial: string | null }) {
   const [section, setSection] = useState<Section>(() => {
@@ -33,6 +34,7 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
   });
   const focusUser = initial?.startsWith("admin:") ? initial.slice(6) : null;
   const isStaff = useApp((s) => roleRank(s.userId ? s.profiles[s.userId]?.site_role : null) >= 2);
+  const isAdmin = useApp((s) => roleRank(s.userId ? s.profiles[s.userId]?.site_role : null) >= 3);
 
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === "Escape" && closeModal();
@@ -74,6 +76,7 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
             <>
               <p className="px-2.5 pt-4 pb-1 text-xs font-bold tracking-wide text-sub uppercase">Staff</p>
               {nav("admin", "Admin Panel", <Shield className="size-4 text-dnd" />)}
+              {isAdmin && nav("devmode", "Dev / updating", <Construction className="size-4 text-amber-400" />)}
             </>
           )}
           <div className="my-2 h-px bg-line" />
@@ -94,7 +97,7 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
           <button onClick={closeModal} className="grid size-8 shrink-0 place-items-center rounded-full bg-hover text-sub" aria-label="Close settings">
             <X className="size-4" />
           </button>
-          {ALL.filter((x) => x !== "admin" || isStaff).map((s) => (
+          {ALL.filter((x) => (x !== "admin" || isStaff) && (x !== "devmode" || isAdmin)).map((s) => (
             <button key={s} onClick={() => setSection(s)} className={cn("shrink-0 rounded-md px-3 py-1 text-sm capitalize", section === s ? "bg-active" : "text-sub")}>
               {MOBILE_LABEL[s] ?? s}
             </button>
@@ -104,6 +107,13 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
           {section === "account" && <AccountSection />}
           {section === "appearance" && <AppearanceSection />}
           {section === "admin" && isStaff && <AdminPanel focusUser={focusUser} />}
+          {section === "devmode" && isAdmin && (
+            <>
+              <H>Development / updating mode</H>
+              <p className="-mt-3 mb-5 text-sm text-sub">Admins only. Toggle this on while Nexus is updating — members see “we&apos;ll be back soon.”</p>
+              <DevelopmentModePanel variant="settings" />
+            </>
+          )}
           {section === "chat" && <ChatSection />}
           {section === "voice" && <VoiceSection />}
           {section === "vavatar" && (

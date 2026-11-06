@@ -39,8 +39,10 @@ export const ROLE_PERKS: Perk[] = [
   { id: "roles", title: "Assign VIP & Moderator", blurb: "Promote members up to one rank below you.", minRank: 3 },
   { id: "badges", title: "Grant badges", blurb: "Create and award custom badges.", minRank: 3 },
   { id: "usernames", title: "Rename accounts", blurb: "Force-change usernames on NexusGram.", minRank: 3 },
+  { id: "gift_links", title: "Premium gift links", blurb: "Mint shareable Lighting gift URLs (mods & admins).", minRank: 2 },
   { id: "premium_grant", title: "Grant Premium", blurb: "Gift Lighting / Dist plans from Admin Panel.", minRank: 3 },
   { id: "announce", title: "Site announcements", blurb: "Broadcast a banner to everyone on Nexus.", minRank: 3 },
+  { id: "maintenance", title: "Development / updating mode", blurb: "Show “we'll be back soon” while Nexus updates.", minRank: 3 },
   { id: "claims", title: "Artist claims & vault", blurb: "Review claims and unlock the file vault.", minRank: 3 },
   { id: "full_premium", title: "All Premium features", blurb: "Admins unlock every paid studio perk automatically.", minRank: 3 },
   // Owner
@@ -71,11 +73,13 @@ export const can = {
   removeVideo: () => hasRank(2),
   chatMod: () => hasRank(2),
   audit: () => hasRank(2),
+  giftLinks: () => hasRank(2),
   staffDesk: () => hasRank(1), // VIP+ can open lounge; mods+ see tools
   setRoles: () => hasRank(3),
   badges: () => hasRank(3),
   usernames: () => hasRank(3),
   announce: () => hasRank(3),
+  maintenance: () => hasRank(3),
   claimsVault: () => hasRank(3),
   appointAdmins: () => hasRank(4),
   ownerSettings: () => hasRank(4),
@@ -187,6 +191,39 @@ export async function setSiteNotice(body: string, active: boolean) {
     return false;
   }
   toast(active ? "Announcement live" : "Announcement cleared", "success");
+  return true;
+}
+
+const DEFAULT_MAINT =
+  "We'll be back soon — Nexus is updating.\nHang tight while we ship improvements.";
+
+export async function fetchMaintenance(): Promise<SiteNotice | null> {
+  const { data, error } = await supabase.from("site_notices").select("*").eq("id", "maintenance").maybeSingle();
+  if (error) return null;
+  return (data as SiteNotice) ?? null;
+}
+
+/** Admin-only development / updating mode — full-screen gate for members. */
+export async function setMaintenance(active: boolean, body?: string) {
+  if (!can.maintenance()) {
+    toast("Only admins can toggle development mode", "error");
+    return false;
+  }
+  const uid = useApp.getState().userId;
+  const row = {
+    id: "maintenance",
+    body: (body?.trim() || DEFAULT_MAINT).slice(0, 280),
+    active,
+    author_id: uid,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabase.from("site_notices").upsert(row);
+  if (error) {
+    toast(errorText(error), "error");
+    return false;
+  }
+  toast(active ? "Development mode ON — members see “back soon”" : "Development mode OFF", "success");
+  window.dispatchEvent(new Event("nexus:maintenance"));
   return true;
 }
 

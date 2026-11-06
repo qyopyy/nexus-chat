@@ -46,6 +46,7 @@ import LiveHub from "./live/LiveHub";
 import PulseHub from "./pulse/PulseHub";
 import StaffDesk from "./staff/StaffDesk";
 import SiteNoticeBanner from "./staff/SiteNoticeBanner";
+import MaintenanceGate from "./MaintenanceGate";
 import { useStudio, videosGo } from "@/store/studio";
 import { releaseByCode } from "@/lib/protect";
 import NexusGram from "./gram/NexusGram";
@@ -224,7 +225,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
 
   if (hub === "studio") {
     return (
-      <>
+      <MaintenanceGate>
         <Studio />
         <IncomingCall />
         <InvitePopup />
@@ -234,13 +235,13 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
         <EffectsLayer />
         <ButtonFxBoot />
         <WelcomeSplash name={welcomeName} />
-      </>
+      </MaintenanceGate>
     );
   }
 
   if (mobile) {
     return (
-      <>
+      <MaintenanceGate>
         <MobileShell />
         <IncomingCall />
         <InvitePopup />
@@ -250,11 +251,12 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
         <EffectsLayer />
         <ButtonFxBoot />
         <WelcomeSplash name={welcomeName} />
-      </>
+      </MaintenanceGate>
     );
   }
 
   return (
+    <MaintenanceGate>
     <div className="flex h-full w-full overflow-hidden bg-rail">
       {/* rail + sidebar */}
       <div className={cn("h-full shrink-0 md:flex", mobileSidebar ? "flex w-full md:w-auto" : "hidden")}>
@@ -329,5 +331,6 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       <ButtonFxBoot />
       <WelcomeSplash name={welcomeName} />
     </div>
+    </MaintenanceGate>
   );
 }

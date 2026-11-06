@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   BadgeCheck,
+  Construction,
   Crown,
   Gavel,
+  Gift,
   Megaphone,
   Shield,
   Sparkles,
@@ -20,9 +22,11 @@ import { cn } from "@/lib/utils";
 import { openGram } from "@/lib/gram";
 import { openPulse } from "@/lib/pulse";
 import Avatar from "@/components/ui/Avatar";
+import DevelopmentModePanel from "@/components/admin/DevelopmentModePanel";
+import GiftLinksPanel from "@/components/admin/GiftLinksPanel";
 import type { AdminAction, AdminUserRow } from "@/lib/types";
 
-type Tab = "lounge" | "tools" | "announce" | "members" | "audit";
+type Tab = "lounge" | "tools" | "announce" | "gifts" | "dev" | "members" | "audit";
 
 export const useStaffDesk = create<{ tab: Tab }>(() => ({ tab: "lounge" }));
 
@@ -47,8 +51,10 @@ export default function StaffDesk({ mobile }: { mobile?: boolean }) {
   const tabs: { id: Tab; label: string; min: number; icon: React.ReactNode }[] = [
     { id: "lounge", label: "Your perks", min: 1, icon: <Sparkles className="size-4" /> },
     { id: "tools", label: "Quick tools", min: 2, icon: <Gavel className="size-4" /> },
+    { id: "gifts", label: "Gift links", min: 2, icon: <Gift className="size-4" /> },
     { id: "members", label: "Promote", min: 3, icon: <Users className="size-4" /> },
     { id: "announce", label: "Announce", min: 3, icon: <Megaphone className="size-4" /> },
+    { id: "dev", label: "Dev mode", min: 3, icon: <Construction className="size-4" /> },
     { id: "audit", label: "Audit", min: 2, icon: <Shield className="size-4" /> },
   ];
 
@@ -104,8 +110,10 @@ export default function StaffDesk({ mobile }: { mobile?: boolean }) {
         <div className="mx-auto max-w-2xl px-4 py-5 pb-16">
           {tab === "lounge" && <Lounge rank={rank} />}
           {tab === "tools" && rank >= 2 && <Tools />}
+          {tab === "gifts" && rank >= 2 && <GiftLinksPanel />}
           {tab === "members" && rank >= 3 && <Promote rank={rank} />}
           {tab === "announce" && rank >= 3 && <Announce />}
+          {tab === "dev" && rank >= 3 && <DevelopmentModePanel variant="staff" />}
           {tab === "audit" && rank >= 2 && <Audit />}
         </div>
       </div>

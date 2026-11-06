@@ -19,6 +19,7 @@ import {
   Globe,
   Link2,
   MapPin,
+  Megaphone,
   Piano,
   Pipette,
   QrCode,
@@ -45,6 +46,7 @@ import UpcGenerator from "./UpcGenerator";
 import PitchSheet from "./PitchSheet";
 import MetadataPack from "./MetadataPack";
 import ReleaseChecklist from "./ReleaseChecklist";
+import PromoStudio from "./PromoStudio";
 import VoiceChangerApp from "./VoiceChangerApp";
 import FlStudioLab from "./FlStudioLab";
 import SpotifyTakedown from "@/components/music/SpotifyTakedown";
@@ -67,6 +69,7 @@ type ToolId =
   | "pitch"
   | "metadata"
   | "release"
+  | "promo"
   | "voicefx"
   | "flstudio"
   | "qr"
@@ -190,6 +193,15 @@ const TOOLS: {
     bg: "linear-gradient(135deg,#f59e0b,#7c2d12)",
     emoji: "☑",
     Icon: CheckSquare,
+  },
+  {
+    id: "promo",
+    name: "Promo studio",
+    tag: "IG · Reels · TikTok",
+    desc: "30-day Story / Reel / TikTok scripts with shot lists — copy captions and film every day.",
+    bg: "linear-gradient(135deg,#ff2bd6,#7c3aed)",
+    emoji: "📣",
+    Icon: Megaphone,
   },
   {
     id: "voicefx",
@@ -358,6 +370,7 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
   if (tool === "pitch") return <PitchSheet mobile={mobile} onBack={backToGrid} />;
   if (tool === "metadata") return <MetadataPack mobile={mobile} onBack={backToGrid} />;
   if (tool === "release") return <ReleaseChecklist mobile={mobile} onBack={backToGrid} />;
+  if (tool === "promo") return <PromoStudio mobile={mobile} onBack={backToGrid} />;
   if (tool === "voicefx") return <VoiceChangerApp mobile={mobile} onBack={backToGrid} />;
   if (tool === "flstudio") return <FlStudioLab mobile={mobile} onBack={backToGrid} />;
   if (tool === "qr") return <QrMaker mobile={mobile} onBack={backToGrid} />;
