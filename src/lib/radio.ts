@@ -133,10 +133,8 @@ function emptyPattern(): Pattern {
   return (pr?.p ?? {}) as Pattern;
 }
 
-export async function openRadio() {
-  useApp.setState({ hub: "radio", mobileTab: "music" });
-  useRadio.setState({ open: true });
-
+/** Refresh queue/player/jam + realtime channel without navigating to the Radio hub. */
+export async function ensureRadio() {
   // Always refresh queue/player; only skip re-subscribing if the channel is already live
   const [{ data: tracks }, { data: player }, { data: jam }] = await Promise.all([
     supabase.from("radio_tracks").select("*").is("removed_at", null).order("created_at"),
@@ -210,6 +208,12 @@ export async function openRadio() {
 
   if (!tick) tick = setInterval(() => void sync(), 4000);
   void sync();
+}
+
+export async function openRadio() {
+  useApp.setState({ hub: "radio", mobileTab: "music" });
+  useRadio.setState({ open: true });
+  await ensureRadio();
 }
 
 export function closeRadio() {
