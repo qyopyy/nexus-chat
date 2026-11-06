@@ -9,18 +9,25 @@ import {
   Gavel,
   Gift,
   Megaphone,
+  Pause,
+  Play,
+  Radio,
   Shield,
+  SkipForward,
   Sparkles,
+  Trash2,
   Users,
 } from "lucide-react";
 import { create } from "zustand";
 import { useApp, openModal, toast } from "@/store/app";
 import { myRank, listUsers, setRole, auditLog } from "@/lib/admin";
-import { ROLE_PERKS, can, fetchSiteNotice, perksForRank, setSiteNotice, type SiteNotice } from "@/lib/privileges";
+import { ROLE_PERKS, can, fetchSiteNotice, hasRank, perksForRank, setSiteNotice, type SiteNotice } from "@/lib/privileges";
 import { ROLE_INFO, type SiteRole } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { openGram } from "@/lib/gram";
 import { openPulse } from "@/lib/pulse";
+import { ensureRadio, openRadio, radioNext, radioRemove, radioTogglePlay, useRadio } from "@/lib/radio";
+import { loadProfiles } from "@/lib/data";
 import Avatar from "@/components/ui/Avatar";
 import DevelopmentModePanel from "@/components/admin/DevelopmentModePanel";
 import GiftLinksPanel from "@/components/admin/GiftLinksPanel";
@@ -176,6 +183,7 @@ function Tools() {
     <div className="space-y-3">
       {can.setRoles() && <YoutubeCidToggle />}
       <PushHealthCard />
+      {hasRank(2) && <RadioModerationCard />}
       <div className="grid gap-3 sm:grid-cols-2">
         <ToolCard
           title="NexusGram Admin"
@@ -214,6 +222,134 @@ function Tools() {
           blurb="Realtime notification_inbox + FCM"
           onClick={() => toast("Inbox rows are written on every message · FCM delivers when the app is closed", "info")}
         />
+      </div>
+    </div>
+  );
+}
+
+function RadioModerationCard() {
+  const tracks = useRadio((s) => s.tracks);
+  const player = useRadio((s) => s.player);
+  const profiles = useApp((s) => s.profiles);
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void ensureRadio().finally(() => {
+      if (alive) setReady(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const ids = [...new Set([...tracks.map((t) => t.added_by), player?.updated_by].filter(Boolean) as string[])];
+    if (ids.length) void loadProfiles(ids);
+  }, [tracks, player?.updated_by]);
+
+  const current = tracks.find((t) => t.id === player?.track_id);
+  const playing = !!player?.is_playing && !!current;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 font-semibold">
+            <Radio className="size-4 text-[#ff2bd6]" />
+            Nexus Radio
+          </div>
+          <div className="mt-0.5 text-xs text-white/45">
+            {!ready
+              ? "Loading queue…"
+              : current
+                ? `On air · ${current.title}${current.artist ? ` — ${current.artist}` : ""}`
+                : tracks.length
+                  ? "Queue loaded · nothing playing"
+                  : "Queue is empty"}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            disabled={!ready || busy || !tracks.length}
+            onClick={() => {
+              setBusy(true);
+              radioTogglePlay();
+              setBusy(false);
+            }}
+            className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/15 disabled:opacity-40"
+            aria-label={playing ? "Pause" : "Play"}
+          >
+            {playing ? <Pause className="size-3.5 fill-current" /> : <Play className="size-3.5 fill-current" />}
+            {playing ? "Pause" : "Play"}
+          </button>
+          <button
+            type="button"
+            disabled={!ready || busy || !tracks.length}
+            onClick={async () => {
+              setBusy(true);
+              await radioNext(false);
+              toast("Skipped to next track", "success");
+              setBusy(false);
+            }}
+            className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/15 disabled:opacity-40"
+            aria-label="Skip"
+          >
+            <SkipForward className="size-3.5 fill-current" />
+            Skip
+          </button>
+          <button
+            type="button"
+            onClick={() => void openRadio()}
+            className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-black"
+          >
+            Open hub
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-3 max-h-56 space-y-1 overflow-y-auto">
+        {!ready ? (
+          <p className="px-1 py-4 text-center text-xs text-white/40">Fetching radio state…</p>
+        ) : tracks.length === 0 ? (
+          <p className="px-1 py-4 text-center text-xs text-white/40">No songs in the queue.</p>
+        ) : (
+          tracks.map((t, i) => {
+            const on = t.id === player?.track_id;
+            return (
+              <div
+                key={t.id}
+                className={cn(
+                  "flex items-center gap-2 rounded-xl px-2 py-2",
+                  on ? "bg-[#ff2bd6]/15" : "hover:bg-white/[0.04]",
+                )}
+              >
+                <div className="w-5 shrink-0 text-center text-[11px] tabular-nums text-white/35">{i + 1}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">{t.title}</div>
+                  <div className="truncate text-[11px] text-white/45">
+                    {t.artist || "—"} · @{profiles[t.added_by]?.username ?? "…"}
+                    {on ? (playing ? " · playing" : " · paused") : ""}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    if (!confirm(`Remove “${t.title}” from the radio queue?`)) return;
+                    void radioRemove(t.id).then(() => toast("Removed from queue", "success"));
+                  }}
+                  className="grid size-8 place-items-center rounded-full text-white/40 hover:bg-white/10 hover:text-[#ed4245] disabled:opacity-40"
+                  aria-label="Remove track"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );
