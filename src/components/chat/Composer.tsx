@@ -98,6 +98,27 @@ export default function Composer({
     if (replyTo) area.current?.focus();
   }, [replyTo]);
 
+  // Restore unsent draft when switching chats
+  useEffect(() => {
+    try {
+      const draft = localStorage.getItem(`nexus.draft.${conversationId}`) || "";
+      setText(draft);
+    } catch {
+      setText("");
+    }
+  }, [conversationId]);
+
+  // Persist draft (debounced via rAF coalesce on each keystroke is fine at chat scale)
+  useEffect(() => {
+    try {
+      const key = `nexus.draft.${conversationId}`;
+      if (!text.trim()) localStorage.removeItem(key);
+      else localStorage.setItem(key, text.slice(0, 8000));
+    } catch {
+      /* private mode */
+    }
+  }, [text, conversationId]);
+
   useEffect(() => {
     if (file && file.type.startsWith("image/")) {
       const url = URL.createObjectURL(file);
@@ -140,6 +161,11 @@ export default function Composer({
       if (isCmd) void runBotCommand(conversationId, t);
     });
     setText("");
+    try {
+      localStorage.removeItem(`nexus.draft.${conversationId}`);
+    } catch {
+      /* ignore */
+    }
     if (me) sendLive(me, "");
     setFile(null);
     setEditOpen(false);

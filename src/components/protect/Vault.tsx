@@ -567,16 +567,7 @@ export default function Vault() {
               </button>
             </div>
             {preview.f.mime?.startsWith("audio/") || isAudio(preview.f) ? (
-              <div className="rounded-2xl bg-white/5 p-5">
-                <div className="mb-4 flex items-center gap-3">
-                  <div className="grid size-16 place-items-center rounded-2xl bg-gradient-to-br from-[#5865f2] to-[#eb459e] text-3xl">🎵</div>
-                  <div className="min-w-0">
-                    <div className="truncate text-lg font-bold text-white">{displayName(preview.f)}</div>
-                    <div className="text-sm text-white/70">{preview.f.artist || "Unknown artist"}</div>
-                  </div>
-                </div>
-                <audio src={preview.url} controls autoPlay className="w-full" />
-              </div>
+              <VaultAudioPreview url={preview.url} title={displayName(preview.f)} artist={preview.f.artist} />
             ) : preview.f.mime?.startsWith("video/") ? (
               <video src={preview.url} controls autoPlay className="max-h-[75vh] w-full rounded-xl bg-black" />
             ) : preview.f.mime?.startsWith("image/") ? (
@@ -588,6 +579,63 @@ export default function Vault() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function VaultAudioPreview({ url, title, artist }: { url: string; title: string; artist?: string | null }) {
+  const ref = useRef<HTMLAudioElement>(null);
+  const [rate, setRate] = useState(1);
+  const [loop, setLoop] = useState(false);
+
+  useEffect(() => {
+    const a = ref.current;
+    if (!a) return;
+    a.playbackRate = rate;
+    a.loop = loop;
+  }, [rate, loop]);
+
+  function skip(sec: number) {
+    const a = ref.current;
+    if (!a) return;
+    a.currentTime = Math.max(0, Math.min((a.duration || 0) - 0.05, a.currentTime + sec));
+  }
+
+  return (
+    <div className="rounded-2xl bg-white/5 p-5">
+      <div className="mb-4 flex items-center gap-3">
+        <div className="grid size-16 place-items-center rounded-2xl bg-gradient-to-br from-[#5865f2] to-[#eb459e] text-3xl">🎵</div>
+        <div className="min-w-0">
+          <div className="truncate text-lg font-bold text-white">{title}</div>
+          <div className="text-sm text-white/70">{artist || "Unknown artist"}</div>
+        </div>
+      </div>
+      <audio ref={ref} src={url} controls autoPlay className="w-full" />
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => skip(-10)} className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/15">
+          −10s
+        </button>
+        <button type="button" onClick={() => skip(10)} className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/15">
+          +10s
+        </button>
+        <button
+          type="button"
+          onClick={() => setLoop((v) => !v)}
+          className={cn("rounded-full px-3 py-1.5 text-xs font-bold", loop ? "bg-accent text-white" : "bg-white/10 text-white hover:bg-white/15")}
+        >
+          Loop {loop ? "on" : "off"}
+        </button>
+        {[0.75, 1, 1.25, 1.5].map((r) => (
+          <button
+            key={r}
+            type="button"
+            onClick={() => setRate(r)}
+            className={cn("rounded-full px-3 py-1.5 text-xs font-bold tabular-nums", rate === r ? "bg-accent text-white" : "bg-white/10 text-white hover:bg-white/15")}
+          >
+            {r}×
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

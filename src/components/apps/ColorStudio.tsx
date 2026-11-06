@@ -23,6 +23,24 @@ function rgbToHex(r: number, g: number, b: number) {
   return `#${[r, g, b].map((n) => clamp(n).toString(16).padStart(2, "0")).join("")}`;
 }
 
+function hslToRgb(h: number, s: number, l: number) {
+  const ss = s / 100;
+  const ll = l / 100;
+  const c = (1 - Math.abs(2 * ll - 1)) * ss;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = ll - c / 2;
+  let rp = 0,
+    gp = 0,
+    bp = 0;
+  if (h < 60) [rp, gp, bp] = [c, x, 0];
+  else if (h < 120) [rp, gp, bp] = [x, c, 0];
+  else if (h < 180) [rp, gp, bp] = [0, c, x];
+  else if (h < 240) [rp, gp, bp] = [0, x, c];
+  else if (h < 300) [rp, gp, bp] = [x, 0, c];
+  else [rp, gp, bp] = [c, 0, x];
+  return { r: clamp((rp + m) * 255), g: clamp((gp + m) * 255), b: clamp((bp + m) * 255) };
+}
+
 function rgbToHsl(r: number, g: number, b: number) {
   const rn = r / 255;
   const gn = g / 255;
@@ -80,9 +98,21 @@ export default function ColorStudio({ onBack, mobile }: { onBack: () => void; mo
     { label: "HSL", value: `hsl(${hsl.h}, ${hsl.s}%, ${hsl.l}%)` },
   ];
 
+  const palettes = useMemo(() => {
+    const hue = (deg: number) => {
+      const rgb2 = hslToRgb((hsl.h + deg + 360) % 360, Math.max(hsl.s, 35), hsl.l);
+      return rgbToHex(rgb2.r, rgb2.g, rgb2.b).toUpperCase();
+    };
+    return [
+      { name: "Complementary", colors: [hue(0), hue(180)] },
+      { name: "Analogous", colors: [hue(-30), hue(0), hue(30)] },
+      { name: "Triad", colors: [hue(0), hue(120), hue(240)] },
+    ];
+  }, [hsl.h, hsl.s, hsl.l]);
+
   return (
     <AppFrame title="Color studio" Icon={Pipette} iconClass="text-[#faa61a]" mobile={mobile} onBack={onBack}>
-      <p className="text-sm text-sub">Pick a brand color, copy HEX / RGB / HSL, and check contrast against white and black.</p>
+      <p className="text-sm text-sub">Pick a brand color, copy HEX / RGB / HSL, check contrast, and tap palette swatches to copy.</p>
       <div className="overflow-hidden rounded-2xl bg-side">
         <div className="h-40 w-full" style={{ background: rgbToHex(rgb.r, rgb.g, rgb.b) }} />
         <div className="space-y-3 p-4">
@@ -115,6 +145,30 @@ export default function ColorStudio({ onBack, mobile }: { onBack: () => void; mo
               <div className="mt-1 font-bold">{vsBlack.toFixed(2)}:1</div>
               <div className="text-xs">{vsBlack >= 4.5 ? "AA body ✓" : vsBlack >= 3 ? "AA large" : "Fail"}</div>
             </div>
+          </div>
+          <div className="space-y-3 pt-1">
+            {palettes.map((p) => (
+              <div key={p.name}>
+                <div className="mb-1.5 text-xs font-semibold text-sub">{p.name}</div>
+                <div className="flex flex-wrap gap-2">
+                  {p.colors.map((c) => (
+                    <button
+                      key={`${p.name}-${c}`}
+                      type="button"
+                      title={`Copy ${c}`}
+                      onClick={() => {
+                        setHex(c);
+                        void copy(c, c);
+                      }}
+                      className="flex items-center gap-2 rounded-xl bg-black/25 px-2 py-1.5 hover:bg-black/35"
+                    >
+                      <span className="size-7 rounded-lg ring-1 ring-white/15" style={{ background: c }} />
+                      <span className="font-mono text-xs">{copied === c ? "Copied" : c}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

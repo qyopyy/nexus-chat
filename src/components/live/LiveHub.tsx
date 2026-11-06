@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Mic, MicOff, MonitorUp, Radio, Video, VideoOff } from "lucide-react";
+import { ArrowLeft, Copy, Mic, MicOff, MonitorUp, Radio, Video, VideoOff } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
@@ -33,6 +33,20 @@ export default function LiveHub({ mobile }: { mobile?: boolean }) {
 
   useEffect(() => {
     if (!stream) void listLiveStreams();
+  }, [stream]);
+
+  // Deep link: /?watchLive=<streamId> or #watchLive=<id>
+  useEffect(() => {
+    if (stream) return;
+    try {
+      const q = new URLSearchParams(window.location.search).get("watchLive");
+      const hash = window.location.hash.match(/watchLive=([^&]+)/)?.[1];
+      const id = q || hash;
+      if (!id) return;
+      void watchLive(id).catch(() => toast("Couldn't open that live stream", "error"));
+    } catch {
+      /* ignore */
+    }
   }, [stream]);
 
   return (
@@ -191,9 +205,24 @@ function StreamRoom({ mobile }: { mobile?: boolean }) {
   const screenOn = useLive((s) => s.screenOn);
   const avatarOn = useLive((s) => s.avatarOn);
   const [text, setText] = useState("");
+  const [elapsed, setElapsed] = useState("0:00");
   const videoRef = useRef<HTMLVideoElement>(null);
   const screenRef = useRef<HTMLVideoElement>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const started = Date.parse(stream.started_at || "") || Date.now();
+    const tick = () => {
+      const sec = Math.max(0, Math.floor((Date.now() - started) / 1000));
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      setElapsed(h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`);
+    };
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [stream.started_at]);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -229,11 +258,23 @@ function StreamRoom({ mobile }: { mobile?: boolean }) {
         )}
         <div className="absolute top-3 left-3 flex flex-wrap items-center gap-2">
           <span className="rounded bg-[#eb0400] px-2 py-0.5 text-[11px] font-black tracking-wide">LIVE</span>
+          <span className="rounded bg-black/60 px-2 py-0.5 text-[11px] font-semibold tabular-nums backdrop-blur">{elapsed}</span>
           <span className="rounded bg-black/60 px-2 py-0.5 text-[11px] font-semibold backdrop-blur">{viewers} watching</span>
           <span className="rounded bg-black/60 px-2 py-0.5 text-[11px] text-white/70 backdrop-blur">{stream.quality}</span>
           {avatarOn && (
             <span className="rounded bg-gradient-to-r from-[#ff2bd6] to-[#8b5cff] px-2 py-0.5 text-[11px] font-bold tracking-wide">V-Avatar</span>
           )}
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded bg-black/60 px-2 py-0.5 text-[11px] font-semibold backdrop-blur hover:bg-black/75"
+            title="Copy watch link"
+            onClick={() => {
+              const url = `${typeof window !== "undefined" ? window.location.origin : ""}/?watchLive=${encodeURIComponent(stream.id)}`;
+              void navigator.clipboard.writeText(url).then(() => toast("Watch link copied", "success"));
+            }}
+          >
+            <Copy className="size-3" /> Share
+          </button>
         </div>
         <div className="absolute top-3 right-3 flex items-center gap-2 rounded-full bg-black/50 py-1 pr-3 pl-1 backdrop-blur">
           <Avatar userId={stream.host_id} size={28} plain />

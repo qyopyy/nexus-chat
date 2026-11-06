@@ -894,7 +894,10 @@ export default function BumpHub({
               ids={nearby.map((n) => n.user_id)}
               meta={(id) => {
                 const n = nearbyById.get(id);
-                return n ? `${formatMeters(n.meters)} · ${n.visible}${n.label ? ` · ${n.label}` : ""}` : "";
+                if (!n) return "";
+                const walkMin = Math.max(1, Math.round(n.meters / 84)); // ~1.4 m/s walking
+                const eta = walkMin < 60 ? `~${walkMin} min walk` : `~${(walkMin / 60).toFixed(1)} h walk`;
+                return `${formatMeters(n.meters)} · ${eta} · ${n.visible}${n.label ? ` · ${n.label}` : ""}`;
               }}
               onOpen={openPerson}
               onMessage={openMessages}
