@@ -3,7 +3,7 @@
 //  POST /functions/v1/bots?bot=<community bot id>&token=<token>  community bot webhook
 //  POST /functions/v1/bots  (signed in)  {action:"cmd", conversation_id, text}
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2.119.0";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

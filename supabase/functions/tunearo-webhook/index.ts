@@ -1,7 +1,7 @@
 // Receives Tunearo webhooks (release.* / royalties.imported), verifies X-Tunearo-Signature
 // (HMAC-SHA256 of the raw body with the endpoint secret) and updates the matching Nexus release.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2.119.0";
 
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const enc = new TextEncoder();

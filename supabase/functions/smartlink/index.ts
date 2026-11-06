@@ -4,7 +4,7 @@
 //   find  {release_id}                → owner/staff: look up store links from the UPC / ISRC
 //                                        (Spotify, Deezer, Apple Music) and fill the rest via Odesli/song.link
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2.119.0";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

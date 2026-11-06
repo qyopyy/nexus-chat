@@ -3,7 +3,7 @@
 //  signed in:  {action:"add", url} · {action:"scan", id}
 //  pg_cron:    {action:"scan_all"} with x-push-secret
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2.119.0";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

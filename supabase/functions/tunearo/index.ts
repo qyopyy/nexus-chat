@@ -2,7 +2,7 @@
 // The API key lives server-side only: TUNEARO_API_KEY secret, or saved by an admin in Studio (dist_settings).
 // Big files never pass through here: we hand the admin's browser Tunearo's pre-signed upload URLs.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2.119.0";
 
 const API = "https://dashboard.tunearo.com/api/public/v1";
 const cors = {

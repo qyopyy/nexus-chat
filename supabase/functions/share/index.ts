@@ -2,7 +2,7 @@
 //  {action:"info", token}                              → file name/size/owner + whether a password is needed
 //  {action:"get", token, password?, mode:"download"|"preview"} → short-lived signed URL
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2.119.0";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

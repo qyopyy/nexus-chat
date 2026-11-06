@@ -1,7 +1,7 @@
 // Nexus signup — creates an already-confirmed account (no confirmation email,
 // so no email rate limits). Account passwords and sessions stay on Supabase Auth.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2.119.0";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

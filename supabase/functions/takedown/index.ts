@@ -6,7 +6,7 @@
 //                                              Reply-To + CC = the verified rights holder, then Nexus Bot confirms in chat
 // Secrets: RESEND_API_KEY (resend.com, domain verified), optional TAKEDOWN_FROM, optional TAKEDOWN_TEST_TO (redirects platform mail while testing)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2.119.0";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
