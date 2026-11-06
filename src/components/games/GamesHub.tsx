@@ -234,7 +234,7 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
                       <Best id={g.id} />
                     </div>
                   </button>
-                  {isSoloScoreGame(g.id) && <HubChallengeBtn id={g.id} onChallenge={() => setHubChallenge(g.id)} />}
+                  {isSoloScoreGame(g.id) && <HubChallengeBtn id={g.id} onChallenge={() => setHubChallenge(g.id as SoloScoreGame)} />}
                 </div>
               ))}
             </div>
@@ -430,7 +430,7 @@ function GameScreen({ id, onBack, mobile }: { id: GameId; onBack: () => void; mo
             </div>
           )}
           {challengeOpen && canChallenge && (result ?? localBest(id)) > 0 && (
-            <ScoreChallengeSheet game={id} score={result ?? localBest(id)} onClose={() => setChallengeOpen(false)} />
+            <ScoreChallengeSheet game={id as SoloScoreGame} score={result ?? localBest(id)} onClose={() => setChallengeOpen(false)} />
           )}
         </div>
         <aside className={cn("shrink-0 border-white/10 bg-[#0d0d16] lg:w-72 lg:border-l", session > 0 && result === null ? "hidden lg:block" : "block")}>
