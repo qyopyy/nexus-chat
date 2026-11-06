@@ -4,12 +4,13 @@ import { useChatFx } from "@/lib/chatFx";
 import { TypingAnim } from "./TypingBubbles";
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Bookmark, Bot, ChevronLeft, Hash, Image as ImageIcon, Maximize2, MessageSquare, Phone, Search, Users, Video, Volume2 } from "lucide-react";
+import { Bell, BellOff, Bookmark, Bot, ChevronLeft, Hash, Image as ImageIcon, Maximize2, MessageSquare, Phone, Search, Users, Video, Volume2 } from "lucide-react";
 import { useApp, conversationTitle, findChannel, openProfileCard, toast } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { useChat } from "@/store/chat";
 import { useCall, startCall } from "@/lib/call";
 import { clearChatWallpaper, fileToDataUrl, getChatWallpaper, setChatWallpaper, subscribeChatWallpapers } from "@/lib/chatWallpaper";
+import { usePrefs, toggleMute } from "@/store/prefs";
 import { cn } from "@/lib/utils";
 import Avatar, { statusLabel } from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
@@ -49,6 +50,7 @@ export default function ChatHeader({
   const typing = useChat((s) => s.typing);
   const inThisCall = useCall((s) => s.status !== "idle" && s.conversationId === conversationId);
   const otherUnread = useApp((s) => Object.entries(s.unread).reduce((n, [id, c]) => n + (id !== conversationId && c > 0 ? 1 : 0), 0));
+  const muted = usePrefs((s) => s.muted.includes(conversationId));
 
   const typers = useMemo(() => {
     const now = Date.now();
@@ -73,6 +75,8 @@ export default function ChatHeader({
     subtitle = <span className={st ? "text-accent" : "text-sub"}>{statusLabel(st).toLowerCase()}</span>;
   } else if (chat?.kind === "group") {
     subtitle = <span className="text-sub">{chat.member_count} members</span>;
+  } else if (muted) {
+    subtitle = <span className="text-sub">notifications muted</span>;
   }
 
   const canCall = kind === "dm" || kind === "group";
@@ -122,8 +126,11 @@ export default function ChatHeader({
       )}
 
       <div className="min-w-0 flex-1 leading-tight">
-        <div className="truncate font-semibold">
-          {kind === "dm" && chat?.other_user_id ? <NameTag userId={chat.other_user_id} maxBadges={mobile ? 3 : 6} /> : title}
+        <div className="flex min-w-0 items-center gap-1.5">
+          <div className="truncate font-semibold">
+            {kind === "dm" && chat?.other_user_id ? <NameTag userId={chat.other_user_id} maxBadges={mobile ? 3 : 6} /> : title}
+          </div>
+          {muted && <BellOff className="size-3.5 shrink-0 text-sub" aria-hidden />}
         </div>
         {subtitle && <div className="truncate text-xs">{subtitle}</div>}
       </div>
@@ -142,6 +149,18 @@ export default function ChatHeader({
         {inThisCall && (
           <HeaderBtn label={stageExpanded ? "Show chat" : "Expand call"} onClick={onToggleStage} active={!stageExpanded}>
             {stageExpanded ? <MessageSquare className="size-5" /> : <Maximize2 className="size-5" />}
+          </HeaderBtn>
+        )}
+        {kind !== "voice" && (
+          <HeaderBtn
+            label={muted ? "Unmute notifications" : "Mute notifications"}
+            active={muted}
+            onClick={() => {
+              haptic.light();
+              toggleMute(conversationId);
+            }}
+          >
+            {muted ? <BellOff className="size-5" /> : <Bell className="size-5" />}
           </HeaderBtn>
         )}
         {kind !== "voice" && (
