@@ -1,0 +1,117 @@
+Nexus — Google Play Console listing copy
+=======================================
+Paste into Play Console → Nexus → Grow → Store presence → Main store listing.
+Package / applicationId should match Capgo / Capacitor appId when published:
+  hu.qyopy.nexus.B44X8B76QR
+
+────────────────────────────────────
+App name (max 30 chars)
+────────────────────────────────────
+
+Nexus
+
+────────────────────────────────────
+Short description (max 80 chars)
+────────────────────────────────────
+
+Chat, friends, Live places, music, and tools — your social home on Android.
+
+────────────────────────────────────
+Full description (max 4000 chars)
+────────────────────────────────────
+
+Nexus is your social home for chatting with friends, joining communities, and staying nearby — with music, maps, and useful tools built in.
+
+CHAT & COMMUNITIES
+• Instant messaging with friends and servers
+• Voice and video calls
+• Share photos, files, and links
+• Stay in sync across Android, iPhone, and the web
+
+WUMP — LIVE PLACES
+• Share your Live pin with friends or family when you choose
+• OpenStreetMap-based map with privacy controls
+• Invite links for people you trust
+• Turn Live off anytime — location sharing stops
+
+MUSIC & CREATIVE APPS
+• Listen and discover inside Nexus
+• Nexus Link — link-in-bio pages with themes
+• Image studio, docs tools, QR maker, and more
+
+BUILT-IN BROWSER
+• Search the web without leaving Nexus
+• Shields and private DNS options for safer browsing
+
+ONE ACCOUNT, EVERYWHERE
+• Same login on web, Android, and iPhone
+• Your chats, friends, and apps travel with you
+
+PRIVACY YOU CONTROL
+• Location is only shared while Live is on
+• Choose friends, family, or a short everyone flash
+• Review privacy settings anytime at https://nexusproject.cc/privacy
+
+Nexus is built by qyopy.
+Support: https://nexusproject.cc
+Privacy: https://nexusproject.cc/privacy
+
+────────────────────────────────────
+Graphics (Play requirements)
+────────────────────────────────────
+
+App icon: 512×512 PNG (opaque)
+Feature graphic: 1024×500 PNG/JPEG
+Phone screenshots: min 2 (prefer 4–8), same story order as App Store
+Tablet screenshots: optional if you declare tablet support
+
+Suggested screenshot order:
+  1. Home / chats
+  2. Messaging
+  3. Calls
+  4. Wump Live map
+  5. Music
+  6. Nexus Link
+  7. Browser & tools
+
+────────────────────────────────────
+Categorization
+────────────────────────────────────
+
+App category: Social
+Tags (optional): Communication, Social, Maps
+
+────────────────────────────────────
+Contact details
+────────────────────────────────────
+
+Email: owner@qyopy.hu
+Website: https://nexusproject.cc
+Privacy policy: https://nexusproject.cc/privacy
+
+────────────────────────────────────
+Store settings / content rating
+────────────────────────────────────
+
+Complete IARC questionnaire in Play Console.
+Expect Social / User-generated content / Location / Unrestricted internet → typically Teen or similar.
+Declare location permission purpose: Wump Live friend/family sharing (optional, user-controlled).
+
+Data safety form — align with mobile/app-store-listing.txt App Privacy section:
+  • Account email / username collected
+  • Messages & user content
+  • Location while Live is on
+  • Push identifiers
+  • Not sold; used for app functionality (and analytics only if you enable it)
+
+────────────────────────────────────
+Release notes (first production)
+────────────────────────────────────
+
+First Android release of Nexus.
+
+• Chat with friends and communities
+• Voice & video calls
+• Wump Live map with privacy controls
+• Music, Nexus Link, browser, and built-in tools
+• Same account as the web app

@@ -10,7 +10,9 @@ Issues you hit
    Placeholder while verification fails; marketing icon must be opaque RGB.
 
 3) No App Store description
-   Description is edited in App Store Connect (see app-store-listing.txt).
+   Description is edited in App Store Connect — paste from app-store-listing.txt
+   (name, subtitle, description, keywords, What’s New, review notes, privacy).
+   Android: play-store-listing.txt.
 
 4) Xcode “not compatible” on your Mac
    Current Xcode needs a newer macOS. You do NOT need Xcode locally.
