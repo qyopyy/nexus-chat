@@ -71,13 +71,13 @@ export type BumpInboxRow = {
 /**
  * Opens Wump as its own live hub (desktop rail + phone Apps tab).
  * Capacitor loads https://nexusproject.cc — web deploys update without a new IPA/APK.
- * Standalone Wump IPA already lives on /bump/app.
+ * Standalone Wump IPA already lives on /wump/app (legacy /bump/app still works).
  */
 export function openBump() {
   if (typeof window !== "undefined" && /BumpApp|WumpApp/i.test(navigator.userAgent)) {
     const onShell = window.location.pathname.startsWith("/bump/app") || window.location.pathname.startsWith("/wump/app");
     if (!onShell) {
-      window.location.href = "/bump/app";
+      window.location.href = "/wump/app";
       return;
     }
   }

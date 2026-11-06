@@ -1,12 +1,12 @@
-name: Bump iOS app (.ipa)
+name: Wump iOS app (.ipa)
 
-# Standalone Bump.ipa (bundle hu.qyopy.bump) — Sideloadly / AltStore.
-# Opens https://nexusproject.cc/bump/app — same Nexus account & backend.
+# Standalone Wump.ipa (bundle hu.qyopy.bump) — Sideloadly / AltStore.
+# Opens https://nexusproject.cc/wump/app — same Nexus account & backend.
 on:
   workflow_dispatch:
     inputs:
       url:
-        description: "Bump web entry URL (leave empty for production /bump/app)"
+        description: "Wump web entry URL (leave empty for production /wump/app)"
         required: false
   push:
     branches: [main]
@@ -30,8 +30,8 @@ jobs:
       run:
         working-directory: mobile-bump
     env:
-      BUMP_URL: ${{ github.event.inputs.url || vars.BUMP_URL || 'https://nexusproject.cc/bump/app' }}
-      NEXUS_URL: ${{ github.event.inputs.url || vars.BUMP_URL || 'https://nexusproject.cc/bump/app' }}
+      BUMP_URL: ${{ github.event.inputs.url || vars.BUMP_URL || 'https://nexusproject.cc/wump/app' }}
+      NEXUS_URL: ${{ github.event.inputs.url || vars.BUMP_URL || 'https://nexusproject.cc/wump/app' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -44,7 +44,7 @@ jobs:
 
       - name: Create iOS project
         run: |
-          echo "Bump app will open: $BUMP_URL"
+          echo "Wump app will open: $BUMP_URL"
           npx cap add ios
           npx cap sync ios
           ls ios/App
@@ -53,9 +53,9 @@ jobs:
         run: |
           PLIST=ios/App/App/Info.plist
           pb() { /usr/libexec/PlistBuddy -c "$1" "$PLIST" 2>/dev/null || true; }
-          pb "Add :NSLocationWhenInUseUsageDescription string Bump uses your location so friends and family can find you nearby. Location is rounded and expires after 20 minutes."
-          pb "Add :NSLocationAlwaysAndWhenInUseUsageDescription string Bump can refresh your pin in the background while you are Live, so family can keep finding you nearby. Turn Live off anytime to stop sharing."
-          pb "Add :NSPhotoLibraryUsageDescription string Attach a photo to your Bump profile."
+          pb "Add :NSLocationWhenInUseUsageDescription string Wump uses your location so friends and family can find you nearby. Location is rounded and expires after 20 minutes."
+          pb "Add :NSLocationAlwaysAndWhenInUseUsageDescription string Wump can refresh your pin in the background while you are Live, so family can keep finding you nearby. Turn Live off anytime to stop sharing."
+          pb "Add :NSPhotoLibraryUsageDescription string Attach a photo to your Wump profile."
           pb "Add :UIBackgroundModes array"
           pb "Add :UIBackgroundModes:0 string location"
           pb "Add :UIBackgroundModes:1 string remote-notification"
@@ -66,8 +66,10 @@ jobs:
           pb "Add :CFBundleURLTypes:0 dict"
           pb "Add :CFBundleURLTypes:0:CFBundleURLSchemes array"
           pb "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string hu.qyopy.bump"
-          pb "Set :CFBundleDisplayName Bump"
-          pb "Add :CFBundleDisplayName string Bump"
+          pb "Set :CFBundleDisplayName Wump"
+          pb "Add :CFBundleDisplayName string Wump"
+          pb "Set :CFBundleName Wump"
+          pb "Add :CFBundleName string Wump"
           pb "Add :ITSAppUsesNonExemptEncryption bool false"
           pb "Add :UIStatusBarStyle string UIStatusBarStyleLightContent"
           pb "Add :UIViewControllerBasedStatusBarAppearance bool false"
@@ -121,29 +123,31 @@ jobs:
           # Ensure app id (Capacitor should already have set this)
           /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier hu.qyopy.bump" "$APP/Info.plist" 2>/dev/null \
             || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string hu.qyopy.bump" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Wump" "$APP/Info.plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Wump" "$APP/Info.plist"
           bash "$GITHUB_WORKSPACE/.github/scripts/fix-ios-framework-ids.sh" "$APP"
           rm -rf Payload && mkdir Payload
           cp -R "$APP" Payload/
-          zip -qry ../../Bump.ipa Payload
-          ls -lh ../../Bump.ipa
+          zip -qry ../../Wump.ipa Payload
+          ls -lh ../../Wump.ipa
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Bump-ipa
-          path: mobile-bump/Bump.ipa
+          name: Wump-ipa
+          path: mobile-bump/Wump.ipa
 
       - name: Publish release
         if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="bump-ios-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" Bump.ipa --repo "$GITHUB_REPOSITORY" \
-            --title "Bump iOS build ${GITHUB_RUN_NUMBER}" \
-            --notes "Standalone **Bump** IPA (bundle \`hu.qyopy.bump\`).
+          TAG="wump-ios-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" Wump.ipa --repo "$GITHUB_REPOSITORY" \
+            --title "Wump iOS build ${GITHUB_RUN_NUMBER}" \
+            --notes "Standalone **Wump** IPA (bundle \`hu.qyopy.bump\`).
 
           Install with Sideloadly / AltStore using your Apple ID.
           Opens: ${BUMP_URL}
 
-          Same Nexus login & backend. Background location while Live.
-          Nexus chat app stays separate — Bump is also available inside Nexus."
+          Friends, chat, live map, groups — same Nexus login & backend.
+          Nexus chat app stays separate — Wump is also available inside Nexus."

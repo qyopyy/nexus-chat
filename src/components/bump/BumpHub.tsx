@@ -90,6 +90,7 @@ import {
 } from "@/lib/wumpPlaces";
 import WumpExplorePanel from "./WumpExplorePanel";
 import WumpSavedPlacesPanel from "./WumpSavedPlacesPanel";
+import WumpFriendsPanel from "./WumpFriendsPanel";
 
 type Tab = "nearby" | "friends" | "music" | "profile" | "social" | "messages" | "settings" | "groups";
 
@@ -99,6 +100,7 @@ export default function BumpHub({
   standalone,
   initialTab,
   hideChromeTabs,
+  onTabChange,
 }: {
   mobile?: boolean;
   onBack?: () => void;
@@ -108,14 +110,23 @@ export default function BumpHub({
   initialTab?: Tab;
   /** Hide top pill tabs (parent provides bottom nav) */
   hideChromeTabs?: boolean;
+  /** Notify parent shell when tab changes (standalone bottom nav sync) */
+  onTabChange?: (tab: Tab) => void;
 }) {
   const me = useApp((s) => s.userId);
   const friendships = useApp((s) => s.friendships);
   const profiles = useApp((s) => s.profiles);
-  const [tab, setTab] = useState<Tab>(initialTab || "nearby");
+  const [tab, setTabState] = useState<Tab>(initialTab || "nearby");
+  const setTab = useCallback(
+    (t: Tab) => {
+      setTabState(t);
+      onTabChange?.(t);
+    },
+    [onTabChange],
+  );
 
   useEffect(() => {
-    if (initialTab) setTab(initialTab);
+    if (initialTab) setTabState(initialTab);
   }, [initialTab]);
   const [visible, setVisible] = useState<BumpVisible>("friends");
   const [live, setLive] = useState(false);
@@ -349,7 +360,7 @@ export default function BumpHub({
           (u.pathname.startsWith("/bump/") && !u.pathname.startsWith("/bump/app")) ||
           (u.pathname.startsWith("/wump/") && !u.pathname.startsWith("/wump/app"))
         ) {
-          u.pathname = bumpOnly ? "/bump/app" : "/";
+          u.pathname = bumpOnly ? "/wump/app" : "/";
         }
         window.history.replaceState(null, "", u.pathname + u.search);
         void refresh();
@@ -523,14 +534,60 @@ export default function BumpHub({
 
     <div className={cn("flex h-full flex-col bg-chat", (mobile || bumpOnly) && !hideChromeTabs && "pb-safe-2")}>
       {hideChromeTabs ? (
-        <div className="flex shrink-0 items-center gap-2 border-b border-white/5 px-4 py-2">
-          {liveChip}
-          {flashLeft > 0 && (
-            <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent tabular-nums">
-              Everyone {Math.floor(flashLeft / 60)}:{String(flashLeft % 60).padStart(2, "0")}
+        <div className="flex shrink-0 flex-col gap-2 border-b border-white/5 px-3 py-2">
+          <div className="flex items-center gap-2">
+            {liveChip}
+            {flashLeft > 0 && (
+              <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent tabular-nums">
+                Everyone {Math.floor(flashLeft / 60)}:{String(flashLeft % 60).padStart(2, "0")}
+              </span>
+            )}
+            <span className="ml-auto text-[11px] text-sub">
+              {friendIds.length} friends · {nearby.length} nearby
             </span>
-          )}
-          <span className="ml-auto text-[11px] text-sub">Realtime nearby</span>
+          </div>
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {(
+              [
+                ["nearby", "Map", <Radio className="size-3.5" key="m" />],
+                ["friends", "Friends", <Users className="size-3.5" key="f" />],
+                ["messages", "Chat", <MessageCircle className="size-3.5" key="c" />],
+                ["groups", "Groups", <UserPlus className="size-3.5" key="g" />],
+              ] as const
+            ).map(([id, label, icon]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition",
+                  tab === id ? "bg-emerald-500 text-white" : "bg-white/5 text-sub hover:bg-white/10 hover:text-txt",
+                )}
+              >
+                {icon}
+                {label}
+              </button>
+            ))}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void (live ? stop() : goLive())}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold transition",
+                live ? "bg-white/10 text-ok" : "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30",
+              )}
+            >
+              <Navigation className="size-3.5" />
+              {live ? "Refresh" : "Go Live"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShareFriendOpen(true)}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-sub hover:bg-white/10 hover:text-txt"
+            >
+              <Share2 className="size-3.5" /> Share pin
+            </button>
+          </div>
         </div>
       ) : (
         <header
@@ -624,7 +681,8 @@ export default function BumpHub({
               }}
               onOpenPerson={(id) => openPerson(id)}
               onOpenProfilePage={openProfilePage}
-              onSearch={() => setTab("social")}
+              onSearch={() => setTab("friends")}
+              onFriends={() => setTab("friends")}
               onScratch={() => setTab("messages")}
               onGoLive={() => void goLive()}
               onSavePlace={(p) => handleSavePlace(p)}
@@ -956,29 +1014,26 @@ export default function BumpHub({
         )}
 
         {tab === "friends" && (
-          <div className="mx-auto max-w-xl">
-            <PersonList
-              title="Friends"
-              empty="No friends yet. Add people from Chats → Friends, then find them nearby on Wump."
-              ids={friendIds}
-              meta={(id) => {
-                const n = nearbyById.get(id);
-                return n ? `Nearby · ${formatMeters(n.meters)}` : "Not sharing location right now";
-              }}
-              badge={(id) => (nearbyById.has(id) ? "Near" : null)}
-              onOpen={openPerson}
-              onMessage={openMessages}
-              onWave={(id) => {
-                void bumpWave(id).then((row) => {
-                  if (row) {
-                    toast("Wave sent", "success");
-                    openMessages(id);
-                  }
-                });
-              }}
-              onRefresh={() => void refresh()}
-            />
-          </div>
+          <WumpFriendsPanel
+            friendIds={friendIds}
+            nearbyById={nearbyById}
+            onOpen={openPerson}
+            onMessage={openMessages}
+            onWave={(id) => {
+              void bumpWave(id).then((row) => {
+                if (row) {
+                  toast("Wave sent", "success");
+                  openMessages(id);
+                }
+              });
+            }}
+            onSharePin={(id) => {
+              setShareBusy(true);
+              void bumpShareLocationWithFriend(id, liveLabel.trim() || undefined).finally(() => setShareBusy(false));
+            }}
+            onFindOnMap={() => setTab("nearby")}
+            onRefresh={() => void refresh()}
+          />
         )}
 
         {tab === "profile" && me && <BumpProfileEditor userId={me} />}
@@ -988,7 +1043,22 @@ export default function BumpHub({
         )}
 
         {tab === "messages" && me && (
-          <BumpMessagesPane me={me} focusUser={threadUser} onFocusUser={setThreadUser} onOpenProfile={openPerson} friendIds={friendIds} />
+          <BumpMessagesPane
+            me={me}
+            focusUser={threadUser}
+            onFocusUser={setThreadUser}
+            onOpenProfile={openPerson}
+            friendIds={friendIds}
+            onSharePin={(id) => {
+              setShareBusy(true);
+              void bumpShareLocationWithFriend(id, liveLabel.trim() || undefined).finally(() => setShareBusy(false));
+            }}
+            onWave={(id) => {
+              void bumpWave(id).then((row) => {
+                if (row) toast("Wave sent", "success");
+              });
+            }}
+          />
         )}
       </div>
       {!hideChromeTabs && <BumpMiniPlayer onOpen={() => setTab("music")} />}
@@ -1446,12 +1516,16 @@ function BumpMessagesPane({
   onFocusUser,
   onOpenProfile,
   friendIds,
+  onSharePin,
+  onWave,
 }: {
   me: string;
   focusUser: string | null;
   onFocusUser: (id: string | null) => void;
   onOpenProfile: (id: string) => void;
   friendIds: string[];
+  onSharePin?: (id: string) => void;
+  onWave?: (id: string) => void;
 }) {
   const bubbles = useAppearance((s) => s.messageBubbles !== false);
   const [inbox, setInbox] = useState<BumpInboxRow[]>([]);
@@ -1459,6 +1533,7 @@ function BumpMessagesPane({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
+  const quickReplies = ["👋 Hey!", "Where are you?", "Meet up?", "On my way", "Be right there"];
 
   const refreshInbox = useCallback(async () => {
     setInbox(await bumpInbox());
@@ -1493,10 +1568,11 @@ function BumpMessagesPane({
     });
   }, [focusUser, refreshInbox]);
 
-  async function send() {
-    if (!focusUser || !draft.trim()) return;
+  async function send(text?: string) {
+    const body = (text ?? draft).trim();
+    if (!focusUser || !body) return;
     setSending(true);
-    const row = await bumpSendMessage(focusUser, draft.trim());
+    const row = await bumpSendMessage(focusUser, body);
     setSending(false);
     if (row) {
       setDraft("");
@@ -1510,7 +1586,7 @@ function BumpMessagesPane({
 
   if (focusUser) {
     return (
-      <div className="mx-auto flex h-[min(70vh,640px)] max-w-lg flex-col overflow-hidden rounded-2xl bg-side ring-1 ring-white/5">
+      <div className="mx-auto flex h-[min(78vh,720px)] max-w-lg flex-col overflow-hidden rounded-2xl bg-side ring-1 ring-white/5">
         <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2.5">
           <button type="button" onClick={() => onFocusUser(null)} className="rounded-full px-2 py-1 text-xs font-semibold text-accent hover:bg-accent/10">
             ← Inbox
@@ -1521,9 +1597,36 @@ function BumpMessagesPane({
               <NameTag userId={focusUser} />
             </span>
           </button>
+          {onWave && (
+            <button
+              type="button"
+              onClick={() => onWave(focusUser)}
+              className="grid size-9 place-items-center rounded-full bg-white/5 text-ok hover:bg-ok/20"
+              aria-label="Wave"
+              title="Wave"
+            >
+              <Hand className="size-4" />
+            </button>
+          )}
+          {onSharePin && (
+            <button
+              type="button"
+              onClick={() => onSharePin(focusUser)}
+              className="grid size-9 place-items-center rounded-full bg-white/5 text-accent hover:bg-accent/20"
+              aria-label="Share pin"
+              title="Share pin"
+            >
+              <Share2 className="size-4" />
+            </button>
+          )}
         </div>
         <div ref={scroller} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3 py-3">
-          {!msgs.length && <p className="py-8 text-center text-xs text-sub">Say hi — first Wump message.</p>}
+          {!msgs.length && (
+            <div className="py-8 text-center">
+              <p className="text-sm font-semibold text-txt">Start the chat</p>
+              <p className="mt-1 text-xs text-sub">Waves, meetups, and live pins — all in {WUMP}.</p>
+            </div>
+          )}
           {msgs.map((m, i) => {
             const mine = m.sender_id === me;
             const next = msgs[i + 1];
@@ -1547,7 +1650,20 @@ function BumpMessagesPane({
             );
           })}
         </div>
-        <div className="flex gap-2 border-t border-white/5 p-3">
+        <div className="flex gap-1.5 overflow-x-auto border-t border-white/5 px-3 pt-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {quickReplies.map((q) => (
+            <button
+              key={q}
+              type="button"
+              disabled={sending}
+              onClick={() => void send(q)}
+              className="shrink-0 rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-sub hover:bg-white/10 hover:text-txt disabled:opacity-40"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2 p-3">
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
@@ -1558,9 +1674,14 @@ function BumpMessagesPane({
               }
             }}
             placeholder="Message…"
-            className="min-w-0 flex-1 rounded-full bg-black/30 px-4 py-2.5 text-sm outline-none ring-1 ring-white/10 focus:ring-accent"
+            className="min-w-0 flex-1 rounded-full bg-black/30 px-4 py-2.5 text-sm outline-none ring-1 ring-white/10 focus:ring-emerald-500"
           />
-          <button type="button" disabled={sending || !draft.trim()} onClick={() => void send()} className="rounded-full bg-accent px-4 text-sm font-bold text-white disabled:opacity-40">
+          <button
+            type="button"
+            disabled={sending || !draft.trim()}
+            onClick={() => void send()}
+            className="rounded-full bg-emerald-500 px-4 text-sm font-bold text-white disabled:opacity-40"
+          >
             Send
           </button>
         </div>
@@ -1568,17 +1689,27 @@ function BumpMessagesPane({
     );
   }
 
+  const unreadTotal = inbox.reduce((n, r) => n + (r.unread || 0), 0);
+
   return (
     <div className="mx-auto max-w-lg space-y-4">
       <section className="overflow-hidden rounded-2xl bg-side ring-1 ring-white/5">
         <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
-          <div className="text-sm font-bold">Inbox</div>
+          <div className="flex items-center gap-2 text-sm font-bold">
+            <MessageCircle className="size-4 text-emerald-400" /> Chat
+            {unreadTotal > 0 && (
+              <span className="rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-white">{unreadTotal}</span>
+            )}
+          </div>
           <button type="button" onClick={() => void refreshInbox()} className="text-xs font-semibold text-accent">
             Refresh
           </button>
         </div>
         {!inbox.length ? (
-          <p className="px-4 py-5 text-xs text-sub">No Wump messages yet. Open a friend or nearby profile and tap Message.</p>
+          <div className="px-4 py-6 text-center">
+            <p className="text-sm font-semibold text-txt">No conversations yet</p>
+            <p className="mt-1 text-xs text-sub">Pick a friend below or open Friends → Message.</p>
+          </div>
         ) : (
           <ul>
             {inbox.map((row) => (
@@ -1590,7 +1721,7 @@ function BumpMessagesPane({
                       <span className="truncate text-sm font-semibold">
                         <NameTag userId={row.other_id} />
                       </span>
-                      {row.unread > 0 && <span className="rounded-full bg-accent px-1.5 text-[10px] font-bold text-white">{row.unread}</span>}
+                      {row.unread > 0 && <span className="rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-white">{row.unread}</span>}
                     </div>
                     <div className="truncate text-[12px] text-sub">{row.last_body}</div>
                   </div>
@@ -1604,9 +1735,9 @@ function BumpMessagesPane({
 
       {!!friendIds.length && (
         <section className="rounded-2xl bg-side p-4 ring-1 ring-white/5">
-          <div className="mb-2 text-xs font-bold tracking-wide text-sub uppercase">Message a friend</div>
+          <div className="mb-2 text-xs font-bold tracking-wide text-sub uppercase">Start a chat</div>
           <div className="flex flex-wrap gap-2">
-            {friendIds.slice(0, 12).map((id) => (
+            {friendIds.slice(0, 16).map((id) => (
               <button
                 key={id}
                 type="button"

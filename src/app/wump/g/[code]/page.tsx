@@ -8,5 +8,5 @@ export default async function WumpGroupInvitePage({ params }: { params: Promise<
   const ua = h.get("user-agent") || "";
   const standalone = /BumpApp|WumpApp/i.test(ua);
   const q = encodeURIComponent(code);
-  redirect(standalone ? `/bump/app?wumpGroup=${q}` : `/?wumpGroup=${q}`);
+  redirect(standalone ? `/wump/app?wumpGroup=${q}` : `/?wumpGroup=${q}`);
 }
