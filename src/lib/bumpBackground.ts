@@ -95,7 +95,7 @@ async function publishQuiet(loc: DeviceLocation, force = false) {
     opts.onLocation?.(loc.lat, loc.lng, { heading: loc.heading, speed: loc.speed, accuracy: loc.accuracy });
     // Fog-of-war style exploration cells (server-side, no IPA)
     void wumpExploreMark(loc.lat, loc.lng).then((r) => {
-      if (r?.new) opts.onExplore?.();
+      if (r) opts.onExplore?.();
     });
   }
 }

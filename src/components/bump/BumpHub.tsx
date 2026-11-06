@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   Bell,
   BellOff,
-  Compass,
   Copy,
   Download,
   ExternalLink,
@@ -78,15 +77,19 @@ import { WUMP, WUMP_TAGLINE } from "@/lib/wumpBrand";
 import { pauseBumpMusic, playBumpTrack, useBumpMusic } from "@/lib/bumpMusic";
 import { fetchWumpPrivacy, loadWumpPrivacyLocal } from "@/lib/wumpPrivacy";
 import {
+  WUMP_EXPLORE_EMPTY,
   wumpDeleteSavedPlace,
   wumpExploreMark,
   wumpExploreStats,
   wumpListSavedPlaces,
   wumpProfileUrl,
   wumpSavePlace,
+  wumpUsernameHandle,
   type WumpExploreStats,
   type WumpSavedPlace,
 } from "@/lib/wumpPlaces";
+import WumpExplorePanel from "./WumpExplorePanel";
+import WumpSavedPlacesPanel from "./WumpSavedPlacesPanel";
 
 type Tab = "nearby" | "friends" | "music" | "profile" | "social" | "messages" | "settings" | "groups";
 
@@ -137,15 +140,8 @@ export default function BumpHub({
   const [myAccuracy, setMyAccuracy] = useState<number | null>(null);
   const [myPlaceName, setMyPlaceName] = useState<string | null>(null);
   const [savedPlaces, setSavedPlaces] = useState<WumpSavedPlace[]>([]);
-  const [explore, setExplore] = useState<WumpExploreStats>({
-    percent: 0,
-    explored_local: 0,
-    total_local: 0,
-    explored_all: 0,
-    radius_m: 5000,
-    has_location: false,
-  });
-  const [placesPanel, setPlacesPanel] = useState(false);
+  const [explore, setExplore] = useState<WumpExploreStats>(WUMP_EXPLORE_EMPTY);
+  const [placesPanel, setPlacesPanel] = useState(true);
   const bumpOnly = standalone || isBumpApp();
   const myUsername = me ? profiles[me]?.username || null : null;
   const musicPlaying = useBumpMusic((s) => s.playing);
@@ -213,7 +209,21 @@ export default function BumpHub({
       setMyPlaceName(mine.place_name || mine.place_locality || null);
       void refreshExplore(mine.lat, mine.lng);
       void wumpExploreMark(mine.lat, mine.lng).then((r) => {
-        if (r?.new) void refreshExplore(mine.lat, mine.lng);
+        if (!r) return;
+        if (typeof r.percent === "number") {
+          setExplore((prev) => ({
+            ...prev,
+            percent: r.percent ?? prev.percent,
+            explored_local: r.explored_local ?? prev.explored_local,
+            total_local: r.total_local ?? prev.total_local,
+            explored_all: r.explored_all ?? prev.explored_all,
+            has_location: true,
+            lat: mine.lat,
+            lng: mine.lng,
+          }));
+        } else if (r.new) {
+          void refreshExplore(mine.lat, mine.lng);
+        }
       });
     } else {
       setLive(false);
@@ -623,37 +633,21 @@ export default function BumpHub({
                 if (!live) void goLive();
               }}
             />
-            <div className="flex items-center gap-2 rounded-2xl bg-side px-3 py-2.5 ring-1 ring-white/5">
-              <Compass className="size-5 shrink-0 text-emerald-400" />
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-bold">
-                  {explore.percent}% of nearby map explored
-                </div>
-                <div className="text-[11px] text-sub">
-                  {explore.has_location
-                    ? `${explore.explored_local} / ~${explore.total_local} cells within ${(explore.radius_m / 1000).toFixed(0)} km · ${explore.explored_all} total`
-                    : "Go Live to start exploring the map"}
-                </div>
-              </div>
-              {myUsername && (
-                <button
-                  type="button"
-                  onClick={() => openProfilePage(myUsername)}
-                  className="shrink-0 rounded-full bg-sky-500/15 px-2.5 py-1 text-[11px] font-bold text-sky-300 ring-1 ring-sky-500/30"
-                >
-                  @{myUsername}
-                </button>
-              )}
-            </div>
+            <WumpExplorePanel
+              stats={explore}
+              username={myUsername}
+              onOpenProfile={myUsername ? () => openProfilePage(myUsername) : undefined}
+            />
             {live && (myPlaceName || nearby.some((n) => n.place_name || n.profile_place_name || n.username)) && (
-              <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {myPlaceName && (
                   <button
                     type="button"
                     onClick={() => (myUsername ? openProfilePage(myUsername) : setTab("profile"))}
-                    className="shrink-0 rounded-full bg-sky-500/15 px-3 py-1.5 text-xs font-semibold text-sky-300 ring-1 ring-sky-500/30"
+                    className="shrink-0 rounded-full bg-sky-500/12 px-3 py-1.5 text-xs font-semibold text-sky-200 ring-1 ring-sky-500/25 transition hover:bg-sky-500/20"
                   >
-                    {myUsername ? `@${myUsername}` : "You"} · {myPlaceName}
+                    <span className="text-sky-300">{wumpUsernameHandle(myUsername) || "You"}</span>
+                    <span className="text-sky-200/70"> · {myPlaceName}</span>
                   </button>
                 )}
                 {nearby
@@ -668,71 +662,25 @@ export default function BumpHub({
                         key={n.user_id}
                         type="button"
                         onClick={() => openPerson(n.user_id)}
-                        className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-txt ring-1 ring-white/10 hover:bg-white/10"
+                        className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-txt ring-1 ring-white/10 transition hover:bg-white/10"
                       >
-                        {username ? `@${username}` : name}
-                        {place ? ` · ${place}` : ""}
+                        <span className="text-sky-200/90">{wumpUsernameHandle(username) || name}</span>
+                        {place ? <span className="text-sub"> · {place}</span> : null}
                       </button>
                     );
                   })}
               </div>
             )}
-            {(placesPanel || savedPlaces.length > 0) && (
-              <section className="overflow-hidden rounded-2xl bg-side ring-1 ring-white/5">
-                <div className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
-                  <MapPin className="size-4 text-sky-400" />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-bold">Saved places</div>
-                    <div className="text-[11px] text-sub">Tap the map or bookmark while Live to save spots</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setPlacesPanel((v) => !v)}
-                    className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-sub"
-                  >
-                    {placesPanel ? "Hide" : "Show"}
-                  </button>
-                </div>
-                {placesPanel && (
-                  <ul className="max-h-56 divide-y divide-white/5 overflow-y-auto">
-                    {!savedPlaces.length ? (
-                      <li className="px-4 py-4 text-xs text-sub">No saved places yet — tap anywhere on the map to save one.</li>
-                    ) : (
-                      savedPlaces.map((p) => (
-                        <li key={p.id} className="flex items-center gap-3 px-4 py-2.5">
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-semibold">{p.name}</div>
-                            <div className="truncate text-[11px] text-sub">
-                              {p.locality || `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`}
-                              {p.source !== "map" ? ` · ${p.source}` : ""}
-                            </div>
-                          </div>
-                          <a
-                            href={appleMapsLink(p.lat, p.lng, p.name)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="rounded-full bg-sky-500/15 px-2.5 py-1 text-[11px] font-bold text-sky-300"
-                          >
-                            Go
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void wumpDeleteSavedPlace(p.id).then((ok) => {
-                                if (ok) setSavedPlaces((prev) => prev.filter((x) => x.id !== p.id));
-                              });
-                            }}
-                            className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-sub hover:text-danger"
-                          >
-                            Delete
-                          </button>
-                        </li>
-                      ))
-                    )}
-                  </ul>
-                )}
-              </section>
-            )}
+            <WumpSavedPlacesPanel
+              places={savedPlaces}
+              open={placesPanel}
+              onToggle={() => setPlacesPanel((v) => !v)}
+              onDelete={(id) => {
+                void wumpDeleteSavedPlace(id).then((ok) => {
+                  if (ok) setSavedPlaces((prev) => prev.filter((x) => x.id !== id));
+                });
+              }}
+            />
             {!bumpOnly && (
               <a
                 href={bumpIpaReleasesUrl()}
@@ -1237,17 +1185,17 @@ function BumpProfileEditor({ userId }: { userId: string }) {
             }}
           />
           <div className="min-w-0 flex-1 pb-1">
-            <div className="truncate text-lg font-extrabold">{displayName || nexus?.display_name || "You"}</div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="truncate text-sm text-sub">@{username || nexus?.username || "…"}</div>
+            <div className="truncate text-lg font-extrabold tracking-tight">{displayName || nexus?.display_name || "You"}</div>
+            <div className="mt-0.5 flex flex-wrap items-center gap-2">
+              <div className="truncate text-sm text-sub">{wumpUsernameHandle(username || nexus?.username) || "@…"}</div>
               {(username || nexus?.username) && (
                 <a
                   href={wumpProfileUrl(username || nexus?.username) || "#"}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-bold text-sky-300 ring-1 ring-sky-500/30"
+                  className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-sky-200 ring-1 ring-white/10 transition hover:bg-white/10"
                 >
-                  Profile page <ExternalLink className="size-2.5" />
+                  Open profile <ExternalLink className="size-2.5 opacity-70" />
                 </a>
               )}
             </div>
@@ -1387,17 +1335,17 @@ function BumpSocialPane({
           <div className="flex items-start gap-3 px-4 pb-4 -mt-8">
             <Avatar userId={prof.user_id} size={72} className="ring-[3px] ring-side" />
             <div className="min-w-0 flex-1 pt-8">
-              <div className="truncate text-lg font-extrabold">{prof.display_name}</div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="truncate text-sm text-sub">@{prof.username}</div>
+                  <div className="truncate text-lg font-extrabold tracking-tight">{prof.display_name}</div>
+              <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                <div className="truncate text-sm text-sub">{wumpUsernameHandle(prof.username) || `@${prof.username}`}</div>
                 {prof.username && (
                   <a
                     href={wumpProfileUrl(prof.username) || "#"}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-bold text-sky-300 ring-1 ring-sky-500/30"
+                    className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-sky-200 ring-1 ring-white/10 transition hover:bg-white/10"
                   >
-                    Profile page <ExternalLink className="size-2.5" />
+                    Open profile <ExternalLink className="size-2.5 opacity-70" />
                   </a>
                 )}
               </div>
