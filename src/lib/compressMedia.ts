@@ -109,8 +109,9 @@ export type CompressVideoOpts = {
  * .mov / QuickTime / HEVC always become MP4 at Full HD (1920) @ up to 60fps.
  */
 export async function compressVideo(file: File | Blob, opts: CompressVideoOpts = {}): Promise<CompressedVideo> {
-  const maxEdge = opts.maxEdge ?? FULL_HD_60.maxEdge;
-  const maxFps = opts.maxFps ?? FULL_HD_60.maxFps;
+  // Platform lock: never encode below Full HD 60fps policy (callers may still force re-encode).
+  const maxEdge = Math.max(opts.maxEdge ?? FULL_HD_60.maxEdge, FULL_HD_60.maxEdge);
+  const maxFps = Math.max(opts.maxFps ?? FULL_HD_60.maxFps, FULL_HD_60.maxFps);
   const onProgress = opts.onProgress;
   const mime = pickMime();
   const name = file instanceof File ? file.name : "clip.mp4";
