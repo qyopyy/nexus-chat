@@ -18,8 +18,9 @@ import { ComposerPlus } from "./Extras";
 import AttachEditor, { shouldOpenAttachEditor } from "./AttachEditor";
 import { FORMAT_COLORS, VANISH_PICKS, wrapSelection } from "@/lib/chatFormat";
 
-const MAX_FREE = 25 * 1024 * 1024;
-const MAX_PREMIUM = 100 * 1024 * 1024;
+/** Raised for Supabase Pro — free gets 100 MB; premium up to 5 GB (bucket cap). */
+const MAX_FREE = 100 * 1024 * 1024;
+const MAX_PREMIUM = 5 * 1024 * 1024 * 1024;
 const MAX_VOICE_SECONDS = 300;
 
 function voiceMime() {
@@ -110,8 +111,11 @@ export default function Composer({
     if (!file) return;
     const max = myTier() >= NEED.uploads100 ? MAX_PREMIUM : MAX_FREE;
     if (file.size > max) {
-      if (max === MAX_FREE && file.size <= MAX_PREMIUM) gate(NEED.uploads100, "Files up to 100 MB");
-      else toast(`That file is ${formatBytes(file.size)} — the limit is ${max / 1048576} MB.`, "error");
+      if (max === MAX_FREE && file.size <= MAX_PREMIUM) gate(NEED.uploads100, "Files up to 5 GB");
+      else {
+        const lim = max >= 1073741824 ? `${(max / 1073741824).toFixed(0)} GB` : `${max / 1048576} MB`;
+        toast(`That file is ${formatBytes(file.size)} — the limit is ${lim}.`, "error");
+      }
       setFile(null);
     }
   }, [file, setFile]);
