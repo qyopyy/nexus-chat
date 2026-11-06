@@ -82,7 +82,9 @@ export default function WumpSettings({ userId }: { userId: string }) {
               { id: "city", label: "City" },
             ]}
           />
-          <p className="mt-1.5 text-[11px] text-sub">{precisionLabel(p.wump_precision)} grid when publishing to the map.</p>
+          <p className="mt-1.5 text-[11px] text-sub">
+            {precisionLabel(p.wump_precision)}. Friends see this fuzzed radius — not a raw GPS trail.
+          </p>
         </Field>
 
         <Toggle
