@@ -55,6 +55,14 @@ const config: CapacitorConfig = {
       persist: true,
       autoClear: false,
     },
+    // Capgo cloud OTA for the offline shell (live UI still comes from server.url / Vercel)
+    CapacitorUpdater: {
+      autoUpdate: true,
+      keepUrlPathAfterReload: true,
+      statsUrl: "https://stats.capgo.app/stats",
+      updateUrl: "https://plugin.capgo.app/updates",
+      appReadyTimeout: 20000,
+    },
   },
 };
 

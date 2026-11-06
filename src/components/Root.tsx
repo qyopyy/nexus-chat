@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { startLiveUpdates } from "@/lib/liveUpdate";
+import { notifyCapgoAppReady } from "@/lib/capgo";
 import { mfaNeedsChallenge } from "@/lib/mfa";
 import AuthScreen, { ResetPasswordScreen, type AuthMode } from "@/components/AuthScreen";
 import AppShell from "@/components/AppShell";
@@ -16,6 +17,10 @@ export default function Root({ mode, initialVideo, initialRelease, initialGram, 
 
   // Capacitor APK/IPA load the live site — reload when a new web deploy lands
   useEffect(() => startLiveUpdates(), []);
+  // Capgo OTA: mark the shell ready so production channel updates stick
+  useEffect(() => {
+    void notifyCapgoAppReady();
+  }, []);
 
   // Standalone Bump IPA (UA BumpApp) always uses the slim /bump/app shell
   useEffect(() => {

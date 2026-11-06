@@ -156,6 +156,22 @@ jobs:
           name: Nexus-ipa
           path: mobile/Nexus.ipa
 
+      - name: Upload Capgo shell bundle
+        if: github.event_name != 'pull_request'
+        env:
+          CAPGO_API_KEY: ${{ secrets.CAPGO_API_KEY }}
+        run: |
+          if [ -z "$CAPGO_API_KEY" ]; then
+            echo "CAPGO_API_KEY secret not set — skipping Capgo upload"
+            exit 0
+          fi
+          npx --yes @capgo/cli@latest bundle upload "${BUNDLE_ID}" \
+            -a "$CAPGO_API_KEY" \
+            --channel production \
+            --bundle "1.${GITHUB_RUN_NUMBER}" \
+            --comment "GitHub Actions ios-${GITHUB_RUN_NUMBER} · ${NEXUS_URL}" \
+            || echo "::warning::Capgo upload failed (shell still ships via IPA + live site)"
+
       - name: Publish release
         if: github.event_name != 'pull_request'
         env:
@@ -176,4 +192,7 @@ jobs:
           ⚠️ Sideloadly / unsigned IPA — Transporter will fail with Missing Provisioning Profile (90174).
           For App Store: Archive + Distribute from Xcode with your Apple team (see TRANSPORTER_ISSUES.txt).
 
-          Opens: ${NEXUS_URL}"
+          Opens: ${NEXUS_URL}
+          Live UI: Vercel web deploy (server.url) — no IPA rebuild needed for chat/features.
+          Capgo: production channel OTA for the offline Capacitor shell (https://console.capgo.app/app/${BUNDLE_ID}).
+          Website downloads: https://nexusproject.cc → Apps → iOS apps (.ipa)"

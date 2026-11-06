@@ -1,0 +1,5 @@
+ios/
+android/
+bun.lock
+.capgo*
+node_modules/
