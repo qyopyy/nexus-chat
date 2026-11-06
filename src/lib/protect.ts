@@ -26,8 +26,73 @@ async function fnCall<T>(name: string, body: Record<string, unknown>): Promise<T
 }
 
 // ================================================================ My Vault
-export type VaultFile = { id: string; owner_id: string; path: string; name: string; mime: string | null; bytes: number; folder: string; note: string | null; created_at: string };
+export type VaultKind = "file" | "master" | "stem" | "demo" | "mix" | "artwork" | "contract" | "video";
+export type VaultFile = {
+  id: string;
+  owner_id: string;
+  path: string;
+  name: string;
+  mime: string | null;
+  bytes: number;
+  folder: string;
+  note: string | null;
+  kind?: VaultKind | null;
+  duration_ms?: number | null;
+  artist?: string | null;
+  title?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+};
 export type VaultShare = { id: string; file_id: string; token: string; expires_at: string | null; max_downloads: number | null; downloads: number; views: number; pass_hash: string | null; allow_download: boolean; revoked: boolean; last_at: string | null; created_at: string };
+
+export const VAULT_KINDS: { id: VaultKind; label: string; emoji: string }[] = [
+  { id: "master", label: "Master", emoji: "💎" },
+  { id: "stem", label: "Stem", emoji: "🎚️" },
+  { id: "mix", label: "Mix / bounce", emoji: "🎛️" },
+  { id: "demo", label: "Demo", emoji: "🎤" },
+  { id: "artwork", label: "Artwork", emoji: "🖼️" },
+  { id: "contract", label: "Contract / docs", emoji: "📄" },
+  { id: "video", label: "Video", emoji: "🎬" },
+  { id: "file", label: "Other file", emoji: "📦" },
+];
+
+export function guessVaultKind(file: File): VaultKind {
+  const m = file.type || "";
+  const n = file.name.toLowerCase();
+  if (m.startsWith("audio/") || /\.(mp3|wav|flac|aiff?|m4a|ogg|aac)$/i.test(n)) {
+    if (/stem|drum|bass|vocal|guitar|synth/i.test(n)) return "stem";
+    if (/demo|rough|sketch/i.test(n)) return "demo";
+    if (/mix|bounce|instrumental/i.test(n)) return "mix";
+    return "master";
+  }
+  if (m.startsWith("video/") || /\.(mp4|mov|webm|mkv)$/i.test(n)) return "video";
+  if (m.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(n)) return "artwork";
+  if (m.includes("pdf") || /\.(pdf|docx?|txt)$/i.test(n)) return "contract";
+  return "file";
+}
+
+/** Probe audio/video duration in the browser before/after upload */
+export function probeMediaDuration(file: Blob): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const el = document.createElement(file.type.startsWith("video/") ? "video" : "audio");
+    el.preload = "metadata";
+    const done = (ms: number | null) => {
+      URL.revokeObjectURL(url);
+      resolve(ms);
+    };
+    el.onloadedmetadata = () => done(Number.isFinite(el.duration) ? Math.round(el.duration * 1000) : null);
+    el.onerror = () => done(null);
+    setTimeout(() => done(null), 8000);
+    el.src = url;
+  });
+}
+
+export function fmtDuration(ms?: number | null) {
+  if (!ms || ms < 0) return "";
+  const s = Math.round(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
 
 export async function vaultUsage() {
   const { data } = await supabase.rpc("vault_usage");
@@ -37,12 +102,39 @@ export async function listVault() {
   const { data } = await supabase.from("vault_files").select("*").eq("owner_id", me()).order("created_at", { ascending: false }).limit(2000);
   return (data ?? []) as VaultFile[];
 }
-export async function uploadVault(file: File, folder: string, onProgress?: (p: number) => void) {
+export async function uploadVault(
+  file: File,
+  folder: string,
+  onProgress?: (p: number) => void,
+  meta?: { kind?: VaultKind; artist?: string; title?: string; note?: string; duration_ms?: number | null },
+) {
   const id = crypto.randomUUID();
   const safe = file.name.replace(/[^\w.\- ()]+/g, "_").slice(-120) || "file";
   const path = `${me()}/${id}/${safe}`;
+  let duration_ms = meta?.duration_ms ?? null;
+  if (duration_ms == null && (file.type.startsWith("audio/") || file.type.startsWith("video/"))) {
+    duration_ms = await probeMediaDuration(file);
+  }
+  const kind = meta?.kind ?? guessVaultKind(file);
   // register first so the quota is checked before any bytes move
-  const { data: row, error } = await supabase.from("vault_files").insert({ id, owner_id: me(), path, name: file.name.slice(0, 300), mime: file.type || null, bytes: file.size, folder: folder.trim().slice(0, 100) }).select().single();
+  const { data: row, error } = await supabase
+    .from("vault_files")
+    .insert({
+      id,
+      owner_id: me(),
+      path,
+      name: file.name.slice(0, 300),
+      mime: file.type || null,
+      bytes: file.size,
+      folder: folder.trim().slice(0, 100),
+      kind,
+      duration_ms,
+      artist: meta?.artist?.trim().slice(0, 120) || null,
+      title: meta?.title?.trim().slice(0, 200) || null,
+      note: meta?.note?.trim().slice(0, 500) || null,
+    })
+    .select()
+    .single();
   if (error) throw new Error(errorText(error));
   try {
     const { data: s } = await supabase.auth.getSession();
@@ -68,7 +160,10 @@ export async function vaultUrl(f: VaultFile, download = false) {
   const { data } = await supabase.storage.from("user-vault").createSignedUrl(f.path, 600, download ? { download: f.name } : undefined);
   return data?.signedUrl ?? null;
 }
-export async function updateVault(id: string, patch: Partial<Pick<VaultFile, "name" | "folder" | "note">>) {
+export async function updateVault(
+  id: string,
+  patch: Partial<Pick<VaultFile, "name" | "folder" | "note" | "kind" | "artist" | "title" | "duration_ms">>,
+) {
   const { error } = await supabase.from("vault_files").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) toast(errorText(error), "error");
   return !error;
@@ -76,6 +171,13 @@ export async function updateVault(id: string, patch: Partial<Pick<VaultFile, "na
 export async function removeVault(f: VaultFile) {
   await supabase.storage.from("user-vault").remove([f.path]);
   const { error } = await supabase.from("vault_files").delete().eq("id", f.id);
+  if (error) toast(errorText(error), "error");
+  return !error;
+}
+export async function removeVaultMany(files: VaultFile[]) {
+  if (!files.length) return true;
+  await supabase.storage.from("user-vault").remove(files.map((f) => f.path));
+  const { error } = await supabase.from("vault_files").delete().in("id", files.map((f) => f.id));
   if (error) toast(errorText(error), "error");
   return !error;
 }
