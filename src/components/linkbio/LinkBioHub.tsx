@@ -30,7 +30,7 @@ import {
   type LinkBioTheme,
 } from "@/lib/linkbio";
 import { SOCIAL_VERIFY_LIST, linkVerifyReadiness } from "@/lib/linkVerify";
-import { spotifyEmbed } from "@/lib/links";
+import { resolveMusicEmbed, spotifyEmbed } from "@/lib/links";
 import { studioGo } from "@/store/studio";
 import LinkBioAdmin from "@/components/linkbio/LinkBioAdmin";
 
@@ -732,10 +732,11 @@ export default function LinkBioHub({
                   key={`mu-${page.music_url ?? ""}`}
                   onBlur={(e) => {
                     const raw = e.target.value.trim().slice(0, 800);
-                    const embed = spotifyEmbed(raw) || raw;
-                    if (embed !== (page.music_url ?? "")) void save({ music_url: embed });
+                    const resolved = resolveMusicEmbed(raw);
+                    const store = resolved && resolved.kind !== "audio" ? resolved.src : raw;
+                    if (store !== (page.music_url ?? "")) void save({ music_url: store });
                   }}
-                  placeholder="https://open.spotify.com/track/… or SoundCloud / Apple Music"
+                  placeholder="Spotify · Apple Music · SoundCloud · or upload"
                   className="mb-2 w-full rounded-xl bg-black/30 px-3 py-2 text-sm outline-none ring-1 ring-white/10 focus:ring-[#a855f7]"
                 />
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -767,20 +768,25 @@ export default function LinkBioHub({
                       Clear music
                     </button>
                   )}
-                  <span className="text-[11px] text-white/40">MP3 / WAV / M4A · up to 20 MB</span>
+                  <span className="text-[11px] text-white/40">Spotify · Apple · SoundCloud · MP3 up to 20 MB</span>
                 </div>
-                {page.music_url && spotifyEmbed(page.music_url) && (
-                  <iframe
-                    title="Spotify preview"
-                    src={spotifyEmbed(page.music_url)!}
-                    className="mb-3 h-20 w-full rounded-xl border-0"
-                    allow="encrypted-media; clipboard-write"
-                    loading="lazy"
-                  />
-                )}
-                {page.music_url && !spotifyEmbed(page.music_url) && /\.(mp3|wav|m4a|aac|ogg|flac|webm)(\?|$)/i.test(page.music_url) && (
-                  <audio controls src={page.music_url} className="mb-3 w-full" preload="metadata" />
-                )}
+                {(() => {
+                  const emb = page.music_url ? resolveMusicEmbed(page.music_url) : null;
+                  if (!emb) return null;
+                  if (emb.kind === "audio") {
+                    return <audio controls src={emb.src} className="mb-3 w-full" preload="metadata" />;
+                  }
+                  return (
+                    <iframe
+                      title={`${emb.kind} preview`}
+                      src={emb.src}
+                      className="mb-3 w-full rounded-xl border-0"
+                      style={{ height: emb.height }}
+                      allow="encrypted-media; clipboard-write; autoplay; fullscreen; picture-in-picture"
+                      loading="lazy"
+                    />
+                  );
+                })()}
 
                 <label className="mb-1 block text-xs font-semibold text-white/50">SEO title</label>
                 <input

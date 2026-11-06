@@ -87,6 +87,59 @@ export function spotifyKind(url: string | null | undefined) {
   return m?.[1] ?? null;
 }
 
+/** music.apple.com/…/{album|song|playlist}/… → embed.music.apple.com player */
+export function appleMusicEmbed(url: string | null | undefined): string | null {
+  if (!url || !/music\.apple\.com/i.test(url)) return null;
+  try {
+    const u = new URL(url.trim());
+    if (u.hostname.includes("embed.music.apple.com")) return u.toString();
+    // https://music.apple.com/{cc}/album/…/id?i=songId  or /song/ /playlist/
+    const path = u.pathname.replace(/^\/+/, "");
+    if (!path) return null;
+    const emb = new URL(`https://embed.music.apple.com/${path}`);
+    u.searchParams.forEach((v, k) => emb.searchParams.set(k, v));
+    emb.searchParams.set("theme", "dark");
+    return emb.toString();
+  } catch {
+    return null;
+  }
+}
+
+/** soundcloud.com/… → w.soundcloud.com/player/?url=… */
+export function soundcloudEmbed(url: string | null | undefined): string | null {
+  if (!url || !/soundcloud\.com/i.test(url)) return null;
+  try {
+    const u = new URL(url.trim());
+    if (u.hostname.includes("w.soundcloud.com") || u.pathname.includes("/player/")) return u.toString();
+    // Already an API track resource
+    if (/api\.soundcloud\.com/i.test(u.hostname)) {
+      return `https://w.soundcloud.com/player/?url=${encodeURIComponent(u.toString())}&color=%23ff5500&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false`;
+    }
+    const clean = `${u.origin}${u.pathname}`.replace(/\/+$/, "");
+    return `https://w.soundcloud.com/player/?url=${encodeURIComponent(clean)}&color=%23ff5500&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=false`;
+  } catch {
+    return null;
+  }
+}
+
+export type MusicEmbed = { kind: "spotify" | "apple" | "soundcloud" | "audio"; src: string; height: number };
+
+/** Resolve a Link / profile music URL into a playable embed or direct audio src. */
+export function resolveMusicEmbed(url: string | null | undefined): MusicEmbed | null {
+  if (!url?.trim()) return null;
+  const raw = url.trim();
+  const sp = spotifyEmbed(raw);
+  if (sp) return { kind: "spotify", src: sp, height: 152 };
+  const apple = appleMusicEmbed(raw);
+  if (apple) return { kind: "apple", src: apple, height: 175 };
+  const sc = soundcloudEmbed(raw);
+  if (sc) return { kind: "soundcloud", src: sc, height: 166 };
+  if (/^https?:\/\//i.test(raw) && (/\.(mp3|wav|m4a|aac|ogg|flac|webm)(\?|$)/i.test(raw) || /linkbio-music/i.test(raw))) {
+    return { kind: "audio", src: raw, height: 54 };
+  }
+  return null;
+}
+
 /** "12.4k", "1,200", "3.1M" → number */
 export function parseCount(s: string): number | null {
   const m = s.trim().toLowerCase().replace(/[\s,]/g, "").match(/^(\d+(?:\.\d+)?)([kmb])?$/);

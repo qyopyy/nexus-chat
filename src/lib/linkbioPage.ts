@@ -1,7 +1,7 @@
 // Server-only: public Nexus Link page (/bio/<username>).
 
 import { jsonLd, personLd, seoHead, truncate } from "@/lib/seo";
-import { spotifyEmbed } from "@/lib/links";
+import { resolveMusicEmbed } from "@/lib/links";
 
 export type PublicLinkBioBadge = {
   key: string;
@@ -157,8 +157,14 @@ const LINK_ICON: Record<string, string> = {
   telegram: "✈️",
   soundcloud: "☁️",
   spotify: "🎧",
+  applemusic: "🍎",
   discord: "💬",
   github: "⌘",
+  snapchat: "👻",
+  facebook: "f",
+  linkedin: "in",
+  threads: "@",
+  twitch: "📺",
 };
 
 function bgLayer(kind: string, animated: boolean, accent: string) {
@@ -333,26 +339,12 @@ body{background:${t.bg};overflow-x:hidden}
 <form id="unlock"><input type="password" name="pw" placeholder="Page password" required minlength="1" autocomplete="current-password"/><button type="submit">Unlock</button><div class="err" id="err">Wrong password</div></form></div>`
     : "";
 
-  const spotify = !locked && p.music_url ? spotifyEmbed(p.music_url) : null;
-  const audioDirect =
-    !locked &&
-    p.music_url &&
-    !spotify &&
-    (/^https?:\/\//i.test(p.music_url) &&
-      (/\.(mp3|wav|m4a|aac|ogg|flac|webm)(\?|$)/i.test(p.music_url) || /linkbio-music/i.test(p.music_url)));
-  const scOrApple =
-    !locked &&
-    p.music_url &&
-    !spotify &&
-    !audioDirect &&
-    /soundcloud\.com|music\.apple\.com/i.test(p.music_url);
-  const music = spotify
-    ? `<div class="music"><iframe src="${esc(spotify)}" width="100%" height="152" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe></div>`
-    : audioDirect
-      ? `<div class="music"><audio controls preload="metadata" src="${esc(p.music_url!)}"><a href="${esc(p.music_url!)}">Play track</a></audio></div>`
-      : scOrApple
-        ? `<div class="music"><iframe src="${esc(p.music_url!.includes("embed") ? p.music_url! : p.music_url!)}" width="100%" height="120" frameborder="0" allow="encrypted-media" loading="lazy"></iframe></div>`
-        : "";
+  const emb = !locked && p.music_url ? resolveMusicEmbed(p.music_url) : null;
+  const music = emb
+    ? emb.kind === "audio"
+      ? `<div class="music"><audio controls preload="metadata" src="${esc(emb.src)}"><a href="${esc(emb.src)}">Play track</a></audio></div>`
+      : `<div class="music"><iframe src="${esc(emb.src)}" width="100%" height="${emb.height}" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" ${emb.kind === "soundcloud" ? 'scrolling="no"' : ""}></iframe></div>`
+    : "";
 
   const body = `<div class="stage font-${esc(p.font)} layout-${esc(p.layout || "classic")}">
 ${bgLayer(p.background, p.animated_bg, accent)}
