@@ -30,9 +30,10 @@ import {
   type LinkBioTheme,
 } from "@/lib/linkbio";
 import { SOCIAL_VERIFY_LIST, linkVerifyReadiness } from "@/lib/linkVerify";
-import { resolveMusicEmbed, spotifyEmbed } from "@/lib/links";
+import { resolveMusicEmbed } from "@/lib/links";
 import { studioGo } from "@/store/studio";
 import LinkBioAdmin from "@/components/linkbio/LinkBioAdmin";
+import PinToLinkPanel from "@/components/music/PinToLinkPanel";
 
 export { openLinkBio };
 
@@ -787,6 +788,9 @@ export default function LinkBioHub({
                     />
                   );
                 })()}
+                <div className="mb-3">
+                  <PinToLinkPanel compact />
+                </div>
 
                 <label className="mb-1 block text-xs font-semibold text-white/50">SEO title</label>
                 <input
