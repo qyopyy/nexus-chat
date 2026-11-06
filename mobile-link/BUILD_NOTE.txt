@@ -1,3 +1,6 @@
 Nexus Link IPA — separate Sideloadly / AltStore build (bundle hu.qyopy.link).
 Loads https://nexusproject.cc/bio/app live so themes, invites, and Link UI update on web deploy.
 This shell is independent of Nexus / Wump / Browser IPAs — rebuild only when Cap config or icons change.
+
+Icon: resources/icon-1024.png → full AppIcon.appiconset in GitHub Actions (link-ipa.yml).
+Trigger: Actions → “Nexus Link iOS app (.ipa)” → Run workflow, or push to mobile-link/**.

@@ -71,10 +71,15 @@ jobs:
           mkdir -p "$ICONSET"
           cp resources/AppIcon.Contents.json "$ICONSET/Contents.json"
           python3 - <<'PY'
-          import json, subprocess
+          import json, subprocess, sys
           from pathlib import Path
           src = Path("resources/icon-1024.png")
+          if not src.is_file():
+              sys.exit("missing resources/icon-1024.png")
           iconset = Path("ios/App/App/Assets.xcassets/AppIcon.appiconset")
+          # Drop Capacitor/default placeholders so only our generated icons remain
+          for old in iconset.glob("*.png"):
+              old.unlink()
           data = json.loads((iconset / "Contents.json").read_text())
           for img in data["images"]:
               w, h = img["size"].split("x")
@@ -83,7 +88,14 @@ jobs:
               out = iconset / img["filename"]
               subprocess.check_call(["sips", "-z", str(px), str(px), str(src), "--out", str(out)], stdout=subprocess.DEVNULL)
               print(out.name, px)
+          missing = [i["filename"] for i in data["images"] if not (iconset / i["filename"]).is_file()]
+          if missing:
+              sys.exit(f"icon generation incomplete: {missing}")
+          print(f"AppIcon set ready ({len(data['images'])} sizes) from {src}")
           PY
+          # Keep www splash/icon in sync for Cap web assets
+          cp resources/icon-1024.png www/icon-512.png 2>/dev/null || true
+          ls -la ios/App/App/Assets.xcassets/AppIcon.appiconset | head -30
 
       - name: Build (unsigned)
         run: |
@@ -105,11 +117,20 @@ jobs:
           APP=build/App.xcarchive/Products/Applications/App.app
           /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier hu.qyopy.link" "$APP/Info.plist" 2>/dev/null \
             || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string hu.qyopy.link" "$APP/Info.plist"
+          # Confirm home-screen icon assets were compiled into the .app
+          if ! find "$APP" -iname '*AppIcon*' | head -5 | grep -q .; then
+            echo "::warning::No AppIcon assets found inside .app — icon may show blank on device"
+            find "$APP" -name '*.png' | head -20 || true
+          else
+            echo "AppIcon present in .app:"
+            find "$APP" -iname '*AppIcon*' | head -10
+          fi
           bash "$GITHUB_WORKSPACE/.github/scripts/fix-ios-framework-ids.sh" "$APP"
           rm -rf Payload && mkdir Payload
           cp -R "$APP" Payload/
           zip -qry ../../NexusLink.ipa Payload
           ls -lh ../../NexusLink.ipa
+          unzip -l ../../NexusLink.ipa | grep -i 'AppIcon\|Payload/App.app' | head -20
 
       - uses: actions/upload-artifact@v4
         with:
