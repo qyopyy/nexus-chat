@@ -186,14 +186,24 @@ export default function BrowserHub({
         results: BrowserSearchHit[];
         google: string;
         fetched: boolean;
+        live?: boolean;
+        note?: string;
         error?: string;
       };
-      if (data.error && !data.results?.length) toast(data.error, "info");
       const open = data.google || searchUrlForPrefs(prefs, q);
+      const hits = data.results || [];
+      // Realtime live path: engine blocked scrape → open shielded live search immediately
+      if (data.live || (!hits.length && !data.fetched)) {
+        toast(data.note || data.error || "Opening live search…", "info");
+        setBusy(false);
+        await openLive(open);
+        return;
+      }
+      if (data.note) toast(data.note, "info");
       const next: View = {
         kind: "results",
         q,
-        hits: data.results || [],
+        hits,
         google: open,
         fetched: !!data.fetched,
       };
@@ -518,9 +528,16 @@ export default function BrowserHub({
               </button>
             </div>
             {!view.fetched && (
-              <p className="mb-3 rounded-xl bg-amber-500/15 px-3 py-2 text-sm text-amber-100">
-                Couldn&apos;t parse results HTML — use Live results or open externally.
-              </p>
+              <div className="mb-3 space-y-2 rounded-xl bg-amber-500/15 px-3 py-3 text-sm text-amber-100">
+                <p>Couldn&apos;t load a result list — open the live search page with Shields.</p>
+                <button
+                  type="button"
+                  onClick={() => void openLive(view.google)}
+                  className="rounded-full bg-orange-500 px-3 py-1.5 text-xs font-bold text-[#0b1220]"
+                >
+                  Open live results now
+                </button>
+              </div>
             )}
             <ul className="space-y-3">
               {view.hits.map((h) => (

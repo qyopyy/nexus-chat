@@ -1,7 +1,7 @@
 name: Browser iOS app (.ipa)
 
 # Standalone Nexus Browser.ipa (bundle hu.qyopy.browser) — Sideloadly / AltStore.
-# Opens https://nexusproject.cc/browser/app — Google search via Nexus APIs.
+# Opens https://nexusproject.cc/browser/app — live search + Shields (web deploy updates UI).
 on:
   workflow_dispatch:
     inputs:

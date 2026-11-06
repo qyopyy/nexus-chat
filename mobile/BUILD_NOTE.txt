@@ -1,0 +1,5 @@
+Nexus mobile shell rebuild trigger — 2026-11-06
+Browser search is live on the web; this touch rebuilds APK + IPA shells
+so sideloaded installs pick up the current production URL / icons / bundle id.
+Capacitor loads https://nexusproject.cc — search/shields update without a rebuild
+after web deploy, but a fresh IPA/APK is still useful after native metadata changes.
