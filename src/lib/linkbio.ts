@@ -17,6 +17,8 @@ export type LinkBioTheme =
 
 export type LinkBioBackground = "none" | "particles" | "rain" | "smoke" | "stars" | "grid" | "waves" | "999";
 export type LinkBioFont = "glow" | "marker" | "display" | "space" | "mono" | "juice";
+export type LinkBioButtonStyle = "pill" | "square" | "outline" | "glass";
+export type LinkBioLayout = "classic" | "cards" | "minimal";
 
 export type LinkBioLink = { type?: string; url: string; label?: string };
 
@@ -38,6 +40,18 @@ export type LinkBioPage = {
   premium_until?: string | null;
   published?: boolean;
   view_count: number;
+  password_enabled?: boolean;
+  password_protected?: boolean;
+  button_style?: LinkBioButtonStyle;
+  layout?: LinkBioLayout;
+  show_views?: boolean;
+  show_branding?: boolean;
+  nsfw?: boolean;
+  seo_title?: string | null;
+  seo_description?: string | null;
+  banner_url?: string | null;
+  music_url?: string | null;
+  custom_status?: string | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -54,6 +68,17 @@ export type LinkBioAdminRow = {
   view_count: number;
   owner_username: string;
   updated_at: string;
+};
+
+export type LinkBioInvite = {
+  id: string;
+  code: string;
+  note: string | null;
+  max_uses: number;
+  uses: number;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
 };
 
 export const LINKBIO_THEMES: { id: LinkBioTheme; name: string; tag: string; premium?: boolean }[] = [
@@ -87,6 +112,19 @@ export const LINKBIO_FONTS: { id: LinkBioFont; name: string; premium?: boolean }
   { id: "display", name: "Display" },
   { id: "space", name: "Space" },
   { id: "mono", name: "Mono" },
+];
+
+export const LINKBIO_BUTTONS: { id: LinkBioButtonStyle; name: string }[] = [
+  { id: "pill", name: "Pill" },
+  { id: "square", name: "Square" },
+  { id: "outline", name: "Outline" },
+  { id: "glass", name: "Glass" },
+];
+
+export const LINKBIO_LAYOUTS: { id: LinkBioLayout; name: string }[] = [
+  { id: "classic", name: "Classic" },
+  { id: "cards", name: "Cards" },
+  { id: "minimal", name: "Minimal" },
 ];
 
 export function openLinkBio() {
@@ -152,4 +190,52 @@ export async function linkbioAdminSetPremium(id: string, on: boolean, until?: st
   }
   toast(on ? "Premium granted" : "Premium removed");
   return data as LinkBioAdminRow[];
+}
+
+export async function linkbioInviteCheck(code: string) {
+  const { data, error } = await supabase.rpc("linkbio_invite_check", { p_code: code.trim().toUpperCase() });
+  if (error) return { ok: false as const, error: errorText(error) };
+  return data as { ok: boolean; error?: string; code?: string; remaining?: number };
+}
+
+export async function linkbioInviteRedeem(code: string) {
+  const { data, error } = await supabase.rpc("linkbio_invite_redeem", { p_code: code.trim().toUpperCase() });
+  if (error) {
+    toast(errorText(error));
+    return null;
+  }
+  return data as { ok: boolean; already?: boolean };
+}
+
+export async function linkbioInviteList(): Promise<LinkBioInvite[]> {
+  const { data, error } = await supabase.rpc("linkbio_invite_list");
+  if (error) {
+    toast(errorText(error));
+    return [];
+  }
+  return (data as LinkBioInvite[]) ?? [];
+}
+
+export async function linkbioInviteCreate(maxUses = 1, note?: string, days = 30) {
+  const { data, error } = await supabase.rpc("linkbio_invite_create", {
+    p_max_uses: maxUses,
+    p_note: note ?? null,
+    p_days: days,
+  });
+  if (error) {
+    toast(errorText(error));
+    return null;
+  }
+  toast("Invite created");
+  return data as { id: string; code: string; max_uses: number; uses: number; expires_at: string | null; note: string | null };
+}
+
+export async function linkbioInviteRevoke(id: string) {
+  const { data, error } = await supabase.rpc("linkbio_invite_revoke", { p_id: id });
+  if (error) {
+    toast(errorText(error));
+    return null;
+  }
+  toast("Invite revoked");
+  return data as LinkBioInvite[];
 }
