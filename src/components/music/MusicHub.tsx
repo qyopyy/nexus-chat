@@ -16,6 +16,7 @@ import ToolView, { ToolsGrid } from "./Tools";
 import Lookup from "./Lookup";
 import Library from "./Library";
 import { PostCard } from "./Posts";
+import PinToLinkPanel from "./PinToLinkPanel";
 import type { ArtistPage, ArtistPost } from "@/lib/types";
 
 /** Music tab: artist showcase, watchlist releases, artist pages & posts, code lookup, your Spotify */
@@ -174,11 +175,13 @@ function Home() {
           >
             <span className="grid size-12 place-items-center rounded-xl bg-[#c4a574]/20 text-2xl">♩</span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[10px] font-semibold tracking-[0.2em] text-[#c4a574]/80 uppercase">New</span>
+              <span className="block text-[10px] font-semibold tracking-[0.2em] text-[#c4a574]/80 uppercase">Studio</span>
               <span className="block text-lg font-black">Cutroom</span>
-              <span className="block text-sm text-[#cfc8ba]/80">WIP cuts, versioned uploads, share links, profiles & follows</span>
+              <span className="block text-sm text-[#cfc8ba]/80">Versioned cuts, share links, profiles & follows — pin a track to Link</span>
             </span>
           </button>
+
+          <PinToLinkPanel />
 
           <button
             onClick={() => useApp.setState(window.innerWidth < 768 ? { mobileTab: "games" } : { hub: "games" })}

@@ -32,6 +32,7 @@ import { SOCIAL_VERIFY_LIST, linkVerifyReadiness } from "@/lib/linkVerify";
 import { spotifyEmbed } from "@/lib/links";
 import { studioGo } from "@/store/studio";
 import LinkBioAdmin from "@/components/linkbio/LinkBioAdmin";
+import PinToLinkPanel from "@/components/music/PinToLinkPanel";
 
 export { openLinkBio };
 
@@ -747,6 +748,9 @@ export default function LinkBioHub({
                 {page.music_url && !spotifyEmbed(page.music_url) && /\.(mp3|wav|m4a|aac|ogg|flac|webm)(\?|$)/i.test(page.music_url) && (
                   <audio controls src={page.music_url} className="mb-3 w-full" preload="metadata" />
                 )}
+                <div className="mb-3">
+                  <PinToLinkPanel compact />
+                </div>
 
                 <label className="mb-1 block text-xs font-semibold text-white/50">SEO title</label>
                 <input

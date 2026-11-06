@@ -102,7 +102,7 @@ export default function UntitledHub({ mobile }: { mobile?: boolean }) {
         <button onClick={() => untitledHome()} className="font-semibold tracking-wide">
           {CUTROOM}
         </button>
-        <span className="text-xs text-[#8a8478]">WIP music</span>
+        <span className="text-xs text-[#8a8478]">cuts · versions · Link</span>
         <div className="ml-auto flex gap-1">
           <button onClick={() => untitledGo({ view: "explore" })} className="rounded-full px-3 py-1.5 text-xs font-semibold text-[#c4a574] hover:bg-white/5">
             Explore
