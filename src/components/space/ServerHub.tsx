@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarDays, CalendarPlus, Crown, Gauge, Hash, Image as ImageIcon, Link2, MapPin, ScrollText, Shield, Trash2, Trophy, X } from "lucide-react";
+import { Bell, BellRing, CalendarDays, CalendarPlus, Crown, Gauge, Hash, Image as ImageIcon, Link2, MapPin, ScrollText, Shield, Trash2, Trophy, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { createEvent, deleteEvent, events, icsFor, leaderboard, levelOf, rsvp, setInfo, setRole, setSlowmode, xpFor, type Rsvp, type SpaceEvent, type XpRow } from "@/lib/serverHub";
+import { loadEventReminders, scheduleEventReminder, useEventReminders } from "@/lib/eventReminders";
 import { deleteChannel, setAnnouncementChannel, setChannel } from "@/lib/spaceExtras";
 import { download } from "@/lib/dsp";
 import { cn } from "@/lib/utils";
@@ -226,11 +227,15 @@ function Home({ spaceId, staff }: { spaceId: string; staff: boolean }) {
 function Events({ spaceId, staff }: { spaceId: string; staff: boolean }) {
   const me = useApp((s) => s.userId);
   const spaceName = useApp((s) => s.spaces.find((x) => x.id === spaceId)?.name ?? "Nexus");
+  const reminders = useEventReminders((s) => s.reminders);
   const [data, setData] = useState<{ list: SpaceEvent[]; rsvps: Rsvp[] } | null>(null);
   const [form, setForm] = useState(false);
   const [f, setF] = useState({ title: "", description: "", location: "", starts_at: new Date(Date.now() + 86400000).toISOString().slice(0, 16) });
   const load = useCallback(() => void events(spaceId).then(setData), [spaceId]);
   useEffect(load, [load]);
+  useEffect(() => {
+    loadEventReminders();
+  }, []);
   const inp = "w-full rounded-xl border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent";
   return (
     <div className="space-y-3">
@@ -275,6 +280,7 @@ function Events({ spaceId, staff }: { spaceId: string; staff: boolean }) {
           const mine = rs.find((x) => x.user_id === me)?.status ?? null;
           const start = new Date(e.starts_at);
           const live = start.getTime() <= Date.now() && Date.now() - start.getTime() < 3 * 3600000;
+          const reminded = reminders.some((r) => r.eventId === e.id);
           return (
             <div key={e.id} className="overflow-hidden rounded-2xl bg-side">
               <div className="flex gap-3 p-3">
@@ -316,6 +322,25 @@ function Events({ spaceId, staff }: { spaceId: string; staff: boolean }) {
                 ))}
                 <button onClick={() => download(new Blob([icsFor(e, spaceName)], { type: "text/calendar" }), `${e.title}.ics`)} className="rounded-full bg-hover px-3 py-1 text-sm font-semibold">
                   📅 Add to calendar
+                </button>
+                <button
+                  type="button"
+                  disabled={reminded}
+                  onClick={() =>
+                    scheduleEventReminder({
+                      eventId: e.id,
+                      title: e.title,
+                      spaceName,
+                      startsAt: e.starts_at,
+                    })
+                  }
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold",
+                    reminded ? "bg-accent/20 text-accent" : "bg-hover",
+                  )}
+                >
+                  {reminded ? <BellRing className="size-3.5" /> : <Bell className="size-3.5" />}
+                  {reminded ? "Reminder set" : "Remind me"}
                 </button>
                 {(staff || e.created_by === me) && (
                   <button onClick={async () => confirm("Delete this event?") && (await deleteEvent(e.id)) && load()} className="ml-auto grid size-8 place-items-center rounded-full text-dnd hover:bg-dnd/10" aria-label="Delete event">
