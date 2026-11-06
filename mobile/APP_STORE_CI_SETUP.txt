@@ -89,10 +89,14 @@ E) Run the cloud build
    (processing can take another few minutes).
 
 
-F) Still paste listing text in App Store Connect
-------------------------------------------------
+F) Still paste listing text in App Store Connect / Play Console
+---------------------------------------------------------------
 Icon is in the IPA. Description is NOT — paste from:
-  mobile/app-store-listing.txt
+  mobile/app-store-listing.txt   → App Store Connect (full copy, review notes, privacy, screenshots)
+  mobile/play-store-listing.txt  → Google Play Console
+
+Also complete Age Ratings + App Privacy (iOS) and Data safety (Android) using the
+guidance in those files before Submit for Review / Production.
 
 
 Troubleshooting

@@ -1,7 +1,17 @@
 Nexus — App Store Connect listing copy
 =====================================
-Paste these into App Store Connect → App Store → iOS version → Description / keywords.
-(The App Store description is NOT stored inside the .ipa file.)
+Paste into App Store Connect → Your Apps → Nexus → App Store → iOS version.
+(The store description is NOT stored inside the .ipa file.)
+
+Bundle ID
+  hu.qyopy.nexus.B44X8B76QR
+
+SKU (suggested)
+  nexus-ios-hu-qyopy
+
+────────────────────────────────────
+App Information
+────────────────────────────────────
 
 Name (under 30 chars)
   Nexus
@@ -9,23 +19,58 @@ Name (under 30 chars)
 Subtitle (under 30 chars)
   Chat · friends · places
 
-Promotional text (optional, under 170 chars)
-  Stay close to friends with chat, voice, Live location on Wump, music, and more — all in one Nexus home.
+Promotional text (optional, under 170 chars — editable anytime)
+  Stay close to friends with chat, voice, Live places on Wump, music, and more — one Nexus home on iPhone.
 
-Description
-  Nexus is your social home for chatting with friends, sharing moments, and staying nearby.
+────────────────────────────────────
+Description (under 4000 chars)
+────────────────────────────────────
 
-  • Instant messaging with friends and communities
-  • Voice & video calls
-  • Wump Live map — share your pin with friends and family when you choose
-  • Music, browser, and more built-in apps
-  • Same account on web, iPhone, and Android
+Nexus is your social home for chatting with friends, joining communities, and staying nearby — with music, maps, and useful tools built in.
 
-  Location is only shared while you turn Live on, and you can stop anytime.
-  Privacy controls let you choose friends, family, or a short everyone flash.
+CHAT & COMMUNITIES
+• Instant messaging with friends and servers
+• Voice and video calls
+• Share photos, files, and links
+• Stay in sync across iPhone, Android, and the web
 
-Keywords (comma-separated, under 100 chars)
-  chat,friends,messaging,map,location,social,music,calls,community
+WUMP — LIVE PLACES
+• Share your Live pin with friends or family when you choose
+• OpenStreetMap-based map with privacy controls
+• Invite links for people you trust
+• Turn Live off anytime — location sharing stops
+
+MUSIC & CREATIVE APPS
+• Listen and discover inside Nexus
+• Nexus Link — link-in-bio pages with themes
+• Image studio, docs tools, QR maker, and more
+
+BUILT-IN BROWSER
+• Search the web without leaving Nexus
+• Shields and private DNS options for safer browsing
+
+ONE ACCOUNT, EVERYWHERE
+• Same login on web, iPhone, and Android
+• Your chats, friends, and apps travel with you
+
+PRIVACY YOU CONTROL
+• Location is only shared while Live is on
+• Choose friends, family, or a short everyone flash
+• Review privacy settings anytime at nexusproject.cc/privacy
+
+Nexus is built by qyopy. Support: https://nexusproject.cc
+
+────────────────────────────────────
+Keywords (comma-separated, max 100 characters, no spaces after commas preferred)
+────────────────────────────────────
+
+chat,friends,messaging,map,location,social,music,calls,community,voice
+
+Character count check: keep ≤ 100. Current target ≈ 78.
+
+────────────────────────────────────
+URLs
+────────────────────────────────────
 
 Support URL
   https://nexusproject.cc
@@ -36,12 +81,163 @@ Marketing URL
 Privacy Policy URL
   https://nexusproject.cc/privacy
 
-Category
-  Primary: Social Networking
-  Secondary: Lifestyle
+────────────────────────────────────
+Categories
+────────────────────────────────────
 
+Primary: Social Networking
+Secondary: Lifestyle
+
+────────────────────────────────────
 Copyright
-  © 2026 qyopy
+────────────────────────────────────
 
-Age rating
-  Complete the Age Ratings questionnaire in App Store Connect (chat + location).
+© 2026 qyopy
+
+────────────────────────────────────
+What’s New (first release / version notes)
+────────────────────────────────────
+
+Welcome to Nexus on iPhone.
+
+• Chat with friends and communities
+• Voice & video calls
+• Wump Live map with privacy controls
+• Music, Nexus Link, browser, and built-in tools
+• Same account as the web app
+
+Thanks for trying Nexus — tell us what you want next at nexusproject.cc
+
+────────────────────────────────────
+App Review Information (for Apple reviewers)
+────────────────────────────────────
+
+Contact
+  Name: Martin Csatos (qyopy)
+  Email: owner@qyopy.hu
+  Phone: (add your phone in App Store Connect)
+
+Demo account
+  Provide a working test login in App Store Connect → App Review Information.
+  The app loads https://nexusproject.cc — reviewers can sign in with the demo account.
+
+Notes for Review
+  Nexus is a Capacitor shell around the live Nexus web app (nexusproject.cc).
+  Core features: messaging, voice/video calls, Wump location sharing (user-controlled),
+  music, link-in-bio (Nexus Link), and a built-in browser.
+  Location is used only for Wump/Bump Live sharing when the user enables it.
+  Background location is optional and can be turned off at any time.
+  Push notifications are used for message and call alerts.
+
+Sign-in requirement
+  Yes — account required for chat and social features.
+  Guest browsing of public marketing pages may work without sign-in.
+
+────────────────────────────────────
+Age Ratings questionnaire (guidance)
+────────────────────────────────────
+
+Complete Age Ratings in App Store Connect. Suggested answers for Nexus:
+
+  Unrestricted Web Access: Yes (in-app browser)
+  User-Generated Content: Yes (chat, profiles, links)
+  Messaging / Chat: Yes
+  Location Sharing: Yes (optional, user-controlled Live)
+  Contests: No (unless you add contests later)
+  Gambling: No
+  Contests with cash prizes: No
+  Violence / Horror: None / Infrequent (user UGC only)
+  Profanity: Infrequent/Mild possible via UGC
+  Mature Themes: None intended; UGC possible
+  Alcohol / Tobacco / Drugs: None intended
+  Sexual Content: None intended; moderate UGC risk → follow ASC prompts
+  Guns / Weapons: None intended
+
+Expect a 12+ or 17+ rating depending on how ASC scores unrestricted web + UGC + chat.
+Add parental controls / reporting links if prompted.
+
+────────────────────────────────────
+App Privacy (Privacy Nutrition Labels) — disclose accurately
+────────────────────────────────────
+
+Likely data types (verify against your real Supabase / analytics / Capgo usage):
+
+  Contact Info
+    • Email Address — Account / App Functionality
+    • Name / Username — Account / App Functionality
+
+  User Content
+    • Messages, photos, files — App Functionality
+    • Other User Content (link-in-bio, profiles) — App Functionality
+
+  Location
+    • Precise / Coarse Location — App Functionality (Wump Live only when enabled)
+    Linked to user: Yes when Live is on
+    Used for tracking: No (unless you add ads/trackers — currently no)
+
+  Identifiers
+    • User ID — App Functionality
+    • Device ID (push) — App Functionality
+
+  Usage Data
+    • Product Interaction — Analytics / App Functionality (if Capgo/stats enabled)
+    • Crash / Diagnostics — if collected
+
+  Diagnostics
+    • Crash Data / Performance — App Functionality / Analytics (if enabled)
+
+Tracking
+  If you do NOT sell data or use third-party advertising SDKs for cross-app tracking,
+  select “No, we do not track” / do not declare tracking. Capgo OTA update checks alone
+  are typically App Functionality, not tracking — confirm in Capgo docs for your plan.
+
+────────────────────────────────────
+Screenshot & preview guidance
+────────────────────────────────────
+
+Required sizes (generate on device or Simulator; do not use marketing mock frames that violate ASC rules):
+
+  iPhone 6.7" (e.g. 1290×2796) — required for modern phones
+  iPhone 6.5" and/or 5.5" as ASC prompts
+  iPad 12.9" if you tick iPad support
+
+Suggested caption order (5–8 frames):
+  1. Nexus home — chats and friends at a glance
+  2. Messaging — conversations that feel instant
+  3. Voice & video — talk without leaving Nexus
+  4. Wump Live — share your place with people you trust
+  5. Music — listen inside your social home
+  6. Nexus Link — your link-in-bio, your style
+  7. Browser & tools — search and create without switching apps
+  8. One account — web, iPhone, Android
+
+App Preview video (optional, 15–30s): open Nexus → open a chat → start a call → toggle Wump Live → open music.
+
+────────────────────────────────────
+Localization (optional next)
+────────────────────────────────────
+
+Default: English (U.S.) or English (U.K.)
+Suggested second locale: Hungarian (hu) — subtitle e.g. “Chat · barátok · helyek”
+
+────────────────────────────────────
+Version / build metadata (native)
+────────────────────────────────────
+
+Marketing version: match mobile package / Xcode MARKETING_VERSION (e.g. 1.3.1)
+Build: increment CURRENT_PROJECT_VERSION for every App Store / TestFlight upload
+Bundle ID: hu.qyopy.nexus.B44X8B76QR (do not change for Capgo ID conflicts)
+
+────────────────────────────────────
+Checklist before Submit for Review
+────────────────────────────────────
+
+[ ] Listing fields pasted (name, subtitle, description, keywords, URLs)
+[ ] Screenshots uploaded for required device sizes
+[ ] Privacy Policy URL loads and matches disclosures
+[ ] Age Ratings questionnaire completed
+[ ] App Privacy answers saved
+[ ] App Review contact + demo account filled
+[ ] Signed build in TestFlight / Ready for Review
+[ ] Export compliance / encryption answers completed
+[ ] Content rights / advertising identifier answers completed
