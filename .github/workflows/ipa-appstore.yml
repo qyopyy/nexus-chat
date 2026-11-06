@@ -1,0 +1,267 @@
+name: iOS App Store (signed)
+
+# Signs Nexus with your Apple Distribution cert on a GitHub-hosted Mac — no local Xcode needed.
+# Manual only. Requires repo Secrets (see mobile/APP_STORE_CI_SETUP.txt).
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Live site the app opens (leave empty for NEXUS_URL / production)"
+        required: false
+      upload:
+        description: "Upload to App Store Connect after signing?"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  appstore:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      NEXUS_URL: ${{ github.event.inputs.url || vars.NEXUS_URL || 'https://nexusproject.cc' }}
+      BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'hu.qyopy.nexus.B44X8B76QR' }}
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check signing secrets
+        run: |
+          missing=0
+          for k in APPLE_TEAM_ID APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_PROVISION_PROFILE_BASE64; do
+            # secrets aren't exported to env by name automatically — probe via GitHub context in a later step
+            echo "Need secret: $k"
+          done
+          if [ -z "${{ secrets.APPLE_TEAM_ID }}" ] || [ -z "${{ secrets.APPLE_CERTIFICATE_BASE64 }}" ] || [ -z "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" ] || [ -z "${{ secrets.APPLE_PROVISION_PROFILE_BASE64 }}" ]; then
+            echo "::error::Missing Apple signing secrets. Follow mobile/APP_STORE_CI_SETUP.txt (no Xcode required)."
+            exit 1
+          fi
+          if [ "${{ github.event.inputs.upload }}" = "true" ]; then
+            if [ -z "${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}" ] || [ -z "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}" ] || [ -z "${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}" ]; then
+              echo "::error::Upload requested but App Store Connect API key secrets are missing. See mobile/APP_STORE_CI_SETUP.txt"
+              exit 1
+            fi
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Capacitor
+        run: npm install --no-audit --no-fund
+
+      - name: Import certificate + provisioning profile
+        env:
+          CERT_B64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CERT_PW: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          PROFILE_B64: ${{ secrets.APPLE_PROVISION_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          CERT_PATH="$RUNNER_TEMP/dist.p12"
+          PROFILE_PATH="$RUNNER_TEMP/nexus.mobileprovision"
+          KEYCHAIN="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PW="$(openssl rand -base64 32)"
+
+          echo "$CERT_B64" | base64 -d > "$CERT_PATH"
+          echo "$PROFILE_B64" | base64 -d > "$PROFILE_PATH"
+
+          # Install profile where Xcode looks
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' /dev/stdin <<< "$(security cms -D -i "$PROFILE_PATH")" 2>/dev/null || true)
+          if [ -z "$PROFILE_UUID" ]; then
+            PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" | plutil -extract UUID raw -)
+          fi
+          echo "Provisioning profile UUID=$PROFILE_UUID"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID}.mobileprovision"
+          echo "PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+          echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+          echo "KEYCHAIN_PW=$KEYCHAIN_PW" >> "$GITHUB_ENV"
+
+          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security import "$CERT_PATH" -P "$CERT_PW" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security list-keychain -d user -s "$KEYCHAIN" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PW" "$KEYCHAIN"
+
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+      - name: Create iOS project
+        run: |
+          npx cap add ios
+          npx cap sync ios
+
+      - name: App icons + Info.plist
+        run: |
+          pip3 install --user pillow >/dev/null
+          PLIST=ios/App/App/Info.plist
+          pb() { /usr/libexec/PlistBuddy -c "$1" "$PLIST" 2>/dev/null || true; }
+          pb "Add :NSMicrophoneUsageDescription string Nexus uses your microphone for voice calls."
+          pb "Add :NSCameraUsageDescription string Nexus uses your camera for video calls."
+          pb "Add :NSPhotoLibraryUsageDescription string Choose photos and videos to send in chats."
+          pb "Add :NSPhotoLibraryAddUsageDescription string Save photos and videos from chats."
+          pb "Add :NSLocationWhenInUseUsageDescription string Nexus uses your location for Bump so you can find friends and family nearby. Location is rounded and expires after 20 minutes."
+          pb "Add :NSLocationAlwaysAndWhenInUseUsageDescription string Nexus can refresh your Bump pin in the background while you are Live, so family can keep finding you nearby. Turn Live off anytime to stop sharing."
+          pb "Add :UIBackgroundModes array"
+          pb "Add :UIBackgroundModes:0 string audio"
+          pb "Add :UIBackgroundModes:1 string voip"
+          pb "Add :UIBackgroundModes:2 string remote-notification"
+          pb "Add :UIBackgroundModes:3 string fetch"
+          pb "Add :UIBackgroundModes:4 string location"
+          pb "Set :CFBundleDisplayName Nexus"
+          pb "Add :CFBundleDisplayName string Nexus"
+          pb "Set :CFBundleName Nexus"
+          pb "Add :CFBundleName string Nexus"
+          pb "Set :CFBundleIdentifier ${BUNDLE_ID}"
+          pb "Add :CFBundleIdentifier string ${BUNDLE_ID}"
+          pb "Add :ITSAppUsesNonExemptEncryption bool false"
+          pb "Set :UIUserInterfaceStyle Dark"
+          pb "Add :UIUserInterfaceStyle string Dark"
+          pb "Set :CFBundleShortVersionString 1.${GITHUB_RUN_NUMBER}"
+          pb "Add :CFBundleShortVersionString string 1.${GITHUB_RUN_NUMBER}"
+          pb "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}"
+          pb "Add :CFBundleVersion string ${GITHUB_RUN_NUMBER}"
+          pb "Set :NSHumanReadableCopyright © 2026 qyopy"
+          pb "Add :NSHumanReadableCopyright string © 2026 qyopy"
+          python3 scripts/prepare-app-icons.py ios/App/App/Assets.xcassets/AppIcon.appiconset
+
+      - name: Configure manual signing for Archive
+        run: |
+          set -euo pipefail
+          cd ios/App
+          PROFILE_NAME=$(security cms -D -i "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID}.mobileprovision" | plutil -extract Name raw -)
+          echo "Profile name: $PROFILE_NAME"
+          # Prefer the Apple Distribution identity from the imported keychain
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | sed -n 's/.*"\(Apple Distribution[^"]*\)".*/\1/p' | head -1)
+          if [ -z "$IDENTITY" ]; then
+            IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | sed -n 's/.*"\(iPhone Distribution[^"]*\)".*/\1/p' | head -1)
+          fi
+          if [ -z "$IDENTITY" ]; then
+            echo "::error::No Apple Distribution identity found in the imported certificate. Recreate an Apple Distribution .p12 (not Development)."
+            security find-identity -v -p codesigning "$KEYCHAIN" || true
+            exit 1
+          fi
+          echo "Using identity: $IDENTITY"
+          echo "CODE_SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "PROVISIONING_PROFILE_SPECIFIER=$PROFILE_NAME" >> "$GITHUB_ENV"
+
+          # Disable automatic signing on the App target via xcodebuild flags (manual below)
+
+      - name: Archive (signed)
+        run: |
+          set -euo pipefail
+          cd ios/App
+          if [ -d App.xcworkspace ]; then TARGET="-workspace App.xcworkspace"; else TARGET="-project App.xcodeproj"; fi
+          xcodebuild $TARGET -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/App.xcarchive" archive \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROVISIONING_PROFILE_SPECIFIER" \
+            MARKETING_VERSION="1.${GITHUB_RUN_NUMBER}" \
+            CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
+            | tail -60
+          test -d build/App.xcarchive/Products/Applications/App.app
+          test -f build/App.xcarchive/Products/Applications/App.app/embedded.mobileprovision
+          echo "embedded.mobileprovision OK"
+
+      - name: Export App Store IPA
+        run: |
+          set -euo pipefail
+          cd ios/App
+          cat > ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>teamID</key>
+            <string>${TEAM_ID}</string>
+            <key>signingCertificate</key>
+            <string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${BUNDLE_ID}</key>
+              <string>${PROVISIONING_PROFILE_SPECIFIER}</string>
+            </dict>
+            <key>destination</key>
+            <string>export</string>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>uploadSymbols</key>
+            <true/>
+          </dict>
+          </plist>
+          EOF
+          # Strip leading spaces from heredoc so plutil accepts the file
+          sed -i '' 's/^[[:space:]]*//' ExportOptions.plist
+          plutil -lint ExportOptions.plist
+          xcodebuild -exportArchive \
+            -archivePath "$PWD/build/App.xcarchive" \
+            -exportPath "$PWD/build/export" \
+            -exportOptionsPlist ExportOptions.plist \
+            | tee /tmp/export.log | tail -40
+          IPA=$(ls build/export/*.ipa | head -1)
+          cp "$IPA" "$GITHUB_WORKSPACE/Nexus-AppStore.ipa"
+          ls -lh "$GITHUB_WORKSPACE/Nexus-AppStore.ipa"
+          unzip -l "$GITHUB_WORKSPACE/Nexus-AppStore.ipa" | grep -E 'embedded.mobileprovision|Payload' | head -20
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nexus-AppStore-ipa
+          path: Nexus-AppStore.ipa
+
+      - name: Upload to App Store Connect
+        if: ${{ github.event.inputs.upload == 'true' }}
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          ASC_KEY_B64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          echo "$ASC_KEY_B64" | base64 -d > "$KEY_PATH"
+          # API key must live in one of altool's expected folders for -apiKey
+          mkdir -p "$HOME/.private_keys" "$HOME/.appstoreconnect/private_keys"
+          cp "$KEY_PATH" "$HOME/.private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          cp "$KEY_PATH" "$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$GITHUB_WORKSPACE/Nexus-AppStore.ipa" \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID" \
+            --verbose
+
+      - name: Publish GitHub release (signed IPA)
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: ${{ github.workspace }}
+        run: |
+          TAG="ios-appstore-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" Nexus-AppStore.ipa \
+            mobile/app-store-listing.txt \
+            mobile/APP_STORE_CI_SETUP.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Nexus App Store IPA build ${GITHUB_RUN_NUMBER}" \
+            --notes "Signed App Store IPA · ${BUNDLE_ID} · team ${TEAM_ID}
+
+          Includes embedded.mobileprovision (valid for Transporter / ASC).
+          ${{ github.event.inputs.upload == 'true' && 'Uploaded to App Store Connect via API key.' || 'Not uploaded — download artifact and drop into Transporter, or re-run with upload=true.' }}
+
+          Paste store listing from app-store-listing.txt in App Store Connect."
+
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          security delete-keychain "$KEYCHAIN" 2>/dev/null || true
