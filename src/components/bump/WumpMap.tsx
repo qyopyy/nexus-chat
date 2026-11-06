@@ -7,7 +7,6 @@ import {
   BookmarkPlus,
   Compass,
   Crosshair,
-  ExternalLink,
   Layers,
   LocateFixed,
   MapPinned,
@@ -493,54 +492,45 @@ export default function WumpMap({
   const liveFriends = nearby.filter((n) => (n.age_seconds ?? 0) < 90).length;
   const shownPlace = myPlaceName || resolvedMine;
   const profileHref = myUsername ? wumpProfileUrl(myUsername) : null;
-  const exploreLabel =
+  const pct = Math.max(0, Math.min(100, explorePercent || 0));
+  const exploreTitle =
     exploreTotal > 0
-      ? `${explorePercent}% explored · ${exploreLocal}/${exploreTotal} cells`
+      ? `${pct}% explored · ${exploreLocal}/${exploreTotal} areas`
       : exploreAll > 0
-        ? `${exploreAll} cells explored`
-        : "Explore the map while Live";
+        ? `${exploreAll} areas explored`
+        : "Explore while Live";
 
   return (
-    <div className="relative mx-auto aspect-[9/14] w-full max-w-md overflow-hidden rounded-[2rem] shadow-2xl ring-1 ring-black/10">
+    <div className="relative mx-auto aspect-[9/14] w-full max-w-md overflow-hidden rounded-[2rem] bg-slate-200 shadow-2xl ring-1 ring-black/10">
       <div ref={wrapRef} className="absolute inset-0 z-0 bg-[#e2e8f0] [&_.leaflet-control-attribution]:text-[9px]" />
 
       {err && (
-        <div className="absolute inset-0 z-20 grid place-items-center bg-slate-200 p-6 text-center text-sm font-semibold text-slate-700">
+        <div className="absolute inset-0 z-20 grid place-items-center bg-slate-200/95 p-6 text-center text-sm font-semibold text-slate-700 backdrop-blur">
           {err}
         </div>
       )}
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-24 bg-gradient-to-b from-black/25 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-28 bg-gradient-to-b from-black/35 via-black/10 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-36 bg-gradient-to-t from-black/30 to-transparent" />
 
-      <div className="absolute top-3 left-1/2 z-10 flex max-w-[78%] -translate-x-1/2 flex-col items-center gap-1">
-        <div className="flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-slate-600 shadow backdrop-blur">
-          <span className={cn("size-1.5 rounded-full", live ? "animate-pulse bg-emerald-500" : "bg-slate-300")} />
-          {live ? `${liveFriends} live · ${nearby.length} nearby` : `${viewsToday} on map`}
-        </div>
-        <div
-          className="flex max-w-full items-center gap-1.5 truncate rounded-full bg-emerald-950/85 px-2.5 py-1 text-[10px] font-bold text-emerald-100 shadow backdrop-blur"
-          title={exploreLabel}
-        >
-          <Compass className="size-3 shrink-0 text-emerald-300" />
-          <span className="truncate">
-            {explorePercent}% map · {exploreAll} cells
+      {/* Compact status HUD */}
+      <div className="absolute top-3 left-3 right-14 z-10 space-y-1.5">
+        <div className="inline-flex max-w-full items-center gap-2 rounded-2xl bg-white/92 px-2.5 py-1.5 shadow-lg backdrop-blur-md ring-1 ring-black/5">
+          <span className={cn("size-2 shrink-0 rounded-full", live ? "animate-pulse bg-emerald-500" : "bg-slate-300")} />
+          <span className="truncate text-[11px] font-semibold text-slate-700">
+            {live ? `${liveFriends} live · ${nearby.length} nearby` : `${viewsToday} on map`}
+          </span>
+          <span className="h-3 w-px shrink-0 bg-slate-200" />
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold tabular-nums text-emerald-700" title={exploreTitle}>
+            <Compass className="size-3 shrink-0" />
+            {pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1)}%
           </span>
         </div>
         {(shownPlace || tapPlace) && (
-          <div className="flex max-w-full items-center gap-1 truncate rounded-full bg-slate-900/85 px-2.5 py-1 text-[10px] font-bold text-white shadow backdrop-blur">
+          <div className="inline-flex max-w-full items-center gap-1.5 rounded-2xl bg-slate-950/80 px-2.5 py-1 text-[10px] font-semibold text-white shadow backdrop-blur">
             <MapPinned className="size-3 shrink-0 text-sky-300" />
             <span className="truncate">{tapPlace || shownPlace}</span>
           </div>
-        )}
-        {myUsername && (
-          <button
-            type="button"
-            onClick={() => (onOpenProfilePage ? onOpenProfilePage(myUsername) : undefined)}
-            className="pointer-events-auto flex max-w-full items-center gap-1 truncate rounded-full bg-sky-950/80 px-2.5 py-1 text-[10px] font-bold text-sky-100 shadow backdrop-blur"
-          >
-            @{myUsername}
-            <ExternalLink className="size-2.5 shrink-0 opacity-80" />
-          </button>
         )}
       </div>
 
@@ -551,18 +541,23 @@ export default function WumpMap({
             onClick={() => {
               if (myUsername && onOpenProfilePage) onOpenProfilePage(myUsername);
             }}
-            className="relative"
+            className="group relative"
             aria-label={myUsername ? `Open @${myUsername}` : "Profile"}
             title={myUsername ? `@${myUsername}` : "Profile"}
           >
-            <Avatar userId={me} size={40} className="ring-2 ring-white shadow" />
-            <span className={cn("absolute -top-0.5 -right-0.5 size-2.5 rounded-full ring-2 ring-white", live ? "bg-ok" : "bg-faint")} />
+            <Avatar userId={me} size={40} className="ring-2 ring-white shadow-lg" />
+            <span className={cn("absolute -top-0.5 -right-0.5 size-2.5 rounded-full ring-2 ring-white", live ? "bg-emerald-500" : "bg-slate-400")} />
+            {myUsername && (
+              <span className="pointer-events-none absolute top-full left-1/2 mt-1 max-w-[4.5rem] -translate-x-1/2 truncate rounded-md bg-slate-950/85 px-1.5 py-0.5 text-[9px] font-bold text-sky-100 opacity-0 shadow transition group-hover:opacity-100">
+                @{myUsername}
+              </span>
+            )}
           </button>
         )}
         <button
           type="button"
           onClick={onSearch}
-          className="relative grid size-10 place-items-center rounded-full bg-[#3b82f6] text-white shadow-lg"
+          className="grid size-10 place-items-center rounded-full bg-slate-900/85 text-white shadow-lg backdrop-blur transition hover:bg-slate-900"
           aria-label="People"
         >
           <Bell className="size-4" />
@@ -570,7 +565,7 @@ export default function WumpMap({
         <button
           type="button"
           onClick={cycleStyle}
-          className="grid size-10 place-items-center rounded-full bg-white/90 text-slate-600 shadow-lg backdrop-blur"
+          className="grid size-10 place-items-center rounded-full bg-white/92 text-slate-600 shadow-lg backdrop-blur ring-1 ring-black/5 transition hover:bg-white"
           aria-label={`Map style: ${mapStyle}`}
           title={`Map: ${mapStyle}`}
         >
@@ -581,7 +576,7 @@ export default function WumpMap({
             type="button"
             disabled={saving}
             onClick={() => void saveHere()}
-            className="grid size-10 place-items-center rounded-full bg-amber-400 text-amber-950 shadow-lg disabled:opacity-60"
+            className="grid size-10 place-items-center rounded-full bg-white text-sky-700 shadow-lg ring-1 ring-sky-200 transition hover:bg-sky-50 disabled:opacity-60"
             aria-label="Save this place"
             title="Save this place"
           >
@@ -594,29 +589,34 @@ export default function WumpMap({
         <button
           type="button"
           onClick={() => onGoLive?.()}
-          className="absolute inset-x-6 top-[40%] z-10 rounded-2xl bg-white/95 p-4 text-center text-sm font-semibold text-slate-700 shadow-lg backdrop-blur"
+          className="absolute inset-x-5 top-[38%] z-10 rounded-2xl bg-white/95 p-4 text-center shadow-xl ring-1 ring-black/5 backdrop-blur"
         >
-          Go live to explore the map and drop your pin
+          <div className="text-sm font-bold text-slate-800">Go Live on the map</div>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+            Share your pin, explore nearby coverage, and save places as you move.
+          </p>
         </button>
       )}
 
       {tapSave && onSavePlace && (
-        <div className="absolute inset-x-4 top-[38%] z-20 rounded-2xl bg-white/95 p-3 shadow-xl backdrop-blur">
-          <div className="flex items-start gap-2">
-            <Bookmark className="mt-0.5 size-4 shrink-0 text-sky-600" />
+        <div className="absolute inset-x-3 bottom-[7.75rem] z-20 overflow-hidden rounded-2xl bg-white/96 shadow-2xl ring-1 ring-black/8 backdrop-blur-md">
+          <div className="flex items-start gap-3 p-3.5">
+            <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-sky-50 text-sky-600">
+              <Bookmark className="size-4" />
+            </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-bold text-slate-800">{tapSave.name}</div>
-              <div className="text-[11px] text-slate-500">
-                {tapSave.lat.toFixed(5)}, {tapSave.lng.toFixed(5)}
+              <div className="truncate text-sm font-bold text-slate-900">{tapSave.name}</div>
+              <div className="mt-0.5 text-[11px] text-slate-500">
+                {tapSave.locality || `${tapSave.lat.toFixed(4)}, ${tapSave.lng.toFixed(4)}`}
               </div>
             </div>
           </div>
-          <div className="mt-2 flex gap-2">
+          <div className="flex gap-2 border-t border-slate-100 px-3 py-2.5">
             <button
               type="button"
               disabled={saving}
               onClick={() => void saveTap()}
-              className="flex-1 rounded-xl bg-sky-600 py-2 text-xs font-bold text-white disabled:opacity-60"
+              className="flex-1 rounded-xl bg-slate-900 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800 disabled:opacity-60"
             >
               {saving ? "Saving…" : "Save place"}
             </button>
@@ -626,9 +626,9 @@ export default function WumpMap({
                 setTapSave(null);
                 setTapPlace(null);
               }}
-              className="rounded-xl bg-slate-200 px-3 py-2 text-xs font-bold text-slate-600"
+              className="rounded-xl bg-slate-100 px-3.5 py-2.5 text-xs font-bold text-slate-600 transition hover:bg-slate-200"
             >
-              Dismiss
+              Cancel
             </button>
           </div>
         </div>
@@ -638,8 +638,8 @@ export default function WumpMap({
         type="button"
         onClick={recenter}
         className={cn(
-          "absolute bottom-28 left-4 z-10 grid size-11 place-items-center rounded-full shadow-lg",
-          follow ? "bg-sky-500 text-white" : "bg-white text-sky-600",
+          "absolute bottom-28 left-4 z-10 grid size-11 place-items-center rounded-full shadow-lg ring-1 transition",
+          follow ? "bg-sky-500 text-white ring-sky-400/40" : "bg-white text-sky-600 ring-black/5",
         )}
         aria-label={follow ? "Following you" : "Recenter / follow"}
         title={follow ? "Following" : "Follow me"}
@@ -649,7 +649,7 @@ export default function WumpMap({
       <button
         type="button"
         onClick={onSearch}
-        className="absolute bottom-28 right-4 z-10 grid size-11 place-items-center rounded-full bg-white text-slate-500 shadow-lg"
+        className="absolute bottom-28 right-4 z-10 grid size-11 place-items-center rounded-full bg-white text-slate-500 shadow-lg ring-1 ring-black/5"
         aria-label="Search people"
       >
         <Search className="size-5" />
@@ -659,26 +659,26 @@ export default function WumpMap({
         <button
           type="button"
           onClick={onScratch}
-          className="relative grid size-[4.5rem] place-items-center rounded-full bg-gradient-to-br from-[#fb7185] to-[#e11d48] text-white shadow-xl active:scale-95"
+          className="relative grid size-[4.25rem] place-items-center rounded-full bg-gradient-to-br from-[#fb7185] to-[#e11d48] text-white shadow-xl ring-2 ring-white/40 active:scale-95"
         >
-          <TriangleAlert className="size-6" />
-          <span className="absolute -bottom-1 text-[9px] font-black tracking-wider">CHAT</span>
+          <TriangleAlert className="size-5" />
+          <span className="absolute -bottom-0.5 text-[8px] font-black tracking-wider">CHAT</span>
         </button>
         <button
           type="button"
           onClick={onTogglePlay}
-          className="grid size-[5.25rem] place-items-center rounded-full bg-gradient-to-br from-[#60a5fa] via-[#a78bfa] to-[#f472b6] text-white shadow-2xl ring-4 ring-white/50 active:scale-95"
+          className="grid size-[5rem] place-items-center rounded-full bg-gradient-to-br from-[#60a5fa] via-[#818cf8] to-[#f472b6] text-white shadow-2xl ring-4 ring-white/55 active:scale-95"
           aria-label={playing ? "Pause music" : "Play music"}
         >
-          {playing ? <Pause className="size-8 fill-white" /> : <Play className="ml-1 size-8 fill-white" />}
+          {playing ? <Pause className="size-7 fill-white" /> : <Play className="ml-0.5 size-7 fill-white" />}
         </button>
         <button
           type="button"
           onClick={onPlaces}
-          className="relative grid size-[4.5rem] place-items-center rounded-full bg-gradient-to-br from-[#38bdf8] to-[#2563eb] text-white shadow-xl active:scale-95"
+          className="relative grid size-[4.25rem] place-items-center rounded-full bg-gradient-to-br from-[#38bdf8] to-[#2563eb] text-white shadow-xl ring-2 ring-white/40 active:scale-95"
         >
-          <span className="text-center text-[11px] leading-tight font-black">
-            <Users className="mx-auto mb-0.5 size-4" />
+          <span className="text-center text-[10px] leading-tight font-black">
+            <Users className="mx-auto mb-0.5 size-3.5" />
             +{Math.max(placesCount, nearby.length, savedPlaces.length)}
           </span>
         </button>
