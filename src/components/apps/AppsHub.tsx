@@ -18,6 +18,7 @@ import {
   Globe,
   Link2,
   MapPin,
+  Megaphone,
   Pipette,
   QrCode,
   ShieldAlert,
@@ -43,6 +44,7 @@ import UpcGenerator from "./UpcGenerator";
 import PitchSheet from "./PitchSheet";
 import MetadataPack from "./MetadataPack";
 import ReleaseChecklist from "./ReleaseChecklist";
+import PromoStudio from "./PromoStudio";
 import SpotifyTakedown from "@/components/music/SpotifyTakedown";
 import BumpHub from "@/components/bump/BumpHub";
 import BrowserHub from "@/components/browser/BrowserHub";
@@ -63,6 +65,7 @@ type ToolId =
   | "pitch"
   | "metadata"
   | "release"
+  | "promo"
   | "qr"
   | "color"
   | "text"
@@ -184,6 +187,15 @@ const TOOLS: {
     bg: "linear-gradient(135deg,#f59e0b,#7c2d12)",
     emoji: "☑",
     Icon: CheckSquare,
+  },
+  {
+    id: "promo",
+    name: "Promo studio",
+    tag: "IG · Reels · TikTok",
+    desc: "Daily captions for Stories, Reels, and TikTok to promote Nexus — one-tap copy.",
+    bg: "linear-gradient(135deg,#ff2bd6,#7c3aed)",
+    emoji: "📣",
+    Icon: Megaphone,
   },
   {
     id: "qr",
@@ -334,6 +346,7 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
   if (tool === "pitch") return <PitchSheet mobile={mobile} onBack={backToGrid} />;
   if (tool === "metadata") return <MetadataPack mobile={mobile} onBack={backToGrid} />;
   if (tool === "release") return <ReleaseChecklist mobile={mobile} onBack={backToGrid} />;
+  if (tool === "promo") return <PromoStudio mobile={mobile} onBack={backToGrid} />;
   if (tool === "qr") return <QrMaker mobile={mobile} onBack={backToGrid} />;
   if (tool === "color") return <ColorStudio mobile={mobile} onBack={backToGrid} />;
   if (tool === "text") return <TextLab mobile={mobile} onBack={backToGrid} />;

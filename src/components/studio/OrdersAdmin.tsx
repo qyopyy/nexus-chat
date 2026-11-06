@@ -16,6 +16,7 @@ import {
   type Order,
   type PremiumGift,
 } from "@/lib/premium";
+import { giftShareText } from "@/lib/promoCopy";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
@@ -273,11 +274,24 @@ function GiftLinkCard() {
         </button>
       </form>
       {lastUrl && (
-        <div className="mt-3 break-all rounded-lg bg-black/25 px-3 py-2 font-mono text-xs">
-          {lastUrl}
-          <button type="button" className="ml-2 font-sans font-semibold text-accent" onClick={() => void navigator.clipboard.writeText(lastUrl).then(() => toast("Copied", "success"))}>
-            Copy
-          </button>
+        <div className="mt-3 space-y-2 break-all rounded-lg bg-black/25 px-3 py-2 font-mono text-xs">
+          <div>{lastUrl}</div>
+          <div className="flex flex-wrap gap-2 font-sans">
+            <button type="button" className="font-semibold text-accent" onClick={() => void navigator.clipboard.writeText(lastUrl).then(() => toast("Copied", "success"))}>
+              Copy link
+            </button>
+            <button
+              type="button"
+              className="font-semibold text-[#ffd400]"
+              onClick={() =>
+                void navigator.clipboard
+                  .writeText(giftShareText(lastUrl, days, PLANS.find((p) => p.id === tier)?.name))
+                  .then(() => toast("Gift text copied", "success"))
+              }
+            >
+              Copy gift text
+            </button>
+          </div>
         </div>
       )}
       {gifts.length > 0 && (
@@ -289,7 +303,18 @@ function GiftLinkCard() {
                 {PLANS.find((p) => p.id === g.tier)?.short ?? g.tier} · {g.days}d · {g.claims}/{g.max_claims}
               </span>
               <button type="button" className="ml-auto font-semibold text-accent" onClick={() => void navigator.clipboard.writeText(giftLink(g.code)).then(() => toast("Copied", "success"))}>
-                Copy
+                Link
+              </button>
+              <button
+                type="button"
+                className="font-semibold text-[#ffd400]"
+                onClick={() =>
+                  void navigator.clipboard
+                    .writeText(giftShareText(giftLink(g.code), g.days, PLANS.find((p) => p.id === g.tier)?.name))
+                    .then(() => toast("Gift text copied", "success"))
+                }
+              >
+                Text
               </button>
             </li>
           ))}
