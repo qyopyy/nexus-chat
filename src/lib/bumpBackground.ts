@@ -6,8 +6,8 @@
  */
 
 import { supabase } from "./supabase";
-import { watchDeviceLocation, type LocationWatchHandle } from "./location";
-import { bumpNearby, type BumpNearby, type BumpVisible } from "./bump";
+import { watchDeviceLocation, type DeviceLocation, type LocationWatchHandle } from "./location";
+import { bumpExpireStale, bumpNearby, bumpPublishSample, type BumpNearby, type BumpVisible } from "./bump";
 import { isNativeApp } from "./useMobile";
 import { haptic } from "./haptics";
 import { useApp } from "@/store/app";
@@ -21,8 +21,12 @@ type CapLN = {
 
 /** Mandatory floor — refresh published pin at least every 5 minutes while Live */
 export const WUMP_REFRESH_MS = 5 * 60_000;
-/** Throttle continuous GPS watch publishes so we don't spam */
-const WATCH_THROTTLE_MS = 8_000;
+/** Moving: publish often so friends see you live */
+const WATCH_THROTTLE_MOVING_MS = 3_000;
+/** Stationary: slower publishes to save battery */
+const WATCH_THROTTLE_IDLE_MS = 12_000;
+/** Treat as moving above this ground speed (m/s ≈ walking) */
+const MOVING_SPEED_MPS = 0.6;
 
 let watch: LocationWatchHandle | null = null;
 let heartbeat: ReturnType<typeof setInterval> | null = null;
@@ -30,14 +34,17 @@ let nearbyPoll: ReturnType<typeof setInterval> | null = null;
 let autoStop: ReturnType<typeof setTimeout> | null = null;
 let running = false;
 let lastPublish = 0;
+let lastLat: number | null = null;
+let lastLng: number | null = null;
 let knownNearby = new Set<string>();
 let opts: {
   visible: BumpVisible;
   label: string | null;
   alerts: boolean;
+  radiusM: number;
   onNearby?: (rows: BumpNearby[]) => void;
-  onLocation?: (lat: number, lng: number) => void;
-} = { visible: "friends", label: null, alerts: true };
+  onLocation?: (lat: number, lng: number, meta?: { heading: number | null; speed: number | null; accuracy: number | null }) => void;
+} = { visible: "friends", label: null, alerts: true, radiusM: 800 };
 
 function ln(): CapLN | null {
   if (typeof window === "undefined") return null;
@@ -45,25 +52,31 @@ function ln(): CapLN | null {
   return cap?.Plugins?.LocalNotifications ?? null;
 }
 
-async function publishQuiet(lat: number, lng: number, accuracy: number | null, force = false) {
+function movedEnough(lat: number, lng: number) {
+  if (lastLat == null || lastLng == null) return true;
+  const dLat = (lat - lastLat) * 111_320;
+  const dLng = (lng - lastLng) * 111_320 * Math.cos((lat * Math.PI) / 180);
+  return Math.hypot(dLat, dLng) >= 8; // ≥ ~8 m
+}
+
+async function publishQuiet(loc: DeviceLocation, force = false) {
   const now = Date.now();
-  if (!force && now - lastPublish < WATCH_THROTTLE_MS) return;
+  const moving = (loc.speed != null && loc.speed >= MOVING_SPEED_MPS) || movedEnough(loc.lat, loc.lng);
+  const throttle = moving ? WATCH_THROTTLE_MOVING_MS : WATCH_THROTTLE_IDLE_MS;
+  if (!force && now - lastPublish < throttle) return;
   lastPublish = now;
+  lastLat = loc.lat;
+  lastLng = loc.lng;
   const priv = loadWumpPrivacyLocal();
   if (!priv.wump_share_enabled) return;
-  await supabase.rpc("bump_publish", {
-    p_lat: lat,
-    p_lng: lng,
-    p_accuracy: accuracy,
-    p_visible: opts.visible,
-    p_label: opts.label,
-    p_precision: priv.wump_precision,
-  });
-  opts.onLocation?.(lat, lng);
+  const ok = await bumpPublishSample(loc, opts.visible, opts.label);
+  if (ok) opts.onLocation?.(loc.lat, loc.lng, { heading: loc.heading, speed: loc.speed, accuracy: loc.accuracy });
 }
 
 async function notifyNearby(rows: BumpNearby[]) {
   if (!opts.alerts) return;
+  const priv = loadWumpPrivacyLocal();
+  if (!priv.wump_allow_nearby_alerts) return;
   const fresh = rows.filter((r) => !knownNearby.has(r.user_id));
   for (const r of rows) knownNearby.add(r.user_id);
   if (!fresh.length) return;
@@ -100,7 +113,7 @@ async function notifyNearby(rows: BumpNearby[]) {
 
 async function refreshNearby() {
   try {
-    const rows = await bumpNearby(800);
+    const rows = await bumpNearby(opts.radiusM);
     opts.onNearby?.(rows);
     await notifyNearby(rows);
   } catch {
@@ -117,24 +130,29 @@ export async function startBumpBackground(input: {
   label?: string | null;
   alerts?: boolean;
   autoStopMinutes?: number;
+  radiusM?: number;
   onNearby?: (rows: BumpNearby[]) => void;
-  onLocation?: (lat: number, lng: number) => void;
+  onLocation?: (lat: number, lng: number, meta?: { heading: number | null; speed: number | null; accuracy: number | null }) => void;
 }) {
   await stopBumpBackground({ clearServer: false });
   opts = {
     visible: input.visible,
     label: input.label?.trim() || null,
     alerts: input.alerts !== false,
+    radiusM: input.radiusM ?? 800,
     onNearby: input.onNearby,
     onLocation: input.onLocation,
   };
   knownNearby = new Set();
+  lastLat = null;
+  lastLng = null;
   running = true;
+  void bumpExpireStale();
 
   // Continuous GPS → realtime moving pin
   watch = await watchDeviceLocation(
     (loc) => {
-      void publishQuiet(loc.lat, loc.lng, loc.accuracy);
+      void publishQuiet(loc);
     },
     () => {
       /* heartbeat / 5-min floor covers gaps */
@@ -143,24 +161,24 @@ export async function startBumpBackground(input: {
   );
 
   // Mandatory 5-minute floor + faster interim heartbeat on native
-  const tickMs = isNativeApp() ? Math.min(60_000, WUMP_REFRESH_MS) : WUMP_REFRESH_MS;
+  const tickMs = isNativeApp() ? Math.min(45_000, WUMP_REFRESH_MS) : WUMP_REFRESH_MS;
   heartbeat = setInterval(() => {
     if (!running) return;
     void (async () => {
       try {
         const { getDeviceLocation } = await import("./location");
         const loc = await getDeviceLocation({ highAccuracy: false });
-        const force = Date.now() - lastPublish >= WUMP_REFRESH_MS - 1_000;
-        await publishQuiet(loc.lat, loc.lng, loc.accuracy, force || true);
+        await publishQuiet(loc, true);
       } catch {
         /* ignore */
       }
     })();
   }, tickMs);
 
+  // Nearby poll — fast enough to feel live when friends move
   nearbyPoll = setInterval(() => {
     if (running) void refreshNearby();
-  }, 15_000);
+  }, isNativeApp() ? 8_000 : 10_000);
   void refreshNearby();
 
   if (input.autoStopMinutes && input.autoStopMinutes > 0) {
@@ -189,6 +207,14 @@ export async function stopBumpBackground(optsStop?: { clearServer?: boolean }) {
   }
 }
 
-export function updateBumpBackgroundOptions(partial: Partial<{ visible: BumpVisible; label: string | null; alerts: boolean; onLocation?: (lat: number, lng: number) => void }>) {
+export function updateBumpBackgroundOptions(
+  partial: Partial<{
+    visible: BumpVisible;
+    label: string | null;
+    alerts: boolean;
+    radiusM: number;
+    onLocation?: (lat: number, lng: number, meta?: { heading: number | null; speed: number | null; accuracy: number | null }) => void;
+  }>,
+) {
   opts = { ...opts, ...partial };
 }

@@ -122,6 +122,8 @@ export default function BumpHub({
   const [shareBusy, setShareBusy] = useState(false);
   const [myLat, setMyLat] = useState<number | null>(null);
   const [myLng, setMyLng] = useState<number | null>(null);
+  const [myHeading, setMyHeading] = useState<number | null>(null);
+  const [myAccuracy, setMyAccuracy] = useState<number | null>(null);
   const bumpOnly = standalone || isBumpApp();
   const musicPlaying = useBumpMusic((s) => s.playing);
   const musicCurrentId = useBumpMusic((s) => s.currentId);
@@ -170,19 +172,23 @@ export default function BumpHub({
       if (mine.visible) setVisible(mine.visible);
       setMyLat(mine.lat);
       setMyLng(mine.lng);
+      setMyHeading(mine.heading ?? null);
+      setMyAccuracy(mine.accuracy_m ?? null);
     } else {
       setLive(false);
       setMyLat(null);
       setMyLng(null);
+      setMyHeading(null);
+      setMyAccuracy(null);
     }
   }, [me, radius]);
 
-  // Restore Live + nearby; poll often for realtime pin movement + 5-min location floor
+  // Restore Live + nearby; poll fast while Live so pins feel realtime
   useEffect(() => {
     void refresh();
     const t = setInterval(() => {
       if (live) void refresh();
-    }, 15_000);
+    }, 6_000);
     return () => clearInterval(t);
   }, [refresh, live]);
 
@@ -224,10 +230,15 @@ export default function BumpHub({
       label: liveLabel,
       alerts,
       autoStopMinutes: autoStopMin,
+      radiusM: radius,
       onNearby: setNearby,
-      onLocation: (lat, lng) => {
+      onLocation: (lat, lng, meta) => {
         setMyLat(lat);
         setMyLng(lng);
+        if (meta) {
+          setMyHeading(meta.heading);
+          setMyAccuracy(meta.accuracy);
+        }
       },
     });
     return () => {
@@ -237,8 +248,8 @@ export default function BumpHub({
 
   useEffect(() => {
     if (!live) return;
-    updateBumpBackgroundOptions({ visible, label: liveLabel.trim() || null, alerts });
-  }, [live, visible, liveLabel, alerts]);
+    updateBumpBackgroundOptions({ visible, label: liveLabel.trim() || null, alerts, radiusM: radius });
+  }, [live, visible, liveLabel, alerts, radius]);
 
   // Flash "everyone" countdown
   useEffect(() => {
@@ -295,6 +306,8 @@ export default function BumpHub({
       setLive(true);
       if (typeof row.lat === "number") setMyLat(row.lat);
       if (typeof row.lng === "number") setMyLng(row.lng);
+      setMyHeading(row.heading ?? null);
+      setMyAccuracy(row.accuracy_m ?? null);
       await refresh();
       const priv = loadWumpPrivacyLocal();
       if (bgShare && priv.wump_allow_background) {
@@ -315,6 +328,8 @@ export default function BumpHub({
     setNearby([]);
     setMyLat(null);
     setMyLng(null);
+    setMyHeading(null);
+    setMyAccuracy(null);
     setFlashUntil(null);
   }
 
@@ -500,6 +515,8 @@ export default function BumpHub({
               me={me}
               myLat={myLat}
               myLng={myLng}
+              myHeading={myHeading}
+              myAccuracy={myAccuracy}
               nearby={nearby}
               live={live}
               viewsToday={friendIds.length + nearby.length + (live ? 1 : 0)}

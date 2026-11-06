@@ -6,6 +6,8 @@ export type DeviceLocation = {
   lat: number;
   lng: number;
   accuracy: number | null;
+  heading: number | null;
+  speed: number | null;
   source: "capacitor" | "browser";
 };
 
@@ -15,12 +17,26 @@ type CapGeo = {
     timeout?: number;
     maximumAge?: number;
   }) => Promise<{
-    coords: { latitude: number; longitude: number; accuracy?: number };
+    coords: {
+      latitude: number;
+      longitude: number;
+      accuracy?: number;
+      heading?: number | null;
+      speed?: number | null;
+    };
   }>;
   watchPosition?: (
     opts: { enableHighAccuracy?: boolean; timeout?: number; maximumAge?: number },
     cb: (
-      pos: { coords: { latitude: number; longitude: number; accuracy?: number } } | null,
+      pos: {
+        coords: {
+          latitude: number;
+          longitude: number;
+          accuracy?: number;
+          heading?: number | null;
+          speed?: number | null;
+        };
+      } | null,
       err?: { message?: string },
     ) => void,
   ) => Promise<string> | string;
@@ -72,6 +88,8 @@ export async function getDeviceLocation(opts?: { highAccuracy?: boolean; timeout
         lat: pos.coords.latitude,
         lng: pos.coords.longitude,
         accuracy: pos.coords.accuracy ?? null,
+        heading: Number.isFinite(pos.coords.heading as number) ? Number(pos.coords.heading) : null,
+        speed: Number.isFinite(pos.coords.speed as number) ? Number(pos.coords.speed) : null,
         source: "capacitor",
       };
     } catch (e) {
@@ -86,6 +104,8 @@ export async function getDeviceLocation(opts?: { highAccuracy?: boolean; timeout
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           accuracy: pos.coords.accuracy ?? null,
+          heading: Number.isFinite(pos.coords.heading) ? pos.coords.heading : null,
+          speed: Number.isFinite(pos.coords.speed) ? pos.coords.speed : null,
           source: "browser",
         }),
       (err) => reject(new Error(err.message || "Location permission denied")),
@@ -119,6 +139,8 @@ export async function watchDeviceLocation(
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           accuracy: pos.coords.accuracy ?? null,
+          heading: Number.isFinite(pos.coords.heading as number) ? Number(pos.coords.heading) : null,
+          speed: Number.isFinite(pos.coords.speed as number) ? Number(pos.coords.speed) : null,
           source: "capacitor",
         });
       });
@@ -142,10 +164,12 @@ export async function watchDeviceLocation(
         lat: pos.coords.latitude,
         lng: pos.coords.longitude,
         accuracy: pos.coords.accuracy ?? null,
+        heading: Number.isFinite(pos.coords.heading) ? pos.coords.heading : null,
+        speed: Number.isFinite(pos.coords.speed) ? pos.coords.speed : null,
         source: "browser",
       }),
     (err) => onErr?.(err.message || "Location permission denied"),
-    { enableHighAccuracy: high, maximumAge: 15_000, timeout: 30_000 },
+    { enableHighAccuracy: high, maximumAge: 5_000, timeout: 30_000 },
   );
   return {
     stop: () => {

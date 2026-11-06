@@ -1,21 +1,45 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, Crosshair, Pause, Play, Search, TriangleAlert, Users } from "lucide-react";
+import { Bell, Crosshair, Layers, LocateFixed, Pause, Play, Search, TriangleAlert, Users } from "lucide-react";
 import type { BumpNearby } from "@/lib/bump";
-import { loadLeaflet, newWumpMap, wumpAvatarIcon, type LMap, type LeafletNS } from "@/lib/geo";
+import {
+  loadLeaflet,
+  newWumpMap,
+  wumpAvatarIcon,
+  type LCircle,
+  type LMap,
+  type LeafletNS,
+  type WumpMapStyle,
+} from "@/lib/geo";
 import { formatMeters } from "@/lib/location";
 import { useApp } from "@/store/app";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 
-type MarkerHandle = { remove: () => void; setLatLng?: (c: [number, number]) => void };
+type MarkerHandle = {
+  remove: () => void;
+  setLatLng?: (c: [number, number]) => void;
+  getLatLng?: () => { lat: number; lng: number };
+  setIcon?: (icon: unknown) => void;
+  on?: (ev: string, fn: () => void) => void;
+};
+
+function ageLabel(ageSec?: number | null) {
+  if (ageSec == null || !Number.isFinite(ageSec)) return null;
+  if (ageSec < 20) return "now";
+  if (ageSec < 60) return `${Math.round(ageSec)}s`;
+  if (ageSec < 3600) return `${Math.round(ageSec / 60)}m`;
+  return `${Math.round(ageSec / 3600)}h`;
+}
 
 /** Live OpenStreetMap / CARTO map with real friend pins (Zenly-style chrome on top). */
 export default function WumpMap({
   me,
   myLat,
   myLng,
+  myHeading,
+  myAccuracy,
   nearby,
   live,
   viewsToday,
@@ -31,6 +55,8 @@ export default function WumpMap({
   me: string | null;
   myLat: number | null;
   myLng: number | null;
+  myHeading?: number | null;
+  myAccuracy?: number | null;
   nearby: BumpNearby[];
   live: boolean;
   viewsToday: number;
@@ -46,10 +72,22 @@ export default function WumpMap({
   const wrapRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LMap | null>(null);
   const LRef = useRef<LeafletNS | null>(null);
+  const setStyleRef = useRef<((s: WumpMapStyle) => void) | null>(null);
   const markersRef = useRef<Map<string, MarkerHandle>>(new Map());
+  const accuracyRef = useRef<LCircle | null>(null);
+  const trailRef = useRef<{ remove: () => void; setLatLngs?: (c: [number, number][]) => void } | null>(null);
+  const trailPts = useRef<[number, number][]>([]);
+  const followRef = useRef(true);
+  const userPannedRef = useRef(false);
   const [ready, setReady] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [follow, setFollow] = useState(true);
+  const [mapStyle, setMapStyle] = useState<WumpMapStyle>("streets");
   const profiles = useApp((s) => s.profiles);
+
+  useEffect(() => {
+    followRef.current = follow;
+  }, [follow]);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -60,10 +98,17 @@ export default function WumpMap({
         const L = await loadLeaflet();
         if (cancelled) return;
         LRef.current = L;
-        const center: [number, number] =
-          myLat != null && myLng != null ? [myLat, myLng] : [47.4979, 19.0402];
-        const map = newWumpMap(L, el, center, myLat != null ? 15 : 12);
+        const center: [number, number] = myLat != null && myLng != null ? [myLat, myLng] : [47.4979, 19.0402];
+        const { map, setStyle } = newWumpMap(L, el, center, myLat != null ? 15 : 12, "streets");
         mapRef.current = map;
+        setStyleRef.current = setStyle;
+        const markPanned = () => {
+          userPannedRef.current = true;
+          followRef.current = false;
+          setFollow(false);
+        };
+        map.on("dragstart", markPanned);
+        map.on("zoomstart", markPanned);
         setReady(true);
         requestAnimationFrame(() => map.invalidateSize());
       } catch (e) {
@@ -74,12 +119,21 @@ export default function WumpMap({
       cancelled = true;
       for (const m of markersRef.current.values()) m.remove();
       markersRef.current.clear();
+      accuracyRef.current?.remove();
+      accuracyRef.current = null;
+      trailRef.current?.remove();
+      trailRef.current = null;
       mapRef.current?.remove();
       mapRef.current = null;
     };
     // init once — position updates handled below
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!ready || !setStyleRef.current) return;
+    setStyleRef.current(mapStyle);
+  }, [ready, mapStyle]);
 
   // Resize when container settles
   useEffect(() => {
@@ -88,28 +142,34 @@ export default function WumpMap({
     return () => clearTimeout(t);
   }, [ready, live, nearby.length]);
 
-  // Sync pins
+  // Sync pins + accuracy + trail
   useEffect(() => {
     const map = mapRef.current;
     const L = LRef.current;
     if (!map || !L || !ready) return;
 
     const want = new Set<string>();
-    const upsert = (id: string, lat: number, lng: number, opts: { color: string; initial: string; me?: boolean; label?: string }) => {
+    const upsert = (
+      id: string,
+      lat: number,
+      lng: number,
+      opts: { color: string; initial: string; me?: boolean; label?: string; heading?: number | null; stale?: boolean },
+    ) => {
       want.add(id);
+      const icon = wumpAvatarIcon(L, opts);
       const existing = markersRef.current.get(id);
       if (existing?.setLatLng) {
-        // smooth hop toward new coords for realtime movement
-        const marker = existing as MarkerHandle & { getLatLng?: () => { lat: number; lng: number }; setLatLng: (c: [number, number]) => void };
+        existing.setIcon?.(icon);
+        const marker = existing;
         const cur = marker.getLatLng?.();
         if (cur) {
-          const steps = 8;
+          const steps = 10;
           let i = 0;
           const from = { lat: cur.lat, lng: cur.lng };
           const tick = () => {
             i++;
             const k = i / steps;
-            marker.setLatLng([from.lat + (lat - from.lat) * k, from.lng + (lng - from.lng) * k]);
+            marker.setLatLng?.([from.lat + (lat - from.lat) * k, from.lng + (lng - from.lng) * k]);
             if (i < steps) requestAnimationFrame(tick);
           };
           requestAnimationFrame(tick);
@@ -119,10 +179,7 @@ export default function WumpMap({
         return;
       }
       existing?.remove();
-      const marker = L.marker([lat, lng], { icon: wumpAvatarIcon(L, opts) }).addTo(map) as unknown as MarkerHandle & {
-        on: (ev: string, fn: () => void) => void;
-        setLatLng: (c: [number, number]) => void;
-      };
+      const marker = L.marker([lat, lng], { icon }).addTo(map) as unknown as MarkerHandle;
       marker.on?.("click", () => {
         if (!opts.me) onOpenPerson(id);
       });
@@ -136,16 +193,64 @@ export default function WumpMap({
         initial: name.slice(0, 1),
         me: true,
         label: "You",
+        heading: myHeading ?? null,
       });
+
+      // Accuracy circle
+      const r = Math.max(12, Math.min(myAccuracy ?? 40, 180));
+      if (accuracyRef.current) {
+        accuracyRef.current.setLatLng([myLat, myLng]);
+        accuracyRef.current.setRadius(r);
+      } else if (L.circle) {
+        accuracyRef.current = L.circle([myLat, myLng], {
+          radius: r,
+          color: "#38bdf8",
+          weight: 1,
+          fillColor: "#38bdf8",
+          fillOpacity: 0.12,
+          interactive: false,
+        }).addTo(map);
+      }
+
+      // Breadcrumb trail (last ~40 samples)
+      const last = trailPts.current[trailPts.current.length - 1];
+      if (!last || Math.hypot(last[0] - myLat, last[1] - myLng) > 0.00005) {
+        trailPts.current = [...trailPts.current.slice(-39), [myLat, myLng] as [number, number]];
+      }
+      if (trailPts.current.length >= 2) {
+        if (trailRef.current?.setLatLngs) {
+          trailRef.current.setLatLngs(trailPts.current);
+        } else {
+          trailRef.current?.remove();
+          trailRef.current = L.polyline(trailPts.current, {
+            color: "#38bdf8",
+            weight: 3,
+            opacity: 0.55,
+            lineCap: "round",
+          }).addTo(map) as { remove: () => void; setLatLngs?: (c: [number, number][]) => void };
+        }
+      }
+    } else {
+      accuracyRef.current?.remove();
+      accuracyRef.current = null;
+      trailRef.current?.remove();
+      trailRef.current = null;
+      trailPts.current = [];
     }
 
     for (const n of nearby) {
       const p = profiles[n.user_id];
       const name = p?.display_name || p?.username || "?";
+      const age = n.age_seconds ?? (n.updated_at ? (Date.now() - new Date(n.updated_at).getTime()) / 1000 : null);
+      const stale = age != null && age > 90;
+      const dist = formatMeters(n.meters);
+      const ageTxt = ageLabel(age);
       upsert(n.user_id, n.lat, n.lng, {
         color: p?.avatar_color || "#22c55a",
         initial: name.slice(0, 1),
-        label: formatMeters(n.meters),
+        label: ageTxt ? `${dist} · ${ageTxt}` : dist,
+        heading: n.heading ?? null,
+        stale,
       });
     }
 
@@ -156,24 +261,34 @@ export default function WumpMap({
       }
     }
 
-    const pts: [number, number][] = [];
-    if (live && myLat != null && myLng != null) pts.push([myLat, myLng]);
-    for (const n of nearby) pts.push([n.lat, n.lng]);
-    if (pts.length >= 2) {
+    // Camera: follow me OR one-shot fit when first going live (not after user pans)
+    if (followRef.current && live && myLat != null && myLng != null) {
+      map.setView([myLat, myLng], Math.max(map.getZoom?.() ?? 15, 15));
+    } else if (!userPannedRef.current && live && myLat != null && myLng != null && nearby.length) {
+      const pts: [number, number][] = [[myLat, myLng], ...nearby.map((n) => [n.lat, n.lng] as [number, number])];
       try {
-        map.fitBounds(pts, { padding: [48, 48], maxZoom: 16 });
+        map.fitBounds(pts, { padding: [56, 56], maxZoom: 16 });
       } catch {
         /* empty */
       }
-    } else if (pts.length === 1) {
-      map.setView(pts[0], 15);
     }
-  }, [ready, live, myLat, myLng, me, nearby, profiles, onOpenPerson]);
+  }, [ready, live, myLat, myLng, myHeading, myAccuracy, me, nearby, profiles, onOpenPerson, follow]);
 
   const recenter = () => {
+    userPannedRef.current = false;
+    setFollow(true);
+    followRef.current = true;
     if (myLat != null && myLng != null) mapRef.current?.setView([myLat, myLng], 16);
     else onGoLive?.();
   };
+
+  const cycleStyle = () => {
+    const order: WumpMapStyle[] = ["streets", "dark", "satellite"];
+    const next = order[(order.indexOf(mapStyle) + 1) % order.length]!;
+    setMapStyle(next);
+  };
+
+  const liveFriends = nearby.filter((n) => (n.age_seconds ?? 0) < 90).length;
 
   return (
     <div className="relative mx-auto aspect-[9/14] w-full max-w-md overflow-hidden rounded-[2rem] shadow-2xl ring-1 ring-black/10">
@@ -187,8 +302,9 @@ export default function WumpMap({
 
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-24 bg-gradient-to-b from-black/25 to-transparent" />
 
-      <div className="absolute top-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-600 shadow backdrop-blur">
-        {viewsToday} nearby · OSM map
+      <div className="absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-slate-600 shadow backdrop-blur">
+        <span className={cn("size-1.5 rounded-full", live ? "animate-pulse bg-emerald-500" : "bg-slate-300")} />
+        {live ? `${liveFriends} live · ${nearby.length} nearby` : `${viewsToday} on map`}
       </div>
 
       <div className="absolute top-3 right-3 z-10 flex flex-col items-center gap-2">
@@ -206,6 +322,15 @@ export default function WumpMap({
         >
           <Bell className="size-4" />
         </button>
+        <button
+          type="button"
+          onClick={cycleStyle}
+          className="grid size-10 place-items-center rounded-full bg-white/90 text-slate-600 shadow-lg backdrop-blur"
+          aria-label={`Map style: ${mapStyle}`}
+          title={`Map: ${mapStyle}`}
+        >
+          <Layers className="size-4" />
+        </button>
       </div>
 
       {!live && (
@@ -221,10 +346,14 @@ export default function WumpMap({
       <button
         type="button"
         onClick={recenter}
-        className="absolute bottom-28 left-4 z-10 grid size-11 place-items-center rounded-full bg-white text-sky-600 shadow-lg"
-        aria-label="Recenter"
+        className={cn(
+          "absolute bottom-28 left-4 z-10 grid size-11 place-items-center rounded-full shadow-lg",
+          follow ? "bg-sky-500 text-white" : "bg-white text-sky-600",
+        )}
+        aria-label={follow ? "Following you" : "Recenter / follow"}
+        title={follow ? "Following" : "Follow me"}
       >
-        <Crosshair className="size-5" />
+        {follow ? <LocateFixed className="size-5" /> : <Crosshair className="size-5" />}
       </button>
       <button
         type="button"
