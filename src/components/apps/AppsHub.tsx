@@ -14,6 +14,7 @@ import {
   ImageUpscale,
   KeyRound,
   Globe,
+  Link2,
   MapPin,
   Pipette,
   QrCode,
@@ -39,12 +40,14 @@ import Base64Lab from "./Base64Lab";
 import SpotifyTakedown from "@/components/music/SpotifyTakedown";
 import BumpHub from "@/components/bump/BumpHub";
 import BrowserHub from "@/components/browser/BrowserHub";
+import LinkBioHub, { openLinkBio } from "@/components/linkbio/LinkBioHub";
 import { openBump } from "@/lib/bump";
 import { openBrowser } from "@/lib/browser";
 
 type ToolId =
   | "bump"
   | "browser"
+  | "linkbio"
   | "image"
   | "pdf"
   | "music"
@@ -89,6 +92,15 @@ const TOOLS: {
     emoji: "🌐",
     iconSrc: "/browser-icon.png",
     Icon: Globe,
+  },
+  {
+    id: "linkbio",
+    name: "Nexus Link",
+    tag: "Link in bio · 999 themes · glow",
+    desc: "Side-project link-in-bio with login, Juice 999 themes, animated backgrounds, glowing names, and its own admin.",
+    bg: "linear-gradient(135deg,#a855f7,#4c1d95 50%,#0a0214)",
+    emoji: "🔗",
+    Icon: Link2,
   },
   {
     id: "image",
@@ -240,6 +252,13 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
       </div>
     );
   }
+  if (tool === "linkbio") {
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-[#07060f]">
+        <LinkBioHub mobile={mobile} onBack={backToGrid} />
+      </div>
+    );
+  }
   if (tool === "image") return <ImageStudio mobile={mobile} onBack={backToGrid} />;
   if (tool === "pdf") return <PdfEditor mobile={mobile} onBack={backToGrid} />;
   if (tool === "music") return <MusicCheck mobile={mobile} onBack={backToGrid} />;
@@ -329,6 +348,11 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
                   if (item.id === "browser") {
                     openBrowser();
                     setTool("browser");
+                    return;
+                  }
+                  if (item.id === "linkbio") {
+                    openLinkBio();
+                    setTool("linkbio");
                     return;
                   }
                   setTool(item.id);
