@@ -158,24 +158,36 @@ export async function placeName(lat: number, lng: number): Promise<string> {
 export type LMap = {
   setView: (c: [number, number], z: number) => LMap;
   on: (ev: string, fn: (e: { latlng: { lat: number; lng: number } }) => void) => void;
+  off?: (ev: string, fn?: (e?: unknown) => void) => void;
   invalidateSize: () => void;
   fitBounds: (b: [number, number][], o?: Record<string, unknown>) => void;
   remove: () => void;
+  getZoom?: () => number;
+  removeLayer?: (layer: unknown) => void;
+};
+export type LTileLayer = { addTo: (m: LMap) => LTileLayer; remove?: () => void };
+export type LCircle = {
+  addTo: (m: LMap) => LCircle;
+  remove: () => void;
+  setLatLng: (c: [number, number]) => void;
+  setRadius: (r: number) => void;
 };
 export type LeafletNS = {
   map: (el: HTMLElement, o?: Record<string, unknown>) => LMap;
-  tileLayer: (url: string, o?: Record<string, unknown>) => { addTo: (m: LMap) => unknown };
+  tileLayer: (url: string, o?: Record<string, unknown>) => LTileLayer;
   marker: (c: [number, number], o?: Record<string, unknown>) => {
     addTo: (m: LMap) => {
       remove: () => void;
       setLatLng: (c: [number, number]) => void;
       getLatLng: () => { lat: number; lng: number };
       on: (ev: string, fn: () => void) => void;
+      setIcon?: (icon: unknown) => void;
       bindTooltip?: (t: string, o?: Record<string, unknown>) => unknown;
     };
     remove: () => void;
   };
-  polyline: (c: [number, number][], o?: Record<string, unknown>) => { addTo: (m: LMap) => { remove: () => void } };
+  circle: (c: [number, number], o?: Record<string, unknown>) => LCircle;
+  polyline: (c: [number, number][], o?: Record<string, unknown>) => { addTo: (m: LMap) => { remove: () => void; setLatLngs?: (c: [number, number][]) => void } };
   divIcon: (o: Record<string, unknown>) => unknown;
 };
 let leafletP: Promise<LeafletNS> | null = null;
@@ -220,8 +232,34 @@ export function newMap(L: LeafletNS, el: HTMLElement): LMap {
   return m;
 }
 
+export type WumpMapStyle = "streets" | "dark" | "satellite";
+
+const WUMP_TILES: Record<WumpMapStyle, { url: string; attr: string; maxZoom: number }> = {
+  streets: {
+    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    attr: "© OpenStreetMap © CARTO",
+    maxZoom: 19,
+  },
+  dark: {
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    attr: "© OpenStreetMap © CARTO",
+    maxZoom: 19,
+  },
+  satellite: {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attr: "© Esri",
+    maxZoom: 18,
+  },
+};
+
 /** Wump live map — OSM/CARTO tiles, street-level default, zoom controls hidden (FABs own chrome). */
-export function newWumpMap(L: LeafletNS, el: HTMLElement, center: [number, number] = [47.5, 19.05], zoom = 14): LMap {
+export function newWumpMap(
+  L: LeafletNS,
+  el: HTMLElement,
+  center: [number, number] = [47.5, 19.05],
+  zoom = 14,
+  style: WumpMapStyle = "streets",
+): { map: LMap; setStyle: (s: WumpMapStyle) => void; style: () => WumpMapStyle } {
   const m = L.map(el, {
     worldCopyJump: true,
     minZoom: 2,
@@ -229,12 +267,27 @@ export function newWumpMap(L: LeafletNS, el: HTMLElement, center: [number, numbe
     zoomControl: false,
     attributionControl: true,
   }).setView(center, zoom);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-    attribution: "© OpenStreetMap © CARTO",
-    subdomains: "abcd",
-    maxZoom: 19,
-  }).addTo(m);
-  return m;
+  let current: WumpMapStyle = style;
+  let layer: LTileLayer | null = null;
+  const setStyle = (s: WumpMapStyle) => {
+    const t = WUMP_TILES[s] || WUMP_TILES.streets;
+    if (layer) {
+      try {
+        m.removeLayer?.(layer);
+        layer.remove?.();
+      } catch {
+        /* ignore */
+      }
+    }
+    layer = L.tileLayer(t.url, {
+      attribution: t.attr,
+      subdomains: "abcd",
+      maxZoom: t.maxZoom,
+    }).addTo(m);
+    current = s;
+  };
+  setStyle(style);
+  return { map: m, setStyle, style: () => current };
 }
 
 export const pinIcon = (L: LeafletNS, color: string, label = "") =>
@@ -245,21 +298,30 @@ export const pinIcon = (L: LeafletNS, color: string, label = "") =>
     html: `<div style="position:relative;width:28px;height:36px"><svg viewBox="0 0 28 36" width="28" height="36"><path d="M14 35s12-12.6 12-21A12 12 0 0 0 2 14c0 8.4 12 21 12 21z" fill="${color}" stroke="#fff" stroke-width="2.5"/></svg><span style="position:absolute;top:5px;left:0;width:28px;text-align:center;font:800 11px system-ui;color:#fff">${label}</span></div>`,
   });
 
-/** Round avatar pin for Wump friends on the live map */
-export const wumpAvatarIcon = (L: LeafletNS, opts: { color: string; initial: string; me?: boolean; label?: string }) => {
+/** Round avatar pin for Wump friends on the live map (optional heading cone + stale fade). */
+export const wumpAvatarIcon = (
+  L: LeafletNS,
+  opts: { color: string; initial: string; me?: boolean; label?: string; heading?: number | null; stale?: boolean },
+) => {
   const ring = opts.me ? "#38bdf8" : opts.color || "#22c55a";
+  const opacity = opts.stale ? 0.45 : 1;
   const sub = opts.label
     ? `<span style="position:absolute;left:50%;bottom:-14px;transform:translateX(-50%);white-space:nowrap;background:rgba(15,23,42,.85);color:#fff;font:700 9px system-ui;padding:1px 5px;border-radius:999px">${opts.label}</span>`
     : "";
+  const cone =
+    opts.heading != null && Number.isFinite(opts.heading)
+      ? `<div style="position:absolute;left:50%;top:50%;width:0;height:0;margin-left:-10px;margin-top:-28px;border-left:10px solid transparent;border-right:10px solid transparent;border-bottom:18px solid ${ring};opacity:.85;transform:rotate(${opts.heading}deg);transform-origin:10px 28px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))"></div>`
+      : "";
   return L.divIcon({
     className: "",
-    iconSize: [44, 44],
-    iconAnchor: [22, 22],
-    html: `<div style="position:relative;width:44px;height:44px">
-      <div style="width:44px;height:44px;border-radius:999px;background:${ring};box-shadow:0 4px 14px rgba(0,0,0,.35);display:grid;place-items:center;border:3px solid #fff">
+    iconSize: [44, 56],
+    iconAnchor: [22, 28],
+    html: `<div style="position:relative;width:44px;height:56px;opacity:${opacity}">
+      ${cone}
+      <div style="position:absolute;left:0;top:6px;width:44px;height:44px;border-radius:999px;background:${ring};box-shadow:0 4px 14px rgba(0,0,0,.35);display:grid;place-items:center;border:3px solid #fff">
         <span style="font:800 15px system-ui;color:#fff">${opts.initial.slice(0, 1).toUpperCase()}</span>
       </div>
-      ${opts.me ? `<span style="position:absolute;inset:-4px;border-radius:999px;border:2px solid #38bdf8;opacity:.55;animation:wump-pulse 1.6s ease-out infinite"></span>` : ""}
+      ${opts.me ? `<span style="position:absolute;left:-4px;top:2px;width:52px;height:52px;border-radius:999px;border:2px solid #38bdf8;opacity:.55;animation:wump-pulse 1.6s ease-out infinite"></span>` : ""}
       ${sub}
     </div>
     <style>@keyframes wump-pulse{0%{transform:scale(.92);opacity:.7}100%{transform:scale(1.35);opacity:0}}</style>`,

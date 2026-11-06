@@ -25,9 +25,10 @@ const config: CapacitorConfig = {
       "accounts.google.com",
       "*.google.com",
       "maps.apple.com",
-      // OpenStreetMap / CARTO tiles for the live Wump map
+      // OpenStreetMap / CARTO / Esri tiles for the live Wump map
       "*.basemaps.cartocdn.com",
       "*.tile.openstreetmap.org",
+      "server.arcgisonline.com",
       "unpkg.com",
       "cdn.jsdelivr.net",
     ],

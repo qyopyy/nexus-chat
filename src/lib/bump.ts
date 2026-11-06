@@ -18,6 +18,10 @@ export type BumpNearby = {
   label: string | null;
   updated_at: string;
   meters: number;
+  heading?: number | null;
+  speed_mps?: number | null;
+  expires_at?: string | null;
+  age_seconds?: number | null;
 };
 
 export type BumpProfile = {
@@ -96,6 +100,10 @@ export type BumpPresenceRow = {
   visible: BumpVisible;
   label: string | null;
   updated_at: string;
+  heading?: number | null;
+  speed_mps?: number | null;
+  battery_pct?: number | null;
+  expires_at?: string | null;
 };
 
 /** Restore Live state after refresh (own pin still on the server). */
@@ -179,13 +187,15 @@ export async function bumpPublish(visible: BumpVisible = "friends", label?: stri
       p_visible: visible,
       p_label: label ?? null,
       p_precision: priv.wump_precision,
+      p_heading: loc.heading,
+      p_speed: loc.speed,
     });
     if (error) {
       toast(errorText(error) || "Couldn't share location", "error");
       return null;
     }
     toast(loc.source === "capacitor" ? "Wump live — finding people nearby" : "Wump live", "success");
-    return data as { user_id: string; lat: number; lng: number; updated_at: string };
+    return data as BumpPresenceRow;
   } catch (e) {
     toast(e instanceof Error ? e.message : "Location failed", "error");
     return null;
@@ -427,24 +437,74 @@ export async function bumpShareLocationWithFriend(friendId: string, note?: strin
   }
 }
 
-/** Quiet republish for live heartbeat (no toast). */
+/** Quiet Live heartbeat via dedicated RPC (no toast). Falls back to bump_publish. */
 export async function bumpHeartbeat(visible: BumpVisible = "friends", label?: string | null) {
   try {
     const { loadWumpPrivacyLocal } = await import("./wumpPrivacy");
     const priv = loadWumpPrivacyLocal();
     if (!priv.wump_share_enabled) return false;
     const loc = await getDeviceLocation({ highAccuracy: false });
-    const { error } = await supabase.rpc("bump_publish", {
+    const { error } = await supabase.rpc("bump_heartbeat", {
+      p_lat: loc.lat,
+      p_lng: loc.lng,
+      p_accuracy: loc.accuracy,
+      p_heading: loc.heading,
+      p_speed: loc.speed,
+    });
+    if (!error) return true;
+    // Older DBs without bump_heartbeat — full publish
+    const { error: e2 } = await supabase.rpc("bump_publish", {
       p_lat: loc.lat,
       p_lng: loc.lng,
       p_accuracy: loc.accuracy,
       p_visible: visible,
       p_label: label?.trim() || null,
       p_precision: priv.wump_precision,
+      p_heading: loc.heading,
+      p_speed: loc.speed,
     });
-    return !error;
+    return !e2;
   } catch {
     return false;
+  }
+}
+
+/** Publish a known GPS sample (from watchPosition) without toast. */
+export async function bumpPublishSample(
+  loc: { lat: number; lng: number; accuracy: number | null; heading?: number | null; speed?: number | null },
+  visible: BumpVisible,
+  label?: string | null,
+) {
+  const { loadWumpPrivacyLocal } = await import("./wumpPrivacy");
+  const priv = loadWumpPrivacyLocal();
+  if (!priv.wump_share_enabled) return false;
+  const { error } = await supabase.rpc("bump_heartbeat", {
+    p_lat: loc.lat,
+    p_lng: loc.lng,
+    p_accuracy: loc.accuracy,
+    p_heading: loc.heading ?? null,
+    p_speed: loc.speed ?? null,
+  });
+  if (!error) return true;
+  const { error: e2 } = await supabase.rpc("bump_publish", {
+    p_lat: loc.lat,
+    p_lng: loc.lng,
+    p_accuracy: loc.accuracy,
+    p_visible: visible,
+    p_label: label?.trim() || null,
+    p_precision: priv.wump_precision,
+    p_heading: loc.heading ?? null,
+    p_speed: loc.speed ?? null,
+  });
+  return !e2;
+}
+
+/** Remove expired presence rows (best-effort). */
+export async function bumpExpireStale() {
+  try {
+    await supabase.rpc("bump_expire_stale");
+  } catch {
+    /* ignore */
   }
 }
 
