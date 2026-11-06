@@ -59,17 +59,36 @@ function movedEnough(lat: number, lng: number) {
   return Math.hypot(dLat, dLng) >= 8; // ≥ ~8 m
 }
 
+let lastGeocodeAt = 0;
+let lastGeocodeLat: number | null = null;
+let lastGeocodeLng: number | null = null;
+
+function shouldGeocode(lat: number, lng: number, force: boolean) {
+  if (force) return true;
+  if (lastGeocodeLat == null || lastGeocodeLng == null) return true;
+  if (Date.now() - lastGeocodeAt < 45_000) return false;
+  const dLat = (lat - lastGeocodeLat) * 111_320;
+  const dLng = (lng - lastGeocodeLng) * 111_320 * Math.cos((lat * Math.PI) / 180);
+  return Math.hypot(dLat, dLng) >= 80; // ~80 m before re-resolving place name
+}
+
 async function publishQuiet(loc: DeviceLocation, force = false) {
   const now = Date.now();
   const moving = (loc.speed != null && loc.speed >= MOVING_SPEED_MPS) || movedEnough(loc.lat, loc.lng);
   const throttle = moving ? WATCH_THROTTLE_MOVING_MS : WATCH_THROTTLE_IDLE_MS;
   if (!force && now - lastPublish < throttle) return;
   lastPublish = now;
+  const geocode = shouldGeocode(loc.lat, loc.lng, force);
+  if (geocode) {
+    lastGeocodeAt = now;
+    lastGeocodeLat = loc.lat;
+    lastGeocodeLng = loc.lng;
+  }
   lastLat = loc.lat;
   lastLng = loc.lng;
   const priv = loadWumpPrivacyLocal();
   if (!priv.wump_share_enabled) return;
-  const ok = await bumpPublishSample(loc, opts.visible, opts.label);
+  const ok = await bumpPublishSample(loc, opts.visible, opts.label, { geocode });
   if (ok) opts.onLocation?.(loc.lat, loc.lng, { heading: loc.heading, speed: loc.speed, accuracy: loc.accuracy });
 }
 
