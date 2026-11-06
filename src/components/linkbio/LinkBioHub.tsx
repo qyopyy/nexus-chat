@@ -224,11 +224,11 @@ export default function LinkBioHub({
                 </div>
                 <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <div className="rounded-xl bg-black/30 p-3">
-                    <div className="text-[11px] text-white/45">Views</div>
-                    <div className="font-mono text-xl font-black tabular-nums">{(stats?.views ?? page.view_count).toLocaleString()}</div>
+                    <div className="text-[11px] text-white/45">Views ({statsDays}d)</div>
+                    <div className="font-mono text-xl font-black tabular-nums">{(stats?.views_period ?? 0).toLocaleString()}</div>
                   </div>
                   <div className="rounded-xl bg-black/30 p-3">
-                    <div className="text-[11px] text-white/45">Clicks (7d)</div>
+                    <div className="text-[11px] text-white/45">Clicks ({statsDays}d)</div>
                     <div className="font-mono text-xl font-black tabular-nums">{(stats?.clicks ?? 0).toLocaleString()}</div>
                   </div>
                   <div className="rounded-xl bg-black/30 p-3">
