@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Aperture, Award, ExternalLink, Eye, Gavel, Heart, MessageCircle, Phone, ShieldCheck } from "lucide-react";
-import { openGram } from "@/lib/gram";
+import { Aperture, Award, Copy, Download, ExternalLink, Eye, Gavel, Heart, MessageCircle, Phone, QrCode, Share2, ShieldCheck } from "lucide-react";
+import QRCode from "qrcode";
+import { openGram, publicProfileUrl } from "@/lib/gram";
 import { useApp, openModal, toast } from "@/store/app";
 import { openDM } from "@/lib/data";
 import { startCall } from "@/lib/call";
@@ -11,6 +12,7 @@ import { supabase } from "@/lib/supabase";
 import { isBanned, isMuted, myRank } from "@/lib/admin";
 import { audienceWord, fmtCount, linkLabel, platformById, spotifyEmbed } from "@/lib/links";
 import { fetchLiveFollowers, followersCacheKey, supportsLiveFollowers } from "@/lib/followers";
+import { sanitizeDownloadName } from "@/lib/fileSafety";
 import type { ProfileLink } from "@/lib/types";
 import { BadgeToggles, ModerationControls } from "@/components/admin/ModTools";
 import { ROLE_INFO, roleRank, type SiteRole } from "@/lib/theme";
@@ -258,6 +260,8 @@ export function CardBody({ userId }: { userId: string }) {
         <div className="mt-1 text-sm">{new Date(p.created_at).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" })}</div>
         <div className="mt-1 text-xs text-sub">{statusLabel(status)}</div>
 
+        <ProfileShare username={p.username} links={links} />
+
         <button
           onClick={() => {
             close();
@@ -321,6 +325,98 @@ export function CardBody({ userId }: { userId: string }) {
       </div>
     </div>
       </div>
+    </div>
+  );
+}
+
+/** Copy public /u/ link + expandable QR (png download). Shows Nexus Link if a /bio/ URL is on the profile. */
+function ProfileShare({ username, links }: { username: string; links: ProfileLink[] }) {
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrData, setQrData] = useState<string | null>(null);
+  const profileUrl = publicProfileUrl(username);
+  const nexusLinkUrl = useMemo(() => links.find((l) => /\/bio\/[^/?#]+/i.test(l.url))?.url ?? null, [links]);
+
+  useEffect(() => {
+    if (!qrOpen) {
+      setQrData(null);
+      return;
+    }
+    let alive = true;
+    void QRCode.toDataURL(profileUrl, { margin: 1, width: 200, color: { dark: "#111318", light: "#ffffff" } })
+      .then((url) => {
+        if (alive) setQrData(url);
+      })
+      .catch(() => {
+        if (alive) {
+          setQrData(null);
+          toast("Couldn't make QR", "error");
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, [qrOpen, profileUrl]);
+
+  return (
+    <div className="mt-3 rounded-lg border border-white/10 p-2">
+      <div className="flex items-center gap-1.5 text-xs font-bold tracking-wide text-sub uppercase">
+        <Share2 className="size-3.5" /> Share
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            void navigator.clipboard?.writeText(profileUrl);
+            toast("Profile link copied", "success");
+          }}
+          className="flex items-center justify-center gap-1.5 rounded-lg bg-hover py-2 text-xs font-semibold hover:bg-active active:scale-[.98]"
+          title={profileUrl}
+        >
+          <Copy className="size-3.5" /> Copy link
+        </button>
+        <button
+          type="button"
+          onClick={() => setQrOpen((v) => !v)}
+          className={cn("flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold active:scale-[.98]", qrOpen ? "bg-accent/25 text-accent" : "bg-hover hover:bg-active")}
+        >
+          <QrCode className="size-3.5" /> {qrOpen ? "Hide QR" : "Show QR"}
+        </button>
+      </div>
+      {nexusLinkUrl && (
+        <a
+          href={nexusLinkUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="mt-2 flex items-center justify-center gap-1.5 rounded-lg bg-black/25 px-2 py-1.5 text-[11px] text-sub hover:bg-black/40 hover:text-txt"
+        >
+          <ExternalLink className="size-3" /> Nexus Link
+        </a>
+      )}
+      {qrOpen && (
+        <div className="mt-2 flex flex-col items-center gap-2 rounded-lg bg-black/25 p-3">
+          {qrData ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={qrData} alt={`QR for @${username}`} className="size-[140px] rounded-md bg-white p-1" />
+          ) : (
+            <div className="grid size-[140px] place-items-center rounded-md bg-white/10 text-xs text-sub">Generating…</div>
+          )}
+          <button
+            type="button"
+            disabled={!qrData}
+            onClick={() => {
+              if (!qrData) return;
+              const a = document.createElement("a");
+              a.href = qrData;
+              a.download = `${sanitizeDownloadName(username, "profile")}-qr.png`;
+              a.click();
+              toast("QR downloaded", "success");
+            }}
+            className="flex items-center gap-1.5 rounded-lg bg-hover px-3 py-1.5 text-xs font-semibold hover:bg-active disabled:opacity-50"
+          >
+            <Download className="size-3.5" /> Download PNG
+          </button>
+        </div>
+      )}
     </div>
   );
 }
