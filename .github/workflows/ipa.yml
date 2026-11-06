@@ -114,8 +114,9 @@ jobs:
         run: |
           cd ios/App
           APP=build/App.xcarchive/Products/Applications/App.app
-          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier hu.qyopy.nexus" "$APP/Info.plist" 2>/dev/null \
-            || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string hu.qyopy.nexus" "$APP/Info.plist"
+          # Match App Store Connect: Nexus - hu.qyopy.nexus.B44X8B76QR
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier hu.qyopy.nexus.B44X8B76QR" "$APP/Info.plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string hu.qyopy.nexus.B44X8B76QR" "$APP/Info.plist"
           # Uniquify Cordova / Capacitor plugin framework ids (Sideloadly DuplicateIdentifier)
           bash "$GITHUB_WORKSPACE/.github/scripts/fix-ios-framework-ids.sh" "$APP"
           rm -rf Payload && mkdir Payload
@@ -136,6 +137,8 @@ jobs:
           TAG="ios-${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" Nexus.ipa --repo "$GITHUB_REPOSITORY" \
             --title "Nexus iOS build ${GITHUB_RUN_NUMBER}" \
-            --notes "Unsigned IPA → install with Sideloadly using your Apple ID. Opens: ${NEXUS_URL}
-          
-          Updated shell with the current Nexus app icon (full AppIcon set from 1024px master)."
+            --notes "Bundle ID: hu.qyopy.nexus.B44X8B76QR (App Store Connect).
+
+          Unsigned IPA → Sideloadly / AltStore with your Apple ID. Opens: ${NEXUS_URL}
+
+          App Store / Transporter uploads need a separately signed Archive from Xcode (Distribution cert) — this artifact is not App Store–signed."
