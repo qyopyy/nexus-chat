@@ -5,6 +5,8 @@
   "description": "Native iOS + Android shells for Nexus (Capacitor). The apps load the live web app, so web deploys update them instantly.",
   "scripts": {
     "sync": "npx cap sync",
+    "sync:ios": "npx cap sync ios && python3 scripts/patch-ios-info-plist.py",
+    "patch:ios-plist": "python3 scripts/patch-ios-info-plist.py",
     "open:ios": "npx cap open ios",
     "open:android": "npx cap open android"
   },
