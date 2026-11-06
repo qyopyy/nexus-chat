@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { BrowserSearchHit } from "@/lib/browserTypes";
+import { parseBrowserDnsFromRequest, resolveDoh } from "@/lib/browserDns";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,20 +53,77 @@ function parseGoogleHtml(html: string): BrowserSearchHit[] {
   return hits;
 }
 
+function engineTarget(engine: string, q: string, custom?: string | null) {
+  switch (engine) {
+    case "bing":
+      return `https://www.bing.com/search?q=${encodeURIComponent(q)}`;
+    case "duckduckgo":
+      return `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`;
+    case "brave":
+      return `https://search.brave.com/search?q=${encodeURIComponent(q)}`;
+    case "startpage":
+      return `https://www.startpage.com/sp/search?query=${encodeURIComponent(q)}`;
+    case "ecosia":
+      return `https://www.ecosia.org/search?q=${encodeURIComponent(q)}`;
+    case "qwant":
+      return `https://www.qwant.com/?q=${encodeURIComponent(q)}`;
+    case "custom": {
+      const tpl = (custom || "https://duckduckgo.com/?q={q}").trim();
+      return tpl.includes("{q}") ? tpl.replaceAll("{q}", encodeURIComponent(q)) : `${tpl}${encodeURIComponent(q)}`;
+    }
+    default:
+      return `https://www.google.com/search?q=${encodeURIComponent(q)}&hl=en&gl=us&gbv=1&num=10`;
+  }
+}
+
+function parseGenericLinks(html: string): BrowserSearchHit[] {
+  const hits: BrowserSearchHit[] = [];
+  const seen = new Set<string>();
+  const re = /<a[^>]+href="(https?:\/\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) && hits.length < 12) {
+    const url = m[1];
+    if (seen.has(url)) continue;
+    if (/accounts\.|login\.|support\.|policies\./i.test(url)) continue;
+    const title = decodeHtml(m[2].replace(/<[^>]+>/g, "").trim());
+    if (!title || title.length < 3 || title.length > 200) continue;
+    seen.add(url);
+    hits.push({ title, url, snippet: "" });
+  }
+  return hits;
+}
+
 export async function GET(req: NextRequest) {
   const q = (req.nextUrl.searchParams.get("q") || "").trim().slice(0, 200);
   if (!q) return NextResponse.json({ error: "Missing q" }, { status: 400 });
 
   const engine = (req.nextUrl.searchParams.get("engine") || "google").toLowerCase();
-  const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(q)}&hl=en&gl=us&gbv=1&num=10`;
+  const custom = req.nextUrl.searchParams.get("custom");
+  const dns = parseBrowserDnsFromRequest(req.nextUrl.searchParams);
+  const target = engineTarget(engine, q, custom);
+  const openUrl = engine === "custom" ? target : engineTarget(engine === "duckduckgo" ? "duckduckgo" : engine, q, custom);
 
   try {
-    const target =
-      engine === "bing"
-        ? `https://www.bing.com/search?q=${encodeURIComponent(q)}`
-        : engine === "duckduckgo"
-          ? `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`
-          : googleUrl;
+    // Optional DNS health for the search host (does not rewrite the fetch IP — TLS-safe)
+    let dnsMeta: Awaited<ReturnType<typeof resolveDoh>> | null = null;
+    if (dns.endpoint) {
+      try {
+        dnsMeta = await resolveDoh(new URL(target).hostname, dns.endpoint, dns.dns);
+        if (dnsMeta.blocked) {
+          return NextResponse.json({
+            q,
+            engine,
+            google: openUrl,
+            results: [] as BrowserSearchHit[],
+            fetched: false,
+            dns: dnsMeta,
+            error: `Search host blocked by ${dns.dns === "nextdns" ? "NextDNS" : "DNS"}`,
+          });
+        }
+      } catch {
+        /* ignore dns probe */
+      }
+    }
 
     const res = await fetch(target, {
       headers: {
@@ -76,6 +134,7 @@ export async function GET(req: NextRequest) {
       },
       redirect: "follow",
       cache: "no-store",
+      signal: AbortSignal.timeout(12_000),
     });
     const html = await res.text();
     let results: BrowserSearchHit[] = [];
@@ -90,29 +149,39 @@ export async function GET(req: NextRequest) {
         const title = decodeHtml(m[2].replace(/<[^>]+>/g, "").trim());
         if (title && url) results.push({ title, url, snippet: "" });
       }
-    } else {
+    } else if (engine === "bing") {
       const re = /<h2[^>]*>\s*<a[^>]+href="(https?:\/\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
       let m: RegExpExecArray | null;
       while ((m = re.exec(html)) && results.length < 12) {
         if (/bing\.com|microsoft\.com/i.test(m[1])) continue;
         results.push({ title: decodeHtml(m[2].replace(/<[^>]+>/g, "").trim()), url: m[1], snippet: "" });
       }
+    } else {
+      results = parseGenericLinks(html).filter((h) => {
+        try {
+          const host = new URL(h.url).hostname;
+          return !/brave\.com$|startpage\.com$|ecosia\.org$|qwant\.com$|duckduckgo\.com$/i.test(host);
+        } catch {
+          return false;
+        }
+      });
     }
 
     return NextResponse.json({
       q,
-      engine: engine === "bing" || engine === "duckduckgo" ? engine : "google",
+      engine,
       source: target,
-      google: `https://www.google.com/search?q=${encodeURIComponent(q)}`,
+      google: openUrl,
       results,
       fetched: results.length > 0,
       status: res.status,
+      dns: dnsMeta,
     });
   } catch (e) {
     return NextResponse.json({
       q,
-      engine: "google",
-      google: `https://www.google.com/search?q=${encodeURIComponent(q)}`,
+      engine,
+      google: openUrl,
       results: [] as BrowserSearchHit[],
       fetched: false,
       error: e instanceof Error ? e.message : "Fetch failed",

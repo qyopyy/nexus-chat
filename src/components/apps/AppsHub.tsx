@@ -84,7 +84,7 @@ const TOOLS: {
     id: "browser",
     name: "Browser",
     tag: "Google search · fetch pages · IPA",
-    desc: "Built-in search browser — queries google.com on Nexus servers, opens results, bookmarks, and a standalone IPA.",
+    desc: "Private browser with Brave-style shields, NextDNS / custom DoH, search engines, bookmarks, and a standalone IPA.",
     bg: "linear-gradient(135deg,#60a5fa,#7c3aed 55%,#0b1220)",
     emoji: "🌐",
     iconSrc: "/browser-icon.png",
