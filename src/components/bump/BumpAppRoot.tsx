@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { startLiveUpdates } from "@/lib/liveUpdate";
+import { startCapgo } from "@/lib/capgo";
 import { mfaNeedsChallenge } from "@/lib/mfa";
 import { useApp } from "@/store/app";
 import { loadProfiles, refreshFriends } from "@/lib/data";
@@ -51,6 +52,7 @@ export default function BumpAppRoot() {
   );
 
   useEffect(() => startLiveUpdates(), []);
+  useEffect(() => startCapgo(), []);
   useRealtime(bootstrapped && userId && !needsMfa ? userId : null);
 
   useEffect(() => {

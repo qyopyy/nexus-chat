@@ -16,13 +16,15 @@ import { toast } from "@/store/app";
 import { musicGo } from "@/store/music";
 import { cn } from "@/lib/utils";
 import { sp, type SpTrack } from "@/lib/music";
+import { completeCode, drawUpcBars, sequentialBody, validateCode, type UpcMode } from "@/lib/upc";
 import { CheckView, ReportView, SplitEditor, printSplitSheet } from "./AudioBits";
 import type { Split } from "@/lib/types";
 
-export type ToolId = "isrc" | "takedown" | "analyzer" | "copyright" | "splits" | "tempo" | "tuner" | "royalties" | "master" | "vibe" | "visualizer" | "beats" | "convert" | "karaoke" | "scales";
+export type ToolId = "isrc" | "upc" | "takedown" | "analyzer" | "copyright" | "splits" | "tempo" | "tuner" | "royalties" | "master" | "vibe" | "visualizer" | "beats" | "convert" | "karaoke" | "scales";
 
 export const TOOLS: { id: ToolId; label: string; sub: string; color: string; icon: React.ReactNode }[] = [
   { id: "isrc", label: "Audia ISRC generator", sub: "Official QT6HV codes", color: "#1DB954", icon: <Barcode className="size-5" /> },
+  { id: "upc", label: "UPC / EAN generator", sub: "GS1 barcodes for releases", color: "#22c55e", icon: <Barcode className="size-5" /> },
   { id: "takedown", label: "Takedown notice", sub: "Spotify & Apple Music", color: "#E5484D", icon: <ShieldAlert className="size-5" /> },
   { id: "master", label: "Quick master", sub: "Loud, clean, streaming-ready", color: "#8B5CFF", icon: <SlidersHorizontal className="size-5" /> },
   { id: "vibe", label: "Slowed / sped up", sub: "Live remix: reverb, 8D, lo-fi", color: "#FF2BD6", icon: <Waves className="size-5" /> },
@@ -75,6 +77,7 @@ export default function ToolView({ tool }: { tool: ToolId }) {
         </div>
       </div>
       {tool === "isrc" && <IsrcTool />}
+      {tool === "upc" && <UpcTool />}
       {tool === "takedown" && <TakedownTool />}
       {tool === "analyzer" && <AnalyzerTool />}
       {tool === "copyright" && <AnalyzerTool copyrightFirst />}
@@ -524,6 +527,64 @@ function TunerTool() {
           <input type="number" min={415} max={466} value={ref} onChange={(e) => setRef(Math.max(415, Math.min(466, Number(e.target.value) || 440)))} className="w-16 rounded-lg border border-line bg-transparent px-2 py-1 text-txt outline-none" />
           Hz
         </label>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ UPC / EAN generator
+function UpcTool() {
+  const [mode, setMode] = useState<UpcMode>("upc-a");
+  const [prefix, setPrefix] = useState("860");
+  const [seq, setSeq] = useState(1);
+  const [manual, setManual] = useState("");
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const body = sequentialBody(mode, prefix, seq);
+  const generated = body ? completeCode(mode, body) : null;
+  const code = manual.trim() || generated || "";
+  const check = code ? validateCode(code) : null;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas && check?.ok) drawUpcBars(canvas, code);
+  }, [code, check?.ok]);
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-sub">Generate GS1 UPC-A (12) or EAN-13 barcodes with a valid check digit. Use your company prefix when you have one.</p>
+      <div className="flex flex-wrap gap-2">
+        {(["upc-a", "ean-13"] as UpcMode[]).map((m) => (
+          <button key={m} type="button" onClick={() => setMode(m)} className={cn("rounded-full px-3 py-1.5 text-xs font-bold uppercase", mode === m ? "bg-accent text-white" : "bg-hover text-sub")}>
+            {m === "upc-a" ? "UPC-A" : "EAN-13"}
+          </button>
+        ))}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="Company prefix" className="rounded-lg border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent" />
+        <input type="number" min={0} value={seq} onChange={(e) => setSeq(Math.max(0, Number(e.target.value) || 0))} className="rounded-lg border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent" />
+        <input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="Or paste a code to validate" className="rounded-lg border border-line bg-transparent px-3 py-2 font-mono text-sm outline-none focus:border-accent" />
+      </div>
+      <div className="rounded-2xl border border-line bg-side/60 p-4 text-center">
+        {check?.ok ? (
+          <>
+            <div className="mb-2 font-mono text-lg font-bold tracking-widest">{code}</div>
+            <canvas ref={canvasRef} className="mx-auto max-w-full rounded-lg bg-white" />
+          </>
+        ) : (
+          <p className="text-sm text-sub">{manual.trim() ? check?.reason || "Invalid" : "Set a prefix + sequence, or paste a code."}</p>
+        )}
+        <button
+          type="button"
+          className="mt-3 rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-40"
+          disabled={!check?.ok}
+          onClick={() => {
+            if (!check?.ok) return toast("Invalid UPC", "error");
+            void navigator.clipboard.writeText(code).then(() => toast("UPC copied", "success"));
+          }}
+        >
+          Copy code
+        </button>
       </div>
     </div>
   );

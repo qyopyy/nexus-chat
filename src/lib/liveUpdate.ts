@@ -6,10 +6,13 @@
  */
 
 import { isNativeApp } from "./useMobile";
+import { checkCapgoUpdate, notifyCapgoAppReady } from "./capgo";
 
 const KEY = "nexus.liveBuild";
 const CACHE_HOUR_KEY = "nexus.clientCacheHour";
-const POLL_MS = 45_000;
+/** Native shells poll aggressively so Capgo + Vercel deploys hit devices fast. */
+const POLL_MS_NATIVE = 12_000;
+const POLL_MS_WEB = 30_000;
 const HOUR_MS = 60 * 60_000;
 
 type Version = { build: string; short?: string };
@@ -69,9 +72,16 @@ export function startLiveUpdates() {
   let stopped = false;
   let timer: ReturnType<typeof setInterval> | null = null;
   const disarmChunk = armChunkReload();
+  const native = isNativeApp();
+  const pollMs = native ? POLL_MS_NATIVE : POLL_MS_WEB;
+
+  if (native) {
+    void notifyCapgoAppReady();
+  }
 
   const check = async () => {
     if (stopped) return;
+    if (native) void checkCapgoUpdate();
     const v = await fetchVersion();
     if (!v?.build || stopped) return;
     const prev = localStorage.getItem(KEY);
@@ -81,12 +91,15 @@ export function startLiveUpdates() {
     }
     if (prev !== v.build) {
       localStorage.setItem(KEY, v.build);
-      // Only auto-reload inside the native shell (or when explicitly asked)
-      if (isNativeApp() || sessionStorage.getItem("nexus.forceLiveReload") === "1") {
+      // Native shells + force flag: hard reload so realtime UI matches production.
+      if (native || sessionStorage.getItem("nexus.forceLiveReload") === "1") {
         reloadNow();
-      } else {
-        // Web tabs: soft signal — next full navigation picks up new assets
-        localStorage.setItem(KEY, v.build);
+        return;
+      }
+      // Web: apply on next focus so deploys feel live without interrupting mid-type.
+      sessionStorage.setItem("nexus.pendingLiveReload", "1");
+      if (document.visibilityState !== "visible") {
+        /* wait for focus */
       }
     }
   };
@@ -111,11 +124,16 @@ export function startLiveUpdates() {
 
   void check();
   clearClientCaches();
-  timer = setInterval(() => void check(), POLL_MS);
+  timer = setInterval(() => void check(), pollMs);
   const hourTimer = setInterval(() => clearClientCaches(), HOUR_MS);
 
   const onVis = () => {
     if (document.visibilityState === "visible") {
+      if (sessionStorage.getItem("nexus.pendingLiveReload") === "1") {
+        sessionStorage.removeItem("nexus.pendingLiveReload");
+        reloadNow();
+        return;
+      }
       void check();
       clearClientCaches();
     }

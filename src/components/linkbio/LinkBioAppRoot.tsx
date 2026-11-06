@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isConfigured } from "@/lib/supabase";
+import { startLiveUpdates } from "@/lib/liveUpdate";
+import { startCapgo } from "@/lib/capgo";
 import { mfaNeedsChallenge } from "@/lib/mfa";
 import { useApp } from "@/store/app";
 import { loadProfiles } from "@/lib/data";
@@ -20,6 +22,8 @@ export default function LinkBioAppRoot({ initialAdmin = false }: { initialAdmin?
   const [needsMfa, setNeedsMfa] = useState(false);
   const bootstrapped = useApp((s) => s.bootstrapped);
   const userId = session?.user?.id ?? null;
+  useEffect(() => startLiveUpdates(), []);
+  useEffect(() => startCapgo(), []);
   useRealtime(bootstrapped && userId && !needsMfa ? userId : null);
 
   useEffect(() => {
