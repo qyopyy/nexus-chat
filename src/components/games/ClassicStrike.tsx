@@ -1,18 +1,37 @@
 "use client";
 
 /**
- * Classic Strike — browser FPS homage to Counter-Strike 1.6.
- * Original map art & code (not Valve assets). Fan recreation of classic
- * bomb-defuse flow: buy menu, economy, sites, bots, pointer-lock aim.
- * Solo vs bots, or online peers via classicstrike/net (host round sync).
+ * Classic / Global Strike — same browser raycast engine.
+ * Classic = CS 1.6-style; Global = CS:GO-style loadout + HUD (original homage, not Valve assets).
+ * Solo vs bots or online peers via classicstrike/net. Full mobile virtual controls.
  */
 
 import { useEffect, useRef, useState } from "react";
 import { type GameProps } from "./common";
 import { peerPose, type CsNet } from "./classicstrike/net";
+import MobileControls from "./classicstrike/MobileControls";
+import { freshTouchCtl } from "./classicstrike/touchCtl";
 
 type Team = "T" | "CT";
-type WepId = "knife" | "glock" | "usp" | "deagle" | "ak47" | "m4a1" | "awp" | "he";
+export type StrikeEdition = "classic" | "global";
+type WepId =
+  | "knife"
+  | "glock"
+  | "usp"
+  | "p250"
+  | "deagle"
+  | "mac10"
+  | "mp9"
+  | "galil"
+  | "famas"
+  | "ak47"
+  | "m4a1"
+  | "aug"
+  | "awp"
+  | "ssg"
+  | "he"
+  | "flash"
+  | "zeus";
 
 type Wep = {
   id: WepId;
@@ -24,18 +43,33 @@ type Wep = {
   reserve: number;
   spread: number;
   team?: Team;
+  /** classic-only or global-only; omit = both */
+  edition?: StrikeEdition;
 };
 
 const ARSENAL: Wep[] = [
   { id: "knife", name: "Knife", price: 0, dmg: 55, rpm: 400, mag: 1, reserve: 0, spread: 0 },
-  { id: "glock", name: "Glock-18", price: 400, dmg: 25, rpm: 150, mag: 20, reserve: 120, spread: 0.045, team: "T" },
-  { id: "usp", name: "USP-45", price: 500, dmg: 30, rpm: 170, mag: 12, reserve: 100, spread: 0.03, team: "CT" },
-  { id: "deagle", name: "Desert Eagle", price: 650, dmg: 54, rpm: 350, mag: 7, reserve: 35, spread: 0.02 },
-  { id: "ak47", name: "AK-47", price: 2500, dmg: 36, rpm: 100, mag: 30, reserve: 90, spread: 0.035, team: "T" },
-  { id: "m4a1", name: "M4A1", price: 3100, dmg: 32, rpm: 90, mag: 30, reserve: 90, spread: 0.025, team: "CT" },
+  { id: "glock", name: "Glock-18", price: 200, dmg: 25, rpm: 150, mag: 20, reserve: 120, spread: 0.045, team: "T" },
+  { id: "usp", name: "USP-S", price: 200, dmg: 30, rpm: 170, mag: 12, reserve: 100, spread: 0.03, team: "CT" },
+  { id: "p250", name: "P250", price: 300, dmg: 28, rpm: 160, mag: 13, reserve: 52, spread: 0.035, edition: "global" },
+  { id: "deagle", name: "Desert Eagle", price: 700, dmg: 54, rpm: 350, mag: 7, reserve: 35, spread: 0.02 },
+  { id: "mac10", name: "MAC-10", price: 1050, dmg: 26, rpm: 70, mag: 30, reserve: 100, spread: 0.055, team: "T", edition: "global" },
+  { id: "mp9", name: "MP9", price: 1250, dmg: 24, rpm: 65, mag: 30, reserve: 120, spread: 0.04, team: "CT", edition: "global" },
+  { id: "galil", name: "Galil AR", price: 1800, dmg: 30, rpm: 95, mag: 35, reserve: 90, spread: 0.04, team: "T", edition: "global" },
+  { id: "famas", name: "FAMAS", price: 2050, dmg: 28, rpm: 90, mag: 25, reserve: 90, spread: 0.03, team: "CT", edition: "global" },
+  { id: "ak47", name: "AK-47", price: 2700, dmg: 36, rpm: 100, mag: 30, reserve: 90, spread: 0.035, team: "T" },
+  { id: "m4a1", name: "M4A4", price: 3100, dmg: 32, rpm: 90, mag: 30, reserve: 90, spread: 0.025, team: "CT" },
+  { id: "aug", name: "AUG", price: 3300, dmg: 33, rpm: 95, mag: 30, reserve: 90, spread: 0.02, team: "CT", edition: "global" },
+  { id: "ssg", name: "SSG 08", price: 1700, dmg: 88, rpm: 1200, mag: 10, reserve: 90, spread: 0.004, edition: "global" },
   { id: "awp", name: "AWP", price: 4750, dmg: 110, rpm: 1400, mag: 10, reserve: 30, spread: 0.001 },
+  { id: "zeus", name: "Zeus x27", price: 200, dmg: 100, rpm: 900, mag: 1, reserve: 0, spread: 0.01, edition: "global" },
   { id: "he", name: "HE Grenade", price: 300, dmg: 80, rpm: 800, mag: 1, reserve: 0, spread: 0.08 },
+  { id: "flash", name: "Flashbang", price: 200, dmg: 0, rpm: 800, mag: 1, reserve: 0, spread: 0.1, edition: "global" },
 ];
+
+function arsenalFor(edition: StrikeEdition) {
+  return ARSENAL.filter((w) => !w.edition || w.edition === edition);
+}
 
 // Dust2-inspired grid (1 wall, 0 floor, 2 site A, 3 site B, 4 T spawn, 5 CT spawn)
 const MAP: number[][] = [
@@ -82,19 +116,32 @@ export type ClassicStrikeProps = GameProps & {
   net?: CsNet | null;
   playerName?: string;
   initialTeam?: Team;
+  /** classic = 1.6 homage; global = CS:GO-style loadout on the same engine */
+  edition?: StrikeEdition;
 };
 
-export default function ClassicStrike({ onOver, onScore, mode = "solo", net = null, playerName = "You", initialTeam = "T" }: ClassicStrikeProps) {
+export default function ClassicStrike({
+  onOver,
+  onScore,
+  mode = "solo",
+  net = null,
+  playerName = "You",
+  initialTeam = "T",
+  edition = "classic",
+}: ClassicStrikeProps) {
   const online = mode === "online" && !!net;
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const touchCtl = useRef(freshTouchCtl());
+  const isTouch =
+    typeof window !== "undefined" && (navigator.maxTouchPoints > 0 || "ontouchstart" in window);
   const [hud, setHud] = useState({
     hp: 100,
     armor: 0,
-    money: 800,
+    money: edition === "global" ? 800 : 800,
     kills: 0,
     deaths: 0,
     round: 1,
-    time: 15,
+    time: edition === "global" ? 20 : 15,
     phase: "buy" as Phase,
     wep: (initialTeam === "CT" ? "usp" : "glock") as WepId,
     ammo: initialTeam === "CT" ? 12 : 20,
@@ -103,17 +150,24 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
     buyOpen: true,
     bomb: false,
     planted: false,
-    msg: "BUY TIME — press B · WASD move · click to lock mouse",
+    onSite: false,
+    msg: isTouch
+      ? "BUY TIME — use BUY · stick to move · FIRE to shoot"
+      : "BUY TIME — press B · WASD move · click to lock mouse",
   });
   const hudRef = useRef(hud);
   hudRef.current = hud;
   const [roster, setRoster] = useState<{ id: string; name: string; team: Team }[]>([]);
+  const [buySheet, setBuySheet] = useState(true);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    const pool = arsenalFor(edition);
+    const wepOf = (id: WepId) => pool.find((w) => w.id === id) || pool[0]!;
+    const ctl = touchCtl.current;
 
     let w = 0;
     let h = 0;
@@ -200,8 +254,9 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
       bombPlanted = false;
       defuse = 0;
       phase = "buy";
-      phaseT = 15;
+      phaseT = edition === "global" ? 20 : 15;
       buyOpen = true;
+      setBuySheet(true);
       bots.length = 0;
       // Keep peer placeholders; refill AI bots for empty slots
       const peerIds = onlineMode && net ? [...net.peers.keys()] : [];
@@ -277,13 +332,19 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
       if (!solid(player.x, ny)) player.y = ny;
     };
 
-    const wepOf = (id: WepId) => ARSENAL.find((w) => w.id === id)!;
-
     const shoot = (from: "p" | "b", x: number, y: number, a: number, team: Team, wid: WepId, opts?: { silent?: boolean }) => {
       const wp = wepOf(wid);
+      if (wid === "flash") {
+        flash = Math.max(flash, 1.1);
+        if (onlineMode && net && from === "p" && !opts?.silent) {
+          net.shot({ x, y, a, team, wep: wid, dmg: 0 });
+        }
+        return;
+      }
       const spread = (Math.random() - 0.5) * wp.spread * 2;
       const ang = a + spread;
-      bullets.push({ x, y, a: ang, life: wid === "awp" ? 80 : 45, dmg: wp.dmg, from, team });
+      const life = wid === "awp" || wid === "ssg" ? 80 : wid === "zeus" ? 12 : 45;
+      bullets.push({ x, y, a: ang, life, dmg: wp.dmg, from, team });
       if (onlineMode && net && from === "p" && !opts?.silent) {
         net.shot({ x, y, a: ang, team, wep: wid, dmg: wp.dmg });
       }
@@ -336,7 +397,10 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
     const onKey = (e: KeyboardEvent) => {
       keys[e.code] = e.type === "keydown";
       if (e.type === "keydown") {
-        if (e.code === "KeyB") buyOpen = !buyOpen && phase === "buy";
+        if (e.code === "KeyB") {
+          buyOpen = !buyOpen && phase === "buy";
+          setBuySheet(!!buyOpen);
+        }
         if (e.code === "KeyR" && player.reserve > 0) {
           const wp = wepOf(player.wep);
           const need = wp.mag - player.mag;
@@ -348,7 +412,7 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
           const d = Math.hypot(player.x - bombX, player.y - bombY);
           if (d < 0.8) defuse = Math.min(10, defuse + 0.35);
         }
-        if (e.code === "Digit5" || e.code === "KeyG") {
+        if (e.code === "KeyG") {
           // plant if on site as T
           if (player.team === "T" && phase === "live" && !bombPlanted) {
             const ix = Math.floor(player.x);
@@ -371,17 +435,33 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
           }
         }
         if (phase === "buy" && buyOpen) {
-          if (e.code === "Digit1") buy(player.team === "T" ? "glock" : "usp");
-          if (e.code === "Digit2") buy("deagle");
-          if (e.code === "Digit3") buy(player.team === "T" ? "ak47" : "m4a1");
-          if (e.code === "Digit4") buy("awp");
-          if (e.code === "Digit6") {
-            if (player.money >= 650) {
-              player.money -= 650;
-              player.armor = 100;
-              msg = "Kevlar + Helmet";
-              msgT = 1;
-            }
+          const slots: (WepId | "armor")[] =
+            edition === "global"
+              ? [
+                  player.team === "T" ? "glock" : "usp",
+                  "p250",
+                  "deagle",
+                  player.team === "T" ? "mac10" : "mp9",
+                  player.team === "T" ? "galil" : "famas",
+                  player.team === "T" ? "ak47" : "aug",
+                  "ssg",
+                  "awp",
+                  "zeus",
+                  "armor",
+                ]
+              : [player.team === "T" ? "glock" : "usp", "deagle", player.team === "T" ? "ak47" : "m4a1", "awp", "armor"];
+          const digit = Number(e.code.replace("Digit", ""));
+          if (digit >= 1 && digit <= slots.length) {
+            const pick = slots[digit - 1];
+            if (pick === "armor") {
+              const cost = edition === "global" ? 1000 : 650;
+              if (player.money >= cost) {
+                player.money -= cost;
+                player.armor = 100;
+                msg = "Kevlar + Helmet";
+                msgT = 1;
+              }
+            } else buy(pick);
           }
         }
         if (e.code === "KeyT") {
@@ -405,20 +485,23 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKey);
 
-    const onClick = async () => {
-      if (!pointerLocked) {
-        try {
-          await canvas.requestPointerLock();
-        } catch {
-          /* mobile */
-        }
-      }
+    const tryFire = () => {
       if (phase === "buy") return;
       if (player.cool > 0 || player.mag <= 0 || player.hp <= 0) return;
       const wp = wepOf(player.wep);
       player.cool = wp.rpm / 1000;
       player.mag--;
       shoot("p", player.x, player.y, player.a, player.team, player.wep);
+    };
+    const onClick = async () => {
+      if (!isTouch && !pointerLocked) {
+        try {
+          await canvas.requestPointerLock();
+        } catch {
+          /* */
+        }
+      }
+      if (!isTouch) tryFire();
     };
     canvas.addEventListener("click", onClick);
     const onMouse = (e: MouseEvent) => {
@@ -431,9 +514,10 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
       pointerLocked = document.pointerLockElement === canvas;
     });
 
-    // touch look / fire
+    // Legacy canvas touch fallback when overlay isn't used
     let touchX = 0;
     const onTouchMove = (e: TouchEvent) => {
+      if (isTouch) return;
       if (!e.touches[0]) return;
       const dx = e.touches[0].clientX - touchX;
       touchX = e.touches[0].clientX;
@@ -441,8 +525,9 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
       e.preventDefault();
     };
     const onTouchStart = (e: TouchEvent) => {
+      if (isTouch) return;
       touchX = e.touches[0]?.clientX ?? 0;
-      if (e.touches.length > 1) onClick();
+      if (e.touches.length > 1) tryFire();
     };
     canvas.addEventListener("touchmove", onTouchMove, { passive: false });
     canvas.addEventListener("touchstart", onTouchStart);
@@ -534,6 +619,9 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
 
     let last = performance.now();
     const syncHud = () => {
+      const ix = Math.floor(player.x);
+      const iy = Math.floor(player.y);
+      const cell = MAP[iy]?.[ix];
       const next = {
         hp: Math.max(0, Math.ceil(player.hp)),
         armor: player.armor,
@@ -550,6 +638,7 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
         buyOpen,
         bomb: player.team === "T",
         planted: bombPlanted,
+        onSite: cell === 2 || cell === 3,
         msg,
       };
       setHud(next);
@@ -595,7 +684,93 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
         }
       }
 
-      // movement
+      // apply touch look / actions
+      if (ctl.look) {
+        player.a += ctl.look;
+        ctl.look = 0;
+      }
+      if (ctl.fire) tryFire();
+      if (ctl.reload) {
+        ctl.reload = false;
+        if (player.reserve > 0) {
+          const wp = wepOf(player.wep);
+          const need = wp.mag - player.mag;
+          const take = Math.min(need, player.reserve);
+          player.mag += take;
+          player.reserve -= take;
+        }
+      }
+      if (ctl.plant && player.team === "T" && phase === "live" && !bombPlanted) {
+        ctl.plant = false;
+        const ix = Math.floor(player.x);
+        const iy = Math.floor(player.y);
+        if (MAP[iy]?.[ix] === 2 || MAP[iy]?.[ix] === 3) {
+          bombPlanted = true;
+          bombX = player.x;
+          bombY = player.y;
+          bombT = 40;
+          phase = "planted";
+          phaseT = 40;
+          player.score += 300;
+          msg = "BOMB PLANTED";
+          msgT = 2;
+          if (onlineMode && net) {
+            net.plant(bombX, bombY, bombT);
+            broadcastRound();
+          }
+        }
+      }
+      if (ctl.defuse && bombPlanted && player.team === "CT") {
+        const d = Math.hypot(player.x - bombX, player.y - bombY);
+        if (d < 0.8) defuse = Math.min(10, defuse + dt * 1.15);
+      }
+      if (ctl.buyToggle) {
+        ctl.buyToggle = false;
+        if (phase === "buy") {
+          buyOpen = !buyOpen;
+          setBuySheet(buyOpen);
+        }
+      }
+      if (ctl.buySlot != null && phase === "buy") {
+        const slots: (WepId | "armor")[] =
+          edition === "global"
+            ? [
+                player.team === "T" ? "glock" : "usp",
+                "p250",
+                "deagle",
+                player.team === "T" ? "mac10" : "mp9",
+                player.team === "T" ? "galil" : "famas",
+                player.team === "T" ? "ak47" : "aug",
+                "ssg",
+                "awp",
+                "zeus",
+                "armor",
+              ]
+            : [player.team === "T" ? "glock" : "usp", "deagle", player.team === "T" ? "ak47" : "m4a1", "awp", "armor"];
+        const pick = slots[ctl.buySlot];
+        ctl.buySlot = null;
+        if (pick === "armor") {
+          const cost = edition === "global" ? 1000 : 650;
+          if (player.money >= cost) {
+            player.money -= cost;
+            player.armor = 100;
+            msg = "Kevlar + Helmet";
+            msgT = 1;
+          }
+        } else if (pick) buy(pick);
+      }
+      if (ctl.armor) {
+        ctl.armor = false;
+        const cost = edition === "global" ? 1000 : 650;
+        if (phase === "buy" && player.money >= cost) {
+          player.money -= cost;
+          player.armor = 100;
+          msg = "Kevlar + Helmet";
+          msgT = 1;
+        }
+      }
+
+      // movement (keyboard + virtual stick)
       if (player.hp > 0) {
         const sp = keys.ShiftLeft || keys.ShiftRight ? 2.6 : 3.4;
         let mx = 0;
@@ -615,6 +790,11 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
         if (keys.KeyD) {
           mx += Math.cos(player.a + Math.PI / 2);
           my += Math.sin(player.a + Math.PI / 2);
+        }
+        // stick: my = forward, mx = strafe
+        if (ctl.my || ctl.mx) {
+          mx += Math.cos(player.a) * ctl.my + Math.cos(player.a + Math.PI / 2) * ctl.mx;
+          my += Math.sin(player.a) * ctl.my + Math.sin(player.a + Math.PI / 2) * ctl.mx;
         }
         const len = Math.hypot(mx, my) || 1;
         tryMove(player.x + (mx / len) * sp * dt, player.y + (my / len) * sp * dt);
@@ -944,33 +1124,44 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
         ctx.fillRect(0, 0, w, h);
       }
 
-      if (buyOpen && phase === "buy") {
+      // Desktop buy overlay (touch uses HTML sheet)
+      if (buyOpen && phase === "buy" && !isTouch) {
         ctx.fillStyle = "rgba(0,0,0,0.72)";
-        ctx.fillRect(w * 0.15, h * 0.18, w * 0.7, h * 0.55);
-        ctx.strokeStyle = "#fbbf24";
-        ctx.strokeRect(w * 0.15, h * 0.18, w * 0.7, h * 0.55);
-        ctx.fillStyle = "#fbbf24";
+        ctx.fillRect(w * 0.12, h * 0.12, w * 0.76, h * 0.7);
+        ctx.strokeStyle = edition === "global" ? "#f97316" : "#fbbf24";
+        ctx.strokeRect(w * 0.12, h * 0.12, w * 0.76, h * 0.7);
+        ctx.fillStyle = edition === "global" ? "#f97316" : "#fbbf24";
         ctx.font = "bold 18px monospace";
         ctx.textAlign = "left";
-        ctx.fillText("BUY MENU  (B to close)", w * 0.18, h * 0.24);
-        ctx.font = "13px monospace";
+        ctx.fillText(edition === "global" ? "GLOBAL BUY (B)" : "BUY MENU  (B to close)", w * 0.15, h * 0.18);
+        ctx.font = "12px monospace";
         ctx.fillStyle = "#e7e5e4";
-        const lines = [
-          `1  ${player.team === "T" ? "Glock-18" : "USP-45"}`,
-          "2  Desert Eagle   $650",
-          `3  ${player.team === "T" ? "AK-47 $2500" : "M4A1 $3100"}`,
-          "4  AWP            $4750",
-          "6  Kevlar+Helmet  $650",
-          "G/5 Plant bomb on site (T)",
-          "E  Defuse (CT, hold near bomb)",
-          "T / C  Switch team",
-        ];
-        lines.forEach((l, i) => ctx.fillText(l, w * 0.18, h * 0.3 + i * 22));
+        const lines =
+          edition === "global"
+            ? [
+                `1  ${player.team === "T" ? "Glock-18" : "USP-S"}`,
+                "2  P250 $300",
+                "3  Desert Eagle $700",
+                `4  ${player.team === "T" ? "MAC-10 $1050" : "MP9 $1250"}`,
+                `5  ${player.team === "T" ? "Galil $1800" : "FAMAS $2050"}`,
+                `6  ${player.team === "T" ? "AK-47 $2700" : "AUG $3300"}`,
+                "7  SSG 08 $1700",
+                "8  AWP $4750",
+                "9  Zeus $200   0  Armor $1000",
+              ]
+            : [
+                `1  ${player.team === "T" ? "Glock-18" : "USP-S"}`,
+                "2  Desert Eagle   $700",
+                `3  ${player.team === "T" ? "AK-47 $2700" : "M4A4 $3100"}`,
+                "4  AWP            $4750",
+                "5  Kevlar+Helmet  $650",
+              ];
+        lines.forEach((l, i) => ctx.fillText(l, w * 0.15, h * 0.24 + i * 20));
         ctx.fillStyle = "#a3e635";
-        ctx.fillText(`Money $${player.money}`, w * 0.18, h * 0.68);
+        ctx.fillText(`Money $${player.money}`, w * 0.15, h * 0.76);
       }
 
-      if (!pointerLocked && !buyOpen) {
+      if (!pointerLocked && !buyOpen && !isTouch) {
         ctx.fillStyle = "rgba(0,0,0,0.5)";
         ctx.fillRect(0, h * 0.42, w, 36);
         ctx.fillStyle = "#fff";
@@ -996,15 +1187,80 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
       canvas.removeEventListener("touchstart", onTouchStart);
       if (document.pointerLockElement === canvas) document.exitPointerLock();
     };
-  }, [onOver, onScore, mode, net, playerName, initialTeam]);
+  }, [onOver, onScore, mode, net, playerName, initialTeam, edition, isTouch]);
+
+  const buyItems =
+    edition === "global"
+      ? [
+          { slot: 0, label: hud.team === "T" ? "Glock" : "USP-S", price: 200 },
+          { slot: 1, label: "P250", price: 300 },
+          { slot: 2, label: "Deagle", price: 700 },
+          { slot: 3, label: hud.team === "T" ? "MAC-10" : "MP9", price: hud.team === "T" ? 1050 : 1250 },
+          { slot: 4, label: hud.team === "T" ? "Galil" : "FAMAS", price: hud.team === "T" ? 1800 : 2050 },
+          { slot: 5, label: hud.team === "T" ? "AK-47" : "AUG", price: hud.team === "T" ? 2700 : 3300 },
+          { slot: 6, label: "SSG 08", price: 1700 },
+          { slot: 7, label: "AWP", price: 4750 },
+          { slot: 8, label: "Zeus", price: 200 },
+          { slot: 9, label: "Armor", price: 1000 },
+        ]
+      : [
+          { slot: 0, label: hud.team === "T" ? "Glock" : "USP-S", price: 200 },
+          { slot: 1, label: "Deagle", price: 700 },
+          { slot: 2, label: hud.team === "T" ? "AK-47" : "M4A4", price: hud.team === "T" ? 2700 : 3100 },
+          { slot: 3, label: "AWP", price: 4750 },
+          { slot: 4, label: "Armor", price: 650 },
+        ];
 
   return (
-    <div className="relative size-full min-h-[360px] bg-black select-none">
+    <div className="relative size-full min-h-[360px] overflow-hidden bg-black select-none">
       <canvas ref={canvasRef} className="size-full touch-none" />
-      {/* HUD chrome */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/80 to-transparent p-3 text-white">
+      {isTouch && (
+        <MobileControls
+          ctl={touchCtl}
+          team={hud.team}
+          canPlant={hud.team === "T" && hud.phase === "live" && !hud.planted && hud.onSite}
+          canDefuse={hud.team === "CT" && hud.planted}
+          buyOpen={buySheet && hud.phase === "buy"}
+          onBuyOpen={() => {
+            touchCtl.current.buyToggle = true;
+            setBuySheet((v) => !v);
+          }}
+        />
+      )}
+      {/* Touch buy sheet */}
+      {isTouch && buySheet && hud.phase === "buy" && (
+        <div className="absolute inset-x-0 top-12 bottom-40 z-30 flex flex-col bg-black/80 px-3 py-2 backdrop-blur-sm">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="font-mono text-sm font-black text-orange-300">{edition === "global" ? "GLOBAL BUY" : "BUY MENU"}</div>
+            <div className="font-mono text-sm text-lime-300">${hud.money}</div>
+          </div>
+          <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3">
+            {buyItems.map((it) => (
+              <button
+                key={it.slot}
+                type="button"
+                disabled={hud.money < it.price}
+                onClick={() => {
+                  touchCtl.current.buySlot = it.slot;
+                }}
+                className="rounded-2xl bg-white/10 px-3 py-3 text-left active:bg-orange-500/40 disabled:opacity-40"
+              >
+                <div className="text-sm font-bold text-white">{it.label}</div>
+                <div className="font-mono text-xs text-amber-300">${it.price}</div>
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={() => setBuySheet(false)} className="mt-2 rounded-full bg-lime-500 py-2.5 text-sm font-black text-black">
+            Close buy · start round
+          </button>
+        </div>
+      )}
+      {/* HUD chrome — lifted on phones so it clears the virtual pads */}
+      <div
+        className={`pointer-events-none absolute inset-x-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/85 to-transparent text-white ${isTouch ? "bottom-[7.5rem] px-2 pb-1" : "bottom-0 p-3"}`}
+      >
         <div>
-          <div className="font-mono text-2xl font-black tabular-nums">
+          <div className={`font-mono font-black tabular-nums ${isTouch ? "text-xl" : "text-2xl"}`}>
             <span className={hud.hp < 30 ? "text-red-400" : "text-white"}>{hud.hp}</span>
             <span className="text-sm text-white/50"> HP</span>
             {hud.armor > 0 && <span className="ml-2 text-sky-300">{hud.armor} AP</span>}
@@ -1017,12 +1273,12 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
             {Math.floor(hud.time / 60)}:{String(hud.time % 60).padStart(2, "0")}
           </div>
           <div className="text-[10px] font-bold tracking-widest text-white/60 uppercase">
-            Round {hud.round}/8 · {hud.team} · {hud.phase}
+            {edition === "global" ? "GLOBAL" : "CLASSIC"} · Round {hud.round}/8 · {hud.team}
           </div>
           {hud.msg && <div className="mt-1 text-xs font-bold text-amber-200">{hud.msg}</div>}
         </div>
         <div className="text-right">
-          <div className="font-mono text-sm font-bold">{ARSENAL.find((w) => w.id === hud.wep)?.name}</div>
+          <div className="font-mono text-sm font-bold">{arsenalFor(edition).find((w) => w.id === hud.wep)?.name}</div>
           <div className="font-mono text-xl tabular-nums">
             {hud.ammo}
             <span className="text-sm text-white/50">/{hud.reserve}</span>
@@ -1033,7 +1289,7 @@ export default function ClassicStrike({ onOver, onScore, mode = "solo", net = nu
         </div>
       </div>
       <div className="pointer-events-none absolute top-2 right-2 rounded bg-black/50 px-2 py-1 text-[10px] text-white/70">
-        Fan homage · not affiliated with Valve
+        {edition === "global" ? "Global Strike" : "Classic Strike"} · fan homage · not Valve
         {online && roster.length > 0 && (
           <div className="mt-1 space-y-0.5 text-left font-mono text-[10px] text-lime-300/90">
             {roster.map((p) => (

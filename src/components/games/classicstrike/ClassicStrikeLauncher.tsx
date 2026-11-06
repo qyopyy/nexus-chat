@@ -12,13 +12,24 @@ import { roomLink } from "@/lib/room";
 import { sendGameInvites } from "@/lib/gameInvites";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
-import ClassicStrike from "../ClassicStrike";
+import ClassicStrike, { type StrikeEdition } from "../ClassicStrike";
 import { joinRoom, newCode, validCode, type CsNet, type Team } from "./net";
+import type { GameId } from "@/lib/games";
+import type { RoomGame } from "@/store/games";
 
-export default function ClassicStrikeLauncher({ onBack, mobile }: { onBack: () => void; mobile?: boolean }) {
+export default function ClassicStrikeLauncher({
+  onBack,
+  mobile,
+  edition = "classic",
+}: {
+  onBack: () => void;
+  mobile?: boolean;
+  edition?: StrikeEdition;
+}) {
   const me = useApp((s) => s.userId)!;
   const myName = useApp((s) => s.profiles[s.userId ?? ""]?.display_name ?? "Player");
-  const pending = useGames((s) => (s.joinGame === "classicstrike" ? s.joinCode : null));
+  const gameId = (edition === "global" ? "globalstrike" : "classicstrike") as GameId & RoomGame;
+  const pending = useGames((s) => (s.joinGame === gameId ? s.joinCode : null));
   const [team, setTeam] = useState<Team>("T");
   const [play, setPlay] = useState<{ mode: "solo" | "online"; net: CsNet | null; run: number } | null>(null);
   const [room, setRoom] = useState<string | null>(null);
@@ -26,16 +37,18 @@ export default function ClassicStrikeLauncher({ onBack, mobile }: { onBack: () =
   const [rows, setRows] = useState<Row[]>([]);
   const [result, setResult] = useState<{ score: number; best: number } | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const title = edition === "global" ? "Global Strike" : "Classic Strike";
+  const prefix = edition === "global" ? "globalstrike" : "classicstrike";
 
-  useEffect(() => void leaderboard("classicstrike").then(setRows), []);
+  useEffect(() => void leaderboard(gameId).then(setRows), [gameId]);
 
   const start = useCallback(
     (mode: "solo" | "online", roomCode?: string) => {
-      const net = mode === "online" && roomCode ? joinRoom(roomCode, me, myName, team) : null;
+      const net = mode === "online" && roomCode ? joinRoom(roomCode, me, myName, team, prefix) : null;
       setPlay({ mode, net, run: Date.now() });
       useGames.setState({ playing: true, joinCode: null });
     },
-    [me, myName, team],
+    [me, myName, team, prefix],
   );
 
   useEffect(() => {
@@ -54,15 +67,15 @@ export default function ClassicStrikeLauncher({ onBack, mobile }: { onBack: () =
 
   const onOver = useCallback(
     (score: number) => {
-      const best = localBest("classicstrike");
-      saveLocalBest("classicstrike", score);
-      void submitScore("classicstrike", score).then(() => leaderboard("classicstrike").then(setRows));
+      const best = localBest(gameId);
+      saveLocalBest(gameId, score);
+      void submitScore(gameId, score).then(() => leaderboard(gameId).then(setRows));
       setResult({ score, best });
       play?.net?.leave();
       setPlay(null);
       useGames.setState({ playing: false });
     },
-    [play],
+    [play, gameId],
   );
 
   if (play) {
@@ -88,6 +101,7 @@ export default function ClassicStrikeLauncher({ onBack, mobile }: { onBack: () =
           net={play.net}
           playerName={myName}
           initialTeam={team}
+          edition={edition}
           onOver={onOver}
           onScore={() => {}}
         />
@@ -101,15 +115,25 @@ export default function ClassicStrikeLauncher({ onBack, mobile }: { onBack: () =
         <button type="button" onClick={onBack} className="grid size-9 place-items-center rounded-full hover:bg-white/10" aria-label="Back to games">
           <ArrowLeft className="size-5" />
         </button>
-        <span className="text-lg">🔫</span>
-        <span className="font-bold">Classic Strike</span>
+        <span className="text-lg">{edition === "global" ? "🌐" : "🔫"}</span>
+        <span className="font-bold">{title}</span>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl space-y-4 p-4">
-          <div className="rounded-3xl p-5" style={{ background: "linear-gradient(135deg,#365314,#1c1917 55%,#7c2d12)" }}>
-            <div className="font-mono text-3xl font-black tracking-tight">CLASSIC STRIKE</div>
+          <div
+            className="rounded-3xl p-5"
+            style={{
+              background:
+                edition === "global"
+                  ? "linear-gradient(135deg,#0c4a6e 0%,#0f172a 45%,#c2410c 100%)"
+                  : "linear-gradient(135deg,#365314,#1c1917 55%,#7c2d12)",
+            }}
+          >
+            <div className="font-mono text-3xl font-black tracking-tight uppercase">{title}</div>
             <p className="mt-1 max-w-lg text-sm text-white/85">
-              CS 1.6-style bomb defuse — buy menu, economy, sites. Solo vs bots, or online with friends on the same dust-style map.
+              {edition === "global"
+                ? "CS:GO-style bomb defuse on the same Nexus raycast engine — expanded loadout (SMGs, Galil/FAMAS, AUG, SSG, Zeus), Full HD mobile pads sized for every phone."
+                : "CS 1.6-style bomb defuse — buy menu, economy, sites. Solo vs bots, or online with friends on the same dust-style map."}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="text-xs font-bold text-white/70">Your team</span>
@@ -165,7 +189,7 @@ export default function ClassicStrikeLauncher({ onBack, mobile }: { onBack: () =
                   <button
                     type="button"
                     onClick={() => {
-                      void navigator.clipboard?.writeText(roomLink(room, "classicstrike"));
+                      void navigator.clipboard?.writeText(roomLink(room, gameId));
                       toast("Invite link copied", "success");
                     }}
                     className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-2 text-sm font-semibold"
@@ -228,23 +252,27 @@ export default function ClassicStrikeLauncher({ onBack, mobile }: { onBack: () =
               </div>
             ))}
           </div>
-          <p className="pb-4 text-center text-xs text-white/40">WASD · click lock mouse · B buy · G plant · E defuse · R reload · T/C team</p>
+          <p className="pb-4 text-center text-xs text-white/40">
+            {mobile
+              ? "Phone: left stick move · drag right to look · FIRE · BUY / RLD / PLANT / DEFUSE"
+              : "WASD · click lock mouse · B buy · G plant · E defuse · R reload · T/C team"}
+          </p>
         </div>
       </div>
-      {inviteOpen && room && <InviteSheet code={room} onClose={() => setInviteOpen(false)} />}
+      {inviteOpen && room && <InviteSheet code={room} game={gameId} title={title} onClose={() => setInviteOpen(false)} />}
     </div>
   );
 }
 
-function InviteSheet({ code, onClose }: { code: string; onClose: () => void }) {
+function InviteSheet({ code, game, title, onClose }: { code: string; game: RoomGame; title: string; onClose: () => void }) {
   const ids = friendIds();
   const [sent, setSent] = useState<Record<string, boolean>>({});
   const invite = async (uid: string) => {
     const { data, error } = await supabase.rpc("get_or_create_dm", { p_user: uid });
     if (error) return toast(errorText(error), "error");
-    const link = roomLink(code, "classicstrike");
-    await sendMessage(data as string, `🎮 Join me in Classic Strike! Room code: ${code}\n${link}`);
-    void sendGameInvites("classicstrike", code, [uid]);
+    const link = roomLink(code, game);
+    await sendMessage(data as string, `🎮 Join me in ${title}! Room code: ${code}\n${link}`);
+    void sendGameInvites(game, code, [uid]);
     setSent((s) => ({ ...s, [uid]: true }));
   };
   return (

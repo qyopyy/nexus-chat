@@ -78,13 +78,20 @@ export type CsNet = {
   status: () => "connecting" | "live" | "error";
 };
 
-export function joinRoom(code: string, me: string, name: string, team: Team = "T"): CsNet {
+export function joinRoom(
+  code: string,
+  me: string,
+  name: string,
+  team: Team = "T",
+  /** channel prefix — classicstrike | globalstrike */
+  prefix: "classicstrike" | "globalstrike" = "classicstrike",
+): CsNet {
   const peers = new Map<string, Peer>();
   const joined = Date.now();
   let myTeam = team;
   let st: "connecting" | "live" | "error" = "connecting";
   let handlers: Parameters<CsNet["on"]>[0] = {};
-  const ch: RealtimeChannel = supabase.channel(`classicstrike-${code}`, {
+  const ch: RealtimeChannel = supabase.channel(`${prefix}-${code}`, {
     config: { broadcast: { self: false, ack: false }, presence: { key: me } },
   });
 

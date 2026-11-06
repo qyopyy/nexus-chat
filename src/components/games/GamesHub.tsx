@@ -33,6 +33,16 @@ import ClassicStrikeLauncher from "./classicstrike/ClassicStrikeLauncher";
 
 const GAMES: { id: GameId; name: string; tag: string; desc: string; bg: string; emoji: string; C: typeof Blocks | null; isNew?: boolean }[] = [
   {
+    id: "globalstrike",
+    name: "Global Strike",
+    tag: "CS:GO-style · same engine · mobile",
+    desc: "CS:GO-flavored bomb defuse on the Classic Strike raycast engine — SMGs, Galil/FAMAS, AUG, SSG, Zeus, phone stick + FIRE pads.",
+    bg: "linear-gradient(135deg,#0ea5e9,#0f172a 50%,#ea580c)",
+    emoji: "🌐",
+    C: null,
+    isNew: true,
+  },
+  {
     id: "classicstrike",
     name: "Classic Strike",
     tag: "CS 1.6-style · multiplayer",
@@ -91,7 +101,8 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
   }, [joinCode, joinFor]);
   if (frame) return <WebFrame game={frame} onBack={() => setFrame(null)} mobile={mobile} />;
   if (open === "streets") return <StreetsLauncher onBack={() => setOpen(null)} mobile={mobile} />;
-  if (open === "classicstrike") return <ClassicStrikeLauncher onBack={() => setOpen(null)} mobile={mobile} />;
+  if (open === "classicstrike") return <ClassicStrikeLauncher onBack={() => setOpen(null)} mobile={mobile} edition="classic" />;
+  if (open === "globalstrike") return <ClassicStrikeLauncher onBack={() => setOpen(null)} mobile={mobile} edition="global" />;
   if (open === "bay") return <SunsetBay onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "geo") return <GeoGuess onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "four") return <FourInRow onBack={() => setOpen(null)} mobile={mobile} />;
@@ -110,14 +121,31 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto max-w-5xl space-y-6 p-3 sm:p-5">
+          {/* Global Strike — CS:GO style on same engine */}
+          <button onClick={() => setOpen("globalstrike")} className="group relative block w-full overflow-hidden rounded-3xl text-left" style={{ background: "linear-gradient(135deg,#0c4a6e 0%,#0f172a 42%,#c2410c 100%)" }}>
+            <div className="pointer-events-none absolute inset-0 opacity-35" style={{ background: "radial-gradient(ellipse at 80% 20%,rgba(14,165,233,.35),transparent 55%)" }} />
+            <div className="relative z-10 p-5 sm:p-8">
+              <div className="text-xs font-bold tracking-widest text-sky-300/90 uppercase">New · CS:GO-style · same engine · mobile ready</div>
+              <div className="mt-1 font-mono text-3xl font-black tracking-tight text-white sm:text-5xl">GLOBAL STRIKE</div>
+              <p className="mt-2 max-w-lg text-sm text-white/85">
+                Bomb defuse with the Classic Strike raycast engine — SMGs, Galil / FAMAS, AUG, SSG, Zeus. Virtual stick + FIRE pads sized for every phone.
+              </p>
+              <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-orange-400 px-5 py-2.5 font-bold text-black transition group-hover:scale-105">
+                <Play className="size-4 fill-current" /> Play Global · multiplayer
+              </span>
+              <p className="mt-3 text-[10px] text-white/50">Original homage — not affiliated with Valve or Counter-Strike: Global Offensive.</p>
+            </div>
+            <div className="absolute -right-4 -bottom-6 text-[120px] sm:text-[160px]">🌐</div>
+          </button>
+
           {/* Classic Strike — CS 1.6 style */}
           <button onClick={() => setOpen("classicstrike")} className="group relative block w-full overflow-hidden rounded-3xl text-left" style={{ background: "linear-gradient(135deg,#365314 0%,#1c1917 45%,#7c2d12 100%)" }}>
             <div className="pointer-events-none absolute inset-0 opacity-40" style={{ background: "repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.15) 3px,rgba(0,0,0,.15) 4px)" }} />
             <div className="relative z-10 p-5 sm:p-8">
-              <div className="text-xs font-bold tracking-widest text-lime-300/90 uppercase">New · CS 1.6-style browser FPS</div>
+              <div className="text-xs font-bold tracking-widest text-lime-300/90 uppercase">CS 1.6-style browser FPS</div>
               <div className="mt-1 font-mono text-3xl font-black tracking-tight text-white sm:text-5xl">CLASSIC STRIKE</div>
               <p className="mt-2 max-w-lg text-sm text-white/85">
-                Bomb defuse rounds, buy menu, AK / M4 / AWP — solo vs bots or online with friends. Click to lock mouse — WASD, B buy, G plant, E defuse.
+                Bomb defuse rounds, buy menu, AK / M4 / AWP — solo vs bots or online with friends. Phone pads + desktop mouse lock.
               </p>
               <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#fbbf24] px-5 py-2.5 font-bold text-black transition group-hover:scale-105">
                 <Play className="size-4 fill-current" /> Play · multiplayer
