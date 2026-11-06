@@ -1,0 +1,376 @@
+name: iOS App Store apps (signed)
+
+# Signs Nexus / Wump / Browser / Link for Transporter + App Store Connect.
+# Fixes Missing Provisioning Profile (90174) — Sideloadly IPAs have no embedded.mobileprovision.
+# Requires: APPLE_TEAM_ID, APPLE_CERTIFICATE_BASE64, APPLE_CERTIFICATE_PASSWORD,
+# and a per-app App Store profile secret (see mobile/APP_STORE_CI_SETUP.txt).
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "Which IPA to sign"
+        type: choice
+        options:
+          - wump
+          - nexus
+          - browser
+          - link
+        default: wump
+      url:
+        description: "Live site URL override (leave empty for production)"
+        required: false
+      upload:
+        description: "Upload to App Store Connect after signing?"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  appstore:
+    runs-on: macos-15
+    env:
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APP_KEY: ${{ github.event.inputs.app }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve app matrix
+        id: app
+        run: |
+          set -euo pipefail
+          case "${APP_KEY}" in
+            nexus)
+              echo "dir=mobile" >> "$GITHUB_OUTPUT"
+              echo "bundle=hu.qyopy.nexus.B44X8B76QR" >> "$GITHUB_OUTPUT"
+              echo "display=Nexus" >> "$GITHUB_OUTPUT"
+              echo "ipa=Nexus-AppStore.ipa" >> "$GITHUB_OUTPUT"
+              echo "tag_prefix=ios-appstore" >> "$GITHUB_OUTPUT"
+              echo "url=${{ github.event.inputs.url || vars.NEXUS_URL || 'https://nexusproject.cc' }}" >> "$GITHUB_OUTPUT"
+              echo "profile_secret=APPLE_PROVISION_PROFILE_BASE64" >> "$GITHUB_OUTPUT"
+              echo "env_url_key=NEXUS_URL" >> "$GITHUB_OUTPUT"
+              ;;
+            wump)
+              echo "dir=mobile-bump" >> "$GITHUB_OUTPUT"
+              echo "bundle=hu.qyopy.bump.B44X8B76QR" >> "$GITHUB_OUTPUT"
+              echo "display=Wump" >> "$GITHUB_OUTPUT"
+              echo "ipa=Wump-AppStore.ipa" >> "$GITHUB_OUTPUT"
+              echo "tag_prefix=wump-appstore" >> "$GITHUB_OUTPUT"
+              echo "url=${{ github.event.inputs.url || vars.BUMP_URL || 'https://nexusproject.cc/wump/app' }}" >> "$GITHUB_OUTPUT"
+              echo "profile_secret=APPLE_PROVISION_PROFILE_BASE64_WUMP" >> "$GITHUB_OUTPUT"
+              echo "env_url_key=BUMP_URL" >> "$GITHUB_OUTPUT"
+              ;;
+            browser)
+              echo "dir=mobile-browser" >> "$GITHUB_OUTPUT"
+              echo "bundle=hu.qyopy.browser.B44X8B76QR" >> "$GITHUB_OUTPUT"
+              echo "display=Nexus Browser" >> "$GITHUB_OUTPUT"
+              echo "ipa=Browser-AppStore.ipa" >> "$GITHUB_OUTPUT"
+              echo "tag_prefix=browser-appstore" >> "$GITHUB_OUTPUT"
+              echo "url=${{ github.event.inputs.url || vars.BROWSER_URL || 'https://nexusproject.cc/browser/app' }}" >> "$GITHUB_OUTPUT"
+              echo "profile_secret=APPLE_PROVISION_PROFILE_BASE64_BROWSER" >> "$GITHUB_OUTPUT"
+              echo "env_url_key=BROWSER_URL" >> "$GITHUB_OUTPUT"
+              ;;
+            link)
+              echo "dir=mobile-link" >> "$GITHUB_OUTPUT"
+              echo "bundle=hu.qyopy.link" >> "$GITHUB_OUTPUT"
+              echo "display=Nexus Link" >> "$GITHUB_OUTPUT"
+              echo "ipa=NexusLink-AppStore.ipa" >> "$GITHUB_OUTPUT"
+              echo "tag_prefix=link-appstore" >> "$GITHUB_OUTPUT"
+              echo "url=${{ github.event.inputs.url || vars.LINKBIO_URL || 'https://nexusproject.cc/bio/app' }}" >> "$GITHUB_OUTPUT"
+              echo "profile_secret=APPLE_PROVISION_PROFILE_BASE64_LINK" >> "$GITHUB_OUTPUT"
+              echo "env_url_key=LINKBIO_URL" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::Unknown app ${APP_KEY}"
+              exit 1
+              ;;
+          esac
+
+      - name: Check signing secrets
+        env:
+          PROFILE_NEXUS: ${{ secrets.APPLE_PROVISION_PROFILE_BASE64 }}
+          PROFILE_WUMP: ${{ secrets.APPLE_PROVISION_PROFILE_BASE64_WUMP }}
+          PROFILE_BROWSER: ${{ secrets.APPLE_PROVISION_PROFILE_BASE64_BROWSER }}
+          PROFILE_LINK: ${{ secrets.APPLE_PROVISION_PROFILE_BASE64_LINK }}
+        run: |
+          set -euo pipefail
+          if [ -z "${{ secrets.APPLE_TEAM_ID }}" ] || [ -z "${{ secrets.APPLE_CERTIFICATE_BASE64 }}" ] || [ -z "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" ]; then
+            echo "::error::Missing Apple Distribution secrets (APPLE_TEAM_ID / CERTIFICATE). See mobile/APP_STORE_CI_SETUP.txt"
+            exit 1
+          fi
+          case "${{ steps.app.outputs.profile_secret }}" in
+            APPLE_PROVISION_PROFILE_BASE64) PROFILE="$PROFILE_NEXUS" ;;
+            APPLE_PROVISION_PROFILE_BASE64_WUMP) PROFILE="$PROFILE_WUMP" ;;
+            APPLE_PROVISION_PROFILE_BASE64_BROWSER) PROFILE="$PROFILE_BROWSER" ;;
+            APPLE_PROVISION_PROFILE_BASE64_LINK) PROFILE="$PROFILE_LINK" ;;
+          esac
+          if [ -z "$PROFILE" ]; then
+            # Fallback: Nexus profile secret only valid for nexus bundle
+            if [ "${{ steps.app.outputs.profile_secret }}" != "APPLE_PROVISION_PROFILE_BASE64" ] && [ -n "$PROFILE_NEXUS" ]; then
+              echo "::error::Need secret ${{ steps.app.outputs.profile_secret }} — an App Store .mobileprovision for ${{ steps.app.outputs.bundle }} (base64). The Nexus profile cannot sign ${{ steps.app.outputs.display }}."
+            else
+              echo "::error::Missing secret ${{ steps.app.outputs.profile_secret }} for ${{ steps.app.outputs.display }} (${{ steps.app.outputs.bundle }}). See mobile/APP_STORE_CI_SETUP.txt"
+            fi
+            exit 1
+          fi
+          if [ "${{ github.event.inputs.upload }}" = "true" ]; then
+            if [ -z "${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}" ] || [ -z "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}" ] || [ -z "${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}" ]; then
+              echo "::error::Upload requested but App Store Connect API key secrets are missing."
+              exit 1
+            fi
+          fi
+          echo "Signing ${{ steps.app.outputs.display }} · ${{ steps.app.outputs.bundle }}"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Capacitor
+        working-directory: ${{ steps.app.outputs.dir }}
+        run: npm install --no-audit --no-fund
+
+      - name: Import certificate + provisioning profile
+        env:
+          CERT_B64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CERT_PW: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          PROFILE_NEXUS: ${{ secrets.APPLE_PROVISION_PROFILE_BASE64 }}
+          PROFILE_WUMP: ${{ secrets.APPLE_PROVISION_PROFILE_BASE64_WUMP }}
+          PROFILE_BROWSER: ${{ secrets.APPLE_PROVISION_PROFILE_BASE64_BROWSER }}
+          PROFILE_LINK: ${{ secrets.APPLE_PROVISION_PROFILE_BASE64_LINK }}
+          BUNDLE_ID: ${{ steps.app.outputs.bundle }}
+        run: |
+          set -euo pipefail
+          case "${{ steps.app.outputs.profile_secret }}" in
+            APPLE_PROVISION_PROFILE_BASE64) PROFILE_B64="$PROFILE_NEXUS" ;;
+            APPLE_PROVISION_PROFILE_BASE64_WUMP) PROFILE_B64="$PROFILE_WUMP" ;;
+            APPLE_PROVISION_PROFILE_BASE64_BROWSER) PROFILE_B64="$PROFILE_BROWSER" ;;
+            APPLE_PROVISION_PROFILE_BASE64_LINK) PROFILE_B64="$PROFILE_LINK" ;;
+          esac
+          CERT_PATH="$RUNNER_TEMP/dist.p12"
+          PROFILE_PATH="$RUNNER_TEMP/app.mobileprovision"
+          KEYCHAIN="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PW="$(openssl rand -base64 32)"
+
+          echo "$CERT_B64" | base64 -d > "$CERT_PATH"
+          echo "$PROFILE_B64" | base64 -d > "$PROFILE_PATH"
+
+          security cms -D -i "$PROFILE_PATH" > "$RUNNER_TEMP/profile.plist"
+          PROFILE_UUID=$(plutil -extract UUID raw "$RUNNER_TEMP/profile.plist")
+          PROFILE_NAME=$(plutil -extract Name raw "$RUNNER_TEMP/profile.plist")
+          PROFILE_APP_ID=$(plutil -extract Entitlements.application-identifier raw "$RUNNER_TEMP/profile.plist" 2>/dev/null || true)
+          echo "Profile UUID=$PROFILE_UUID name=$PROFILE_NAME appId=$PROFILE_APP_ID"
+          case "$PROFILE_APP_ID" in
+            *"$BUNDLE_ID") ;;
+            *)
+              echo "::error::Profile application-identifier ($PROFILE_APP_ID) does not include BUNDLE_ID=$BUNDLE_ID. Create an App Store profile for this App ID."
+              exit 1
+              ;;
+          esac
+          GET_TASK=$(plutil -extract Entitlements.get-task-allow raw "$RUNNER_TEMP/profile.plist" 2>/dev/null || echo "false")
+          if [ "$GET_TASK" = "true" ]; then
+            echo "::error::Development profile (get-task-allow=true). Need App Store Connect distribution profile."
+            exit 1
+          fi
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID}.mobileprovision"
+
+          echo "PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+          echo "PROVISIONING_PROFILE_SPECIFIER=$PROFILE_NAME" >> "$GITHUB_ENV"
+          echo "PROFILE_PATH=$PROFILE_PATH" >> "$GITHUB_ENV"
+          echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+          echo "KEYCHAIN_PW=$KEYCHAIN_PW" >> "$GITHUB_ENV"
+          echo "BUNDLE_ID=$BUNDLE_ID" >> "$GITHUB_ENV"
+          echo "APP_DIR=${{ steps.app.outputs.dir }}" >> "$GITHUB_ENV"
+          echo "DISPLAY_NAME=${{ steps.app.outputs.display }}" >> "$GITHUB_ENV"
+          echo "IPA_NAME=${{ steps.app.outputs.ipa }}" >> "$GITHUB_ENV"
+          echo "TAG_PREFIX=${{ steps.app.outputs.tag_prefix }}" >> "$GITHUB_ENV"
+          echo "APP_URL=${{ steps.app.outputs.url }}" >> "$GITHUB_ENV"
+
+          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security import "$CERT_PATH" -P "$CERT_PW" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security list-keychain -d user -s "$KEYCHAIN" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PW" "$KEYCHAIN"
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+      - name: Create iOS project
+        working-directory: ${{ steps.app.outputs.dir }}
+        env:
+          NEXUS_URL: ${{ steps.app.outputs.url }}
+          BUMP_URL: ${{ steps.app.outputs.url }}
+          BROWSER_URL: ${{ steps.app.outputs.url }}
+          LINKBIO_URL: ${{ steps.app.outputs.url }}
+        run: |
+          npx cap add ios
+          npx cap sync ios
+
+      - name: App icons + Info.plist
+        working-directory: ${{ steps.app.outputs.dir }}
+        run: |
+          set -euo pipefail
+          PLIST=ios/App/App/Info.plist
+          if [ -f scripts/patch-ios-info-plist.py ]; then
+            python3 scripts/patch-ios-info-plist.py "$PLIST" || python3 scripts/patch-ios-info-plist.py
+          elif [ -f ../mobile/scripts/patch-ios-info-plist.py ]; then
+            python3 ../mobile/scripts/patch-ios-info-plist.py "$PLIST"
+          fi
+          pb() { /usr/libexec/PlistBuddy -c "$1" "$PLIST" 2>/dev/null || true; }
+          pb "Set :CFBundleDisplayName ${{ steps.app.outputs.display }}"
+          pb "Add :CFBundleDisplayName string ${{ steps.app.outputs.display }}"
+          pb "Set :CFBundleName ${{ steps.app.outputs.display }}"
+          pb "Add :CFBundleName string ${{ steps.app.outputs.display }}"
+          pb "Set :CFBundleIdentifier ${{ steps.app.outputs.bundle }}"
+          pb "Add :CFBundleIdentifier string ${{ steps.app.outputs.bundle }}"
+          pb "Set :UIUserInterfaceStyle Dark"
+          pb "Add :UIUserInterfaceStyle string Dark"
+          pb "Set :CFBundleShortVersionString 1.${GITHUB_RUN_NUMBER}"
+          pb "Add :CFBundleShortVersionString string 1.${GITHUB_RUN_NUMBER}"
+          pb "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}"
+          pb "Add :CFBundleVersion string ${GITHUB_RUN_NUMBER}"
+          pb "Set :NSHumanReadableCopyright © 2026 qyopy"
+          pb "Add :NSHumanReadableCopyright string © 2026 qyopy"
+          ICONSET=ios/App/App/Assets.xcassets/AppIcon.appiconset
+          if [ -f "$GITHUB_WORKSPACE/mobile/scripts/prepare-app-icons.py" ]; then
+            python3 "$GITHUB_WORKSPACE/mobile/scripts/prepare-app-icons.py" "$ICONSET" || true
+          fi
+          if [ ! -f "$ICONSET/AppIcon-1024.png" ] && { [ -f resources/icon-1024.png ] || [ -f resources/icon-1024-opaque.png ]; }; then
+            python3 "$GITHUB_WORKSPACE/.github/scripts/prepare-app-icons-fallback.py" || true
+          fi
+
+      - name: Configure manual signing
+        run: |
+          set -euo pipefail
+          cd "$APP_DIR/ios/App"
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | sed -n 's/.*"\(Apple Distribution[^"]*\)".*/\1/p' | head -1)
+          if [ -z "$IDENTITY" ]; then
+            IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | sed -n 's/.*"\(iPhone Distribution[^"]*\)".*/\1/p' | head -1)
+          fi
+          if [ -z "$IDENTITY" ]; then
+            echo "::error::No Apple Distribution identity in imported .p12"
+            exit 1
+          fi
+          echo "CODE_SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          PBX="App.xcodeproj/project.pbxproj"
+          python3 "$GITHUB_WORKSPACE/.github/scripts/patch-ios-manual-signing.py" "$PBX" \
+            --bundle-id "$BUNDLE_ID" \
+            --team-id "$TEAM_ID" \
+            --profile-uuid "$PROFILE_UUID" \
+            --profile-name "$PROVISIONING_PROFILE_SPECIFIER"
+
+      - name: Archive (signed)
+        run: |
+          set -euo pipefail
+          cd "$APP_DIR/ios/App"
+          if [ -d App.xcworkspace ]; then TARGET="-workspace App.xcworkspace"; else TARGET="-project App.xcodeproj"; fi
+          xcodebuild $TARGET -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/App.xcarchive" archive \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY" \
+            PROVISIONING_PROFILE="$PROFILE_UUID" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROVISIONING_PROFILE_SPECIFIER" \
+            MARKETING_VERSION="1.${GITHUB_RUN_NUMBER}" \
+            CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
+            | tee /tmp/archive.log | tail -80
+          APP=build/App.xcarchive/Products/Applications/App.app
+          test -d "$APP"
+          if [ ! -f "$APP/embedded.mobileprovision" ]; then
+            echo "::warning::Embedding imported profile into archive"
+            cp "$PROFILE_PATH" "$APP/embedded.mobileprovision"
+            codesign --force --sign "$CODE_SIGN_IDENTITY" --timestamp=none --generate-entitlement-der "$APP" \
+              || codesign --force --sign "$CODE_SIGN_IDENTITY" "$APP"
+          fi
+          test -f "$APP/embedded.mobileprovision"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist"
+
+      - name: Export App Store IPA
+        run: |
+          set -euo pipefail
+          cd "$APP_DIR/ios/App"
+          cat > ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>teamID</key>
+            <string>${TEAM_ID}</string>
+            <key>signingCertificate</key>
+            <string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${BUNDLE_ID}</key>
+              <string>${PROVISIONING_PROFILE_SPECIFIER}</string>
+            </dict>
+            <key>destination</key>
+            <string>export</string>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>manageAppVersionAndBuildNumber</key>
+            <false/>
+          </dict>
+          </plist>
+          EOF
+          sed -i '' 's/^[[:space:]]*//' ExportOptions.plist
+          plutil -lint ExportOptions.plist
+          xcodebuild -exportArchive \
+            -archivePath "$PWD/build/App.xcarchive" \
+            -exportPath "$PWD/build/export" \
+            -exportOptionsPlist ExportOptions.plist \
+            | tee /tmp/export.log | tail -60
+          IPA=$(ls build/export/*.ipa | head -1)
+          cp "$IPA" "$GITHUB_WORKSPACE/$IPA_NAME"
+          bash "$GITHUB_WORKSPACE/.github/scripts/verify-ipa-provisioning.sh" "$GITHUB_WORKSPACE/$IPA_NAME"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.app.outputs.display }}-AppStore-ipa
+          path: ${{ steps.app.outputs.ipa }}
+
+      - name: Upload to App Store Connect
+        if: ${{ github.event.inputs.upload == 'true' }}
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          ASC_KEY_B64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          echo "$ASC_KEY_B64" | base64 -d > "$KEY_PATH"
+          mkdir -p "$HOME/.private_keys" "$HOME/.appstoreconnect/private_keys"
+          cp "$KEY_PATH" "$HOME/.private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          cp "$KEY_PATH" "$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          xcrun altool --upload-app --type ios \
+            --file "$GITHUB_WORKSPACE/$IPA_NAME" \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" --verbose
+
+      - name: Publish GitHub release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${TAG_PREFIX}-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" "$IPA_NAME" \
+            mobile/TRANSPORTER_ISSUES.txt \
+            mobile/APP_STORE_CI_SETUP.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "${DISPLAY_NAME} App Store IPA build ${GITHUB_RUN_NUMBER}" \
+            --notes "Signed App Store IPA · ${BUNDLE_ID}
+
+          ✅ Includes embedded.mobileprovision (Transporter / ASC — fixes 90174).
+          Opens: ${APP_URL}
+
+          ⛔ Do NOT upload Sideloadly IPA tags (*-ios-N) to Transporter."
+
+      - name: Cleanup keychain
+        if: always()
+        run: security delete-keychain "$KEYCHAIN" 2>/dev/null || true

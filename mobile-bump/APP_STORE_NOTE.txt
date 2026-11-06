@@ -1,10 +1,21 @@
-Wump — App Store / Capgo
-========================
+Wump — App Store / Capgo / Transporter
+======================================
 Bundle ID: hu.qyopy.bump.B44X8B76QR
 Capgo: https://console.capgo.app/app/hu.qyopy.bump.B44X8B76QR
 App Store Connect app id: 6831488658
 
-Build (Capgo Cloud → TestFlight):
+Transporter error 90174 (Missing embedded.mobileprovision)
+----------------------------------------------------------
+Sideloadly releases (tag wump-ios-N / Wump.ipa) are UNSIGNED — do not upload them.
+
+Instead:
+  1. Add secret APPLE_PROVISION_PROFILE_BASE64_WUMP (App Store profile for this bundle)
+     plus shared APPLE_TEAM_ID / APPLE_CERTIFICATE_* (see mobile/APP_STORE_CI_SETUP.txt)
+  2. Actions → “iOS App Store apps (signed)” → app = wump → Run
+  3. Use Wump-AppStore.ipa / tag wump-appstore-N in Transporter (or upload=true)
+
+Capgo Cloud → TestFlight (optional alternate)
+---------------------------------------------
   cd mobile-bump
   npm i && npx cap add ios && npx cap sync ios
   python3 ../mobile/scripts/prepare-app-icons.py ios/App/App/Assets.xcassets/AppIcon.appiconset
