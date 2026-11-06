@@ -12,7 +12,7 @@ import { roomLink } from "@/lib/room";
 import { sendGameInvites } from "@/lib/gameInvites";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
-import ClassicStrike, { type StrikeEdition } from "../ClassicStrike";
+import ClassicStrike, { type StrikeEdition, type StrikeEngine } from "../ClassicStrike";
 import { joinRoom, newCode, validCode, type CsNet, type Team } from "./net";
 import type { GameId } from "@/lib/games";
 import type { RoomGame } from "@/store/games";
@@ -37,6 +37,7 @@ export default function ClassicStrikeLauncher({
   const [rows, setRows] = useState<Row[]>([]);
   const [result, setResult] = useState<{ score: number; best: number } | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [engine, setEngine] = useState<StrikeEngine>(edition === "global" ? "hq" : "raycast");
   const title = edition === "global" ? "Global Strike" : "Classic Strike";
   const prefix = edition === "global" ? "globalstrike" : "classicstrike";
 
@@ -96,12 +97,13 @@ export default function ClassicStrikeLauncher({
           )}
         </div>
         <ClassicStrike
-          key={play.run}
+          key={`${play.run}-${engine}`}
           mode={play.mode}
           net={play.net}
           playerName={myName}
           initialTeam={team}
           edition={edition}
+          engine={engine}
           onOver={onOver}
           onScore={() => {}}
         />
@@ -132,9 +134,28 @@ export default function ClassicStrikeLauncher({
             <div className="font-mono text-3xl font-black tracking-tight uppercase">{title}</div>
             <p className="mt-1 max-w-lg text-sm text-white/85">
               {edition === "global"
-                ? "CS:GO-style bomb defuse on the same Nexus raycast engine — expanded loadout (SMGs, Galil/FAMAS, AUG, SSG, Zeus), Full HD mobile pads sized for every phone."
+                ? "CS:GO-style bomb defuse with a new high-quality Three.js engine (lit 3D arena) — tuned for phones. Expanded loadout: SMGs, Galil/FAMAS, AUG, SSG, Zeus."
                 : "CS 1.6-style bomb defuse — buy menu, economy, sites. Solo vs bots, or online with friends on the same dust-style map."}
             </p>
+            {edition === "global" && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-white/70">Engine</span>
+                <button
+                  type="button"
+                  onClick={() => setEngine("hq")}
+                  className={cn("rounded-full px-3 py-1 text-xs font-black", engine === "hq" ? "bg-sky-400 text-black" : "bg-white/10")}
+                >
+                  High quality 3D
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEngine("raycast")}
+                  className={cn("rounded-full px-3 py-1 text-xs font-black", engine === "raycast" ? "bg-white text-black" : "bg-white/10")}
+                >
+                  Classic raycast
+                </button>
+              </div>
+            )}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="text-xs font-bold text-white/70">Your team</span>
               <button
