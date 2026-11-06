@@ -22,6 +22,11 @@ export type BumpNearby = {
   speed_mps?: number | null;
   expires_at?: string | null;
   age_seconds?: number | null;
+  place_name?: string | null;
+  place_locality?: string | null;
+  profile_place_name?: string | null;
+  profile_place_lat?: number | null;
+  profile_place_lng?: number | null;
 };
 
 export type BumpProfile = {
@@ -104,6 +109,8 @@ export type BumpPresenceRow = {
   speed_mps?: number | null;
   battery_pct?: number | null;
   expires_at?: string | null;
+  place_name?: string | null;
+  place_locality?: string | null;
 };
 
 /** Restore Live state after refresh (own pin still on the server). */
@@ -118,17 +125,21 @@ export async function bumpMyPresence() {
  * Call from BumpHub while mounted; returns an unsubscribe.
  */
 export function subscribeBumpLive(handlers: {
-  onPresence?: () => void;
+  onPresence?: (row?: BumpPresenceRow | null) => void;
   onMessage?: (row: BumpMessage) => void;
   onFollow?: () => void;
   onFamily?: () => void;
 }) {
   const me = useApp.getState().userId;
   const key = `bump-live:${me ?? "anon"}:${Math.random().toString(36).slice(2, 7)}`;
+  let presenceTimer: ReturnType<typeof setTimeout> | null = null;
   const ch = supabase
     .channel(key)
-    .on("postgres_changes", { event: "*", schema: "public", table: "bump_presence" }, () => {
-      handlers.onPresence?.();
+    .on("postgres_changes", { event: "*", schema: "public", table: "bump_presence" }, (payload) => {
+      // Debounce bursts (heartbeats) so the web client stays smooth — no IPA needed
+      const row = (payload.new || null) as BumpPresenceRow | null;
+      if (presenceTimer) clearTimeout(presenceTimer);
+      presenceTimer = setTimeout(() => handlers.onPresence?.(row), 250);
     })
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "bump_messages" }, (payload) => {
       const row = payload.new as BumpMessage;
@@ -144,6 +155,7 @@ export function subscribeBumpLive(handlers: {
     });
   void ch.subscribe();
   return () => {
+    if (presenceTimer) clearTimeout(presenceTimer);
     void supabase.removeChannel(ch);
   };
 }
@@ -180,6 +192,7 @@ export async function bumpPublish(visible: BumpVisible = "friends", label?: stri
       return null;
     }
     const loc = await getDeviceLocation({ highAccuracy: priv.wump_precision === "exact" });
+    const place = await import("./wumpGeocode").then((m) => m.wumpGeocode(loc.lat, loc.lng)).catch(() => null);
     const { data, error } = await supabase.rpc("bump_publish", {
       p_lat: loc.lat,
       p_lng: loc.lng,
@@ -189,12 +202,24 @@ export async function bumpPublish(visible: BumpVisible = "friends", label?: stri
       p_precision: priv.wump_precision,
       p_heading: loc.heading,
       p_speed: loc.speed,
+      p_place_name: place?.name ?? place?.display ?? null,
+      p_place_locality: place?.locality ?? place?.city ?? null,
     });
     if (error) {
       toast(errorText(error) || "Couldn't share location", "error");
       return null;
     }
-    toast(loc.source === "capacitor" ? "Wump live — finding people nearby" : "Wump live", "success");
+    const where = place?.name || place?.city;
+    toast(
+      loc.source === "capacitor"
+        ? where
+          ? `Wump live near ${where}`
+          : "Wump live — finding people nearby"
+        : where
+          ? `Wump live · ${where}`
+          : "Wump live",
+      "success",
+    );
     return data as BumpPresenceRow;
   } catch (e) {
     toast(e instanceof Error ? e.message : "Location failed", "error");
@@ -444,12 +469,18 @@ export async function bumpHeartbeat(visible: BumpVisible = "friends", label?: st
     const priv = loadWumpPrivacyLocal();
     if (!priv.wump_share_enabled) return false;
     const loc = await getDeviceLocation({ highAccuracy: false });
+    const place = await import("./wumpGeocode").then((m) => m.wumpGeocode(loc.lat, loc.lng)).catch(() => null);
+    const placeArgs = {
+      p_place_name: place?.name ?? place?.display ?? null,
+      p_place_locality: place?.locality ?? place?.city ?? null,
+    };
     const { error } = await supabase.rpc("bump_heartbeat", {
       p_lat: loc.lat,
       p_lng: loc.lng,
       p_accuracy: loc.accuracy,
       p_heading: loc.heading,
       p_speed: loc.speed,
+      ...placeArgs,
     });
     if (!error) return true;
     // Older DBs without bump_heartbeat — full publish
@@ -462,6 +493,7 @@ export async function bumpHeartbeat(visible: BumpVisible = "friends", label?: st
       p_precision: priv.wump_precision,
       p_heading: loc.heading,
       p_speed: loc.speed,
+      ...placeArgs,
     });
     return !e2;
   } catch {
@@ -474,16 +506,33 @@ export async function bumpPublishSample(
   loc: { lat: number; lng: number; accuracy: number | null; heading?: number | null; speed?: number | null },
   visible: BumpVisible,
   label?: string | null,
+  opts?: { geocode?: boolean },
 ) {
   const { loadWumpPrivacyLocal } = await import("./wumpPrivacy");
   const priv = loadWumpPrivacyLocal();
   if (!priv.wump_share_enabled) return false;
+  let placeArgs: { p_place_name: string | null; p_place_locality: string | null } | Record<string, never> = {};
+  if (opts?.geocode !== false) {
+    const place = await import("./wumpGeocode").then((m) => m.wumpGeocode(loc.lat, loc.lng)).catch(() => null);
+    if (place) {
+      placeArgs = {
+        p_place_name: place.name ?? place.display ?? null,
+        p_place_locality: place.locality ?? place.city ?? null,
+      };
+      // Fire-and-forget place patch so realtime friends see names even if heartbeat args lag
+      void supabase.rpc("bump_set_place", {
+        p_place_name: placeArgs.p_place_name,
+        p_place_locality: placeArgs.p_place_locality,
+      });
+    }
+  }
   const { error } = await supabase.rpc("bump_heartbeat", {
     p_lat: loc.lat,
     p_lng: loc.lng,
     p_accuracy: loc.accuracy,
     p_heading: loc.heading ?? null,
     p_speed: loc.speed ?? null,
+    ...placeArgs,
   });
   if (!error) return true;
   const { error: e2 } = await supabase.rpc("bump_publish", {
@@ -495,8 +544,19 @@ export async function bumpPublishSample(
     p_precision: priv.wump_precision,
     p_heading: loc.heading ?? null,
     p_speed: loc.speed ?? null,
+    ...placeArgs,
   });
   return !e2;
+}
+
+/** Patch Live place name after async geocode (triggers realtime for friends). */
+export async function bumpSetPlace(placeName: string | null, locality?: string | null) {
+  const { data, error } = await supabase.rpc("bump_set_place", {
+    p_place_name: placeName,
+    p_place_locality: locality ?? null,
+  });
+  if (error) return null;
+  return data as BumpPresenceRow;
 }
 
 /** Remove expired presence rows (best-effort). */

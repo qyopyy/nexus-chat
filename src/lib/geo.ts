@@ -298,16 +298,33 @@ export const pinIcon = (L: LeafletNS, color: string, label = "") =>
     html: `<div style="position:relative;width:28px;height:36px"><svg viewBox="0 0 28 36" width="28" height="36"><path d="M14 35s12-12.6 12-21A12 12 0 0 0 2 14c0 8.4 12 21 12 21z" fill="${color}" stroke="#fff" stroke-width="2.5"/></svg><span style="position:absolute;top:5px;left:0;width:28px;text-align:center;font:800 11px system-ui;color:#fff">${label}</span></div>`,
   });
 
+function escHtml(s: string) {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
 /** Round avatar pin for Wump friends on the live map (optional heading cone + stale fade). */
 export const wumpAvatarIcon = (
   L: LeafletNS,
-  opts: { color: string; initial: string; me?: boolean; label?: string; heading?: number | null; stale?: boolean },
+  opts: {
+    color: string;
+    initial: string;
+    me?: boolean;
+    label?: string;
+    place?: string | null;
+    heading?: number | null;
+    stale?: boolean;
+  },
 ) => {
   const ring = opts.me ? "#38bdf8" : opts.color || "#22c55a";
   const opacity = opts.stale ? 0.45 : 1;
-  const sub = opts.label
-    ? `<span style="position:absolute;left:50%;bottom:-14px;transform:translateX(-50%);white-space:nowrap;background:rgba(15,23,42,.85);color:#fff;font:700 9px system-ui;padding:1px 5px;border-radius:999px">${opts.label}</span>`
-    : "";
+  const place = opts.place ? escHtml(opts.place.slice(0, 28)) : "";
+  const meta = opts.label ? escHtml(opts.label) : "";
+  const sub =
+    place || meta
+      ? `<span style="position:absolute;left:50%;bottom:-${place && meta ? 28 : 14}px;transform:translateX(-50%);white-space:nowrap;background:rgba(15,23,42,.88);color:#fff;font:700 9px system-ui;padding:2px 6px;border-radius:999px;text-align:center;line-height:1.25;max-width:140px;overflow:hidden;text-overflow:ellipsis">${
+          place ? `<span style="display:block">${place}</span>` : ""
+        }${meta ? `<span style="opacity:.85">${meta}</span>` : ""}</span>`
+      : "";
   const cone =
     opts.heading != null && Number.isFinite(opts.heading)
       ? `<div style="position:absolute;left:50%;top:50%;width:0;height:0;margin-left:-10px;margin-top:-28px;border-left:10px solid transparent;border-right:10px solid transparent;border-bottom:18px solid ${ring};opacity:.85;transform:rotate(${opts.heading}deg);transform-origin:10px 28px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))"></div>`
@@ -325,5 +342,20 @@ export const wumpAvatarIcon = (
       ${sub}
     </div>
     <style>@keyframes wump-pulse{0%{transform:scale(.92);opacity:.7}100%{transform:scale(1.35);opacity:0}}</style>`,
+  });
+};
+
+/** Pinned profile place marker on the Wump map */
+export const wumpPlaceIcon = (L: LeafletNS, opts: { title: string; color?: string }) => {
+  const color = opts.color || "#f59e0b";
+  const title = escHtml(opts.title.slice(0, 32));
+  return L.divIcon({
+    className: "",
+    iconSize: [28, 40],
+    iconAnchor: [14, 36],
+    html: `<div style="position:relative;width:28px;height:40px">
+      <svg viewBox="0 0 28 36" width="28" height="36"><path d="M14 35s12-12.6 12-21A12 12 0 0 0 2 14c0 8.4 12 21 12 21z" fill="${color}" stroke="#fff" stroke-width="2.5"/><circle cx="14" cy="13" r="4.5" fill="#fff"/></svg>
+      <span style="position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:2px;white-space:nowrap;background:rgba(15,23,42,.88);color:#fff;font:700 9px system-ui;padding:2px 6px;border-radius:999px;max-width:120px;overflow:hidden;text-overflow:ellipsis">${title}</span>
+    </div>`,
   });
 };

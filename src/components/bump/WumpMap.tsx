@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, Crosshair, Layers, LocateFixed, Pause, Play, Search, TriangleAlert, Users } from "lucide-react";
+import { Bell, Crosshair, Layers, LocateFixed, MapPinned, Pause, Play, Search, TriangleAlert, Users } from "lucide-react";
 import type { BumpNearby } from "@/lib/bump";
 import {
   loadLeaflet,
   newWumpMap,
   wumpAvatarIcon,
+  wumpPlaceIcon,
   type LCircle,
   type LMap,
   type LeafletNS,
   type WumpMapStyle,
 } from "@/lib/geo";
 import { formatMeters } from "@/lib/location";
+import { wumpGeocode, wumpPlaceShort } from "@/lib/wumpGeocode";
 import { useApp } from "@/store/app";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
@@ -40,6 +42,7 @@ export default function WumpMap({
   myLng,
   myHeading,
   myAccuracy,
+  myPlaceName,
   nearby,
   live,
   viewsToday,
@@ -57,6 +60,7 @@ export default function WumpMap({
   myLng: number | null;
   myHeading?: number | null;
   myAccuracy?: number | null;
+  myPlaceName?: string | null;
   nearby: BumpNearby[];
   live: boolean;
   viewsToday: number;
@@ -74,6 +78,7 @@ export default function WumpMap({
   const LRef = useRef<LeafletNS | null>(null);
   const setStyleRef = useRef<((s: WumpMapStyle) => void) | null>(null);
   const markersRef = useRef<Map<string, MarkerHandle>>(new Map());
+  const placeMarkersRef = useRef<Map<string, MarkerHandle>>(new Map());
   const accuracyRef = useRef<LCircle | null>(null);
   const trailRef = useRef<{ remove: () => void; setLatLngs?: (c: [number, number][]) => void } | null>(null);
   const trailPts = useRef<[number, number][]>([]);
@@ -83,6 +88,8 @@ export default function WumpMap({
   const [err, setErr] = useState<string | null>(null);
   const [follow, setFollow] = useState(true);
   const [mapStyle, setMapStyle] = useState<WumpMapStyle>("streets");
+  const [tapPlace, setTapPlace] = useState<string | null>(null);
+  const [resolvedMine, setResolvedMine] = useState<string | null>(null);
   const profiles = useApp((s) => s.profiles);
 
   useEffect(() => {
@@ -109,6 +116,13 @@ export default function WumpMap({
         };
         map.on("dragstart", markPanned);
         map.on("zoomstart", markPanned);
+        map.on("click", (e) => {
+          const { lat, lng } = e.latlng;
+          setTapPlace("Looking up…");
+          void wumpGeocode(lat, lng).then((p) => {
+            setTapPlace(wumpPlaceShort(p) || p?.display || "Unknown place");
+          });
+        });
         setReady(true);
         requestAnimationFrame(() => map.invalidateSize());
       } catch (e) {
@@ -119,6 +133,8 @@ export default function WumpMap({
       cancelled = true;
       for (const m of markersRef.current.values()) m.remove();
       markersRef.current.clear();
+      for (const m of placeMarkersRef.current.values()) m.remove();
+      placeMarkersRef.current.clear();
       accuracyRef.current?.remove();
       accuracyRef.current = null;
       trailRef.current?.remove();
@@ -153,7 +169,15 @@ export default function WumpMap({
       id: string,
       lat: number,
       lng: number,
-      opts: { color: string; initial: string; me?: boolean; label?: string; heading?: number | null; stale?: boolean },
+      opts: {
+        color: string;
+        initial: string;
+        me?: boolean;
+        label?: string;
+        place?: string | null;
+        heading?: number | null;
+        stale?: boolean;
+      },
     ) => {
       want.add(id);
       const icon = wumpAvatarIcon(L, opts);
@@ -188,11 +212,13 @@ export default function WumpMap({
 
     if (live && myLat != null && myLng != null && me) {
       const name = profiles[me]?.display_name || profiles[me]?.username || "You";
+      const place = myPlaceName || resolvedMine;
       upsert(me, myLat, myLng, {
         color: "#0ea5e9",
         initial: name.slice(0, 1),
         me: true,
         label: "You",
+        place,
         heading: myHeading ?? null,
       });
 
@@ -245,10 +271,12 @@ export default function WumpMap({
       const stale = age != null && age > 90;
       const dist = formatMeters(n.meters);
       const ageTxt = ageLabel(age);
+      const place = n.place_name || n.place_locality || null;
       upsert(n.user_id, n.lat, n.lng, {
         color: p?.avatar_color || "#22c55a",
         initial: name.slice(0, 1),
         label: ageTxt ? `${dist} · ${ageTxt}` : dist,
+        place,
         heading: n.heading ?? null,
         stale,
       });
@@ -258,6 +286,31 @@ export default function WumpMap({
       if (!want.has(id)) {
         m.remove();
         markersRef.current.delete(id);
+      }
+    }
+
+    // Profile-pinned places (Apple Maps / saved spots)
+    const wantPlaces = new Set<string>();
+    for (const n of nearby) {
+      if (n.profile_place_lat == null || n.profile_place_lng == null || !n.profile_place_name) continue;
+      const id = `place:${n.user_id}`;
+      wantPlaces.add(id);
+      const existing = placeMarkersRef.current.get(id);
+      if (existing?.setLatLng) {
+        existing.setLatLng([n.profile_place_lat, n.profile_place_lng]);
+        continue;
+      }
+      existing?.remove();
+      const marker = L.marker([n.profile_place_lat, n.profile_place_lng], {
+        icon: wumpPlaceIcon(L, { title: n.profile_place_name, color: profiles[n.user_id]?.avatar_color || "#f59e0b" }),
+      }).addTo(map) as unknown as MarkerHandle;
+      marker.on?.("click", () => onOpenPerson(n.user_id));
+      placeMarkersRef.current.set(id, marker);
+    }
+    for (const [id, m] of [...placeMarkersRef.current.entries()]) {
+      if (!wantPlaces.has(id)) {
+        m.remove();
+        placeMarkersRef.current.delete(id);
       }
     }
 
@@ -272,7 +325,26 @@ export default function WumpMap({
         /* empty */
       }
     }
-  }, [ready, live, myLat, myLng, myHeading, myAccuracy, me, nearby, profiles, onOpenPerson, follow]);
+  }, [ready, live, myLat, myLng, myHeading, myAccuracy, myPlaceName, resolvedMine, me, nearby, profiles, onOpenPerson, follow]);
+
+  // Resolve my place name on the client when server hasn't filled it yet
+  useEffect(() => {
+    if (!live || myLat == null || myLng == null) {
+      setResolvedMine(null);
+      return;
+    }
+    if (myPlaceName) {
+      setResolvedMine(myPlaceName);
+      return;
+    }
+    let cancelled = false;
+    void wumpGeocode(myLat, myLng).then((p) => {
+      if (!cancelled) setResolvedMine(wumpPlaceShort(p));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [live, myLat, myLng, myPlaceName]);
 
   const recenter = () => {
     userPannedRef.current = false;
@@ -289,6 +361,7 @@ export default function WumpMap({
   };
 
   const liveFriends = nearby.filter((n) => (n.age_seconds ?? 0) < 90).length;
+  const shownPlace = myPlaceName || resolvedMine;
 
   return (
     <div className="relative mx-auto aspect-[9/14] w-full max-w-md overflow-hidden rounded-[2rem] shadow-2xl ring-1 ring-black/10">
@@ -302,9 +375,17 @@ export default function WumpMap({
 
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-24 bg-gradient-to-b from-black/25 to-transparent" />
 
-      <div className="absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-slate-600 shadow backdrop-blur">
-        <span className={cn("size-1.5 rounded-full", live ? "animate-pulse bg-emerald-500" : "bg-slate-300")} />
-        {live ? `${liveFriends} live · ${nearby.length} nearby` : `${viewsToday} on map`}
+      <div className="absolute top-3 left-1/2 z-10 flex max-w-[70%] -translate-x-1/2 flex-col items-center gap-1">
+        <div className="flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-slate-600 shadow backdrop-blur">
+          <span className={cn("size-1.5 rounded-full", live ? "animate-pulse bg-emerald-500" : "bg-slate-300")} />
+          {live ? `${liveFriends} live · ${nearby.length} nearby` : `${viewsToday} on map`}
+        </div>
+        {(shownPlace || tapPlace) && (
+          <div className="flex max-w-full items-center gap-1 truncate rounded-full bg-slate-900/85 px-2.5 py-1 text-[10px] font-bold text-white shadow backdrop-blur">
+            <MapPinned className="size-3 shrink-0 text-sky-300" />
+            <span className="truncate">{tapPlace || shownPlace}</span>
+          </div>
+        )}
       </div>
 
       <div className="absolute top-3 right-3 z-10 flex flex-col items-center gap-2">

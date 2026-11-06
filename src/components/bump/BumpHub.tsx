@@ -124,6 +124,7 @@ export default function BumpHub({
   const [myLng, setMyLng] = useState<number | null>(null);
   const [myHeading, setMyHeading] = useState<number | null>(null);
   const [myAccuracy, setMyAccuracy] = useState<number | null>(null);
+  const [myPlaceName, setMyPlaceName] = useState<string | null>(null);
   const bumpOnly = standalone || isBumpApp();
   const musicPlaying = useBumpMusic((s) => s.playing);
   const musicCurrentId = useBumpMusic((s) => s.currentId);
@@ -174,12 +175,14 @@ export default function BumpHub({
       setMyLng(mine.lng);
       setMyHeading(mine.heading ?? null);
       setMyAccuracy(mine.accuracy_m ?? null);
+      setMyPlaceName(mine.place_name || mine.place_locality || null);
     } else {
       setLive(false);
       setMyLat(null);
       setMyLng(null);
       setMyHeading(null);
       setMyAccuracy(null);
+      setMyPlaceName(null);
     }
   }, [me, radius]);
 
@@ -308,6 +311,7 @@ export default function BumpHub({
       if (typeof row.lng === "number") setMyLng(row.lng);
       setMyHeading(row.heading ?? null);
       setMyAccuracy(row.accuracy_m ?? null);
+      setMyPlaceName(row.place_name || row.place_locality || null);
       await refresh();
       const priv = loadWumpPrivacyLocal();
       if (bgShare && priv.wump_allow_background) {
@@ -330,6 +334,7 @@ export default function BumpHub({
     setMyLng(null);
     setMyHeading(null);
     setMyAccuracy(null);
+    setMyPlaceName(null);
     setFlashUntil(null);
   }
 
@@ -517,10 +522,13 @@ export default function BumpHub({
               myLng={myLng}
               myHeading={myHeading}
               myAccuracy={myAccuracy}
+              myPlaceName={myPlaceName}
               nearby={nearby}
               live={live}
               viewsToday={friendIds.length + nearby.length + (live ? 1 : 0)}
-              placesCount={nearby.filter((n) => n.label).length + family.length}
+              placesCount={
+                nearby.filter((n) => n.place_name || n.profile_place_name).length + family.length
+              }
               playing={musicPlaying}
               onTogglePlay={() => {
                 if (musicPlaying) pauseBumpMusic();
@@ -537,9 +545,45 @@ export default function BumpHub({
               onGoLive={() => void goLive()}
               onPlaces={() => {
                 if (!live) void goLive();
-                else toast(`${nearby.length} places nearby on ${WUMP}`, "info");
+                else {
+                  const named = nearby.filter((n) => n.place_name || n.place_locality || n.profile_place_name);
+                  toast(
+                    named.length
+                      ? `${named.length} named place${named.length === 1 ? "" : "s"} nearby on ${WUMP}`
+                      : myPlaceName
+                        ? `You're near ${myPlaceName}`
+                        : `${nearby.length} people nearby — place names update live`,
+                    "info",
+                  );
+                }
               }}
             />
+            {live && (myPlaceName || nearby.some((n) => n.place_name || n.profile_place_name)) && (
+              <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {myPlaceName && (
+                  <div className="shrink-0 rounded-full bg-sky-500/15 px-3 py-1.5 text-xs font-semibold text-sky-300 ring-1 ring-sky-500/30">
+                    You · {myPlaceName}
+                  </div>
+                )}
+                {nearby
+                  .filter((n) => n.place_name || n.place_locality || n.profile_place_name)
+                  .slice(0, 12)
+                  .map((n) => {
+                    const name = profiles[n.user_id]?.display_name || profiles[n.user_id]?.username || "Friend";
+                    const place = n.place_name || n.place_locality || n.profile_place_name;
+                    return (
+                      <button
+                        key={n.user_id}
+                        type="button"
+                        onClick={() => openPerson(n.user_id)}
+                        className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-txt ring-1 ring-white/10 hover:bg-white/10"
+                      >
+                        {name} · {place}
+                      </button>
+                    );
+                  })}
+              </div>
+            )}
             {!bumpOnly && (
               <a
                 href={bumpIpaReleasesUrl()}
