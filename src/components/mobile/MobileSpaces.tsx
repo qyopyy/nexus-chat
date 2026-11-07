@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BellOff, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, Hash, Link2, Plus, Search, Star, Volume2 } from "lucide-react";
+import { BellOff, CheckCheck, Compass, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, Hash, Link2, Plus, Search, Star, Volume2 } from "lucide-react";
 import { useApp, openModal, toast } from "@/store/app";
 import { loadSpace, markSpaceRead } from "@/lib/data";
 import { haptic } from "@/lib/haptics";
@@ -18,6 +18,7 @@ import {
 import SpaceSidebar from "@/components/layout/SpaceSidebar";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import LargeTitle from "./LargeTitle";
+import VerifiedServerBadge from "@/components/ui/VerifiedServerBadge";
 
 export default function MobileSpaces() {
   const spaceId = useApp((s) => s.spaceId);
@@ -91,6 +92,9 @@ function SpaceList() {
                 ↕
               </button>
             )}
+            <button onClick={() => openModal("discover")} className="grid size-10 place-items-center rounded-full text-accent active:bg-white/10" aria-label="Discover servers">
+              <Compass className="size-6" />
+            </button>
             <button onClick={() => openModal("createSpace")} className="grid size-10 place-items-center rounded-full text-accent active:bg-white/10" aria-label="Create or join a server">
               <Plus className="size-6" />
             </button>
@@ -193,6 +197,7 @@ function SpaceList() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-[17px] font-bold">{sp.name}</span>
+                      {sp.verified && <VerifiedServerBadge size={16} />}
                       {fav && <Star className="size-3.5 shrink-0 fill-amber-400 text-amber-400" />}
                       {quiet && <BellOff className="size-3.5 shrink-0 text-sub" />}
                       {unreadN > 0 && !quiet && (

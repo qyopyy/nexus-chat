@@ -1,5 +1,6 @@
 "use client";
 
+import { emojiPlain } from "@/lib/customEmoji";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BellOff, Bell, CheckCheck, Mic, Phone, Pin, PinOff, Search, Settings, SquarePen, Users, X } from "lucide-react";
 import { useApp, openModal } from "@/store/app";
@@ -220,7 +221,7 @@ export default function MobileChats() {
                                 <Mic className="size-3.5" /> Voice message
                               </span>
                             ) : (
-                              c.last_message
+                              emojiPlain(c.last_message)
                             )}
                           </>
                         ) : (
