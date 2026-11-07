@@ -15,6 +15,7 @@ import EmojiPicker from "@/components/ui/EmojiPicker";
 import Sheet from "@/components/ui/Sheet";
 import { isVoice } from "./MessageBubble";
 import { ComposerPlus } from "./Extras";
+import { DictateButton, ScheduledBar } from "./ScheduleMessage";
 import AttachEditor, { shouldOpenAttachEditor } from "./AttachEditor";
 import { FORMAT_COLORS, VANISH_PICKS, wrapSelection } from "@/lib/chatFormat";
 
@@ -288,6 +289,7 @@ export default function Composer({
             <span className="animate-pulse">🐢</span> Slow mode is on · one message every {slow >= 60 ? `${Math.round(slow / 60)} min` : `${slow}s`}
           </div>
         )}
+        <ScheduledBar conversationId={conversationId} />
         {(replyTo || file || chosen) && !recording && (
           <div className="mb-1.5 flex animate-fade flex-col gap-1.5 rounded-2xl bg-side px-3 py-2">
             {replyTo && (
@@ -439,6 +441,12 @@ export default function Composer({
                     }
                   }}
                   className="max-h-[180px] min-h-11 min-w-0 flex-1 resize-none bg-transparent py-[11px] pl-4 text-[16px] leading-[22px] outline-none placeholder:text-sub md:text-[15px]"
+                />
+                <DictateButton
+                  onText={(t) => {
+                    setText((x) => (x.trim() ? `${x.trimEnd()} ${t}` : t));
+                    area.current?.focus();
+                  }}
                 />
                 <button
                   type="button"

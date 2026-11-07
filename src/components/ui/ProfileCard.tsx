@@ -10,6 +10,7 @@ import { openDM } from "@/lib/data";
 import { startCall } from "@/lib/call";
 import { supabase } from "@/lib/supabase";
 import { isBanned, isMuted, myRank } from "@/lib/admin";
+import { ProfileMutuals, ReleaseCountdown } from "./ProfileMutuals";
 import { audienceWord, fmtCount, linkLabel, platformById, spotifyArtistId, spotifyEmbed } from "@/lib/links";
 import { fetchLiveFollowers, followersCacheKey, supportsLiveFollowers } from "@/lib/followers";
 import { sanitizeDownloadName } from "@/lib/fileSafety";
@@ -227,6 +228,8 @@ export function CardBody({ userId }: { userId: string }) {
           </>
         )}
 
+        <ReleaseCountdown userId={userId} />
+
         {links.length > 0 && (
           <div className="mb-3 space-y-1">
             {links.map((l, i) => (
@@ -260,6 +263,8 @@ export function CardBody({ userId }: { userId: string }) {
             />
           </div>
         )}
+
+        <ProfileMutuals userId={userId} />
 
         {(role.rank > 0 || badges.length > 0) && (
           <>

@@ -160,11 +160,21 @@ function AccountSection() {
   const me = useApp((s) => (s.userId ? s.profiles[s.userId] : undefined));
   const [name, setName] = useState(me?.display_name ?? "");
   const [status, setStatus] = useState(me?.custom_status ?? "");
+  const [clearAfter, setClearAfter] = useState("keep");
   const [bio, setBio] = useState(me?.bio ?? "");
   const [uploading, setUploading] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   if (!me) return null;
-  const dirty = name !== me.display_name || status !== (me.custom_status ?? "") || bio !== (me.bio ?? "");
+  const dirty = name !== me.display_name || status !== (me.custom_status ?? "") || bio !== (me.bio ?? "") || clearAfter !== "keep";
+  const untilFor = (v: string): string | null | undefined => {
+    if (v === "keep") return undefined;
+    if (v === "never") return null;
+    const d = new Date();
+    if (v === "today") d.setHours(23, 59, 0, 0);
+    else if (v === "week") d.setDate(d.getDate() + 7);
+    else d.setMinutes(d.getMinutes() + Number(v));
+    return d.toISOString();
+  };
   const banner = me.banner_color || me.avatar_color;
   const animated = !!me.avatar_url && /\.(gif|webp|apng)(\?|$)/i.test(me.avatar_url);
 
@@ -220,7 +230,18 @@ function AccountSection() {
           </div>
           <div>
             <Label>Custom status</Label>
-            <input value={status} maxLength={80} onChange={(e) => setStatus(e.target.value)} placeholder="🎧 cooking beats" className="w-full rounded-md bg-rail px-3 py-2 outline-none focus:ring-2 focus:ring-accent/60" />
+            <div className="flex gap-2">
+              <input value={status} maxLength={80} onChange={(e) => setStatus(e.target.value)} placeholder="🎧 cooking beats" className="min-w-0 flex-1 rounded-md bg-rail px-3 py-2 outline-none focus:ring-2 focus:ring-accent/60" />
+              <select value={clearAfter} onChange={(e) => setClearAfter(e.target.value)} className="rounded-md bg-rail px-2 py-2 text-sm outline-none" aria-label="Clear status after">
+                <option value="keep">{me.status_until ? `Clears ${new Date(me.status_until).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })}` : "Don't clear"}</option>
+                <option value="30">Clear in 30 min</option>
+                <option value="60">Clear in 1 hour</option>
+                <option value="240">Clear in 4 hours</option>
+                <option value="today">Clear tonight</option>
+                <option value="week">Clear in a week</option>
+                {me.status_until && <option value="never">Don&apos;t clear</option>}
+              </select>
+            </div>
           </div>
           <div>
             <Label>About me</Label>
@@ -230,7 +251,11 @@ function AccountSection() {
           <div className="flex justify-end">
             <button
               disabled={!dirty || !name.trim()}
-              onClick={() => void updateMyProfile({ display_name: name.trim(), custom_status: status.trim() || null, bio: bio.trim() || null })}
+              onClick={() => {
+                const until = untilFor(clearAfter);
+                void updateMyProfile({ display_name: name.trim(), custom_status: status.trim() || null, bio: bio.trim() || null, ...(until !== undefined || !status.trim() ? { status_until: status.trim() ? (until ?? null) : null } : {}) });
+                setClearAfter("keep");
+              }}
               className="rounded-md bg-ok px-4 py-2 text-sm font-semibold text-white hover:bg-ok/85 disabled:opacity-40"
             >
               Save Changes

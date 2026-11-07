@@ -1,5 +1,6 @@
 "use client";
 
+import { ScheduleSheet } from "./ScheduleMessage";
 import { useEffect, useRef, useState } from "react";
 import { Hourglass, Lock, Play, Plus, Square, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
@@ -21,7 +22,7 @@ export function ComposerPlus({ conversationId }: { conversationId: string }) {
   const friendships = useApp((s) => s.friendships);
   const profiles = useApp((s) => s.profiles);
   const [open, setOpen] = useState(false);
-  const [sheet, setSheet] = useState<null | "poll" | "capsule" | "bump">(null);
+  const [sheet, setSheet] = useState<null | "poll" | "capsule" | "bump" | "schedule">(null);
   const item = (emoji: string, label: string, sub: string, fn: () => void) => (
     <button
       onClick={() => {
@@ -59,6 +60,7 @@ export function ComposerPlus({ conversationId }: { conversationId: string }) {
             {item("📎", "Share voice-model zip", "Attach a nexus-voice.json pack in chat", () => {
               toast("Use the paperclip and pick a .zip with nexus-voice.json — peers can download it", "info");
             })}
+            {item("⏰", "Schedule a message", "Nexus sends it for you later", () => setSheet("schedule"))}
             {item("📊", "Poll", "Ask the chat a question", () => setSheet("poll"))}
             {item("⏳", "Time capsule", "A message that stays sealed until a date", () => setSheet("capsule"))}
             {item("📍", "Share Wump location", "Send your live pin to a friend in Nexus", () => setSheet("bump"))}
@@ -69,6 +71,7 @@ export function ComposerPlus({ conversationId }: { conversationId: string }) {
         </>
       )}
       {sheet === "poll" && <PollCreator conversationId={conversationId} onClose={() => setSheet(null)} />}
+      {sheet === "schedule" && <ScheduleSheet conversationId={conversationId} onClose={() => setSheet(null)} />}
       {sheet === "capsule" && <CapsuleCreator conversationId={conversationId} onClose={() => setSheet(null)} />}
       {sheet === "bump" && (
         <BumpSharePicker

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bell, BellRing, ShieldAlert, CalendarDays, CalendarPlus, Crown, Gauge, Hash, Image as ImageIcon, Link2, MapPin, ScrollText, Shield, Trash2, Trophy, X } from "lucide-react";
+import { Bell, BellRing, ShieldAlert, Sparkles, CalendarDays, CalendarPlus, Crown, Gauge, Hash, Image as ImageIcon, Link2, MapPin, ScrollText, Shield, Trash2, Trophy, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { createEvent, deleteEvent, events, icsFor, leaderboard, levelOf, rsvp, setInfo, setRole, setSlowmode, xpFor, type Rsvp, type SpaceEvent, type XpRow } from "@/lib/serverHub";
 import { loadEventReminders, scheduleEventReminder, useEventReminders } from "@/lib/eventReminders";
@@ -12,9 +12,10 @@ import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import { InvitesPanel, LookPanel, RolesPanel } from "./ServerStudio";
 import AutoModPanel from "./AutoModPanel";
+import OnboardingPanel from "./OnboardingPanel";
 import type { Conversation, SpaceMember } from "@/lib/types";
 
-type Tab = "home" | "look" | "invites" | "roles" | "events" | "levels" | "members" | "channels" | "automod";
+type Tab = "home" | "look" | "invites" | "roles" | "events" | "levels" | "members" | "channels" | "automod" | "onboarding";
 const EMPTY_M: SpaceMember[] = [];
 const EMPTY_C: Conversation[] = [];
 
@@ -39,6 +40,7 @@ export default function ServerHub({ spaceId, onClose, initial = "home" }: { spac
       ? ([
           ["channels", "Channels", <Gauge key="c" className="size-4" />],
           ["automod", "AutoMod", <ShieldAlert key="a" className="size-4" />],
+          ["onboarding", "Onboarding", <Sparkles key="o" className="size-4" />],
         ] as [Tab, string, React.ReactNode][])
       : []),
   ];
@@ -90,6 +92,7 @@ export default function ServerHub({ spaceId, onClose, initial = "home" }: { spac
           {tab === "members" && <Members spaceId={spaceId} owner={myRole === "owner"} />}
           {tab === "channels" && staff && <Channels spaceId={spaceId} />}
           {tab === "automod" && staff && <AutoModPanel spaceId={spaceId} />}
+          {tab === "onboarding" && staff && <OnboardingPanel spaceId={spaceId} />}
         </div>
       </div>
     </div>

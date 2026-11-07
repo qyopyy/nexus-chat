@@ -37,6 +37,7 @@ export async function updateMyProfile(
       | "display_name"
       | "avatar_color"
       | "custom_status"
+      | "status_until"
       | "avatar_url"
       | "avatar_decoration"
       | "banner_color"

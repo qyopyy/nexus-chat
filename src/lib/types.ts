@@ -10,6 +10,8 @@ export type Profile = {
   avatar_color: string;
   avatar_url: string | null;
   custom_status: string | null;
+  /** custom status clears itself at this time */
+  status_until?: string | null;
   created_at: string;
   site_role: "owner" | "admin" | "moderator" | "vip" | "member";
   avatar_decoration: string | null;
