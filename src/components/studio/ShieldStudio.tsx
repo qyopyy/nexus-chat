@@ -52,7 +52,7 @@ export default function ShieldStudio() {
   const [busy, setBusy] = useState(false);
   const [acrBusy, setAcrBusy] = useState(false);
   const [test, setTest] = useState<string | null>(null);
-  const [acr, setAcr] = useState<{ configured: boolean; shieldBucket?: boolean } | null>(null);
+  const [acr, setAcr] = useState<{ configured: boolean; shieldBucket?: boolean; acrcloud?: boolean; audibleMagic?: boolean } | null>(null);
   useEffect(() => void checkStatus().then(setAcr), []);
   const pick = useRef<HTMLInputElement>(null);
   const testPick = useRef<HTMLInputElement>(null);
@@ -268,7 +268,13 @@ export default function ShieldStudio() {
                   try {
                     const c = await copyrightCheck(await clipFromFile(f), { kind: "tool" });
                     const sh = c.matches.find((m) => (m as { shield?: boolean }).shield);
-                    line += sh ? `\n☁️ ACRCloud: protected “${sh.title}”` : c.status === "match" ? `\n☁️ ACRCloud: released song “${c.matches[0]?.title}” — ${c.matches[0]?.artists.join(", ")}` : "\n☁️ ACRCloud: no match";
+                    const label = [acr.acrcloud !== false && "ACRCloud", acr.audibleMagic && "Audible Magic"].filter(Boolean).join(" + ") || "Copyright check";
+                    const top = c.matches.find((m) => !m.shield);
+                    line += sh
+                      ? `\n☁️ ${label}: protected “${sh.title}”`
+                      : c.status === "match" || c.status === "blocked"
+                        ? `\n☁️ ${label}: released song “${top?.title ?? c.matches[0]?.title}” — ${(top ?? c.matches[0])?.artists.join(", ")}${top?.engines?.length ? ` (${top.engines.map((e) => (e === "audible_magic" ? "Audible Magic" : e === "acrcloud" ? "ACRCloud" : e)).join(" + ")})` : ""}`
+                        : `\n☁️ ${label}: no match`;
                   } catch (err) {
                     line += `\n☁️ ACRCloud: ${(err as Error).message}`;
                   }

@@ -43,7 +43,7 @@ import { DefaultsDialog, PitchCard, PitchSummary, ReadinessCard, SmartLinkCard, 
 import LiveDeliveryCard from "./LiveDeliveryCard";
 import { duplicateRelease, getDefaults, getPitch, getSmartLink, readiness, remoteImageSize, savePitch, statusLog, type Pitch, type SmartLink, type StatusLog } from "@/lib/distExtras";
 import { CheckPill, CheckView, Chips, ReportView, SplitEditor, printSplitSheet } from "@/components/music/AudioBits";
-import { analyzeAudio, checkStatus, clearCheckConfig, saveShieldBucket, clipFromBuffer, copyrightCheck, decodeFile, latestChecks, lyricsLookExplicit, saveCheckConfig, setYoutubeCidBlock, type AudioCheck, type AudioReport } from "@/lib/audio";
+import { analyzeAudio, checkStatus, clearAudibleMagic, clearCheckConfig, saveAudibleMagic, saveShieldBucket, clipFromBuffer, copyrightCheck, decodeFile, latestChecks, lyricsLookExplicit, saveCheckConfig, setYoutubeCidBlock, type AudioCheck, type AudioReport } from "@/lib/audio";
 import type { DistArtist, DistRelease, DistStatus, DistTrack } from "@/lib/types";
 
 // ------------------------------------------------------------------ list
@@ -1384,7 +1384,7 @@ export function DistSettings() {
   );
 }
 
-/** admins: connect the audio-fingerprint copyright check (ACRCloud; Audible Magic needs an enterprise deal) */
+/** admins: connect the audio-fingerprint copyright check — ACRCloud + Audible Magic (360 scan) */
 function CopyrightSettings() {
   const [on, setOn] = useState<boolean | null>(null);
   const [host, setHost] = useState("");
@@ -1396,10 +1396,14 @@ function CopyrightSettings() {
   const [bucket, setBucket] = useState("");
   const [ytCid, setYtCid] = useState(false);
   const [ytBusy, setYtBusy] = useState(false);
+  const [amOn, setAmOn] = useState(false);
+  const [amUrl, setAmUrl] = useState("");
+  const [amToken, setAmToken] = useState("");
   const load = useCallback(
     () =>
       void checkStatus().then((x) => {
-        setOn(x.configured);
+        setOn(x.acrcloud ?? x.configured);
+        setAmOn(!!x.audibleMagic);
         setBucketOn(!!x.shieldBucket);
         setYtCid(!!x.youtubeCidBlock);
       }),
@@ -1417,12 +1421,12 @@ function CopyrightSettings() {
           <div className="min-w-0 flex-1">
             <div className="font-semibold">Global YouTube Content ID block</div>
             <p className="text-xs text-sub">
-              Separate from per-song Shield Content ID. When on, uploads that match commercial / YouTube catalog audio are hard-blocked live across chat, videos, spaces, radio and releases.
+              Separate from per-song Shield Content ID. When on, uploads that match commercial / YouTube catalog audio (ACRCloud) or hit an Audible Magic block rule are hard-blocked live across chat, videos, spaces, radio and releases.
             </p>
           </div>
           <button
             type="button"
-            disabled={ytBusy || !on}
+            disabled={ytBusy || (!on && !amOn)}
             onClick={async () => {
               setYtBusy(true);
               try {
@@ -1443,7 +1447,7 @@ function CopyrightSettings() {
       </div>
       <p className="mb-2 text-sm text-sub">
         Create an &quot;Audio &amp; Video Recognition&quot; project at console.acrcloud.com (bucket: ACRCloud Music), then paste its host, access key and access secret. They&apos;re stored on the server
-        only. Audible Magic works through an enterprise agreement — when you have one, send their API details to add it.
+        only. Add Audible Magic below for a 360 scan — both engines run on every check and results are merged.
       </p>
       <form
         onSubmit={async (e) => {
@@ -1484,6 +1488,55 @@ function CopyrightSettings() {
           )}
         </div>
       </form>
+
+      <div className="mt-5 border-t border-line pt-4">
+        <div className="mb-1 flex items-center gap-2 font-semibold">
+          {amOn ? <CircleCheck className="size-5 text-ok" /> : <X className="size-5 text-sub" />} Audible Magic 360
+          <span className="rounded-full bg-[#7c3aed]/25 px-2 py-px text-[10px] font-bold text-[#c4b5fd]">2nd engine</span>
+        </div>
+        <p className="mb-2 text-sm text-sub">
+          Audible Magic runs as a licensed Toolkit (no public cloud API). Run the small relay from <code className="rounded bg-black/30 px-1 text-[12px]">tools/audible-magic-relay</code> next to the
+          Toolkit + config file Audible Magic gives you, put it behind HTTPS, then paste its URL and relay token. Every check then fingerprints with ACRCloud <b>and</b> Audible Magic; matches show which engine
+          found them, and Audible Magic <i>block</i> rules hard-block when the global Content ID block is on.
+        </p>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBusy(true);
+            try {
+              await saveAudibleMagic(amUrl, amToken);
+              toast("Audible Magic connected — 360 scan is on", "success");
+              setAmToken("");
+              load();
+            } catch (err) {
+              toast((err as Error).message, "error");
+            }
+            setBusy(false);
+          }}
+          className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+        >
+          <input value={amUrl} onChange={(e) => setAmUrl(e.target.value.trim())} placeholder="https://am.yourdomain.com" className="min-w-0 rounded-lg border border-line bg-transparent px-3 py-2 font-mono text-sm outline-none focus:border-accent" />
+          <input type="password" value={amToken} onChange={(e) => setAmToken(e.target.value)} autoComplete="off" placeholder="Relay token" className="min-w-0 rounded-lg border border-line bg-transparent px-3 py-2 font-mono text-sm outline-none focus:border-accent" />
+          <div className="flex gap-2">
+            <button disabled={busy || !/^https:\/\//.test(amUrl) || amToken.trim().length < 16} className="rounded-full bg-accent px-5 py-2 text-sm font-semibold text-white disabled:opacity-40">
+              {busy ? "Testing…" : amOn ? "Replace" : "Connect"}
+            </button>
+            {amOn && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!confirm("Disconnect Audible Magic?")) return;
+                  await clearAudibleMagic().catch((err) => toast((err as Error).message, "error"));
+                  load();
+                }}
+                className="rounded-full bg-hover px-4 py-2 text-sm font-semibold hover:bg-active"
+              >
+                Disconnect
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
 
       <div className="mt-5 border-t border-line pt-4">
         <div className="mb-1 flex items-center gap-2 font-semibold">
