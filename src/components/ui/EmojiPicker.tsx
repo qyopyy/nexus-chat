@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Clock, Search, X } from "lucide-react";
+import { Clock, Search, Smile, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/lib/useMobile";
 import { haptic } from "@/lib/haptics";
 import type { EmojiGroup, EmojiItem } from "@/lib/emojiData";
 import Sheet from "./Sheet";
+import { useApp } from "@/store/app";
+import { useEmojis, loadMyEmojis, emojiToken, type CustomEmoji } from "@/lib/customEmoji";
+import { EmojiText } from "./CustomEmoji";
 
 const TONES = ["", "\u{1F3FB}", "\u{1F3FC}", "\u{1F3FD}", "\u{1F3FE}", "\u{1F3FF}"];
 const TONE_SWATCH = ["#FFCC4D", "#F7DECE", "#F3D2A2", "#D5AB88", "#AF7E57", "#7C533E"];
@@ -109,7 +112,22 @@ function Body({ onPick, tall }: { onPick: (e: string) => void; tall?: boolean })
   useEffect(() => {
     setRecent(load<string[]>(RECENT_KEY, []));
     setTone(load<number>(TONE_KEY, 0));
+    void loadMyEmojis();
   }, []);
+
+  const customAll = useEmojis((s) => s.mine);
+  const spaces = useApp((s) => s.spaces);
+  const me = useApp((s) => s.userId);
+  const customGroups = useMemo(() => {
+    const out: { id: string; label: string; items: CustomEmoji[] }[] = [];
+    const personal = customAll.filter((e) => !e.space_id && e.owner_id === me);
+    if (personal.length) out.push({ id: "c-me", label: "Your emojis", items: personal });
+    for (const sp of spaces) {
+      const items = customAll.filter((e) => e.space_id === sp.id);
+      if (items.length) out.push({ id: `c-${sp.id}`, label: sp.name, items });
+    }
+    return out;
+  }, [customAll, spaces, me]);
 
   const choose = (e: string) => {
     const next = [e, ...recent.filter((x) => x !== e)].slice(0, 32);
@@ -117,6 +135,12 @@ function Body({ onPick, tall }: { onPick: (e: string) => void; tall?: boolean })
     save(RECENT_KEY, next);
     onPick(e);
   };
+
+  const customResults = useMemo(() => {
+    const s = q.trim().toLowerCase().replace(/^:|:$/g, "");
+    if (!s) return [];
+    return customAll.filter((e) => e.name.includes(s.replace(/\s+/g, "_"))).slice(0, 60);
+  }, [q, customAll]);
 
   const results = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -155,6 +179,18 @@ function Body({ onPick, tall }: { onPick: (e: string) => void; tall?: boolean })
       </button>
     );
   };
+
+  const customCell = (e: CustomEmoji) => (
+    <button
+      key={e.id}
+      title={`:${e.name}:`}
+      onClick={() => choose(emojiToken(e))}
+      className="grid aspect-square place-items-center rounded-lg p-1 transition hover:scale-110 hover:bg-hover active:scale-95"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={e.url} alt={`:${e.name}:`} loading="lazy" draggable={false} className="size-7 object-contain md:size-6" />
+    </button>
+  );
 
   const cols = tall ? "grid-cols-8" : "grid-cols-9";
 
@@ -206,6 +242,11 @@ function Body({ onPick, tall }: { onPick: (e: string) => void; tall?: boolean })
           <Tab on={active === "recent"} onClick={() => jump("recent")}>
             <Clock className="size-[18px]" />
           </Tab>
+          {customGroups.length > 0 && (
+            <Tab on={active.startsWith("c-")} onClick={() => jump(customGroups[0].id)} title="Custom emojis">
+              <Smile className="size-[18px]" />
+            </Tab>
+          )}
           {(groups ?? []).map((g) => (
             <Tab key={g.id} on={active === g.id} onClick={() => jump(g.id)} title={g.label}>
               <span className="text-lg leading-none">{g.icon}</span>
@@ -218,8 +259,11 @@ function Body({ onPick, tall }: { onPick: (e: string) => void; tall?: boolean })
         {!groups ? (
           <div className="grid h-full place-items-center text-sm text-sub">Loading emoji…</div>
         ) : results ? (
-          results.length ? (
-            <div className={cn("grid gap-0.5 pt-1", cols)}>{results.map((it, i) => cell(it, `r${i}`))}</div>
+          results.length || customResults.length ? (
+            <div className={cn("grid gap-0.5 pt-1", cols)}>
+              {customResults.map(customCell)}
+              {results.map((it, i) => cell(it, `r${i}`))}
+            </div>
           ) : (
             <div className="grid h-full place-items-center text-sm text-sub">No emoji found</div>
           )
@@ -230,7 +274,7 @@ function Body({ onPick, tall }: { onPick: (e: string) => void; tall?: boolean })
                 <div className={cn("grid gap-0.5", cols)}>
                   {recent.map((e) => (
                     <button key={e} onClick={() => choose(e)} className="grid aspect-square place-items-center rounded-lg text-[26px] leading-none hover:bg-hover active:scale-95 md:text-[22px]">
-                      {e}
+                      <EmojiText value={e} />
                     </button>
                   ))}
                 </div>
@@ -238,6 +282,11 @@ function Body({ onPick, tall }: { onPick: (e: string) => void; tall?: boolean })
                 <div className="px-1 pb-1 text-xs text-sub">Emoji you use show up here.</div>
               )}
             </Section>
+            {customGroups.map((g) => (
+              <Section key={g.id} id={g.id} label={g.label}>
+                <div className={cn("grid gap-0.5", cols)}>{g.items.map(customCell)}</div>
+              </Section>
+            ))}
             {groups.map((g) => (
               <Section key={g.id} id={g.id} label={g.label}>
                 <div className={cn("grid gap-0.5", cols)}>{g.items.map((it, i) => cell(it, `${g.id}${i}`))}</div>
