@@ -146,9 +146,9 @@ const TOOLS: {
   },
   {
     id: "pdf",
-    name: "Docs editor",
-    tag: "PDF · text · pages · stamps",
-    desc: "Professional PDF tools: styled text, page rotate, blanks, watermarks, page numbers, undo/redo.",
+    name: "PDF editor & sign",
+    tag: "Sign · text · pages · stamps",
+    desc: "Sign PDFs with a drawn, typed or uploaded signature, add text and dates, rotate and reorder pages.",
     bg: "linear-gradient(135deg,#faa61a,#5c2b0b)",
     emoji: "📄",
     Icon: FilePen,

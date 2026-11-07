@@ -461,3 +461,20 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible { outline: 
 .site-spin { animation: site-spin 8s linear infinite; }
 .site-card:hover .site-spin { animation-duration: 2s; }
 @media (prefers-reduced-motion: reduce) { .site-spin { animation: none; } }
+
+/* invisible-ink sparkles for hidden messages */
+@keyframes ink-drift { 0% { background-position: 0 0, 0 0, 0 0 } 100% { background-position: 40px -60px, -50px 40px, 30px 50px } }
+@keyframes ink-twinkle { 0%, 100% { opacity: .55 } 50% { opacity: 1 } }
+.ink-sparkles {
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,.9) 0 1px, transparent 1.6px),
+    radial-gradient(circle, rgba(255,255,255,.7) 0 .8px, transparent 1.4px),
+    radial-gradient(circle, rgba(200,210,255,.8) 0 1.1px, transparent 1.8px);
+  background-size: 13px 11px, 17px 19px, 23px 21px;
+  animation: ink-drift 3.5s linear infinite, ink-twinkle 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) { .ink-sparkles { animation: none; } }
+
+/* streamer mode: blur message previews & personal details until hovered */
+html.streamer .sensitive { filter: blur(6px); transition: filter .2s; }
+html.streamer .sensitive:hover { filter: none; }

@@ -46,6 +46,8 @@ async function fcmAccessToken(sa: any) {
 }
 
 function preview(m: any) {
+  if (m.hidden) return "🙈 Hidden message";
+  if (m.spoiler) return "⚠️ Spoiler";
   const t = String(m.attachment_type ?? "");
   if (m.content?.trim()) return m.content.trim().slice(0, 160);
   if (t.startsWith("audio/") && String(m.attachment_name ?? "").startsWith("voice-")) return "🎤 Voice message";

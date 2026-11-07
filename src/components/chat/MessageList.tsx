@@ -12,6 +12,7 @@ import { TTL_OPTIONS, expired, isTimerNotice, loadOlder } from "@/lib/data";
 import { formatDay, sameDay } from "@/lib/utils";
 import MessageBubble from "./MessageBubble";
 import HiddenMessage from "./HiddenMessage";
+import { usePrefs } from "@/lib/prefs";
 import { loadBlocks } from "@/lib/blocks";
 import type { Message } from "@/lib/types";
 
@@ -38,7 +39,8 @@ export default function MessageList({ conversationId, initialUnread }: { convers
   const me = useApp((s) => s.userId);
   const kind = useApp((s) => s.convKinds[conversationId]);
   const showNames = kind !== "dm";
-  const linkEmbeds = kind === "dm" || kind === "group";
+  const previewsOn = usePrefs((s) => s.linkPreviews);
+  const linkEmbeds = (kind === "dm" || kind === "group") && previewsOn;
 
   const ref = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);

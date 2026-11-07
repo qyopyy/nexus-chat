@@ -265,23 +265,51 @@ export const FONTS: Record<string, FontDef> = {
   roboto: { name: "Roboto", stack: '"Roboto", sans-serif', url: g("Roboto", "400;500;700") },
   ibmPlex: { name: "IBM Plex Sans", stack: '"IBM Plex Sans", sans-serif', url: g("IBM Plex Sans", "400;500;600;700") },
   syne: { name: "Syne", stack: '"Syne", sans-serif', url: g("Syne", "400;500;600;700") },
+  figtree: { name: "Figtree", stack: '"Figtree", sans-serif', url: g("Figtree") },
+  geist: { name: "Geist", stack: '"Geist", sans-serif', url: g("Geist") },
+  onest: { name: "Onest", stack: '"Onest", sans-serif', url: g("Onest") },
+  sora: { name: "Sora", stack: '"Sora", sans-serif', url: g("Sora") },
+  rubik: { name: "Rubik", stack: '"Rubik", sans-serif', url: g("Rubik") },
+  workSans: { name: "Work Sans", stack: '"Work Sans", sans-serif', url: g("Work Sans") },
+  lato: { name: "Lato", stack: '"Lato", sans-serif', url: g("Lato", "400;700") },
+  openSans: { name: "Open Sans", stack: '"Open Sans", sans-serif', url: g("Open Sans") },
+  quicksand: { name: "Quicksand", stack: '"Quicksand", sans-serif', url: g("Quicksand") },
+  raleway: { name: "Raleway", stack: '"Raleway", sans-serif', url: g("Raleway") },
+  redHat: { name: "Red Hat Display", stack: '"Red Hat Display", sans-serif', url: g("Red Hat Display") },
+  archivo: { name: "Archivo", stack: '"Archivo", sans-serif', url: g("Archivo") },
+  kanit: { name: "Kanit", stack: '"Kanit", sans-serif', url: g("Kanit") },
+  // Readable
+  atkinson: { name: "Atkinson Hyperlegible", stack: '"Atkinson Hyperlegible", sans-serif', url: g("Atkinson Hyperlegible", "400;700") },
+  lexend: { name: "Lexend", stack: '"Lexend", sans-serif', url: g("Lexend") },
   // Serif / display
   sourceSerif: { name: "Source Serif", stack: '"Source Serif 4", Georgia, serif', url: g("Source Serif 4") },
   literata: { name: "Literata", stack: '"Literata", Georgia, serif', url: g("Literata") },
   fraunces: { name: "Fraunces", stack: '"Fraunces", Georgia, serif', url: g("Fraunces") },
   newsreader: { name: "Newsreader", stack: '"Newsreader", Georgia, serif', url: g("Newsreader") },
+  playfair: { name: "Playfair Display", stack: '"Playfair Display", Georgia, serif', url: g("Playfair Display") },
+  merriweather: { name: "Merriweather", stack: '"Merriweather", Georgia, serif', url: g("Merriweather", "400;700") },
+  lora: { name: "Lora", stack: '"Lora", Georgia, serif', url: g("Lora") },
+  crimson: { name: "Crimson Pro", stack: '"Crimson Pro", Georgia, serif', url: g("Crimson Pro") },
   // Fun / mono
   comic: { name: "Comic Neue", stack: '"Comic Neue", "Comic Sans MS", cursive', url: g("Comic Neue", "400;700") },
   mono: { name: "JetBrains Mono", stack: '"JetBrains Mono", ui-monospace, monospace', url: g("JetBrains Mono") },
   ibmMono: { name: "IBM Plex Mono", stack: '"IBM Plex Mono", ui-monospace, monospace', url: g("IBM Plex Mono", "400;500;600;700") },
   pixel: { name: "Pixel (Silkscreen)", stack: '"Silkscreen", monospace', url: g("Silkscreen", "400;700") },
+  firaCode: { name: "Fira Code", stack: '"Fira Code", ui-monospace, monospace', url: g("Fira Code") },
+  spaceMono: { name: "Space Mono", stack: '"Space Mono", ui-monospace, monospace', url: g("Space Mono", "400;700") },
+  vt323: { name: "VT323 (terminal)", stack: '"VT323", monospace', url: g("VT323", "400") },
+  orbitron: { name: "Orbitron", stack: '"Orbitron", sans-serif', url: g("Orbitron") },
+  caveat: { name: "Caveat (handwriting)", stack: '"Caveat", cursive', url: g("Caveat") },
+  patrickHand: { name: "Patrick Hand", stack: '"Patrick Hand", cursive', url: g("Patrick Hand", "400") },
+  righteous: { name: "Righteous", stack: '"Righteous", sans-serif', url: g("Righteous", "400") },
 };
 
 /** Groups for Appearance → Font picker */
 export const FONT_GROUPS: { id: string; label: string; fonts: string[] }[] = [
-  { id: "sans", label: "Sans", fonts: ["default", "system", "manrope", "dmSans", "jakarta", "nunito", "poppins", "montserrat", "spacegrotesk", "outfit", "ubuntu", "roboto", "ibmPlex", "syne"] },
-  { id: "serif", label: "Serif", fonts: ["sourceSerif", "literata", "fraunces", "newsreader"] },
-  { id: "mono", label: "Mono & fun", fonts: ["mono", "ibmMono", "comic", "pixel"] },
+  { id: "sans", label: "Sans", fonts: ["default", "system", "geist", "figtree", "onest", "manrope", "dmSans", "jakarta", "nunito", "poppins", "montserrat", "spacegrotesk", "outfit", "sora", "rubik", "workSans", "lato", "openSans", "quicksand", "raleway", "redHat", "archivo", "kanit", "ubuntu", "roboto", "ibmPlex", "syne"] },
+  { id: "readable", label: "Easy to read", fonts: ["atkinson", "lexend"] },
+  { id: "serif", label: "Serif", fonts: ["sourceSerif", "literata", "fraunces", "newsreader", "playfair", "merriweather", "lora", "crimson"] },
+  { id: "mono", label: "Mono & fun", fonts: ["mono", "ibmMono", "firaCode", "spaceMono", "vt323", "orbitron", "caveat", "patrickHand", "righteous", "comic", "pixel"] },
 ];
 
 /** Groups for Appearance → Theme picker (keeps Ksubi Pink discoverable) */

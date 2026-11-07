@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Bold, FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Strikethrough, Timer, Trash2, Type, Underline, Wand2, X } from "lucide-react";
 import { useApp, conversationTitle, toast } from "@/store/app";
 import { useChat } from "@/store/chat";
-import { TTL_OPTIONS, runBotCommand, sendMessage, setTtl } from "@/lib/data";
+import { TTL_OPTIONS, runBotCommand, sendMessage, setTtl, type SendMode } from "@/lib/data";
 import { MSG_LIMIT_FREE, MSG_LIMIT_PREMIUM, NEED, gate, msgLimit, myTier, useMyTier } from "@/lib/premium";
 import { sendLive, sendTyping } from "@/lib/realtime";
 import { EFFECTS, playEffect, type EffectKind } from "@/lib/effects";
@@ -63,6 +63,7 @@ export default function Composer({
   });
   const timerAllowed = kind === "dm" || kind === "group";
   const [effect, setEffect] = useState<EffectKind | null>(null);
+  const [mode, setMode] = useState<SendMode>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [recQuality, setRecQuality] = useState<Rec["quality"]>("");
@@ -167,7 +168,7 @@ export default function Composer({
     haptic.light();
     // Any /command — built-in or community bots
     const isCmd = !file && /^\/[a-z][\w-]{0,30}\b/i.test(t);
-    void sendMessage(conversationId, text, file, withEffect).then(() => {
+    void sendMessage(conversationId, text, file, withEffect, mode).then(() => {
       if (isCmd) void runBotCommand(conversationId, t);
     });
     setText("");
@@ -180,6 +181,7 @@ export default function Composer({
     setFile(null);
     setEditOpen(false);
     setEffect(null);
+    setMode(null);
   }
 
   /** Wrap the current textarea selection (or insert empty markers) with Discord-style markup */
@@ -307,7 +309,7 @@ export default function Composer({
           </div>
         )}
         <ScheduledBar conversationId={conversationId} />
-        {(replyTo || file || chosen) && !recording && (
+        {(replyTo || file || chosen || mode) && !recording && (
           <div className="mb-1.5 flex animate-fade flex-col gap-1.5 rounded-2xl bg-side px-3 py-2">
             {replyTo && (
               <div className="flex items-center gap-3">
@@ -351,6 +353,25 @@ export default function Composer({
                   Sending with <b>{chosen.label}</b>
                 </span>
                 <button onClick={() => setEffect(null)} className="p-1 text-sub" aria-label="Remove effect">
+                  <X className="size-4" />
+                </button>
+              </div>
+            )}
+            {mode && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-lg">{mode === "hidden" ? "🙈" : "⚠️"}</span>
+                <span className="flex-1">
+                  {mode === "hidden" ? (
+                    <>
+                      Sending as a <b>hidden message</b> — they hold to reveal it
+                    </>
+                  ) : (
+                    <>
+                      Sending behind a <b>spoiler</b> cover
+                    </>
+                  )}
+                </span>
+                <button onClick={() => setMode(null)} className="p-1 text-sub" aria-label="Send normally">
                   <X className="size-4" />
                 </button>
               </div>
@@ -642,6 +663,31 @@ export default function Composer({
       </Sheet>
 
       <Sheet open={effects} onClose={() => setEffects(false)} title="Send with effect">
+        <div className="mb-2 grid grid-cols-2 gap-2">
+          {(
+            [
+              ["hidden", "🙈", "Hidden message", "Invisible ink — hold to read"],
+              ["spoiler", "⚠️", "Spoiler", "Text & media behind a cover"],
+            ] as const
+          ).map(([id, icon, label, hint]) => (
+            <button
+              key={id}
+              onClick={() => {
+                haptic.select();
+                setMode(mode === id ? null : id);
+                setEffects(false);
+                area.current?.focus();
+              }}
+              className={cn("flex items-center gap-2.5 rounded-2xl bg-white/[.06] p-3 text-left transition active:scale-95", mode === id && "ring-2 ring-accent")}
+            >
+              <span className="text-2xl">{icon}</span>
+              <span className="min-w-0">
+                <span className="block text-[13px] font-bold">{label}</span>
+                <span className="block truncate text-[11px] text-sub">{hint}</span>
+              </span>
+            </button>
+          ))}
+        </div>
         <div className="grid grid-cols-3 gap-2 pb-1">
           {EFFECTS.map((e) => (
             <button

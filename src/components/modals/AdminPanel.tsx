@@ -203,7 +203,7 @@ function Members({ rank, focusUser, initialQuery = "" }: { rank: number; focusUs
                 <NameTag userId={u.id} className="font-semibold" />
                 <div className="truncate text-xs text-sub">
                   {profilesUid(u.id)}@{u.username}
-                  {u.email && ` · ${u.email}`} · {u.message_count} msgs · joined {new Date(u.created_at).toLocaleDateString()}
+                  {u.email && <span className="sensitive"> · {u.email}</span>} · {u.message_count} msgs · joined {new Date(u.created_at).toLocaleDateString()}
                 </div>
               </div>
               <MutedChip userId={u.id} />

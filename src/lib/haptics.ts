@@ -10,12 +10,24 @@ type HapticsPlugin = {
 };
 
 function plugin(): HapticsPlugin | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined" || !hapticsOn()) return null;
   const cap = (window as unknown as { Capacitor?: { Plugins?: { Haptics?: HapticsPlugin } } }).Capacitor;
   return cap?.Plugins?.Haptics ?? null;
 }
 
+/** Settings → Accessibility → Haptics (read lazily to avoid an import cycle) */
+function hapticsOn() {
+  try {
+    const raw = localStorage.getItem("nexus.prefs");
+    if (!raw) return true;
+    return JSON.parse(raw)?.state?.haptics !== false;
+  } catch {
+    return true;
+  }
+}
+
 function vibrate(ms: number | number[]) {
+  if (!hapticsOn()) return;
   try {
     navigator.vibrate?.(ms);
   } catch {

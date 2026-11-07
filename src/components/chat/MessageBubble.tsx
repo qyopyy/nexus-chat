@@ -24,6 +24,7 @@ import GameInvite from "@/components/games/GameInvite";
 import { ScoreChallengeCard } from "@/components/games/ScoreChallenge";
 import ServerInvite from "@/components/space/ServerInvite";
 import LinkEmbed from "./LinkEmbed";
+import MessageVeil from "./MessageVeil";
 import { PollCard } from "./Poll";
 import { POLL_RE } from "@/lib/polls";
 import { BUMP_PIN_RE, CAPSULE_RE, JAM_RE } from "@/lib/chatExtras";
@@ -369,6 +370,7 @@ function MessageBubbleImpl({
                   <span className="truncate">Forwarded from {forwarded.from}</span>
                 </div>
               )}
+              <VeilIf m={m} mine={mine}>
               <Attachment m={m} mine={mine} />
               {POLL_RE.test(displayContent) ? (
                 <PollCard id={displayContent.match(POLL_RE)![1]} mine={mine} />
@@ -394,6 +396,7 @@ function MessageBubbleImpl({
               {displayContent.includes("play=") && !deleted && <GameInvite text={displayContent} />}
               {m.content.includes("🎯") && /Beat my score/i.test(m.content) && !deleted && <ScoreChallengeCard text={m.content} fromId={m.author_id} />}
               {(displayContent.includes("/i/") || /[?&]join=/.test(displayContent)) && !deleted && <ServerInvite text={displayContent} />}
+              </VeilIf>
             </>
           )}
 
@@ -493,7 +496,7 @@ function MessageBubbleImpl({
             </ToolBtn>
           )}
           {(mine || canModerate) && (
-            <ToolBtn label={mine ? "Delete" : "Delete (moderator)"} danger onClick={() => confirm("Delete this message?") && void deleteMessage(m.id)}>
+            <ToolBtn label={mine ? "Delete" : "Delete (moderator)"} danger onClick={() => (!usePrefs.getState().confirmDelete || confirm("Delete this message?")) && void deleteMessage(m.id)}>
               <Trash2 className="size-[18px]" />
             </ToolBtn>
           )}
@@ -582,7 +585,7 @@ function MessageBubbleImpl({
               danger
               onClick={() => {
                 setSheet(false);
-                if (confirm("Delete this message?")) void deleteMessage(m.id);
+                if ((!usePrefs.getState().confirmDelete || confirm("Delete this message?"))) void deleteMessage(m.id);
               }}
             />
           </SheetGroup>
@@ -649,3 +652,10 @@ function InlineEditor({ message }: { message: Message }) {
 }
 
 export default memo(MessageBubbleImpl);
+
+/** wraps the message body in a spoiler / invisible-ink cover when the sender chose one */
+function VeilIf({ m, mine, children }: { m: Message; mine: boolean; children: React.ReactNode }) {
+  if (m.hidden) return <MessageVeil kind="hidden" mine={mine}>{children}</MessageVeil>;
+  if (m.spoiler) return <MessageVeil kind="spoiler" mine={mine}>{children}</MessageVeil>;
+  return <>{children}</>;
+}

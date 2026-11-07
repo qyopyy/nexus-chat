@@ -417,7 +417,9 @@ export async function markSpaceRead(spaceId: string) {
   await Promise.all(channels.map((c) => markRead(c.id)));
 }
 
-export async function sendMessage(convId: string, content: string, file?: File | null, chosenEffect?: EffectKind | null) {
+export type SendMode = "hidden" | "spoiler" | null;
+
+export async function sendMessage(convId: string, content: string, file?: File | null, chosenEffect?: EffectKind | null, mode: SendMode = null) {
   const me = get().userId;
   if (!me) return;
   const { loadNetPrefs, stripTrackingFromText } = await import("./netPrefs");
@@ -460,6 +462,8 @@ export async function sendMessage(convId: string, content: string, file?: File |
     deleted_at: null,
     created_at: new Date().toISOString(),
     effect,
+    hidden: mode === "hidden",
+    spoiler: mode === "spoiler",
     pending: true,
   };
   useChat.setState((s) => (s.conversationId === convId ? { messages: [...s.messages, optimistic], replyTo: null } : { replyTo: null }));
@@ -576,6 +580,7 @@ export async function sendMessage(convId: string, content: string, file?: File |
       reply_to_id: replyTo?.id ?? null,
       ...attachment,
       ...(effect ? { effect } : {}),
+      ...(mode === "hidden" ? { hidden: true } : mode === "spoiler" ? { spoiler: true } : {}),
     })
     .select()
     .single();
@@ -762,7 +767,7 @@ export function bumpChatList(m: Message) {
     if (idx === -1) return s;
     const item: ChatListItem = {
       ...s.chatList[idx],
-      last_message: m.content || (m.attachment_name ? `📎 ${m.attachment_name}` : ""),
+      last_message: m.hidden ? "🙈 Hidden message" : m.spoiler ? "⚠️ Spoiler" : m.content || (m.attachment_name ? `📎 ${m.attachment_name}` : ""),
       last_author_id: m.author_id,
       last_message_at: m.created_at,
     };

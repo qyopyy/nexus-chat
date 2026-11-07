@@ -17,7 +17,7 @@ import { shareAppUrl } from "@/lib/seo";
 import { MESSAGE_SOUNDS, sfx } from "@/lib/sounds";
 import { MSG_LIMIT_FREE, MSG_LIMIT_PREMIUM, NEED, gate, useMyTier } from "@/lib/premium";
 import { CAMERA_QUALITY_OPTIONS, pickCameraQuality, useCall } from "@/lib/call";
-import { BlockedPeople, DeleteAccountBlock, MutedWords } from "./ExtraSettings";
+import { BlockedPeople, DeleteAccountBlock, MoreConnections, MutedWords } from "./ExtraSettings";
 
 const Hr = () => <div className="my-8 h-px bg-line" />;
 
@@ -125,6 +125,7 @@ export function ConnectionsSection() {
           Admin note: while the Spotify app is in Development Mode, Spotify only lets accounts listed under User Management in the Spotify developer dashboard sign in. Request extended access there to open it to everyone.
         </p>
       )}
+      <MoreConnections />
     </>
   );
 }
@@ -161,6 +162,16 @@ const PRIV_DEF: Privacy = {
   wump_who_can_invite: "friends",
   wump_share_enabled: true,
 };
+
+function StreamerToggle() {
+  const on = usePrefs((s) => s.streamerMode);
+  return (
+    <>
+      <Label>Streamer mode</Label>
+      <Toggle label="Hide personal info on screen" hint="Blurs chat previews in your chat list and personal details until you hover them — handy when streaming or sharing your screen." checked={on} onChange={(v) => setPref("streamerMode", v)} />
+    </>
+  );
+}
 
 export function PrivacySection() {
   const me = useApp((s) => s.userId);
@@ -295,6 +306,8 @@ export function PrivacySection() {
       )}
 
       <Hr />
+      <StreamerToggle />
+      <Hr />
       <BlockedPeople />
       <Hr />
       <MutedWords />
@@ -331,6 +344,7 @@ export function AccessibilitySection() {
       <H>Accessibility</H>
       <Label>Motion</Label>
       <Toggle label="Reduce motion" hint="Turns off animations, transitions and moving effects across the app." checked={p.reduceMotion} onChange={(v) => setPref("reduceMotion", v)} />
+      <Toggle label="Haptic feedback" hint="Little vibrations when you tap, send and react (phones)." checked={p.haptics} onChange={(v) => setPref("haptics", v)} />
       <Toggle label="Play chat effects" hint="Fireworks, confetti and other full-screen message effects." checked={p.chatEffects} onChange={(v) => setPref("chatEffects", v)} />
       <Toggle label="Show animated profile effects" hint="Effects on other people's profiles (yours always shows for you)." checked={p.othersProfileFx} onChange={(v) => setPref("othersProfileFx", v)} />
       <Hr />
@@ -410,6 +424,8 @@ export function ChatPrefsBlock() {
       <Toggle label="Big emoji" hint="Messages with only emoji show large." checked={p.jumboEmoji} onChange={(v) => setPref("jumboEmoji", v)} />
       <Toggle label="Always reveal spoilers" hint="Text wrapped in ||double bars|| is hidden until clicked." checked={p.spoilersAutoReveal} onChange={(v) => setPref("spoilersAutoReveal", v)} />
       <Toggle label="Play message effects" checked={p.chatEffects} onChange={(v) => setPref("chatEffects", v)} />
+      <Toggle label="Show link previews" hint="Cards for links in DMs and groups. Off saves data." checked={p.linkPreviews} onChange={(v) => setPref("linkPreviews", v)} />
+      <Toggle label="Ask before deleting a message" checked={p.confirmDelete} onChange={(v) => setPref("confirmDelete", v)} />
       <Hr />
       <PremiumQualityBlock />
       <Hr />

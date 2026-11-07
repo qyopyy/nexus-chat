@@ -224,7 +224,7 @@ export default function HomeSidebar() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={cn("truncate text-sm", active ? "text-white/85" : "text-sub")}>
+                    <span className={cn("sensitive truncate text-sm", active ? "text-white/85" : "text-sub")}>
                       {c.last_message ? (
                         <>
                           {lastAuthor && <span className={active ? "text-white" : "text-txt"}>{lastAuthor}: </span>}

@@ -30,7 +30,7 @@ export default function ProfileExtras() {
   const addLink = async () => {
     const l = normalizeLink(linkText, plat);
     if (!l) return toast("That link doesn't look right", "error");
-    if (links.length >= 20) return toast("Up to 20 links", "error");
+    if (links.length >= 30) return toast("Up to 30 links", "error");
     await updateMyProfile({ links: [...links, l] });
     setLinkText("");
   };

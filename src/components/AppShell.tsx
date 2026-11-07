@@ -47,6 +47,7 @@ import PulseHub from "./pulse/PulseHub";
 import StaffDesk from "./staff/StaffDesk";
 import SiteNoticeBanner from "./staff/SiteNoticeBanner";
 import ReportDialog from "./ui/ReportDialog";
+import UpdateReadyPill from "./ui/UpdateReadyPill";
 import MaintenanceGate from "./MaintenanceGate";
 import { useStudio, videosGo } from "@/store/studio";
 import { releaseByCode } from "@/lib/protect";
@@ -241,6 +242,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
         <InvitePopup />
         <ProfileCard />
         <ReportDialog />
+        <UpdateReadyPill />
         <Modals />
         <Toasts />
         <EffectsLayer />
@@ -258,6 +260,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
         <InvitePopup />
         <ProfileCard />
         <ReportDialog />
+        <UpdateReadyPill />
         <Modals />
         <Toasts />
         <EffectsLayer />
@@ -337,6 +340,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
         <InvitePopup />
       <ProfileCard />
       <ReportDialog />
+      <UpdateReadyPill />
       <Modals />
       <MessageBanner />
       <Toasts />

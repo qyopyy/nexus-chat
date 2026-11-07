@@ -7,6 +7,30 @@
 
 import { isNativeApp } from "./useMobile";
 import { checkCapgoUpdate, notifyCapgoAppReady } from "./capgo";
+import { supabase } from "./supabase";
+
+/** tell every open Nexus (over Supabase Realtime) that this build is live — they re-check /api/version */
+function announce(build: string) {
+  if (!build || build === "dev") return;
+  void supabase.rpc("announce_release", { p_build: build.slice(0, 64) }).then(
+    () => undefined,
+    () => undefined,
+  );
+}
+
+/** web: show the "new version ready" pill (UpdateReadyPill listens) */
+function signalReady(build: string) {
+  try {
+    window.dispatchEvent(new CustomEvent("nexus:update-ready", { detail: { build } }));
+  } catch {
+    /* old browsers */
+  }
+}
+
+export function reloadToUpdate() {
+  sessionStorage.removeItem("nexus.pendingLiveReload");
+  reloadNow();
+}
 
 const KEY = "nexus.liveBuild";
 const CACHE_HOUR_KEY = "nexus.clientCacheHour";
@@ -87,10 +111,12 @@ export function startLiveUpdates() {
     const prev = localStorage.getItem(KEY);
     if (!prev) {
       localStorage.setItem(KEY, v.build);
+      announce(v.build);
       return;
     }
     if (prev !== v.build) {
       localStorage.setItem(KEY, v.build);
+      announce(v.build);
       // Native shells + force flag: hard reload so realtime UI matches production.
       if (native || sessionStorage.getItem("nexus.forceLiveReload") === "1") {
         reloadNow();
@@ -98,9 +124,7 @@ export function startLiveUpdates() {
       }
       // Web: apply on next focus so deploys feel live without interrupting mid-type.
       sessionStorage.setItem("nexus.pendingLiveReload", "1");
-      if (document.visibilityState !== "visible") {
-        /* wait for focus */
-      }
+      signalReady(v.build);
     }
   };
 
@@ -125,6 +149,17 @@ export function startLiveUpdates() {
   void check();
   clearClientCaches();
   timer = setInterval(() => void check(), pollMs);
+
+  // realtime: a new deploy announced by the Vercel webhook or the first client that loads it
+  let debounce: ReturnType<typeof setTimeout> | null = null;
+  const channel = supabase
+    .channel("nexus-app-releases")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "app_releases" }, () => {
+      if (debounce) clearTimeout(debounce);
+      // tiny jitter so thousands of clients don't hit /api/version in the same millisecond
+      debounce = setTimeout(() => void check(), 300 + Math.random() * 2500);
+    })
+    .subscribe();
   const hourTimer = setInterval(() => clearClientCaches(), HOUR_MS);
 
   const onVis = () => {
@@ -147,6 +182,8 @@ export function startLiveUpdates() {
 
   return () => {
     stopped = true;
+    if (debounce) clearTimeout(debounce);
+    void supabase.removeChannel(channel);
     if (timer) clearInterval(timer);
     clearInterval(hourTimer);
     document.removeEventListener("visibilitychange", onVis);

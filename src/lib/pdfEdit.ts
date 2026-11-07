@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, degrees, rgb, type PDFFont } from "pdf-lib";
+import { PDFDocument, StandardFonts, degrees, rgb, type PDFFont, type PDFImage } from "pdf-lib";
 
 export type PdfFontId = "helvetica" | "helveticaBold" | "helveticaOblique" | "helveticaBoldOblique";
 
@@ -14,7 +14,19 @@ export type PdfAnnotation = {
   color: string;
   font?: PdfFontId;
   opacity?: number;
+  /** signature / stamp image (PNG data URL). For images x,y is the bottom-left corner. */
+  image?: string;
+  width?: number;
+  height?: number;
 };
+
+function dataUrlBytes(url: string) {
+  const b64 = url.split(",")[1] ?? "";
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
 
 export class PdfEditError extends Error {}
 
@@ -77,8 +89,20 @@ export async function buildEditedPdf(src: Uint8Array, order: number[], annotatio
   const fonts = await embedFonts(out);
   const defaultFont = fonts.helvetica;
 
+  // embed each signature image once
+  const images = new Map<string, PDFImage>();
   for (const note of annotations) {
-    if (!order.includes(note.page)) continue;
+    if (!note.image || images.has(note.image) || !order.includes(note.page)) continue;
+    try {
+      const bytes = dataUrlBytes(note.image);
+      images.set(note.image, note.image.startsWith("data:image/jpeg") ? await out.embedJpg(bytes) : await out.embedPng(bytes));
+    } catch {
+      throw new PdfEditError("A signature image couldn't be added — try creating it again.");
+    }
+  }
+
+  for (const note of annotations) {
+    if (!order.includes(note.page) || note.image) continue;
     const font = fonts[note.font ?? "helvetica"] ?? defaultFont;
     for (const line of note.text.split(/\r?\n/)) {
       if (line) assertEncodable(font, line);
@@ -102,6 +126,11 @@ export async function buildEditedPdf(src: Uint8Array, order: number[], annotatio
     const srcIndex = order[index];
     const notes = annotations.filter((note) => note.page === srcIndex);
     for (const note of notes) {
+      if (note.image) {
+        const img = images.get(note.image);
+        if (img) page.drawImage(img, { x: note.x, y: note.y, width: note.width ?? 160, height: note.height ?? 60, opacity: Math.max(0.15, Math.min(1, note.opacity ?? 1)) });
+        continue;
+      }
       const lines = note.text.split(/\r?\n/);
       const color = hexToRgb(note.color);
       const font = fonts[note.font ?? "helvetica"] ?? defaultFont;

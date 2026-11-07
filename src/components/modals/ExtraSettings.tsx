@@ -2,8 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { Ban, Moon, Trash2 } from "lucide-react";
-import { useApp } from "@/store/app";
-import { loadProfiles } from "@/lib/data";
+import { toast, useApp } from "@/store/app";
+import { CONNECTION_GROUPS, normalizeLink, platformById } from "@/lib/links";
+import type { ProfileLink } from "@/lib/types";
+import { loadProfiles, updateMyProfile } from "@/lib/data";
+
+const NO_LINKS: ProfileLink[] = [];
 import { setPref, usePrefs } from "@/lib/prefs";
 import { loadBlocks, unblockUser, useBlocks } from "@/lib/blocks";
 import { NOTIF_DEFAULTS, deleteMyAccount, fromHHMM, getNotifPrefs, saveNotifPrefs, toHHMM, type NotifPrefs } from "@/lib/adminTools";
@@ -193,6 +197,91 @@ export function DeleteAccountBlock() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ───────────── Connections → every other platform ───────────── */
+export function MoreConnections() {
+  const links = useApp((s) => (s.userId ? (s.profiles[s.userId]?.links ?? NO_LINKS) : NO_LINKS));
+  const [open, setOpen] = useState<string | null>(null);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const byType = (id: string) => links.findIndex((l) => l.type === id);
+  const save = async (id: string) => {
+    const l = normalizeLink(text, id);
+    if (!l) return toast("That doesn't look like a username or link", "error");
+    if (l.type !== id && id !== "website" && l.type !== "website") return toast(`That link is for ${platformById(l.type).label}, not ${platformById(id).label}`, "error");
+    const i = byType(id);
+    const next = i >= 0 ? links.map((x, j) => (j === i ? { ...x, url: l.url, type: id } : x)) : [...links, { ...l, type: id }];
+    if (next.length > 30) return toast("Up to 30 connections", "error");
+    setBusy(true);
+    await updateMyProfile({ links: next });
+    setBusy(false);
+    setOpen(null);
+    setText("");
+  };
+  const remove = async (id: string) => {
+    const i = byType(id);
+    if (i < 0) return;
+    await updateMyProfile({ links: links.filter((_, j) => j !== i) });
+  };
+  return (
+    <div className="mt-6">
+      <Label>More connections</Label>
+      <p className="mb-3 text-sm text-sub">Add your other accounts — they show as buttons on your profile. {links.length}/30 used.</p>
+      <div className="space-y-5">
+        {CONNECTION_GROUPS.map((g) => (
+          <div key={g.label}>
+            <div className="mb-2 text-[11px] font-bold tracking-wide text-faint uppercase">{g.label}</div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {g.ids.map((id) => {
+                const p = platformById(id);
+                const linked = byType(id) >= 0;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => {
+                      setOpen(open === id ? null : id);
+                      setText(linked ? links[byType(id)].url : "");
+                    }}
+                    className={`flex min-h-12 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-semibold transition active:scale-[.98] ${open === id ? "bg-active ring-2 ring-accent" : "bg-side hover:bg-hover"}`}
+                  >
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg text-xs font-black text-white" style={{ background: p.color }}>
+                      {p.glyph}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{p.label}</span>
+                    {linked && <span className="size-2 shrink-0 rounded-full bg-ok" title="Connected" />}
+                  </button>
+                );
+              })}
+            </div>
+            {open && g.ids.includes(open) && (
+              <div className="mt-2 animate-pop rounded-xl bg-side p-3 ring-1 ring-line">
+                <div className="mb-2 text-sm font-semibold">{platformById(open).label}</div>
+                <div className="flex gap-2">
+                  <input
+                    autoFocus
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && void save(open)}
+                    placeholder={platformById(open).fromHandle ? "@username or link" : "Paste your profile link"}
+                    className="min-w-0 flex-1 rounded-md bg-rail px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent/60"
+                  />
+                  <button disabled={busy || !text.trim()} onClick={() => void save(open)} className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
+                    {byType(open) >= 0 ? "Update" : "Connect"}
+                  </button>
+                </div>
+                {byType(open) >= 0 && (
+                  <button onClick={() => void remove(open).then(() => setOpen(null))} className="mt-2 text-xs font-semibold text-dnd">
+                    Disconnect
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

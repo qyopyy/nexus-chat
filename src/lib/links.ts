@@ -48,7 +48,36 @@ export const PLATFORMS: Platform[] = [
   { id: "patreon", label: "Patreon", color: "#FF424D", glyph: "●", hosts: ["patreon.com"], fromHandle: (h) => `https://patreon.com/${h}` },
   { id: "whatsapp", label: "WhatsApp", color: "#25D366", glyph: "✆", hosts: ["wa.me", "whatsapp.com", "chat.whatsapp.com"] },
   { id: "vk", label: "VK", color: "#0077FF", glyph: "VK", hosts: ["vk.com"], fromHandle: (h) => `https://vk.com/${h}` },
+  // gaming
+  { id: "steam", label: "Steam", color: "#171A21", glyph: "♨", hosts: ["steamcommunity.com", "store.steampowered.com"], fromHandle: (h) => `https://steamcommunity.com/id/${h}` },
+  { id: "xbox", label: "Xbox", color: "#107C10", glyph: "X", hosts: ["xbox.com", "account.xbox.com"], fromHandle: (h) => `https://www.xbox.com/play/user/${encodeURIComponent(h)}` },
+  { id: "playstation", label: "PlayStation", color: "#003791", glyph: "△", hosts: ["psnprofiles.com", "my.playstation.com"], fromHandle: (h) => `https://psnprofiles.com/${h}` },
+  { id: "epicgames", label: "Epic Games", color: "#2F2D2E", glyph: "E", hosts: ["epicgames.com", "store.epicgames.com"] },
+  { id: "roblox", label: "Roblox", color: "#E2231A", glyph: "◧", hosts: ["roblox.com"] },
+  { id: "chesscom", label: "Chess.com", color: "#81B64C", glyph: "♞", hosts: ["chess.com"], fromHandle: (h) => `https://www.chess.com/member/${h}` },
+  // music & video
+  { id: "lastfm", label: "Last.fm", color: "#D51007", glyph: "as", hosts: ["last.fm", "lastfm.com"], fromHandle: (h) => `https://www.last.fm/user/${h}` },
+  { id: "mixcloud", label: "Mixcloud", color: "#5000FF", glyph: "☁", hosts: ["mixcloud.com"], fromHandle: (h) => `https://www.mixcloud.com/${h}` },
+  { id: "qobuz", label: "Qobuz", color: "#000000", glyph: "Q", hosts: ["qobuz.com", "open.qobuz.com"] },
+  { id: "vimeo", label: "Vimeo", color: "#1AB7EA", glyph: "v", hosts: ["vimeo.com"], fromHandle: (h) => `https://vimeo.com/${h}` },
+  // social & creator
+  { id: "mastodon", label: "Mastodon", color: "#6364FF", glyph: "M", hosts: ["mastodon.social", "mstdn.social", "mas.to"] },
+  { id: "kofi", label: "Ko-fi", color: "#FF5E5B", glyph: "☕", hosts: ["ko-fi.com"], fromHandle: (h) => `https://ko-fi.com/${h}` },
+  { id: "buymeacoffee", label: "Buy Me a Coffee", color: "#FFDD00", glyph: "☕", hosts: ["buymeacoffee.com"], fromHandle: (h) => `https://buymeacoffee.com/${h}` },
+  { id: "linktree", label: "Linktree", color: "#43E55E", glyph: "✳", hosts: ["linktr.ee"], fromHandle: (h) => `https://linktr.ee/${h}` },
+  { id: "substack", label: "Substack", color: "#FF6719", glyph: "S", hosts: ["substack.com"], fromHandle: (h) => `https://${h}.substack.com` },
+  { id: "medium", label: "Medium", color: "#000000", glyph: "M", hosts: ["medium.com"], fromHandle: (h) => `https://medium.com/@${h}` },
+  { id: "behance", label: "Behance", color: "#1769FF", glyph: "Bē", hosts: ["behance.net"], fromHandle: (h) => `https://www.behance.net/${h}` },
+  { id: "dribbble", label: "Dribbble", color: "#EA4C89", glyph: "◍", hosts: ["dribbble.com"], fromHandle: (h) => `https://dribbble.com/${h}` },
   { id: "website", label: "Website", color: "#4E5058", glyph: "🌐", hosts: [] },
+];
+
+/** categories for Settings → Connections */
+export const CONNECTION_GROUPS: { label: string; ids: string[] }[] = [
+  { label: "Social", ids: ["instagram", "tiktok", "x", "youtube", "snapchat", "threads", "bluesky", "facebook", "reddit", "pinterest", "linkedin", "mastodon", "telegram", "whatsapp", "vk"] },
+  { label: "Music", ids: ["soundcloud", "applemusic", "youtubemusic", "deezer", "tidal", "amazonmusic", "audiomack", "bandcamp", "beatport", "lastfm", "mixcloud", "qobuz", "shazam", "genius"] },
+  { label: "Gaming & streaming", ids: ["twitch", "kick", "steam", "xbox", "playstation", "epicgames", "roblox", "chesscom", "discord", "vimeo"] },
+  { label: "Creator & support", ids: ["patreon", "kofi", "buymeacoffee", "linktree", "substack", "medium", "behance", "dribbble", "github", "website"] },
 ];
 
 /** platforms shown under "Music" on profiles */

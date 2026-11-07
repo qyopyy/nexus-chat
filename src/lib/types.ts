@@ -267,6 +267,10 @@ export type Message = {
   effect?: string | null;
   /** display name of a webhook / bot post */
   bot_name?: string | null;
+  /** "invisible ink": blurred under sparkles until the reader holds to reveal */
+  hidden?: boolean;
+  /** whole message (text + media) behind a spoiler cover */
+  spoiler?: boolean;
   /** client-only: optimistic message not yet confirmed */
   pending?: boolean;
 };

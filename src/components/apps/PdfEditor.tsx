@@ -10,7 +10,9 @@ import {
   Download,
   FilePlus2,
   FilePen,
+  CalendarDays,
   Italic,
+  PenLine,
   Redo2,
   RotateCw,
   ShieldCheck,
@@ -24,6 +26,7 @@ import { sanitizeDownloadName, sniffPdf } from "@/lib/fileSafety";
 import { buildEditedPdf, isBlankPage, nextBlankPageId, PdfEditError, type PdfAnnotation, type PdfFontId } from "@/lib/pdfEdit";
 import { loadPdfjs } from "@/lib/pdfjs";
 import { cn } from "@/lib/utils";
+import SignaturePad, { forgetSavedSignature, loadSavedSignature, type Signature } from "./SignaturePad";
 
 const MAX_BYTES = 40 * 1024 * 1024;
 const MAX_PAGES = 80;
@@ -87,6 +90,11 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
   const future = useRef<Snapshot[]>([]);
   const [histTick, setHistTick] = useState(0);
   const dragRef = useRef<{ id: string; ox: number; oy: number } | null>(null);
+  // signing
+  const [sig, setSig] = useState<Signature | null>(null);
+  const [sigOpen, setSigOpen] = useState(false);
+  const [placing, setPlacing] = useState(false);
+  useEffect(() => setSig(loadSavedSignature()), []);
   const dragMoved = useRef(false);
 
   useEffect(() => {
@@ -288,6 +296,62 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
     setSelectedNote(note.id);
   }
 
+  /** drop the signature centred on (x, y) in PDF space */
+  function placeSignature(x: number, y: number, s: Signature | null = sig) {
+    const src = order[current];
+    const pageHeight = metrics?.height;
+    const pageWidth = metrics?.width;
+    if (!s || src === undefined || !pageHeight || !pageWidth) return;
+    const width = Math.min(pageWidth * 0.4, 170);
+    const height = (width * s.h) / s.w;
+    pushHistory();
+    const note: Placed = {
+      id: uid(),
+      page: src,
+      text: "Signature",
+      image: s.url,
+      width,
+      height,
+      x: Math.max(0, Math.min(pageWidth - width, x - width / 2)),
+      y: Math.max(0, Math.min(pageHeight - height, y - height / 2)),
+      size: 12,
+      color: "#000000",
+      opacity: 1,
+      pageHeight,
+    };
+    setNotes((list) => [...list, note]);
+    setSelectedNote(note.id);
+    setPlacing(false);
+    setError(null);
+  }
+
+  function addDate() {
+    const src = order[current];
+    const pageHeight = metrics?.height;
+    if (src === undefined || !pageHeight || !metrics) return;
+    const sel = notes.find((n) => n.id === selectedNote && n.image);
+    const label = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+    pushHistory();
+    const note: Placed = {
+      id: uid(),
+      page: src,
+      text: label,
+      x: sel ? sel.x : 48,
+      y: sel ? Math.max(8, sel.y - 16) : 48,
+      size: 11,
+      color: "#111827",
+      font: "helvetica",
+      opacity: 1,
+      pageHeight,
+    };
+    setNotes((list) => [...list, note]);
+    setSelectedNote(note.id);
+  }
+
+  function resizeSelected(width: number) {
+    setNotes((list) => list.map((n) => (n.id === selectedNote && n.image && n.width && n.height ? { ...n, height: (n.height / n.width) * width, width } : n)));
+  }
+
   function onStageClick(e: React.MouseEvent<HTMLDivElement>) {
     if (dragRef.current) return;
     if ((e.target as HTMLElement).closest("[data-note]")) return;
@@ -296,6 +360,7 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
     const rect = canvas.getBoundingClientRect();
     const px = ((e.clientX - rect.left) / rect.width) * metrics.width;
     const py = metrics.height - ((e.clientY - rect.top) / rect.height) * metrics.height;
+    if (placing) return placeSignature(px, py);
     placeAt(Math.max(0, px), Math.max(0, py));
   }
 
@@ -353,7 +418,7 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${name}-edited.pdf`;
+      a.download = `${name}-${notes.some((n) => n.image) ? "signed" : "edited"}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -374,7 +439,7 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
           <ArrowLeft className="size-5" />
         </button>
         <FilePen className="size-5 text-[#faa61a]" />
-        <span className="min-w-0 flex-1 truncate font-bold">Docs editor</span>
+        <span className="min-w-0 flex-1 truncate font-bold">PDF editor &amp; sign</span>
         {ready && (
           <>
             <button onClick={undo} disabled={histTick >= 0 && history.current.length === 0} className="grid size-9 place-items-center rounded-full hover:bg-hover disabled:opacity-30" aria-label="Undo">
@@ -403,7 +468,7 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
         <div className="mx-auto mb-4 flex max-w-6xl items-start gap-2 rounded-2xl bg-side/80 px-3 py-2 text-xs text-sub">
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-ok" />
           <span>
-            Professional PDF docs tools — text styles, page tools, watermarks, and page numbers. Files stay in this tab. Caps at {MAX_PAGES} pages · 40 MB. Helvetica family only for overlay text.
+            Sign PDFs, add text, reorder and rotate pages, watermarks and page numbers. Files stay in this tab. Caps at {MAX_PAGES} pages · 40 MB. Helvetica family only for overlay text.
           </span>
         </div>
         {!ready ? (
@@ -421,7 +486,7 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
             />
             <FilePen className="mb-3 size-10 text-sub" />
             <span className="block font-semibold">{busy ? "Opening PDF…" : "Open a PDF document"}</span>
-            <span className="mt-1 block max-w-sm text-sm text-sub">Annotate, reorder, rotate, insert blanks, watermark, then download. Editing stays on this device.</span>
+            <span className="mt-1 block max-w-sm text-sm text-sub">Sign, annotate, reorder, rotate, insert blanks, watermark, then download. Editing stays on this device.</span>
           </label>
         ) : (
           <div className="mx-auto grid max-w-6xl gap-4 lg:grid-cols-[220px_minmax(0,1fr)_300px]">
@@ -486,7 +551,8 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
                       className={cn("absolute cursor-move whitespace-pre text-left select-none", selectedNote === note.id && "outline outline-2 outline-accent")}
                       style={{
                         left: `${(note.x / metrics.width) * 100}%`,
-                        top: `${((metrics.height - note.y - note.size) / metrics.height) * 100}%`,
+                        top: `${((metrics.height - note.y - (note.image ? (note.height ?? 60) : note.size)) / metrics.height) * 100}%`,
+                        ...(note.image ? { width: `${((note.width ?? 160) / metrics.width) * 100}%` } : {}),
                         fontSize: `${Math.max(8, note.size * metrics.scale)}px`,
                         color: note.color,
                         opacity: note.opacity ?? 1,
@@ -526,13 +592,66 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
                         window.addEventListener("mouseup", onUp);
                       }}
                     >
-                      {note.text}
+                      {note.image ? <img src={note.image} alt="Signature" draggable={false} className="pointer-events-none block w-full" /> : note.text}
                     </span>
                   ))}
+                {placing && (
+                  <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
+                    <span className="rounded-full bg-accent px-3 py-1.5 text-xs font-bold text-white shadow-lg">Tap where the signature goes</span>
+                  </div>
+                )}
               </div>
             </div>
 
             <aside className="h-fit space-y-3 rounded-2xl bg-side p-4">
+              <div className="space-y-2 rounded-xl bg-accent/10 p-3 ring-1 ring-accent/30">
+                <h2 className="flex items-center gap-1.5 font-bold">
+                  <PenLine className="size-4 text-accent" /> Sign
+                </h2>
+                {sig ? (
+                  <>
+                    <div className="grid h-16 place-items-center rounded-lg bg-white p-1">
+                      <img src={sig.url} alt="Your signature" className="max-h-full max-w-full" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button onClick={() => setPlacing((v) => !v)} className={cn("rounded-lg py-2 text-xs font-bold", placing ? "bg-white text-black" : "bg-accent text-white")}>
+                        {placing ? "Cancel" : "Place on page"}
+                      </button>
+                      <button onClick={() => metrics && placeSignature(metrics.width * 0.72, 90)} className="rounded-lg bg-white/10 py-2 text-xs font-semibold">
+                        Bottom-right
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <button onClick={() => setSigOpen(true)} className="flex items-center gap-1 font-semibold text-accent">
+                        <PenLine className="size-3.5" /> New signature
+                      </button>
+                      <button onClick={addDate} className="flex items-center gap-1 font-semibold text-sub hover:text-txt">
+                        <CalendarDays className="size-3.5" /> Add date
+                      </button>
+                      <button
+                        onClick={() => {
+                          forgetSavedSignature();
+                          setSig(null);
+                        }}
+                        className="ml-auto text-sub hover:text-dnd"
+                      >
+                        Forget
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <button onClick={() => setSigOpen(true)} className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent py-2.5 text-sm font-bold text-white">
+                    <PenLine className="size-4" /> Create signature
+                  </button>
+                )}
+                {notes.find((n) => n.id === selectedNote && n.image) && (
+                  <label className="block">
+                    <span className="mb-1 block text-[11px] font-bold tracking-wide text-sub uppercase">Signature size</span>
+                    <input type="range" min={60} max={360} value={notes.find((n) => n.id === selectedNote)?.width ?? 170} onChange={(e) => resizeSelected(Number(e.target.value))} onPointerDown={pushHistory} className="w-full accent-accent" />
+                  </label>
+                )}
+                <p className="text-[11px] text-sub">Draw, type or upload your signature, place it, then download the signed PDF. Nothing leaves this device.</p>
+              </div>
               <h2 className="font-bold">Text tools</h2>
               <p className="text-xs text-sub">Style a note, click the page to place it, then drag to reposition.</p>
               <label className="block">
@@ -623,7 +742,7 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
                   {pageNotes.map((note) => (
                     <li key={note.id} className={cn("flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm", selectedNote === note.id ? "bg-accent/20" : "bg-black/20")}>
                       <button type="button" className="min-w-0 flex-1 truncate text-left" onClick={() => setSelectedNote(note.id)}>
-                        {note.text}
+                        {note.image ? "✍️ Signature" : note.text}
                       </button>
                       <button
                         onClick={() => {
@@ -646,6 +765,16 @@ export default function PdfEditor({ onBack, mobile }: { onBack: () => void; mobi
           </div>
         )}
         {error && <p className="mx-auto mt-3 max-w-6xl text-sm text-dnd">{error}</p>}
+        {sigOpen && (
+          <SignaturePad
+            onClose={() => setSigOpen(false)}
+            onDone={(s) => {
+              setSig(s);
+              setSigOpen(false);
+              setPlacing(true);
+            }}
+          />
+        )}
         {ready && (
           <label className="mx-auto mt-4 block max-w-6xl text-sm text-accent">
             Open a different PDF

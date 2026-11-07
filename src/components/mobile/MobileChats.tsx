@@ -208,7 +208,7 @@ export default function MobileChats() {
                       <span className={cn("ml-auto shrink-0 text-[13px]", n > 0 && !isMuted ? "text-accent" : "text-sub")}>{formatListTime(c.last_message_at ?? c.created_at)}</span>
                     </div>
                     <div className="mt-0.5 flex items-start gap-2">
-                      <span className="line-clamp-2 min-h-[2.5em] flex-1 text-[14.5px] leading-[1.25] text-sub">
+                      <span className="sensitive line-clamp-2 min-h-[2.5em] flex-1 text-[14.5px] leading-[1.25] text-sub">
                         {c.last_message ? (
                           <>
                             {lastAuthor && <span className="text-txt">{lastAuthor}: </span>}

@@ -40,6 +40,14 @@ export type Prefs = {
   mutedWords: string[];
   /** collapse messages from people you blocked in servers & groups */
   hideBlocked: boolean;
+  /** link preview cards under messages in DMs & groups */
+  linkPreviews: boolean;
+  /** ask before deleting a message */
+  confirmDelete: boolean;
+  /** blur message previews, emails and phone numbers — for streaming / screen sharing */
+  streamerMode: boolean;
+  /** vibration feedback on taps (phones) */
+  haptics: boolean;
   // sounds
   uiSounds: boolean;
   uiVolume: number; // 0–1
@@ -77,6 +85,10 @@ export const PREF_DEFAULTS: Prefs = {
   studioVoice: false,
   mutedWords: [],
   hideBlocked: true,
+  linkPreviews: true,
+  confirmDelete: true,
+  streamerMode: false,
+  haptics: true,
   uiSounds: true,
   uiVolume: 1,
   ringtone: true,
@@ -114,6 +126,7 @@ function apply(p: Prefs) {
   h.classList.toggle("big-targets", p.bigTargets);
   h.style.setProperty("--sat", String(p.saturation / 100));
   h.classList.toggle("desat", p.saturation < 100);
+  h.classList.toggle("streamer", p.streamerMode);
 }
 if (typeof window !== "undefined") {
   apply(usePrefs.getState());
