@@ -635,7 +635,7 @@ export function UsernamesField() {
         onSubmit={(e) => {
           e.preventDefault();
           const v = clean(val);
-          if (v.length < 3) return toast("Usernames are at least 3 characters", "error");
+          if (v.length < 1) return toast("Type a username", "error");
           void run(async () => {
             await claimUsername(v);
             setVal("");

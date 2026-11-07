@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Copy, ExternalLink, Pencil, Plane, Share2, Trash2 } from "lucide-react";
+import { Copy, ExternalLink, Mail, Pencil, Plane, RefreshCw, Share2, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useApp, toast } from "@/store/app";
 import { roleRank } from "@/lib/theme";
@@ -144,7 +144,98 @@ export default function TestFlightInvites() {
           );
         })}
       </div>
+      {admin && <Testers />}
       {admin && <p className="mt-2 text-[11px] text-white/45">Get each link in App Store Connect → your app → TestFlight → External testing group → Public link. Only admins see the edit buttons.</p>}
     </section>
+  );
+}
+
+type Signup = { id: string; app: TfApp; email: string; first_name: string; last_name: string; status: "pending" | "invited" | "failed"; error: string | null; created_at: string };
+
+/** admin: email signups from /beta, the 10,000 limit and the App Store Connect connection */
+function Testers() {
+  const [rows, setRows] = useState<Signup[]>([]);
+  const [counts, setCounts] = useState({ invited: 0, pending: 0, failed: 0 });
+  const [conn, setConn] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const [list, inv, pen, fail] = await Promise.all([
+      supabase.from("testflight_signups").select("id,app,email,first_name,last_name,status,error,created_at").order("created_at", { ascending: false }).limit(50),
+      supabase.from("testflight_signups").select("id", { count: "exact", head: true }).eq("status", "invited"),
+      supabase.from("testflight_signups").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      supabase.from("testflight_signups").select("id", { count: "exact", head: true }).eq("status", "failed"),
+    ]);
+    setRows((list.data as Signup[]) ?? []);
+    setCounts({ invited: inv.count ?? 0, pending: pen.count ?? 0, failed: fail.count ?? 0 });
+  }, []);
+  useEffect(() => {
+    void load();
+    void supabase.functions.invoke("testflight-invite", { body: { action: "status" } }).then(({ data }) => {
+      const d = data as { configured?: boolean; error?: string; groups?: Record<string, string | { error: string }> } | null;
+      if (!d) return setConn("Couldn't check the Apple connection");
+      if (!d.configured) return setConn(d.error ?? "Apple connection not set up");
+      const g = d.groups?.nexus;
+      setConn(typeof g === "string" ? `Connected · adding testers to “${g}”` : `Connected, but: ${g?.error ?? "no group"}`);
+    });
+  }, [load]);
+
+  const retry = async () => {
+    setBusy(true);
+    const { data, error } = await supabase.functions.invoke("testflight-invite", { body: { action: "retry" } });
+    setBusy(false);
+    const d = data as { configured?: boolean; sent?: number; failed?: number; errors?: string[]; error?: string } | null;
+    if (error || !d) return toast("Couldn't send invites", "error");
+    if (!d.configured) return toast(d.error ?? "Apple connection not set up", "error");
+    toast(`Sent ${d.sent} invite${d.sent === 1 ? "" : "s"}${d.failed ? ` · ${d.failed} failed: ${d.errors?.[0] ?? ""}` : ""}`, d.failed ? "error" : "success");
+    void load();
+  };
+  const remove = async (id: string) => {
+    await supabase.from("testflight_signups").delete().eq("id", id);
+    void load();
+  };
+
+  return (
+    <div className="mt-3 rounded-xl bg-black/25 p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <Mail className="size-4 text-[#5ab0ff]" />
+        <span className="text-sm font-bold">Email signups</span>
+        <span className="ml-auto text-xs text-white/60 tabular-nums">{counts.invited.toLocaleString()} / 10,000 invited</span>
+      </div>
+      <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+        <div className="h-full rounded-full bg-[#0a84ff]" style={{ width: `${Math.min(100, (counts.invited / 10000) * 100)}%` }} />
+      </div>
+      {conn && <div className={cn("mb-2 text-[11px]", conn.startsWith("Connected ·") ? "text-[#7ee2a8]" : "text-[#ffcc66]")}>{conn}</div>}
+      {counts.pending + counts.failed > 0 && (
+        <button onClick={() => void retry()} disabled={busy} className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[#0a84ff] py-2 text-sm font-bold disabled:opacity-60">
+          <RefreshCw className={cn("size-4", busy && "animate-spin")} /> Send {counts.pending + counts.failed} waiting invite{counts.pending + counts.failed === 1 ? "" : "s"}
+        </button>
+      )}
+      {rows.length === 0 ? (
+        <div className="text-xs text-white/50">No signups yet — share nexusproject.cc/beta.</div>
+      ) : (
+        <div className="max-h-64 space-y-1 overflow-y-auto">
+          {rows.map((r) => (
+            <div key={r.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-white/5">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-semibold">
+                  {r.first_name} {r.last_name} <span className="font-normal text-white/45">· {r.app}</span>
+                </span>
+                <span className="block truncate text-white/55" title={r.error ?? undefined}>
+                  {r.email}
+                  {r.error ? ` · ${r.error}` : ""}
+                </span>
+              </span>
+              <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold uppercase", r.status === "invited" ? "bg-[#30d158]/20 text-[#7ee2a8]" : r.status === "failed" ? "bg-[#ff453a]/20 text-[#ff8a80]" : "bg-white/10 text-white/70")}>
+                {r.status}
+              </span>
+              <button onClick={() => void remove(r.id)} className="grid size-6 place-items-center rounded-full text-white/50 hover:bg-white/10 hover:text-white" aria-label={`Remove ${r.email}`}>
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

@@ -111,7 +111,7 @@ export default function LinkBioHub({
       bio: (me.bio ?? "").slice(0, 280),
       custom_status: (me.custom_status ?? "").slice(0, 80),
     };
-    if (me.username && /^[a-z0-9_]{2,24}$/.test(me.username)) {
+    if (me.username && /^[a-z0-9_]{1,24}$/.test(me.username)) {
       patch.username = me.username;
     }
     const next = await linkbioSave(patch);

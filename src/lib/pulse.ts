@@ -70,7 +70,7 @@ export function extractPulseHashtags(text: string): string[] {
 }
 
 export function extractPulseMentions(text: string): string[] {
-  const found = text.match(/@([a-zA-Z0-9_]{2,24})/g) ?? [];
+  const found = text.match(/@([a-zA-Z0-9_.]{1,24})/g) ?? [];
   return [...new Set(found.map((t) => t.slice(1).toLowerCase()))].slice(0, 12);
 }
 

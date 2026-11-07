@@ -5,11 +5,12 @@ import { ImagePlus, Plus, Trash2 } from "lucide-react";
 import { useApp, toast, openModal } from "@/store/app";
 import { NEED, gate, useMyTier } from "@/lib/premium";
 import { updateMyProfile, uploadBanner } from "@/lib/data";
-import { PLATFORMS, audienceWord, fmtCount, linkLabel, normalizeLink, parseCount, platformById, spotifyEmbed } from "@/lib/links";
+import { MUSIC_PLATFORMS, PLATFORMS, audienceWord, fmtCount, linkLabel, normalizeLink, parseCount, platformById, spotifyEmbed } from "@/lib/links";
 import { supportsLiveFollowers } from "@/lib/followers";
 import type { ProfileLink } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import SpotifyConnect from "@/components/music/SpotifyConnect";
+import CustomDomain from "./CustomDomain";
 import { BORDERS, BorderRing, EFFECTS, EffectCanvas, THEMES, themeBg } from "@/components/profile/ProfileFx";
 
 const Label = ({ children }: { children: React.ReactNode }) => <div className="mb-2 text-xs font-bold tracking-wide text-sub uppercase">{children}</div>;
@@ -29,7 +30,7 @@ export default function ProfileExtras() {
   const addLink = async () => {
     const l = normalizeLink(linkText, plat);
     if (!l) return toast("That link doesn't look right", "error");
-    if (links.length >= 10) return toast("Up to 10 links", "error");
+    if (links.length >= 20) return toast("Up to 20 links", "error");
     await updateMyProfile({ links: [...links, l] });
     setLinkText("");
   };
@@ -87,7 +88,7 @@ export default function ProfileExtras() {
 
       {/* social links */}
       <div>
-        <Label>Links ({links.length}/10)</Label>
+        <Label>Links & artist profiles ({links.length}/20)</Label>
         <div className="space-y-1.5">
           {links.map((l, i) => (
             <LinkEditRow key={`${l.url}${i}`} link={l} onFollowers={(n) => void updateMyProfile({ links: links.map((x, j) => (j === i ? { ...x, followers: n } : x)) }, true)} onRemove={() => removeLink(i)} onUp={i > 0 ? () => move(i, -1) : undefined} onDown={i < links.length - 1 ? () => move(i, 1) : undefined} />
@@ -95,17 +96,26 @@ export default function ProfileExtras() {
         </div>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
           <select value={plat} onChange={(e) => setPlat(e.target.value)} className="rounded-md bg-rail px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent/60">
-            {PLATFORMS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
+            <optgroup label="Social">
+              {PLATFORMS.filter((p) => !MUSIC_PLATFORMS.has(p.id)).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Music & artist profiles">
+              {PLATFORMS.filter((p) => MUSIC_PLATFORMS.has(p.id)).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.id === "spotify" ? "Spotify (artist profile)" : p.label}
+                </option>
+              ))}
+            </optgroup>
           </select>
           <input
             value={linkText}
             onChange={(e) => setLinkText(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && void addLink()}
-            placeholder={plat === "website" ? "yourdomain.com" : "@handle or full link"}
+            placeholder={plat === "website" ? "yourdomain.com" : plat === "spotify" ? "open.spotify.com/artist/… (artist page)" : platformById(plat).fromHandle ? "@handle or full link" : "Paste the full link"}
             className="min-w-0 flex-1 rounded-md bg-rail px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent/60"
           />
           <button onClick={() => void addLink()} disabled={!linkText.trim()} className="flex items-center justify-center gap-1 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-2 disabled:opacity-40">
@@ -113,6 +123,8 @@ export default function ProfileExtras() {
           </button>
         </div>
       </div>
+
+      <CustomDomain />
 
       {/* profile song */}
       <div>

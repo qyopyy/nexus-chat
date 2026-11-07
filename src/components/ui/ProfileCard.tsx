@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Aperture, Award, Copy, Download, ExternalLink, Eye, Gavel, Heart, MessageCircle, Phone, QrCode, Share2, ShieldCheck } from "lucide-react";
+import { Aperture, Award, Copy, Download, ExternalLink, Eye, Gavel, Globe, Heart, MessageCircle, Phone, QrCode, Share2, ShieldCheck } from "lucide-react";
 import QRCode from "qrcode";
 import { openGram, publicProfileUrl } from "@/lib/gram";
 import { useApp, openModal, toast } from "@/store/app";
@@ -10,7 +10,7 @@ import { openDM } from "@/lib/data";
 import { startCall } from "@/lib/call";
 import { supabase } from "@/lib/supabase";
 import { isBanned, isMuted, myRank } from "@/lib/admin";
-import { audienceWord, fmtCount, linkLabel, platformById, spotifyEmbed } from "@/lib/links";
+import { audienceWord, fmtCount, linkLabel, platformById, spotifyArtistId, spotifyEmbed } from "@/lib/links";
 import { fetchLiveFollowers, followersCacheKey, supportsLiveFollowers } from "@/lib/followers";
 import { sanitizeDownloadName } from "@/lib/fileSafety";
 import type { ProfileLink } from "@/lib/types";
@@ -81,6 +81,7 @@ export function CardBody({ userId }: { userId: string }) {
   const [badgeOpen, setBadgeOpen] = useState(false);
   const [liked, setLiked] = useState(false);
   const [statsHidden, setStatsHidden] = useState(false);
+  const [domain, setDomain] = useState<string | null>(null);
   const aliases = useAliases((s) => s.byUser[userId] ?? NO_ALIASES);
   const othersFx = usePrefs((s) => s.othersProfileFx);
   const devMode = usePrefs((s) => s.devMode);
@@ -106,6 +107,8 @@ export function CardBody({ userId }: { userId: string }) {
       .maybeSingle()
       .then(({ data }) => setStatsHidden(data?.show_stats === false));
     void loadAliases(userId);
+    setDomain(null);
+    void supabase.rpc("profile_domain_of", { p_user: userId }).then(({ data }) => setDomain(typeof data === "string" && data ? data : null));
   }, [userId, me]);
   if (!p) return null;
 
@@ -117,6 +120,7 @@ export function CardBody({ userId }: { userId: string }) {
   const close = () => useApp.setState({ profileCard: null });
   const embed = spotifyEmbed(p.profile_song);
   const links = (p.links ?? []).filter((l) => l && l.url);
+  const artistId = links.map((l) => spotifyArtistId(l.url)).find(Boolean) ?? null;
   const np = liveNow(p.now_playing);
   const showStats = userId === me || !statsHidden;
 
@@ -189,6 +193,11 @@ export function CardBody({ userId }: { userId: string }) {
             </button>
           )}
         </div>
+        {domain && (
+          <a href={`https://${domain}`} target="_blank" rel="noreferrer noopener" className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline">
+            <Globe className="size-3.5" /> {domain}
+          </a>
+        )}
         {p.custom_status && <div className="mt-1 text-sm">{p.custom_status}</div>}
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
           {showStats && (
@@ -223,6 +232,19 @@ export function CardBody({ userId }: { userId: string }) {
             {links.map((l, i) => (
               <LinkRow key={i} link={l} />
             ))}
+          </div>
+        )}
+
+        {artistId && (
+          <div className="mb-3">
+            <div className="mb-1 text-xs font-bold tracking-wide text-sub uppercase">Spotify artist</div>
+            <iframe
+              src={`https://open.spotify.com/embed/artist/${artistId}?utm_source=generator&theme=0`}
+              title="Spotify artist"
+              loading="lazy"
+              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+              className="h-[152px] w-full rounded-xl border-0"
+            />
           </div>
         )}
 

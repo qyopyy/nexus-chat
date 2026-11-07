@@ -142,7 +142,7 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
         if (error) throw error;
         setInfo("If that email has an account, a reset link is on its way.");
       } else {
-        if (cleanUser.length < 2) throw new Error("Username needs at least 2 letters or numbers.");
+        if (cleanUser.length < 1) throw new Error("Pick a username.");
         if (password.length < 8) throw new Error("Password needs at least 8 characters.");
         if (password !== confirm) throw new Error("Passwords don't match.");
         if (!agree) throw new Error("Please accept the community rules.");

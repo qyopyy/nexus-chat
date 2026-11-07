@@ -12,7 +12,7 @@ import NameTag, { VerifiedCheck } from "@/components/ui/NameTag";
 import { spotifyEmbed } from "@/lib/links";
 import type { ArtistComment, ArtistPage, ArtistPost } from "@/lib/types";
 
-const TOKEN_RE = /(https?:\/\/[^\s<]+[^\s<.,:;"')\]!?]|@[a-zA-Z0-9_.]{2,32})/g;
+const TOKEN_RE = /(https?:\/\/[^\s<]+[^\s<.,:;"')\]!?]|@[a-zA-Z0-9_.]{1,32})/g;
 
 /** Text with clickable links and @mentions (users → profile card, artist handles → artist page) */
 export function RichText({ text, className }: { text: string; className?: string }) {

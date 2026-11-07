@@ -33,7 +33,7 @@ type ProfileView = Awaited<ReturnType<typeof pulseProfile>>;
 type FeedMode = "foryou" | "following";
 
 function renderPulseBody(body: string, onTag: (tag: string) => void, onMention: (username: string) => void) {
-  const parts = body.split(/((?:https?:\/\/[^\s]+)|(?:#[\p{L}\p{N}_]+)|(?:@[a-zA-Z0-9_]{2,24}))/gu);
+  const parts = body.split(/((?:https?:\/\/[^\s]+)|(?:#[\p{L}\p{N}_]+)|(?:@[a-zA-Z0-9_.]{1,24}))/gu);
   return parts.map((part, i) => {
     if (/^https?:\/\//.test(part)) {
       return (

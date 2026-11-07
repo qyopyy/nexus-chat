@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { SITE } from "@/lib/seo";
 import { TF_APPS } from "@/lib/testflight";
 import { fetchTfLinks } from "./data";
+import BetaSignupForm from "./BetaSignupForm";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,16 @@ export default async function BetaPage() {
           </li>
         </ol>
 
-        <div className="mt-8 space-y-3">
+        {apps.length > 0 && (
+          <div className="mt-8">
+            <BetaSignupForm apps={apps.map((a) => ({ id: a.id, name: a.name }))} />
+            <div className="my-6 flex items-center gap-3 text-xs text-white/40">
+              <span className="h-px flex-1 bg-white/10" /> or join right away <span className="h-px flex-1 bg-white/10" />
+            </div>
+          </div>
+        )}
+
+        <div className={apps.length > 0 ? "space-y-3" : "mt-8 space-y-3"}>
           {apps.length === 0 && <div className="rounded-2xl bg-white/5 p-5 text-center text-white/60 ring-1 ring-white/10">No open beta right now — check back soon.</div>}
           {apps.map((a) => (
             <div key={a.id} className="flex items-center gap-4 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">

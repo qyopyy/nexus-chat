@@ -41,7 +41,7 @@ export default function LinkBioAuth({ initialMode = "login" }: { initialMode?: M
       if (!check.ok) throw new Error(check.error || "Invalid invite code.");
 
       const cleanUser = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 24);
-      if (cleanUser.length < 2) throw new Error("Username needs at least 2 letters or numbers.");
+      if (cleanUser.length < 1) throw new Error("Pick a username.");
       if (password.length < 8) throw new Error("Password needs at least 8 characters.");
       if (password !== confirm) throw new Error("Passwords don't match.");
 

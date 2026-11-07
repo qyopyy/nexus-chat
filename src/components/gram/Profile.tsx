@@ -281,7 +281,7 @@ export function EditProfile({ onClose }: { onClose: () => void }) {
               <span className="pl-3 text-sm text-sub">@</span>
               <input className="w-full bg-transparent px-1 py-2 text-sm outline-none" value={user} maxLength={24} onChange={(e) => setUser(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ""))} />
             </div>
-            <span className="mt-1 block text-[11px] text-sub">3–24 letters, numbers, _ or . — you can change it twice a week.</span>
+            <span className="mt-1 block text-[11px] text-sub">1–24 letters, numbers, _ or . — you can change it twice a week.</span>
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-sub">Bio ({(bio ?? "").length}/190)</span>

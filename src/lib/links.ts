@@ -27,15 +27,58 @@ export const PLATFORMS: Platform[] = [
   { id: "facebook", label: "Facebook", color: "#1877F2", glyph: "f", hosts: ["facebook.com", "fb.com"], fromHandle: (h) => `https://facebook.com/${h}` },
   { id: "linkedin", label: "LinkedIn", color: "#0A66C2", glyph: "in", hosts: ["linkedin.com"] },
   { id: "threads", label: "Threads", color: "#000000", glyph: "@", hosts: ["threads.net", "threads.com"], fromHandle: (h) => `https://threads.net/@${h}` },
+  // music / artist profiles
+  { id: "youtubemusic", label: "YouTube Music", color: "#FF0000", glyph: "◉", hosts: ["music.youtube.com"] },
+  { id: "deezer", label: "Deezer", color: "#A238FF", glyph: "≋", hosts: ["deezer.com", "deezer.page.link", "dzr.page.link"] },
+  { id: "tidal", label: "TIDAL", color: "#000000", glyph: "◆", hosts: ["tidal.com", "listen.tidal.com"] },
+  { id: "amazonmusic", label: "Amazon Music", color: "#25D1DA", glyph: "♪", hosts: ["music.amazon.com", "music.amazon.co.uk", "music.amazon.de", "amazon.com/music"] },
+  { id: "audiomack", label: "Audiomack", color: "#FFA200", glyph: "≈", hosts: ["audiomack.com"], fromHandle: (h) => `https://audiomack.com/${h}` },
+  { id: "bandcamp", label: "Bandcamp", color: "#1DA0C3", glyph: "◢", hosts: ["bandcamp.com"], fromHandle: (h) => `https://${h}.bandcamp.com` },
+  { id: "beatport", label: "Beatport", color: "#01FF95", glyph: "♬", hosts: ["beatport.com"] },
+  { id: "boomplay", label: "Boomplay", color: "#0C1E3C", glyph: "▷", hosts: ["boomplay.com", "boomplaymusic.com"] },
+  { id: "anghami", label: "Anghami", color: "#7A2BFF", glyph: "◑", hosts: ["anghami.com", "play.anghami.com"] },
+  { id: "shazam", label: "Shazam", color: "#0088FF", glyph: "S", hosts: ["shazam.com"] },
+  { id: "genius", label: "Genius", color: "#FFFF64", glyph: "G", hosts: ["genius.com"] },
+  { id: "musixmatch", label: "Musixmatch", color: "#FF6050", glyph: "M", hosts: ["musixmatch.com"] },
+  // more socials
+  { id: "bluesky", label: "Bluesky", color: "#1185FE", glyph: "☁", hosts: ["bsky.app"], fromHandle: (h) => `https://bsky.app/profile/${h.includes(".") ? h : `${h}.bsky.social`}` },
+  { id: "kick", label: "Kick", color: "#53FC18", glyph: "K", hosts: ["kick.com"], fromHandle: (h) => `https://kick.com/${h}` },
+  { id: "reddit", label: "Reddit", color: "#FF4500", glyph: "r/", hosts: ["reddit.com"], fromHandle: (h) => `https://reddit.com/user/${h}` },
+  { id: "pinterest", label: "Pinterest", color: "#E60023", glyph: "P", hosts: ["pinterest.com", "pin.it"], fromHandle: (h) => `https://pinterest.com/${h}` },
+  { id: "patreon", label: "Patreon", color: "#FF424D", glyph: "●", hosts: ["patreon.com"], fromHandle: (h) => `https://patreon.com/${h}` },
+  { id: "whatsapp", label: "WhatsApp", color: "#25D366", glyph: "✆", hosts: ["wa.me", "whatsapp.com", "chat.whatsapp.com"] },
+  { id: "vk", label: "VK", color: "#0077FF", glyph: "VK", hosts: ["vk.com"], fromHandle: (h) => `https://vk.com/${h}` },
   { id: "website", label: "Website", color: "#4E5058", glyph: "🌐", hosts: [] },
 ];
+
+/** platforms shown under "Music" on profiles */
+export const MUSIC_PLATFORMS = new Set(["spotify", "applemusic", "youtubemusic", "soundcloud", "deezer", "tidal", "amazonmusic", "audiomack", "bandcamp", "beatport", "boomplay", "anghami", "shazam", "genius", "musixmatch"]);
+
+/** open.spotify.com/artist/{id} (any locale prefix) */
+export function spotifyArtistId(url: string | null | undefined): string | null {
+  const m = url?.match(/open\.spotify\.com\/(?:intl-[a-z-]+\/)?artist\/([A-Za-z0-9]{22})/);
+  return m ? m[1] : null;
+}
 
 export const platformById = (id: string) => PLATFORMS.find((p) => p.id === id) ?? PLATFORMS[PLATFORMS.length - 1];
 
 export function detectPlatform(url: string): Platform {
   try {
-    const host = new URL(url).hostname.replace(/^www\.|^m\./, "");
-    return PLATFORMS.find((p) => p.hosts.some((h) => host === h || host.endsWith(`.${h}`))) ?? platformById("website");
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\.|^m\./, "");
+    const hostPath = `${host}${u.pathname}`;
+    // most specific match wins (music.youtube.com beats youtube.com)
+    let best: Platform | null = null;
+    let bestLen = 0;
+    for (const p of PLATFORMS)
+      for (const h of p.hosts) {
+        const hit = h.includes("/") ? hostPath.startsWith(h) : host === h || host.endsWith(`.${h}`);
+        if (hit && h.length > bestLen) {
+          best = p;
+          bestLen = h.length;
+        }
+      }
+    return best ?? platformById("website");
   } catch {
     return platformById("website");
   }
@@ -61,11 +104,23 @@ export function normalizeLink(input: string, platformId?: string): ProfileLink |
 /** Human-friendly text for a link row: @handle when we can tell, else the host + path */
 export function linkLabel(l: ProfileLink): string {
   if (l.label) return l.label;
+  if (l.type === "spotify" && spotifyArtistId(l.url)) return "Artist profile";
+  if (l.type === "bandcamp") {
+    try {
+      const sub = new URL(l.url).hostname.split(".")[0];
+      if (sub && sub !== "bandcamp" && sub !== "www") return sub;
+    } catch {
+      /* fall through */
+    }
+  }
   try {
     const u = new URL(l.url);
     const path = u.pathname.replace(/\/+$/, "");
     const seg = path.split("/").filter(Boolean);
-    if (l.type !== "website" && l.type !== "spotify" && l.type !== "applemusic" && seg[0]) {
+    if (MUSIC_PLATFORMS.has(l.type) && seg.some((x) => /^artists?$/i.test(x))) return "Artist profile";
+    if ((l.type === "bluesky" || l.type === "reddit") && seg[1]) return `@${seg[1]}`;
+    const noHandle = ["website", "spotify", "applemusic", "youtubemusic", "deezer", "tidal", "amazonmusic", "beatport", "boomplay", "anghami", "shazam", "genius", "musixmatch", "whatsapp"];
+    if (!noHandle.includes(l.type) && seg[0]) {
       const h = seg[0] === "add" && seg[1] ? seg[1] : seg[0];
       return h.startsWith("@") ? h : `@${h}`;
     }
@@ -152,4 +207,3 @@ export const fmtCount = (n: number) =>
 /** what the platform calls its audience */
 export const audienceWord = (type: string) => (type === "youtube" ? "subscribers" : type === "twitch" || type === "spotify" ? "followers" : type === "discord" || type === "telegram" ? "members" : "followers");
 /** Spotify artist id from a link */
-export const spotifyArtistId = (url: string) => url.match(/open\.spotify\.com\/(?:intl-[a-z]+\/)?artist\/([A-Za-z0-9]{22})/)?.[1] ?? null;

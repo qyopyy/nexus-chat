@@ -234,7 +234,7 @@ export async function setWatch(a: { id: string; name: string; image: string | nu
 // ------------------------------------------------------------------ mentions
 /** "@username" → profile ids (looks up unknown usernames) */
 export async function resolveMentions(text: string) {
-  const names = [...new Set([...text.matchAll(/(^|\s)@([a-z0-9_.]{2,32})/gi)].map((m) => m[2].toLowerCase()))];
+  const names = [...new Set([...text.matchAll(/(^|\s)@([a-z0-9_.]{1,32})/gi)].map((m) => m[2].toLowerCase()))];
   if (!names.length) return;
   const known = new Set(Object.values(useApp.getState().profiles).map((p) => p.username));
   const missing = names.filter((n) => !known.has(n));
