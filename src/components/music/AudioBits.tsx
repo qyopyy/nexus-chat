@@ -1,7 +1,7 @@
 "use client";
 
 import { ShieldAlert, ShieldCheck, ShieldQuestion, Plus, Printer, Trash2, TriangleAlert } from "lucide-react";
-import { PLATFORMS, fmtTime, type AudioCheck, type AudioReport } from "@/lib/audio";
+import { ENGINE_LABEL, PLATFORMS, fmtTime, type AudioCheck, type AudioReport } from "@/lib/audio";
 import { cn } from "@/lib/utils";
 import type { Split } from "@/lib/types";
 
@@ -95,7 +95,7 @@ export const CHECK_INFO = {
   clean: { label: "No copyright matches", cls: "text-ok bg-ok/10 ring-ok/25" },
   own: { label: "Matches your own music", cls: "text-accent bg-accent/10 ring-accent/25" },
   match: { label: "Copyrighted music found", cls: "text-dnd bg-dnd/10 ring-dnd/30" },
-  blocked: { label: "Blocked by YouTube Content ID", cls: "text-dnd bg-dnd/15 ring-dnd/40" },
+  blocked: { label: "Blocked by Content ID", cls: "text-dnd bg-dnd/15 ring-dnd/40" },
   error: { label: "Check couldn't finish", cls: "text-idle bg-idle/10 ring-idle/25" },
 } as const;
 
@@ -124,12 +124,30 @@ export function CheckView({ c }: { c: AudioCheck }) {
       {c.status === "error" && <p className="mt-1 text-sm text-txt/80">{c.note ?? "Try again in a moment."}</p>}
       {c.status === "own" && <p className="mt-1 text-sm text-txt/80">It matched a recording under your own artist name — that&apos;s fine.</p>}
       {c.status === "blocked" && <p className="mt-1 text-sm text-txt/80">{c.note ?? "Global YouTube Content ID is on — this upload was blocked because it matches a commercial / YouTube catalog recording."}</p>}
+      {c.engines && Object.keys(c.engines).length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px]">
+          <span className="font-bold text-sub">360 scan:</span>
+          {Object.entries(c.engines).map(([e, r]) => (
+            <span key={e} className={cn("rounded-full px-2 py-px font-semibold", r === "match" ? "bg-dnd/20 text-dnd" : r === "error" ? "bg-idle/20 text-idle" : "bg-ok/20 text-ok")}>
+              {ENGINE_LABEL[e] ?? e} · {r === "match" ? "match" : r === "error" ? "error" : "clean"}
+            </span>
+          ))}
+        </div>
+      )}
       {c.matches.length > 0 && (
         <div className="mt-2 space-y-1.5">
           {c.matches.map((m, k) => (
             <div key={k} className="rounded-lg bg-black/25 p-2 text-sm text-txt">
-              <div className="font-semibold">
-                {m.title} — {m.artists.join(", ")}
+              <div className="flex flex-wrap items-center gap-1.5 font-semibold">
+                <span>
+                  {m.title} — {m.artists.join(", ")}
+                </span>
+                {(m.engines ?? (m.engine ? [m.engine] : [])).map((e) => (
+                  <span key={e} className={cn("rounded-full px-1.5 py-px text-[10px] font-bold", e === "audible_magic" ? "bg-[#7c3aed]/25 text-[#c4b5fd]" : e === "shield" ? "bg-[#f0b232]/20 text-[#f0b232]" : "bg-[#00a8fc]/20 text-[#7dd3fc]")}>
+                    {ENGINE_LABEL[e] ?? e}
+                  </span>
+                ))}
+                {m.rule && <span className="rounded-full bg-dnd/20 px-1.5 py-px text-[10px] font-bold text-dnd">AM rule: {m.rule}</span>}
               </div>
               <div className="text-xs text-sub">
                 {[m.album, m.label, m.release_date?.slice(0, 4), m.isrc && `ISRC ${m.isrc}`, m.score != null && `${m.score}% match`, m.offset_s != null && `at ${fmtTime(m.offset_s)} in the original`]
