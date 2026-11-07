@@ -5,12 +5,15 @@
  *  - "perfect negotiation" so peers can add/remove camera + screenshare at any time
  *  - Supabase Realtime private channel `call:<conversationId>` for signaling + presence
  *  - Web Audio graph: input gain → voice-activity / push-to-talk gate → outgoing track
- *                     per-user gain (0–200%) → master output gain → output device
+ *                     per-user gain (0–400%) → master output gain → limiter → output device
  *  - speaking detection for every participant (green ring like Discord)
  */
 
 import { create } from "zustand";
 import { loadNetPrefs } from "./netPrefs";
+import { newRoomCode } from "./room";
+import { NEED, gate as premiumGate, myTier } from "./premium";
+import type { RoomGame } from "@/store/games";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { loadJSON, saveJSON } from "./utils";
@@ -49,6 +52,8 @@ export type NoiseMode = "off" | "standard" | "ai";
 export type VoiceQuality = 64 | 128 | 320 | 510;
 
 export type ScreenQuality = "720p30" | "1080p30" | "1080p60" | "1440p30" | "2160p30" | "source";
+/** camera send quality — 1080p needs Nexus Lighting; auto = the best your plan allows */
+export type CameraQuality = "auto" | "720p30" | "1080p30" | "1080p60";
 
 export type VoiceSettings = {
   inputDeviceId: string;
@@ -63,6 +68,7 @@ export type VoiceSettings = {
   pttKey: string; // KeyboardEvent.code
   vadThreshold: number; // RMS 0..0.2
   screenQuality: ScreenQuality;
+  cameraQuality: CameraQuality;
   /** off · browser noise suppression · Nexus Clear (RNNoise AI) */
   noiseMode: NoiseMode;
   /** Opus bitrate in kbps (Discord: 64 default, 96–384 boosted) */
@@ -83,9 +89,13 @@ export type VoiceSettings = {
 export type IncomingCall = { conversationId: string; callerId: string; at: number };
 export type CallLayout = "gallery" | "speaker";
 export type CallQuality = "good" | "ok" | "poor" | null;
+/** Play Together: one game room for the call (Global Strike, Neon Streets, GeoGuess …). */
+export type PlayState = { game: RoomGame; code: string; by: string; rev: number };
+const PLAY_GAMES: RoomGame[] = ["globalstrike", "classicstrike", "streets", "geo", "flappy", "four"];
+
 /** Watch Together: one shared video for everyone in the call. `pos` was the position at local time `t` (performance.now()). */
 export type WatchState = {
-  kind: "youtube" | "video";
+  kind: "youtube" | "video" | "instagram";
   src: string;
   id: string | null;
   title: string;
@@ -140,6 +150,8 @@ type CallState = {
   voiceModel: VoiceModelPack | null;
   /** Watch Together session (null = nothing playing) */
   watch: WatchState | null;
+  /** Play Together: a multiplayer game room everyone in the call can join */
+  play: PlayState | null;
 };
 
 export const DEFAULT_SETTINGS: VoiceSettings = {
@@ -155,6 +167,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   pttKey: "Backquote",
   vadThreshold: 0.015,
   screenQuality: "1080p30",
+  cameraQuality: "auto",
   noiseMode: "ai",
   voiceQuality: 510,
   qualityV: 3,
@@ -197,6 +210,7 @@ export const useCall = create<CallState>(() => ({
   facingMode: "user",
   voiceModel: null,
   watch: null,
+  play: null,
 }));
 
 const get = useCall.getState;
@@ -331,7 +345,15 @@ function ensureAudio(): AudioContext {
       ctx = new AudioContext({ latencyHint: "interactive" });
     }
     master = ctx.createGain();
-    master.connect(ctx.destination);
+    // safety limiter: lets people boost a quiet friend up to 400% without harsh clipping
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -2;
+    limiter.knee.value = 2;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.002;
+    limiter.release.value = 0.12;
+    master.connect(limiter);
+    limiter.connect(ctx.destination);
   }
   if (ctx.state === "suspended") void ctx.resume().catch(() => {});
   applyOutput();
@@ -802,8 +824,13 @@ function ensurePeer(id: string, session?: string | null): Peer {
     if (pc.connectionState === "connected") {
       p.stuckSince = 0;
       pc.getSenders().forEach((sn) => sn.track?.kind === "audio" && void tuneAudioSender(sn));
+      tunePeerVideo(p);
     }
   };
+  // video encodings only exist after (re)negotiation — set HD bitrates every time it settles
+  pc.addEventListener("signalingstatechange", () => {
+    if (pc.signalingState === "stable") tunePeerVideo(p);
+  });
 
   applyPeerVolume(id);
   sfx.join();
@@ -917,6 +944,55 @@ async function tuneAudioSender(sender: RTCRtpSender) {
   } catch {
     /* not negotiated yet — retried once connected */
   }
+}
+
+/** camera presets; kbps lifts WebRTC's default ~2.5 Mbps ceiling so 1080p actually looks like 1080p */
+const CAM_PRESETS = {
+  "720p30": { w: 1280, h: 720, fps: 30, kbps: 2_500 },
+  "1080p30": { w: 1920, h: 1080, fps: 30, kbps: 4_500 },
+  "1080p60": { w: 1920, h: 1080, fps: 60, kbps: 7_000 },
+} as const;
+const SCREEN_KBPS: Record<ScreenQuality, number> = { "720p30": 2_500, "1080p30": 4_500, "1080p60": 8_000, "1440p30": 8_000, "2160p30": 16_000, source: 8_000 };
+
+/** what your camera really sends: free = 720p30 · Lighting+ = 1080p30 (auto) or 1080p60 */
+export function effectiveCameraQuality(): Exclude<CameraQuality, "auto"> {
+  const want = get().settings.cameraQuality ?? "auto";
+  if (myTier() < NEED.hdCalls) return "720p30";
+  return want === "auto" ? "1080p30" : want;
+}
+export const CAMERA_QUALITY_OPTIONS: { value: CameraQuality; label: string }[] = [
+  { value: "auto", label: "Automatic" },
+  { value: "720p30", label: "720p · 30fps" },
+  { value: "1080p30", label: "1080p · 30fps ⚡" },
+  { value: "1080p60", label: "1080p · 60fps ⚡" },
+];
+/** settings picker — 1080p options open the Lighting upsell on free accounts */
+export function pickCameraQuality(v: string) {
+  const q = (CAMERA_QUALITY_OPTIONS.find((o) => o.value === v)?.value ?? "auto") as CameraQuality;
+  if (q.startsWith("1080") && !premiumGate(NEED.hdCalls, "1080p HD camera")) return;
+  void updateSettings({ cameraQuality: q });
+}
+function camConstraints(extra: MediaTrackConstraints = {}): MediaTrackConstraints {
+  const p = CAM_PRESETS[effectiveCameraQuality()];
+  return { width: { ideal: p.w }, height: { ideal: p.h }, frameRate: { ideal: p.fps }, ...extra };
+}
+
+async function tuneVideoSender(sender: RTCRtpSender | undefined, kbps: number) {
+  if (!sender?.track || sender.track.kind !== "video") return;
+  try {
+    const params = sender.getParameters();
+    if (!params.encodings?.length) return; // not negotiated yet — retried when signaling settles
+    if (params.encodings.every((e) => e.maxBitrate === kbps * 1000)) return;
+    for (const e of params.encodings) e.maxBitrate = kbps * 1000;
+    await sender.setParameters(params);
+  } catch {
+    /* retried when signaling settles */
+  }
+}
+function tunePeerVideo(p: Peer) {
+  void tuneVideoSender(p.senders.cam, get().avatarOn ? 2_500 : CAM_PRESETS[effectiveCameraQuality()].kbps);
+  const sk = SCREEN_KBPS[get().settings.screenQuality] ?? 4_500;
+  p.senders.screen.forEach((sn) => void tuneVideoSender(sn, sk));
 }
 
 function isStale(msg: Envelope) {
@@ -1081,7 +1157,7 @@ type WatchMsg = Envelope & { state: Omit<WatchState, "t"> | null; rev: number; b
 let watchRev = 0;
 let watchBy = "";
 
-/** YouTube links (watch, youtu.be, shorts, live, embed, music) and direct video files. */
+/** YouTube links (watch, youtu.be, shorts, live, embed, music), Instagram reels/posts and direct video files (incl. NexusGram videos). */
 export function parseWatchUrl(raw: string): Pick<WatchState, "kind" | "src" | "id" | "title"> | null {
   let u: URL;
   try {
@@ -1099,6 +1175,12 @@ export function parseWatchUrl(raw: string): Pick<WatchState, "kind" | "src" | "i
     if (!id && m) id = m[2];
   }
   if (id !== null) return /^[\w-]{11}$/.test(id) ? { kind: "youtube", src: `https://www.youtube.com/watch?v=${id}`, id, title: "YouTube video" } : null;
+  if (host === "instagram.com" || host === "instagr.am") {
+    const ig = u.pathname.match(/^\/(?:[\w.]+\/)?(reels?|p|tv)\/([\w-]{5,40})/);
+    if (!ig) return null;
+    const type = ig[1] === "p" ? "p" : ig[1] === "tv" ? "tv" : "reel";
+    return { kind: "instagram", src: `https://www.instagram.com/${type}/${ig[2]}/`, id: `${type}/${ig[2]}`, title: type === "p" ? "Instagram post" : "Instagram reel" };
+  }
   if (u.protocol === "https:" && /\.(mp4|webm|m4v|mov|ogv)$/i.test(u.pathname)) {
     const name = decodeURIComponent(u.pathname.split("/").pop() ?? "Video").replace(/\.[a-z0-9]+$/i, "");
     return { kind: "video", src: u.toString(), id: null, title: name.slice(0, 80) || "Video" };
@@ -1116,10 +1198,12 @@ function sendWatch(w: WatchState | null) {
   send("watch", { state, rev: watchRev, by: watchBy });
 }
 
-/** re-announce the current video so someone who just joined catches up */
+/** re-announce the current video / game so someone who just joined catches up */
 function shareWatch() {
   const w = get().watch;
   if (w) sendWatch(w);
+  const p = get().play;
+  if (p) send("play", { state: p, rev: playRev, by: playBy });
 }
 
 function onWatch(m: WatchMsg) {
@@ -1129,7 +1213,7 @@ function onWatch(m: WatchMsg) {
   watchRev = m.rev;
   watchBy = m.by;
   const st = m.state;
-  if (!st || (st.kind !== "youtube" && st.kind !== "video") || typeof st.src !== "string") {
+  if (!st || (st.kind !== "youtube" && st.kind !== "video" && st.kind !== "instagram") || typeof st.src !== "string") {
     set({ watch: null });
     return;
   }
@@ -1157,11 +1241,12 @@ function commitWatch(w: WatchState | null) {
   sendWatch(next);
 }
 
-export function startWatch(url: string): string | null {
+export function startWatch(url: string, title?: string): string | null {
   if (get().status === "idle" || !me) return "Join the call first";
   const p = parseWatchUrl(url);
-  if (!p) return "Paste a YouTube link or a direct .mp4 / .webm video link";
-  commitWatch({ ...p, playing: true, pos: 0, t: performance.now(), rate: 1, by: me, rev: 0 });
+  if (!p) return "Paste a YouTube, Instagram or NexusGram link (or a direct .mp4 video link)";
+  // embeds that can't be remote-controlled (Instagram) start paused so everyone can count down together
+  commitWatch({ ...p, title: title?.slice(0, 120) || p.title, playing: p.kind !== "instagram", pos: 0, t: performance.now(), rate: 1, by: me, rev: 0 });
   return null;
 }
 
@@ -1181,6 +1266,44 @@ export function watchControl(patch: { playing?: boolean; pos?: number; title?: s
 
 export function stopWatch() {
   if (get().watch) commitWatch(null);
+}
+
+// ------------------------------------------------------------------ play together
+type PlayMsg = Envelope & { state: PlayState | null; rev: number; by: string };
+let playRev = 0;
+let playBy = "";
+
+function onPlay(m: PlayMsg) {
+  if (!me || m.from === me || isStale(m) || typeof m.rev !== "number") return;
+  const newer = m.rev > playRev || (m.rev === playRev && typeof m.by === "string" && m.by > playBy);
+  if (!newer) return;
+  playRev = m.rev;
+  playBy = m.by;
+  const st = m.state;
+  if (!st) return set({ play: null });
+  if (!PLAY_GAMES.includes(st.game) || typeof st.code !== "string" || !/^[A-Z2-9]{6}$/.test(st.code)) return;
+  set({ play: { game: st.game, code: st.code, by: typeof st.by === "string" ? st.by : m.from, rev: m.rev } });
+  if (st.by !== me) sfx.join();
+}
+
+/** start a game room for everyone in the call; returns the room code (the caller joins it too) */
+export function startPlayTogether(game: RoomGame): string | null {
+  if (get().status === "idle" || !me || !PLAY_GAMES.includes(game)) return null;
+  const code = newRoomCode();
+  playRev += 1;
+  playBy = me;
+  const state: PlayState = { game, code, by: me, rev: playRev };
+  set({ play: state });
+  send("play", { state, rev: playRev, by: playBy });
+  return code;
+}
+
+export function stopPlayTogether() {
+  if (!get().play || !me) return;
+  playRev += 1;
+  playBy = me;
+  set({ play: null });
+  send("play", { state: null, rev: playRev, by: playBy });
 }
 
 // ------------------------------------------------------------------ reactions & raise hand
@@ -1324,6 +1447,7 @@ export async function joinCall(conversationId: string, opts: { video?: boolean }
       pushReaction(m.from, m.emoji!);
     })
     .on("broadcast", { event: "watch" }, ({ payload }) => onWatch(payload as WatchMsg))
+    .on("broadcast", { event: "play" }, ({ payload }) => onPlay(payload as PlayMsg))
     .on("broadcast", { event: "bye" }, ({ payload }) => {
       const msg = payload as Envelope;
       const p = peers.get(msg.from);
@@ -1447,10 +1571,13 @@ export async function leaveCall() {
     callQuality: null,
     callPingMs: null,
     watch: null,
+    play: null,
     layout: get().layout,
   });
   watchRev = 0;
   watchBy = "";
+  playRev = 0;
+  playBy = "";
   sfx.leave();
 }
 
@@ -1619,12 +1746,7 @@ export async function toggleVideo() {
   }
   try {
     const s = get().settings;
-    const video: MediaTrackConstraints = {
-      width: { ideal: 1280 },
-      height: { ideal: 720 },
-      frameRate: { ideal: 30 },
-      facingMode: { ideal: get().facingMode },
-    };
+    const video = camConstraints({ facingMode: { ideal: get().facingMode } });
     if (s.cameraDeviceId && s.cameraDeviceId !== "default") video.deviceId = { exact: s.cameraDeviceId };
     const cam = await navigator.mediaDevices.getUserMedia({ video });
     if (get().status === "idle") {
@@ -1633,7 +1755,10 @@ export async function toggleVideo() {
     }
     const track = cam.getVideoTracks()[0];
     track.contentHint = "motion";
-    for (const p of peers.values()) p.senders.cam = p.pc.addTrack(track, cam);
+    for (const p of peers.values()) {
+      p.senders.cam = p.pc.addTrack(track, cam);
+      tunePeerVideo(p);
+    }
     set({ localCam: cam });
     broadcastState();
   } catch {
@@ -1668,6 +1793,7 @@ export async function toggleScreen() {
     vt.addEventListener("ended", stopScreen);
     for (const p of peers.values()) {
       screen.getTracks().forEach((t) => p.senders.screen.push(p.pc.addTrack(t, screen)));
+      tunePeerVideo(p);
     }
     set({ localScreen: screen, focused: `${me}:screen` });
     broadcastState();
@@ -1696,8 +1822,9 @@ export function stopScreen() {
   sfx.screenOff();
 }
 
+export const MAX_USER_VOLUME = 4; // 400%
 export function setUserVolume(id: string, v: number) {
-  const userVolumes = { ...get().userVolumes, [id]: v };
+  const userVolumes = { ...get().userVolumes, [id]: Math.max(0, Math.min(MAX_USER_VOLUME, Number.isFinite(v) ? v : 1)) };
   set({ userVolumes });
   saveJSON("nexus.volumes", userVolumes);
   applyPeerVolume(id);
@@ -1750,13 +1877,30 @@ export async function updateSettings(patch: Partial<VoiceSettings>) {
   }
 
   const cam = get().localCam;
-  if (inCall && cam && !get().avatarOn && patch.cameraDeviceId && patch.cameraDeviceId !== prev.cameraDeviceId) {
+  const camSwitched = !!patch.cameraDeviceId && patch.cameraDeviceId !== prev.cameraDeviceId;
+  const camQualityChanged = !!patch.cameraQuality && patch.cameraQuality !== prev.cameraQuality;
+  if (inCall && cam && !get().avatarOn && (camSwitched || camQualityChanged)) {
+    // quality only → re-tune the live track in place (no second capture; iOS dislikes two)
+    const live = cam.getVideoTracks()[0];
+    if (!camSwitched && live) {
+      try {
+        await live.applyConstraints(camConstraints());
+        for (const p of peers.values()) tunePeerVideo(p);
+        return;
+      } catch {
+        /* fall back to a fresh capture */
+      }
+    }
     try {
-      const video: MediaTrackConstraints = { width: { ideal: 1280 }, height: { ideal: 720 } };
-      if (patch.cameraDeviceId !== "default") video.deviceId = { exact: patch.cameraDeviceId };
+      const video = camConstraints(settings.cameraDeviceId && settings.cameraDeviceId !== "default" ? {} : { facingMode: { ideal: get().facingMode } });
+      if (settings.cameraDeviceId && settings.cameraDeviceId !== "default") video.deviceId = { exact: settings.cameraDeviceId };
       const fresh = await navigator.mediaDevices.getUserMedia({ video });
       const nt = fresh.getVideoTracks()[0];
-      for (const p of peers.values()) await p.senders.cam?.replaceTrack(nt);
+      nt.contentHint = "motion";
+      for (const p of peers.values()) {
+        await p.senders.cam?.replaceTrack(nt);
+        tunePeerVideo(p);
+      }
       cam.getVideoTracks().forEach((t) => {
         cam.removeTrack(t);
         t.stop();
@@ -1815,7 +1959,7 @@ export async function flipCamera() {
   }
   try {
     const fresh = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 }, facingMode: { ideal: next } },
+      video: camConstraints({ facingMode: { ideal: next } }),
     });
     const nt = fresh.getVideoTracks()[0];
     if (!nt) throw new Error("no track");

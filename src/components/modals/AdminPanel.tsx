@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, Award, Ban, Bell, ChevronRight, Clock, Construction, Gift, Lock, MessageSquare, Mic, RotateCcw, Search, Shield, Trash2, Users } from "lucide-react";
+import { Activity, Award, Ban, Bell, ChevronRight, Clock, Construction, Download, Eraser, Flag, Gift, Lock, MessageSquare, Mic, RotateCcw, Search, Settings2, Shield, Trash2, Users } from "lucide-react";
+import { ActivityChart, MemberAdminExtras, MessageSearchTab, ReportsTab, SiteSettingsTab } from "@/components/admin/AdminTools";
+import { downloadCsv, refreshReportBadge, useReportBadge } from "@/lib/adminTools";
+import { supabase, errorText } from "@/lib/supabase";
+import { toast } from "@/store/app";
 import { ClaimsTab, VaultTab } from "@/components/admin/AdminExtras";
 import GiftLinksPanel from "@/components/admin/GiftLinksPanel";
 import DevelopmentModePanel from "@/components/admin/DevelopmentModePanel";
@@ -27,19 +31,27 @@ import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import type { AdminAction, AdminUserRow, Profile } from "@/lib/types";
 
-type Tab = "overview" | "members" | "gifts" | "badges" | "claims" | "vault" | "audit" | "dev";
+type Tab = "overview" | "members" | "reports" | "messages" | "site" | "gifts" | "badges" | "claims" | "vault" | "audit" | "dev";
 const EMPTY: string[] = [];
 
 export default function AdminPanel({ focusUser }: { focusUser: string | null }) {
   const me = useApp((s) => (s.userId ? s.profiles[s.userId] : undefined));
   const rank = roleRank(me?.site_role);
   const [tab, setTab] = useState<Tab>(focusUser ? "members" : "overview");
+  const [jump, setJump] = useState<{ id: string; q: string; n: number } | null>(null);
+  const openReports = useReportBadge((s) => s.open);
+  useEffect(() => {
+    if (rank >= 2) void refreshReportBadge();
+  }, [rank]);
 
   if (rank < 2) return <p className="text-sub">Staff only.</p>;
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode; min: number }[] = [
     { id: "overview", label: "Overview", icon: <Activity className="size-4" />, min: 2 },
     { id: "members", label: "Members", icon: <Users className="size-4" />, min: 2 },
+    { id: "reports", label: openReports ? `Reports (${openReports})` : "Reports", icon: <Flag className="size-4" />, min: 2 },
+    { id: "messages", label: "Messages", icon: <MessageSquare className="size-4" />, min: 2 },
+    { id: "site", label: "Site settings", icon: <Settings2 className="size-4" />, min: 3 },
     { id: "gifts", label: "Gift links", icon: <Gift className="size-4" />, min: 2 },
     { id: "dev", label: "Dev mode", icon: <Construction className="size-4" />, min: 3 },
     { id: "badges", label: "Badges", icon: <Award className="size-4" />, min: 3 },
@@ -83,7 +95,17 @@ export default function AdminPanel({ focusUser }: { focusUser: string | null }) 
           ))}
       </div>
       {tab === "overview" && <Overview />}
-      {tab === "members" && <Members rank={rank} focusUser={focusUser} />}
+      {tab === "members" && <Members key={jump?.n ?? 0} rank={rank} focusUser={jump?.id ?? focusUser} initialQuery={jump?.q ?? ""} />}
+      {tab === "reports" && (
+        <ReportsTab
+          onModerate={(id, username) => {
+            setJump({ id, q: username ?? "", n: Date.now() });
+            setTab("members");
+          }}
+        />
+      )}
+      {tab === "messages" && <MessageSearchTab />}
+      {tab === "site" && rank >= 3 && <SiteSettingsTab />}
       {tab === "gifts" && rank >= 2 && <GiftLinksPanel />}
       {tab === "dev" && rank >= 3 && <DevelopmentModePanel variant="admin" />}
       {tab === "badges" && rank >= 3 && <BadgesTab />}
@@ -111,6 +133,7 @@ function Overview() {
     ["Suspended", stats?.banned ?? "…", <Ban key="b" className="size-5 text-dnd" />],
   ];
   return (
+    <>
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {cards.map(([label, value, icon]) => (
         <div key={label} className="rounded-xl bg-side p-4">
@@ -122,11 +145,15 @@ function Overview() {
         </div>
       ))}
     </div>
+    <div className="mt-5">
+      <ActivityChart />
+    </div>
+    </>
   );
 }
 
-function Members({ rank, focusUser }: { rank: number; focusUser: string | null }) {
-  const [q, setQ] = useState("");
+function Members({ rank, focusUser, initialQuery = "" }: { rank: number; focusUser: string | null; initialQuery?: string }) {
+  const [q, setQ] = useState(initialQuery);
   const [rows, setRows] = useState<AdminUserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState<string | null>(focusUser);
@@ -148,7 +175,20 @@ function Members({ rank, focusUser }: { rank: number; focusUser: string | null }
     <>
       <div className="relative mb-3">
         <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-sub" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or username" className="w-full rounded-lg bg-rail py-2.5 pr-3 pl-9 outline-none focus:ring-2 focus:ring-accent/60" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or username" className="w-full rounded-lg bg-rail py-2.5 pr-28 pl-9 outline-none focus:ring-2 focus:ring-accent/60" />
+        <button
+          disabled={!rows.length}
+          onClick={() =>
+            downloadCsv(
+              rows.map((u) => ({ id: u.id, username: u.username, email: u.email ?? "", messages: u.message_count, joined: u.created_at, banned_until: u.banned_until ?? "" })),
+              `nexus-members-${new Date().toISOString().slice(0, 10)}.csv`,
+            )
+          }
+          className="absolute top-1/2 right-1.5 flex -translate-y-1/2 items-center gap-1 rounded-md bg-hover px-2.5 py-1.5 text-xs font-semibold hover:bg-active disabled:opacity-40"
+          title="Download this list as CSV"
+        >
+          <Download className="size-3.5" /> CSV
+        </button>
       </div>
       {loading && rows.length === 0 && <p className="py-6 text-center text-sub">Loading…</p>}
       <div className="space-y-1">
@@ -284,8 +324,53 @@ function MemberDetail({ userId, rank, onChanged }: { userId: string; rank: numbe
           >
             <Bell className="size-4" /> Clear push devices (FCM / Web Push)
           </button>
+          <PurgeMessages userId={userId} onDone={onChanged} />
         </section>
       )}
+
+      {rank >= 3 && <MemberAdminExtras userId={userId} canManage={canManage} onChanged={onChanged} />}
+    </div>
+  );
+}
+
+const PURGE_WINDOWS = [
+  [1, "last hour"],
+  [24, "last 24 hours"],
+  [24 * 7, "last 7 days"],
+  [24 * 30, "last 30 days"],
+] as const;
+/** spam / raid cleanup: delete everything this member posted in a time window (logged in the Audit Log) */
+function PurgeMessages({ userId, onDone }: { userId: string; onDone: () => void }) {
+  const [hours, setHours] = useState<number>(24);
+  const [busy, setBusy] = useState(false);
+  const name = useApp((s) => s.profiles[userId]?.display_name ?? "this member");
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-dnd/10 p-2.5">
+      <Eraser className="size-4 text-dnd" />
+      <span className="text-sm">Delete all messages from</span>
+      <select value={hours} onChange={(e) => setHours(Number(e.target.value))} className="rounded-md bg-rail px-2 py-1 text-sm outline-none">
+        {PURGE_WINDOWS.map(([h, l]) => (
+          <option key={h} value={h}>
+            {l}
+          </option>
+        ))}
+      </select>
+      <button
+        disabled={busy}
+        onClick={async () => {
+          const label = PURGE_WINDOWS.find(([h]) => h === hours)?.[1] ?? "";
+          if (!confirm(`Delete every message ${name} sent in the ${label}? This shows as deleted for everyone.`)) return;
+          setBusy(true);
+          const { data, error } = await supabase.rpc("admin_purge_user_messages", { p_user: userId, p_hours: hours });
+          setBusy(false);
+          if (error) return toast(errorText(error), "error");
+          toast(`Deleted ${Number(data ?? 0).toLocaleString()} message${data === 1 ? "" : "s"}`, "success");
+          onDone();
+        }}
+        className="ml-auto rounded-md bg-dnd px-3 py-1 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        {busy ? "Deleting…" : "Purge"}
+      </button>
     </div>
   );
 }

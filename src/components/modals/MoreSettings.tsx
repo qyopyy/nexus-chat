@@ -15,6 +15,9 @@ import { claimUsername, loadAliases, makePrimary, releaseUsername, useAliases } 
 import { NexusCredit, copyNexusAppLink } from "@/components/ui/NexusCredit";
 import { shareAppUrl } from "@/lib/seo";
 import { MESSAGE_SOUNDS, sfx } from "@/lib/sounds";
+import { MSG_LIMIT_FREE, MSG_LIMIT_PREMIUM, NEED, gate, useMyTier } from "@/lib/premium";
+import { CAMERA_QUALITY_OPTIONS, pickCameraQuality, useCall } from "@/lib/call";
+import { BlockedPeople, DeleteAccountBlock, MutedWords } from "./ExtraSettings";
 
 const Hr = () => <div className="my-8 h-px bg-line" />;
 
@@ -292,6 +295,10 @@ export function PrivacySection() {
       )}
 
       <Hr />
+      <BlockedPeople />
+      <Hr />
+      <MutedWords />
+      <Hr />
       <Label>Activity</Label>
       <div className="mb-2">
         <Select
@@ -341,6 +348,57 @@ export function AccessibilitySection() {
 
 /* ───────────────────── Chat behaviour (inside Chat & Typing) ───────────────────── */
 
+/** ⚡ Lighting perks for chat & calls: original-quality media, HD/Studio voice, 1080p camera, long messages */
+function PremiumQualityBlock() {
+  const p = usePrefs();
+  const tier = useMyTier();
+  const hd = tier >= NEED.hdMedia;
+  const cam = useCall((s) => s.settings.cameraQuality ?? "auto");
+  return (
+    <>
+      <Label>⚡ Premium quality</Label>
+      {!hd ? (
+        <button onClick={() => gate(NEED.hdMedia, "Premium quality")} className="mb-1 flex w-full items-center gap-3 rounded-xl bg-[#ffd400]/10 p-3 text-left ring-1 ring-[#ffd400]/30 transition hover:bg-[#ffd400]/15">
+          <span className="text-2xl">⚡</span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">Unlock with Nexus Lighting</span>
+            <span className="block text-sm text-sub">Original-quality photos &amp; videos, HD &amp; Studio voice messages, a 1080p60 camera and {MSG_LIMIT_PREMIUM.toLocaleString()}-character messages.</span>
+          </span>
+        </button>
+      ) : (
+        <p className="mb-1 text-sm text-sub">
+          Your plan includes these — messages up to {MSG_LIMIT_PREMIUM.toLocaleString()} characters (free: {MSG_LIMIT_FREE.toLocaleString()}) and files up to 5 GB are always on.
+        </p>
+      )}
+      <Toggle
+        label="Send media in original quality"
+        hint="Photos, videos and voice go out exactly as you took them — no compression. iPhone .mov and HEIC are still converted (1440p MP4 / full-size JPEG) so everyone can open them."
+        checked={hd && p.hdUploads !== false}
+        onChange={(v) => {
+          if (gate(NEED.hdMedia, "Original-quality uploads")) setPref("hdUploads", v);
+        }}
+      />
+      <Toggle
+        label="Studio voice messages"
+        hint="Records stereo at 320 kbps with noise suppression and echo cancel off — for singing, beats and instruments. Off = HD voice at 256 kbps."
+        checked={tier >= NEED.hdVoice && p.studioVoice}
+        onChange={(v) => {
+          if (gate(NEED.hdVoice, "Studio voice messages")) setPref("studioVoice", v);
+        }}
+      />
+      <div className="flex items-center justify-between gap-4 border-b border-line/60 py-3">
+        <span>
+          <span className="block font-medium">Camera quality in calls</span>
+          <span className="block text-sm text-sub">{tier >= NEED.hdCalls ? "Automatic sends 1080p · 30fps. Pick 60fps for smoother motion." : "Free calls send 720p. Lighting unlocks 1080p and 60fps."}</span>
+        </span>
+        <div className="w-44 shrink-0">
+          <Select value={tier >= NEED.hdCalls ? cam : "720p30"} onChange={(v) => pickCameraQuality(v)} options={CAMERA_QUALITY_OPTIONS} />
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function ChatPrefsBlock() {
   const p = usePrefs();
   const now = new Date();
@@ -352,6 +410,8 @@ export function ChatPrefsBlock() {
       <Toggle label="Big emoji" hint="Messages with only emoji show large." checked={p.jumboEmoji} onChange={(v) => setPref("jumboEmoji", v)} />
       <Toggle label="Always reveal spoilers" hint="Text wrapped in ||double bars|| is hidden until clicked." checked={p.spoilersAutoReveal} onChange={(v) => setPref("spoilersAutoReveal", v)} />
       <Toggle label="Play message effects" checked={p.chatEffects} onChange={(v) => setPref("chatEffects", v)} />
+      <Hr />
+      <PremiumQualityBlock />
       <Hr />
       <Label>Time &amp; date</Label>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -554,6 +614,7 @@ export function AdvancedSection() {
           Reset device settings
         </button>
       </div>
+      <DeleteAccountBlock />
       <Hr />
       <Label>Keyboard shortcuts</Label>
       <div className="divide-y divide-line/60 rounded-xl bg-side">

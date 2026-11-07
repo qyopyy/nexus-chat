@@ -18,7 +18,16 @@ export const PLANS: Plan[] = [
     price: 3.99,
     color: "#ffd400",
     emoji: "⚡",
-    perks: ["⚡ Lighting badge next to your name", "Animated profile backgrounds, borders & themes", "100 MB file uploads in chats (free: 25 MB)", "Support Nexus 💜"],
+    perks: [
+      "⚡ Lighting badge next to your name",
+      "Animated profile backgrounds, borders & themes",
+      "Files up to 5 GB in chats (free: 100 MB)",
+      "Original-quality photos & videos — no compression",
+      "HD voice messages (256 kbps) + Studio mode for music",
+      "1080p / 60fps HD camera in calls",
+      "Messages up to 8,000 characters (free: 4,000)",
+      "Support Nexus 💜",
+    ],
   },
   {
     id: "premium",
@@ -84,7 +93,12 @@ export function activePlan(p?: Profile | null) {
   return planOf(p.premium_tier);
 }
 
-export const NEED = { flair: 1, uploads100: 1, shield: 2, takedown: 2, distribution: 3, isrc: 3, smartlinks: 3, acr: 4, musicVideo: 5 } as const;
+export const NEED = { flair: 1, uploads100: 1, hdMedia: 1, hdVoice: 1, longMessages: 1, hdCalls: 1, shield: 2, takedown: 2, distribution: 3, isrc: 3, smartlinks: 3, acr: 4, musicVideo: 5 } as const;
+
+/** message length caps — the database enforces the same numbers */
+export const MSG_LIMIT_FREE = 4000;
+export const MSG_LIMIT_PREMIUM = 8000;
+export const msgLimit = (tier: number) => (tier >= NEED.longMessages ? MSG_LIMIT_PREMIUM : MSG_LIMIT_FREE);
 export function needPlan(rank: number) {
   return PLANS.find((p) => p.rank >= rank)!;
 }

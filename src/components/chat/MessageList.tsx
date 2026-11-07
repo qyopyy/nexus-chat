@@ -11,6 +11,8 @@ import { getChatWallpaper, subscribeChatWallpapers } from "@/lib/chatWallpaper";
 import { TTL_OPTIONS, expired, isTimerNotice, loadOlder } from "@/lib/data";
 import { formatDay, sameDay } from "@/lib/utils";
 import MessageBubble from "./MessageBubble";
+import HiddenMessage from "./HiddenMessage";
+import { loadBlocks } from "@/lib/blocks";
 import type { Message } from "@/lib/types";
 
 const GROUP_GAP = 5 * 60 * 1000;
@@ -20,6 +22,9 @@ export default function MessageList({ conversationId, initialUnread }: { convers
   const ttl = useApp((s) => s.convTtl[conversationId]);
   const profiles = useApp((s) => s.profiles);
   const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    void loadBlocks();
+  }, []);
   useEffect(() => {
     if (!ttl) return;
     const t = setInterval(() => setNow(Date.now()), 30_000);
@@ -192,6 +197,7 @@ export default function MessageList({ conversationId, initialUnread }: { convers
                     <span>{m.content!.slice(2).replace(/^Set/, "set").replace(/^Turned/, "turned")}</span>
                   </div>
                 ) : (
+                <HiddenMessage authorId={m.author_id} content={m.content} mine={m.author_id === me}>
                 <MessageBubble
                   message={m}
                   mine={m.author_id === me}
@@ -201,6 +207,7 @@ export default function MessageList({ conversationId, initialUnread }: { convers
                   replied={m.reply_to_id ? byId[m.reply_to_id] ?? null : null}
                   linkEmbeds={linkEmbeds}
                 />
+                </HiddenMessage>
                 )}
               </Fragment>
             );

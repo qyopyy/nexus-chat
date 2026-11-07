@@ -46,6 +46,7 @@ import LiveHub from "./live/LiveHub";
 import PulseHub from "./pulse/PulseHub";
 import StaffDesk from "./staff/StaffDesk";
 import SiteNoticeBanner from "./staff/SiteNoticeBanner";
+import ReportDialog from "./ui/ReportDialog";
 import MaintenanceGate from "./MaintenanceGate";
 import { useStudio, videosGo } from "@/store/studio";
 import { releaseByCode } from "@/lib/protect";
@@ -239,6 +240,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
         <IncomingCall />
         <InvitePopup />
         <ProfileCard />
+        <ReportDialog />
         <Modals />
         <Toasts />
         <EffectsLayer />
@@ -255,6 +257,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
         <IncomingCall />
         <InvitePopup />
         <ProfileCard />
+        <ReportDialog />
         <Modals />
         <Toasts />
         <EffectsLayer />
@@ -333,6 +336,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       <IncomingCall />
         <InvitePopup />
       <ProfileCard />
+      <ReportDialog />
       <Modals />
       <MessageBanner />
       <Toasts />

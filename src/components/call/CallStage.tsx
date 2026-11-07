@@ -38,6 +38,8 @@ import { SoundboardButton, SoundToast } from "./Soundboard";
 import { ReactButton, ReactionsOverlay } from "./Reactions";
 import { CallExtraControls, CallStatusChips } from "./CallExtras";
 import { WatchButton, WatchStage } from "./WatchTogether";
+import { PlayBanner, PlayButton } from "./PlayTogether";
+import { PeopleVolumeButton } from "./PeopleVolume";
 import AvatarButton from "@/components/vavatar/AvatarButton";
 
 export default function CallStage({
@@ -121,6 +123,10 @@ export default function CallStage({
         <button onClick={onToggleExpand} className="ml-auto rounded-md p-1.5 text-white/70 hover:bg-white/10 hover:text-white" title={expanded ? "Collapse" : "Expand"}>
           {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
         </button>
+      </div>
+
+      <div className="px-3 pt-2 empty:hidden">
+        <PlayBanner />
       </div>
 
       {error && (
@@ -224,7 +230,7 @@ function CallControls() {
   useEffect(() => setScreenOk(canScreenShare()), []);
 
   return (
-    <div className="flex shrink-0 items-center justify-center gap-2 pt-1 pb-4 sm:gap-3">
+    <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 pt-1 pb-4 sm:gap-3">
       <CtlBtn label={video ? "Turn off camera" : "Turn on camera"} on={video} onClick={() => void toggleVideo()}>
         {video ? <Video className="size-6" /> : <VideoOff className="size-6" />}
       </CtlBtn>
@@ -265,6 +271,8 @@ function CallControls() {
       <SoundboardButton />
       <ReactButton />
       <WatchButton />
+      <PlayButton />
+      <PeopleVolumeButton />
       <CallExtraControls />
       <CtlBtn label={muted ? "Unmute" : "Mute"} off={muted || deafened} onClick={toggleMute}>
         {muted || deafened ? <MicOff className="size-6" /> : <Mic className="size-6" />}

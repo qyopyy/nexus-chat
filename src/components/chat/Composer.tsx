@@ -6,7 +6,7 @@ import { Bold, FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, S
 import { useApp, conversationTitle, toast } from "@/store/app";
 import { useChat } from "@/store/chat";
 import { TTL_OPTIONS, runBotCommand, sendMessage, setTtl } from "@/lib/data";
-import { NEED, gate, myTier } from "@/lib/premium";
+import { MSG_LIMIT_FREE, MSG_LIMIT_PREMIUM, NEED, gate, msgLimit, myTier, useMyTier } from "@/lib/premium";
 import { sendLive, sendTyping } from "@/lib/realtime";
 import { EFFECTS, playEffect, type EffectKind } from "@/lib/effects";
 import { haptic } from "@/lib/haptics";
@@ -32,7 +32,7 @@ function voiceMime() {
   return "";
 }
 
-type Rec = { recorder: MediaRecorder; stream: MediaStream; chunks: Blob[]; started: number; ctx: AudioContext; analyser: AnalyserNode; mime: string };
+type Rec = { recorder: MediaRecorder; stream: MediaStream; chunks: Blob[]; started: number; ctx: AudioContext; analyser: AnalyserNode; mime: string; quality: "" | "HD" | "Studio" };
 
 export default function Composer({
   conversationId,
@@ -65,7 +65,10 @@ export default function Composer({
   const [effect, setEffect] = useState<EffectKind | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
+  const [recQuality, setRecQuality] = useState<Rec["quality"]>("");
   const [recSecs, setRecSecs] = useState(0);
+  const tier = useMyTier();
+  const limit = msgLimit(tier);
   const [levels, setLevels] = useState<number[]>(() => Array(28).fill(0.1));
   const [editOpen, setEditOpen] = useState(false);
   const [fmtOpen, setFmtOpen] = useState(false);
@@ -154,8 +157,14 @@ export default function Composer({
 
   function submit(withEffect: EffectKind | null = effect) {
     if (!text.trim() && !file) return;
-    haptic.light();
     const t = text.trim();
+    if (t.length > limit) {
+      // keep the draft — nothing is cleared until it fits
+      if (tier < NEED.longMessages && t.length <= MSG_LIMIT_PREMIUM) gate(NEED.longMessages, `Messages over ${MSG_LIMIT_FREE.toLocaleString()} characters`);
+      else toast(`Messages can be up to ${limit.toLocaleString()} characters — this one is ${t.length.toLocaleString()}.`, "error");
+      return;
+    }
+    haptic.light();
     // Any /command — built-in or community bots
     const isCmd = !file && /^\/[a-z][\w-]{0,30}\b/i.test(t);
     void sendMessage(conversationId, text, file, withEffect).then(() => {
@@ -195,17 +204,25 @@ export default function Composer({
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-      const recorder = mime ? new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 192000 }) : new MediaRecorder(stream);
+      // Lighting+: HD voice (256 kbps, 48 kHz) · Studio mode: raw stereo 320 kbps for singing & instruments
+      const hdv = myTier() >= NEED.hdVoice;
+      const studio = hdv && usePrefs.getState().studioVoice;
+      const audio: MediaTrackConstraints = studio
+        ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 2 }, sampleRate: { ideal: 48000 } }
+        : { echoCancellation: true, noiseSuppression: true, ...(hdv ? { sampleRate: { ideal: 48000 } } : {}) };
+      const stream = await navigator.mediaDevices.getUserMedia({ audio });
+      const bps = studio ? 320_000 : hdv ? 256_000 : 192_000;
+      const recorder = mime ? new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: bps }) : new MediaRecorder(stream);
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = new Ctx();
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
       ctx.createMediaStreamSource(stream).connect(analyser);
-      const r: Rec = { recorder, stream, chunks: [], started: Date.now(), ctx, analyser, mime: recorder.mimeType || mime || "audio/webm" };
+      const r: Rec = { recorder, stream, chunks: [], started: Date.now(), ctx, analyser, mime: recorder.mimeType || mime || "audio/webm", quality: studio ? "Studio" : hdv ? "HD" : "" };
       recorder.ondataavailable = (e) => e.data.size && r.chunks.push(e.data);
       recorder.start(250);
       rec.current = r;
+      setRecQuality(r.quality);
       setRecording(true);
       setRecSecs(0);
       haptic.medium();
@@ -341,6 +358,18 @@ export default function Composer({
           </div>
         )}
 
+        {!recording && text.length > limit - 400 && (
+          <div className={cn("mb-1 flex items-center justify-end gap-2 px-2 text-xs font-semibold tabular-nums", text.trim().length > limit ? "text-dnd" : "text-sub")}>
+            {text.trim().length > limit && tier < NEED.longMessages && text.trim().length <= MSG_LIMIT_PREMIUM && (
+              <button onClick={() => gate(NEED.longMessages, `Messages over ${MSG_LIMIT_FREE.toLocaleString()} characters`)} className="rounded-full bg-[#ffd400]/15 px-2 py-0.5 font-bold text-[#ffd400] hover:bg-[#ffd400]/25">
+                ⚡ Send up to {MSG_LIMIT_PREMIUM.toLocaleString()} with Lighting
+              </button>
+            )}
+            <span>
+              {text.trim().length.toLocaleString()} / {limit.toLocaleString()}
+            </span>
+          </div>
+        )}
         {recording ? (
           <div className="flex animate-fade items-center gap-2">
             <button onClick={cancelRecording} className="grid size-11 shrink-0 place-items-center rounded-full text-dnd active:scale-90" aria-label="Discard recording">
@@ -349,6 +378,11 @@ export default function Composer({
             <div className="flex h-11 min-w-0 flex-1 items-center gap-3 rounded-full bg-side px-4">
               <span className="size-2.5 shrink-0 animate-pulse rounded-full bg-dnd" />
               <span className="w-10 shrink-0 text-[15px] font-semibold tabular-nums">{mm}</span>
+              {recQuality && (
+                <span className="shrink-0 rounded-md bg-[#ffd400]/15 px-1.5 py-0.5 text-[10px] font-black tracking-wide text-[#ffd400]" title={recQuality === "Studio" ? "Studio voice · stereo 320 kbps, no noise filter" : "HD voice · 256 kbps"}>
+                  ⚡ {recQuality}
+                </span>
+              )}
               <div className="flex h-6 min-w-0 flex-1 items-center justify-end gap-[3px] overflow-hidden">
                 {levels.map((l, i) => (
                   <span key={i} className="w-[3px] shrink-0 rounded-full bg-accent transition-[height] duration-75" style={{ height: `${Math.round(l * 100)}%` }} />

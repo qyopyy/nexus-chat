@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { Clapperboard, Pause, Play, RotateCcw, RotateCw, Volume2, VolumeX, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { startWatch, stopWatch, useCall, watchControl, watchPos } from "@/lib/call";
+import { supabase } from "@/lib/supabase";
+import { loadProfiles } from "@/lib/data";
+import { mediaUrl } from "@/lib/gram";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 
@@ -156,8 +159,81 @@ function loadVol() {
 }
 
 // ─────────────────────────── the shared screen ───────────────────────────
-/** The video everyone in the call is watching, kept in sync. Anyone can play, pause, seek or stop. */
+/** The video everyone in the call is watching. YouTube / video files stay frame-synced; Instagram is a shared embed with a 3-2-1 countdown. */
 export function WatchStage({ compact }: { compact?: boolean }) {
+  const kind = useCall((s) => s.watch?.kind);
+  if (!kind) return null;
+  return kind === "instagram" ? <EmbedStage compact={compact} /> : <SyncedStage compact={compact} />;
+}
+
+/** Instagram can't be remote-controlled, so everyone gets the same reel plus a shared countdown to press play together. */
+function EmbedStage({ compact }: { compact?: boolean }) {
+  const w = useCall((s) => s.watch);
+  const me = useApp((s) => s.userId);
+  const starter = useApp((s) => (w ? s.profiles[w.by]?.display_name : null));
+  const [count, setCount] = useState<number | null>(null);
+  const lastRev = useRef<number | null>(null);
+  useEffect(() => {
+    if (!w) return;
+    const first = lastRev.current === null;
+    const changed = lastRev.current !== w.rev;
+    lastRev.current = w.rev;
+    if (first || !changed || !w.playing) return;
+    let n = 3;
+    setCount(n);
+    const t = setInterval(() => {
+      n -= 1;
+      setCount(n);
+      if (n < 0) {
+        clearInterval(t);
+        setCount(null);
+      }
+    }, 900);
+    return () => clearInterval(t);
+  }, [w?.rev, w?.playing]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!w || !w.id) return null;
+  return (
+    <div className="relative flex size-full flex-col overflow-hidden rounded-xl bg-black ring-1 ring-white/10">
+      <div className="relative flex min-h-0 flex-1 items-center justify-center bg-[#0b0b0d]">
+        <iframe
+          key={w.id}
+          src={`https://www.instagram.com/${w.id}/embed/`}
+          title="Instagram"
+          allow="autoplay; encrypted-media; picture-in-picture; clipboard-write"
+          className={cn("h-full max-w-full rounded-lg border-0 bg-white", w.id.startsWith("p/") ? "aspect-square" : "aspect-[9/16]")}
+        />
+        {count !== null && (
+          <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/30">
+            <div className="text-center">
+              <div className="text-7xl font-black text-white drop-shadow-lg">{count > 0 ? count : "▶"}</div>
+              <div className="mt-1 rounded-full bg-black/70 px-3 py-1 text-sm font-semibold text-white">{count > 0 ? "Get ready…" : "Tap play now!"}</div>
+            </div>
+          </div>
+        )}
+      </div>
+      <div className={cn("flex shrink-0 items-center gap-2 bg-[#111214] px-3 text-white", compact ? "py-2" : "py-2.5")}>
+        <button onClick={() => watchControl({ playing: true, pos: 0 })} className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-black" title="Count down for everyone, then everyone taps play">
+          <Play className="size-3.5 fill-current" /> 3-2-1 play together
+        </button>
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-white/70">
+          <Avatar userId={w.by} size={18} plain />
+          <span className="truncate">
+            <b className="text-white">{w.title}</b>
+            {!compact && <> · shared by {w.by === me ? "you" : (starter ?? "someone")}</>}
+          </span>
+        </div>
+        <a href={w.src} target="_blank" rel="noreferrer" className="rounded-full bg-white/10 px-2.5 py-1.5 text-xs font-bold hover:bg-white/20">
+          Open
+        </a>
+        <button onClick={stopWatch} className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1.5 text-xs font-bold hover:bg-dnd" title="Stop for everyone">
+          <X className="size-3.5" /> Stop
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SyncedStage({ compact }: { compact?: boolean }) {
   const w = useCall((s) => s.watch);
   const me = useApp((s) => s.userId);
   const starter = useApp((s) => (w ? s.profiles[w.by]?.display_name : null));
@@ -330,36 +406,65 @@ export function WatchStage({ compact }: { compact?: boolean }) {
 export function WatchButton({ mobile }: { mobile?: boolean }) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
+  const [tab, setTab] = useState<"link" | "gram">("link");
+  const [busy, setBusy] = useState(false);
   const active = useCall((s) => !!s.watch);
-  const go = () => {
-    const err = startWatch(url);
+  const start = (link: string, title?: string) => {
+    const err = startWatch(link, title);
     if (err) return toast(err, "error");
     setUrl("");
     setOpen(false);
   };
+  const go = async () => {
+    const gramId = url.match(/(?:nexusproject\.cc|^)\/?(?:n|gram\/c)\/([0-9a-f-]{36})/i)?.[1];
+    if (!gramId) return start(url);
+    setBusy(true);
+    const v = await gramVideo(gramId);
+    setBusy(false);
+    if (!v) return toast("That NexusGram post has no video", "error");
+    start(v.url, v.title);
+  };
   const panel = (
-    <div className="w-[min(92vw,360px)] animate-pop rounded-2xl bg-menu p-3 text-txt shadow-2xl ring-1 ring-white/10" onClick={(e) => e.stopPropagation()}>
+    <div className="w-[min(92vw,380px)] animate-pop rounded-2xl bg-menu p-3 text-txt shadow-2xl ring-1 ring-white/10" onClick={(e) => e.stopPropagation()}>
       <div className="flex items-center gap-2 font-bold">
         <Clapperboard className="size-4 text-accent" /> Watch together
       </div>
-      <p className="mt-0.5 text-xs text-sub">Everyone in the call sees the same video, in sync. Anyone can pause or skip.</p>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          go();
-        }}
-        className="mt-2 flex gap-2"
-      >
-        <input
-          autoFocus={!mobile}
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="YouTube link or .mp4 link"
-          inputMode="url"
-          className="min-w-0 flex-1 rounded-lg bg-rail px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent/60"
-        />
-        <button className="rounded-lg bg-accent px-3 text-sm font-bold text-white">{active ? "Switch" : "Start"}</button>
-      </form>
+      <p className="mt-0.5 text-xs text-sub">YouTube, NexusGram & Instagram for everyone in the call. Anyone can pause or skip.</p>
+      <div className="mt-2 flex gap-1 rounded-lg bg-rail p-1">
+        {(
+          [
+            ["link", "Paste a link"],
+            ["gram", "NexusGram videos"],
+          ] as const
+        ).map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} className={cn("flex-1 rounded-md py-1.5 text-xs font-bold", tab === id ? "bg-accent text-white" : "text-sub")}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === "link" ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void go();
+          }}
+          className="mt-2 flex gap-2"
+        >
+          <input
+            autoFocus={!mobile}
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="YouTube, Instagram or NexusGram link"
+            inputMode="url"
+            className="min-w-0 flex-1 rounded-lg bg-rail px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent/60"
+          />
+          <button disabled={busy || !url.trim()} className="rounded-lg bg-accent px-3 text-sm font-bold text-white disabled:opacity-50">
+            {active ? "Switch" : "Start"}
+          </button>
+        </form>
+      ) : (
+        <GramPicker onPick={(v) => start(v.url, v.title)} />
+      )}
       {active && (
         <button
           onClick={() => {
@@ -405,6 +510,61 @@ export function WatchButton({ mobile }: { mobile?: boolean }) {
           <div className="absolute bottom-16 left-1/2 z-30 -translate-x-1/2">{panel}</div>
         </>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────── NexusGram videos ───────────────────────────
+type GramRow = { id: string; author_id: string; caption: string | null; media: { type: string; path: string; poster?: string; dur?: number }[] | null };
+
+async function gramVideo(postId: string): Promise<{ url: string; title: string } | null> {
+  const { data } = await supabase.from("gram_posts").select("id,author_id,caption,media").eq("id", postId).maybeSingle();
+  const row = data as GramRow | null;
+  const v = row?.media?.find((m) => m.type === "video");
+  if (!row || !v) return null;
+  const name = useApp.getState().profiles[row.author_id]?.display_name;
+  return { url: mediaUrl(v.path), title: (row.caption?.split("\n")[0] || (name ? `NexusGram · ${name}` : "NexusGram video")).slice(0, 100) };
+}
+
+/** latest NexusGram videos — tap one to watch it together */
+function GramPicker({ onPick }: { onPick: (v: { url: string; title: string }) => void }) {
+  const [rows, setRows] = useState<GramRow[] | null>(null);
+  useEffect(() => {
+    void supabase
+      .from("gram_posts")
+      .select("id,author_id,caption,media")
+      .order("created_at", { ascending: false })
+      .limit(60)
+      .then(({ data }) => {
+        const vids = ((data as GramRow[]) ?? []).filter((r) => r.media?.some((m) => m.type === "video")).slice(0, 24);
+        setRows(vids);
+        void loadProfiles(vids.map((r) => r.author_id));
+      });
+  }, []);
+  if (rows === null) return <div className="mt-2 h-32 animate-pulse rounded-lg bg-rail" />;
+  if (rows.length === 0) return <p className="mt-3 text-center text-sm text-sub">No NexusGram videos yet.</p>;
+  return (
+    <div className="mt-2 grid max-h-72 grid-cols-3 gap-1.5 overflow-y-auto">
+      {rows.map((r) => {
+        const v = r.media!.find((m) => m.type === "video")!;
+        return (
+          <button
+            key={r.id}
+            onClick={() => onPick({ url: mediaUrl(v.path), title: (r.caption?.split("\n")[0] || "NexusGram video").slice(0, 100) })}
+            className="group relative aspect-[9/14] overflow-hidden rounded-lg bg-rail"
+            title={r.caption ?? "NexusGram video"}
+          >
+            {v.poster ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={mediaUrl(v.poster)} alt="" className="size-full object-cover transition group-hover:scale-105" loading="lazy" />
+            ) : (
+              <div className="grid size-full place-items-center text-2xl">🎬</div>
+            )}
+            <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/80 px-1.5 pt-4 pb-1 text-left text-[10px] font-semibold text-white">{r.caption || "Video"}</span>
+            {v.dur ? <span className="absolute top-1 right-1 rounded bg-black/70 px-1 text-[9px] font-bold text-white">{fmt(v.dur)}</span> : null}
+          </button>
+        );
+      })}
     </div>
   );
 }

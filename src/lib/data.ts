@@ -5,6 +5,8 @@ import { supabase, errorText } from "./supabase";
 import { useApp, toast } from "@/store/app";
 import { useChat } from "@/store/chat";
 import { effectForText, playEffect, type EffectKind } from "./effects";
+import { MSG_LIMIT_FREE, NEED, gate, msgLimit, myTier } from "./premium";
+import { prefs } from "./prefs";
 import type { ChatListItem, Conversation, Friendship, Message, Profile, Reaction, Space, SpaceMember } from "./types";
 
 const PAGE = 50;
@@ -421,6 +423,14 @@ export async function sendMessage(convId: string, content: string, file?: File |
   const { loadNetPrefs, stripTrackingFromText } = await import("./netPrefs");
   const text = loadNetPrefs().stripTrackers ? stripTrackingFromText(content.trim()) : content.trim();
   if (!text && !file) return;
+  const tier = myTier();
+  if (text.length > msgLimit(tier)) {
+    if (text.length <= msgLimit(NEED.longMessages) && tier < NEED.longMessages) gate(NEED.longMessages, `Messages over ${MSG_LIMIT_FREE.toLocaleString()} characters`);
+    else toast(`Messages can be up to ${msgLimit(tier).toLocaleString()} characters — this one is ${text.length.toLocaleString()}.`, "error");
+    return;
+  }
+  // Lighting+: photos, videos & voice go out in original quality (Settings → Chat → Premium quality)
+  const hd = tier >= NEED.hdMedia && prefs().hdUploads !== false;
   if (file) {
     const { malwareGate } = await import("./malwareGuard");
     if (await malwareGate(file, { fileName: file.name, context: "chat" })) return;
@@ -460,19 +470,27 @@ export async function sendMessage(convId: string, content: string, file?: File |
     let contentType = file.type || "application/octet-stream";
     let name = file.name.replace(/[^\w.\-]+/g, "_") || "file";
     try {
-      // Compress every chat attachment type before upload (images, video, audio/voice, PDF)
+      // Compress every chat attachment type before upload (images, video, audio/voice, PDF).
+      // HD (Lighting+) keeps originals whenever every browser can show them as-is.
+      const webImage = /^image\/(jpeg|png|webp|avif|gif)$/i.test(file.type) || (!file.type && /\.(jpe?g|png|webp|avif|gif)$/i.test(file.name));
+      const webVideo = /^video\/(mp4|webm)$/i.test(file.type) && /\.(mp4|webm)$/i.test(file.name);
       if (/^image\//.test(file.type) || /\.(jpe?g|png|webp|heic|heif|avif|gif)$/i.test(file.name)) {
-        if (!/^image\/gif$/i.test(file.type) && !/\.gif$/i.test(file.name)) {
+        if (hd && webImage) {
+          /* original quality — upload untouched */
+        } else if (!/^image\/gif$/i.test(file.type) && !/\.gif$/i.test(file.name)) {
           const { compressImage } = await import("./compressMedia");
-          const { blob } = await compressImage(file, 1600, 0.85);
+          // HD: HEIC/other formats still become JPEG (so everyone can see them) but at near-full resolution
+          const { blob } = await compressImage(file, hd ? 4096 : 1600, hd ? 0.95 : 0.85);
           upload = blob;
           contentType = blob.type || "image/jpeg";
           if (!/\.jpe?g$/i.test(name) && contentType.includes("jpeg")) name = name.replace(/\.[^.]+$/, "") + ".jpg";
         }
+      } else if (hd && webVideo) {
+        /* original quality — already plays everywhere */
       } else if (/^video\//.test(file.type) || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name)) {
         const { compressVideo, FULL_HD_60 } = await import("./compressMedia");
-        // Chat attachments: Full HD / 60fps (locked platform policy)
-        const out = await compressVideo(file, { ...FULL_HD_60 });
+        // Chat attachments: Full HD / 60fps (locked platform policy) · HD plans convert .mov at 1440p60
+        const out = await compressVideo(file, hd ? { maxEdge: 2560, maxFps: 60 } : { ...FULL_HD_60 });
         if (!out.skipped || out.blob !== file) {
           upload = out.blob.size <= file.size * 1.08 ? out.blob : file;
           if (upload === out.blob) {
@@ -482,7 +500,10 @@ export async function sendMessage(convId: string, content: string, file?: File |
         }
       } else if (/^audio\//.test(file.type) || /\.(wav|mp3|aac|m4a|ogg|opus|flac)$/i.test(file.name) || /voice|recording/i.test(file.name)) {
         const { processChatAudio, isEditableAudio } = await import("./attachAudio");
-        if (isEditableAudio(file) || /^audio\//.test(file.type)) {
+        if (hd) {
+          // HD voice & music: keep the original recording / file bit-for-bit
+          contentType = file.type || contentType;
+        } else if (isEditableAudio(file) || /^audio\//.test(file.type)) {
           const out = await processChatAudio(file, { compress: true, bitrate: 96_000 });
           upload = out;
           contentType = out.type || "audio/mp4";
@@ -679,6 +700,12 @@ export async function forwardMessage(targetConvId: string, message: Message) {
 export async function editMessage(id: string, content: string) {
   const text = content.trim();
   if (!text) return;
+  const tier = myTier();
+  if (text.length > msgLimit(tier)) {
+    if (tier < NEED.longMessages && text.length <= msgLimit(NEED.longMessages)) gate(NEED.longMessages, `Messages over ${MSG_LIMIT_FREE.toLocaleString()} characters`);
+    else toast(`Messages can be up to ${msgLimit(tier).toLocaleString()} characters.`, "error");
+    return;
+  }
   useChat.setState((s) => ({
     messages: s.messages.map((m) => (m.id === id ? { ...m, content: text, edited_at: new Date().toISOString() } : m)),
     editingId: null,

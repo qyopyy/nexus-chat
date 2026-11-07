@@ -1,7 +1,8 @@
 "use client";
 
 import { memo, useEffect, useRef, useState } from "react";
-import { Bookmark, Check, Clock, Copy, Download, FileText, Forward, Lock, Pencil, Pin, Reply, SmilePlus, Sparkles, Trash2 } from "lucide-react";
+import { Bookmark, Check, Clock, Copy, Download, FileText, Flag, Forward, Lock, Pencil, Pin, Reply, SmilePlus, Sparkles, Trash2 } from "lucide-react";
+import { openReport } from "@/lib/adminTools";
 import { usePrefs } from "@/lib/prefs";
 import { useApp, openProfileCard, toast } from "@/store/app";
 import { roleRank } from "@/lib/theme";
@@ -486,6 +487,11 @@ function MessageBubbleImpl({
               <Pencil className="size-[18px]" />
             </ToolBtn>
           )}
+          {!mine && (
+            <ToolBtn label="Report" danger onClick={() => openReport({ messageId: m.id, userId: m.author_id, excerpt: m.content?.slice(0, 200) })}>
+              <Flag className="size-[18px]" />
+            </ToolBtn>
+          )}
           {(mine || canModerate) && (
             <ToolBtn label={mine ? "Delete" : "Delete (moderator)"} danger onClick={() => confirm("Delete this message?") && void deleteMessage(m.id)}>
               <Trash2 className="size-[18px]" />
@@ -555,6 +561,19 @@ function MessageBubbleImpl({
           {effect && <SheetItem icon={<Sparkles className="size-5" />} label={`Replay ${effect.label}`} onClick={() => (setSheet(false), playEffect(effect.id))} />}
           {mine && !m.attachment_url && <SheetItem icon={<Pencil className="size-5" />} label="Edit" onClick={() => (setSheet(false), useChat.setState({ editingId: m.id, replyTo: null }))} />}
         </SheetGroup>
+        {!mine && (
+          <SheetGroup>
+            <SheetItem
+              icon={<Flag className="size-5" />}
+              label="Report message"
+              danger
+              onClick={() => {
+                setSheet(false);
+                openReport({ messageId: m.id, userId: m.author_id, excerpt: m.content?.slice(0, 200) });
+              }}
+            />
+          </SheetGroup>
+        )}
         {(mine || canModerate) && (
           <SheetGroup>
             <SheetItem

@@ -7,12 +7,13 @@ import { LiveText, TypingAnim } from "@/components/chat/TypingBubbles";
 import { useApp, closeModal, openModal, toast } from "@/store/app";
 import { detectPush, disablePush, enablePush, usePush } from "@/lib/push";
 import { isNativeApp } from "@/lib/useMobile";
-import { useCall, leaveCall, micConstraints, updateSettings, type NoiseMode, type ScreenQuality, type VoiceQuality } from "@/lib/call";
+import { CAMERA_QUALITY_OPTIONS, effectiveCameraQuality, pickCameraQuality, useCall, leaveCall, micConstraints, updateSettings, type NoiseMode, type ScreenQuality, type VoiceQuality } from "@/lib/call";
 import AvatarStudio from "@/components/vavatar/AvatarStudio";
 import DevelopmentModePanel from "@/components/admin/DevelopmentModePanel";
 import { updateMyProfile, uploadAvatar } from "@/lib/data";
 import { DECORATIONS, roleRank } from "@/lib/theme";
 import AppearanceSection from "./AppearanceSection";
+import { NotificationPrefsBlock } from "./ExtraSettings";
 import AdminPanel from "./AdminPanel";
 import ProfileExtras from "./ProfileExtras";
 import NameTag from "@/components/ui/NameTag";
@@ -589,6 +590,11 @@ function VoiceSection() {
           />
         </div>
         <div>
+          <Label>Camera quality</Label>
+          <Select value={s.cameraQuality ?? "auto"} onChange={pickCameraQuality} options={CAMERA_QUALITY_OPTIONS} />
+          <p className="mt-1 text-xs text-sub">Sending {effectiveCameraQuality().replace("p", "p · ").replace(/(\d+)$/, "$1fps")} · 1080p &amp; 60fps need ⚡ Lighting</p>
+        </div>
+        <div>
           <Label>Screen share quality</Label>
           <Select
             value={s.screenQuality}
@@ -665,6 +671,7 @@ function NotificationSection() {
         )}
         {status && <div className="mt-3 text-xs text-sub">Devices receiving your notifications: {status.devices}</div>}
       </div>
+      <NotificationPrefsBlock />
 
       {isOwner && (
         <div className="mt-4 rounded-xl bg-side p-4">

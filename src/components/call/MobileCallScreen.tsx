@@ -7,6 +7,8 @@ import { SoundboardButton, SoundToast } from "./Soundboard";
 import { ReactButton, ReactionsOverlay } from "./Reactions";
 import { CallExtraControls, CallStatusChips } from "./CallExtras";
 import { WatchButton, WatchStage } from "./WatchTogether";
+import { PlayBanner, PlayButton } from "./PlayTogether";
+import { PeopleVolumeButton } from "./PeopleVolume";
 import AvatarButton from "@/components/vavatar/AvatarButton";
 import { useCall, canScreenShare, leaveCall, setFocused, toggleDeafen, toggleMute, toggleScreen, toggleVideo } from "@/lib/call";
 import { haptic } from "@/lib/haptics";
@@ -107,6 +109,10 @@ export default function MobileCallScreen({ conversationId }: { conversationId: s
         <span className="w-10" />
       </div>
 
+      <div className="mb-2 px-3 empty:hidden">
+        <PlayBanner />
+      </div>
+
       {/* stage */}
       <div className="relative min-h-0 flex-1 px-3">
         {watching ? (
@@ -185,11 +191,13 @@ export default function MobileCallScreen({ conversationId }: { conversationId: s
       {/* controls */}
       <div className="mx-3 mb-safe-3 rounded-[30px] bg-white/[.08] p-3 backdrop-blur-2xl">
         <CallExtraControls mobile />
-        <div className="mb-3 flex items-center justify-center gap-8">
+        <div className="mb-3 grid grid-cols-6 justify-items-center gap-1">
           <AvatarButton mobile />
           <SoundboardButton mobile />
           <ReactButton mobile />
           <WatchButton mobile />
+          <PlayButton mobile />
+          <PeopleVolumeButton mobile />
         </div>
         <div className="flex items-center justify-around">
           <Ctl label={localCam ? "Camera off" : "Camera"} on={!!localCam} onClick={() => void toggleVideo()}>

@@ -32,6 +32,14 @@ export type Prefs = {
   dateFormat: "auto" | "dmy" | "mdy" | "ymd";
   jumboEmoji: boolean;
   spoilersAutoReveal: boolean;
+  /** Lighting+: send photos, videos & voice in original quality (no compression) */
+  hdUploads: boolean;
+  /** Lighting+: voice messages without noise suppression / echo cancel, stereo 320 kbps — for singing & instruments */
+  studioVoice: boolean;
+  /** messages containing these words/phrases are collapsed for you (your own messages never are) */
+  mutedWords: string[];
+  /** collapse messages from people you blocked in servers & groups */
+  hideBlocked: boolean;
   // sounds
   uiSounds: boolean;
   uiVolume: number; // 0–1
@@ -65,6 +73,10 @@ export const PREF_DEFAULTS: Prefs = {
   dateFormat: "auto",
   jumboEmoji: true,
   spoilersAutoReveal: false,
+  hdUploads: true,
+  studioVoice: false,
+  mutedWords: [],
+  hideBlocked: true,
   uiSounds: true,
   uiVolume: 1,
   ringtone: true,

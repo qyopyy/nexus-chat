@@ -56,6 +56,44 @@ function preview(m: any) {
   return "New message";
 }
 
+// ---------------------------------------------------------------- per-user notification settings (Settings → Notifications)
+type NPrefs = { user_id: string; dms: boolean; groups: boolean; mentions: boolean; calls: boolean; previews: boolean; quiet_enabled: boolean; quiet_start: number; quiet_end: number; quiet_allow_calls: boolean; tz: string };
+function localMinutes(tz: string) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+    const h = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
+    const m = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+    return (h % 24) * 60 + m;
+  } catch {
+    const d = new Date();
+    return d.getUTCHours() * 60 + d.getUTCMinutes();
+  }
+}
+function inQuiet(p: NPrefs) {
+  if (!p.quiet_enabled || p.quiet_start === p.quiet_end) return false;
+  const now = localMinutes(p.tz || "UTC");
+  return p.quiet_start < p.quiet_end ? now >= p.quiet_start && now < p.quiet_end : now >= p.quiet_start || now < p.quiet_end;
+}
+/** drop recipients who turned this kind off or are in quiet hours; returns who should get a hidden preview */
+async function applyPrefs(recipients: string[], kind: "dm" | "group" | "mention" | "call") {
+  if (!recipients.length) return { keep: recipients, hidePreview: new Set<string>() };
+  const { data } = await admin.from("notification_prefs").select("*").in("user_id", recipients);
+  const byId = new Map<string, NPrefs>(((data ?? []) as NPrefs[]).map((p) => [p.user_id, p]));
+  const hidePreview = new Set<string>();
+  const keep = recipients.filter((id) => {
+    const p = byId.get(id);
+    if (!p) return true;
+    if (kind === "dm" && !p.dms) return false;
+    if (kind === "group" && !p.groups) return false;
+    if (kind === "mention" && !p.mentions) return false;
+    if (kind === "call" && !p.calls) return false;
+    if (inQuiet(p) && !(kind === "call" && p.quiet_allow_calls)) return false;
+    if (!p.previews) hidePreview.add(id);
+    return true;
+  });
+  return { keep, hidePreview };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   const cfg = await config();
@@ -69,12 +107,16 @@ Deno.serve(async (req: Request) => {
   let conv: any = null;
   let payload: Record<string, unknown>;
   let isCall = false;
+  let kind: "dm" | "group" | "mention" | "call" = "dm";
+  let senderId = "";
 
   if (call_event_id) {
     // ---- incoming call ring
     isCall = true;
+    kind = "call";
     const { data: ev } = await admin.from("call_events").select("*").eq("id", call_event_id).maybeSingle();
     if (!ev || ev.kind !== "ring") return json({ skipped: "no ring" });
+    senderId = ev.caller_id;
     const [{ data: c }, { data: caller }] = await Promise.all([
       admin.from("conversations").select("id, kind, name, space_id").eq("id", ev.conversation_id).maybeSingle(),
       admin.from("profiles").select("display_name, avatar_url").eq("id", ev.caller_id).maybeSingle(),
@@ -98,6 +140,7 @@ Deno.serve(async (req: Request) => {
   } else {
     const { data: m } = await admin.from("messages").select("*").eq("id", message_id).maybeSingle();
     if (!m || m.deleted_at) return json({ skipped: "no message" });
+    senderId = m.author_id;
     const [{ data: c }, { data: author }] = await Promise.all([
       admin.from("conversations").select("id, kind, name, space_id").eq("id", m.conversation_id).maybeSingle(),
       admin.from("profiles").select("display_name, username, avatar_url").eq("id", m.author_id).maybeSingle(),
@@ -109,8 +152,10 @@ Deno.serve(async (req: Request) => {
     if (conv.kind === "dm" || conv.kind === "group") {
       const { data } = await admin.from("conversation_members").select("user_id, muted").eq("conversation_id", conv.id);
       recipients = (data ?? []).filter((r: any) => r.user_id !== m.author_id && !r.muted).map((r: any) => r.user_id);
+      kind = conv.kind === "dm" ? "dm" : "group";
     } else if (conv.space_id) {
-      const names = [...String(m.content ?? "").matchAll(/(^|\s)@([a-z0-9_.]{2,32})/gi)].map((x) => x[2].toLowerCase());
+      kind = "mention";
+      const names = [...String(m.content ?? "").matchAll(/(^|\s)@([a-z0-9_.]{1,32})/gi)].map((x) => x[2].toLowerCase());
       const everyone = /(^|\s)@(everyone|here)\b/i.test(m.content ?? "");
       const { data: members } = await admin.from("space_members").select("user_id, role").eq("space_id", conv.space_id);
       const authorRole = (members ?? []).find((x: any) => x.user_id === m.author_id)?.role;
@@ -135,7 +180,20 @@ Deno.serve(async (req: Request) => {
       message_id: m.id,
     };
   }
+  // people who blocked the sender (or were blocked by them) never get a notification
+  if (recipients.length && senderId) {
+    const { data: bl } = await admin
+      .from("user_blocks")
+      .select("blocker_id, blocked_id")
+      .or(`and(blocked_id.eq.${senderId},blocker_id.in.(${recipients.join(",")})),and(blocker_id.eq.${senderId},blocked_id.in.(${recipients.join(",")}))`);
+    const skip = new Set(((bl ?? []) as { blocker_id: string; blocked_id: string }[]).map((b) => (b.blocker_id === senderId ? b.blocked_id : b.blocker_id)));
+    recipients = recipients.filter((id) => !skip.has(id));
+  }
+  const filtered = await applyPrefs(recipients, kind);
+  recipients = filtered.keep;
   if (!recipients.length) return json({ sent: 0 });
+  const hidden = { ...payload, body: isCall ? body : "New message" };
+  const payloadFor = (uid: string) => (filtered.hidePreview.has(uid) ? hidden : payload);
 
   const { data: subs } = await admin.from("push_subscriptions").select("*").in("user_id", recipients);
   let sent = 0;
@@ -154,7 +212,7 @@ Deno.serve(async (req: Request) => {
       try {
         if (s.kind === "web") {
           if (!cfg.vapid_private) return;
-          await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(payload), { TTL: isCall ? 60 : 86400, urgency: "high", topic: (isCall ? "c" : "") + conv.id.replace(/-/g, "").slice(0, isCall ? 31 : 32) });
+          await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(payloadFor(s.user_id)), { TTL: isCall ? 60 : 86400, urgency: "high", topic: (isCall ? "c" : "") + conv.id.replace(/-/g, "").slice(0, isCall ? 31 : 32) });
           sent++;
         } else if (s.kind === "fcm" && sa) {
           const token = await fcmAccessToken(sa);
@@ -164,7 +222,7 @@ Deno.serve(async (req: Request) => {
             body: JSON.stringify({
               message: {
                 token: s.endpoint,
-                notification: { title, body },
+                notification: { title, body: filtered.hidePreview.has(s.user_id) ? String(hidden.body) : body },
                 data: { conversation_id: conv.id, url: String(payload.url), call: isCall ? "1" : "0" },
                 android: { priority: "high", ttl: isCall ? "60s" : "86400s", notification: { tag: String(payload.tag), channel_id: isCall ? "calls" : "messages", sound: "default" } },
                 apns: { payload: { aps: { sound: "default", "thread-id": conv.id } } },

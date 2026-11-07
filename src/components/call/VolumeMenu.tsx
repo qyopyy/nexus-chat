@@ -4,10 +4,10 @@ import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { MessageCircle, RotateCcw } from "lucide-react";
 import { useApp } from "@/store/app";
-import { useCall, setUserVolume, toggleLocalMute } from "@/lib/call";
+import { useCall, setUserVolume, toggleLocalMute, MAX_USER_VOLUME } from "@/lib/call";
 import { openDM } from "@/lib/data";
 
-/** Discord-style per-user menu: User Volume 0–200%, local mute */
+/** Discord-style per-user menu: User Volume 0–400%, local mute */
 export default function VolumeMenu({ userId, x, y, onClose }: { userId: string; x: number; y: number; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const profile = useApp((s) => s.profiles[userId]);
@@ -47,12 +47,12 @@ export default function VolumeMenu({ userId, x, y, onClose }: { userId: string; 
         <input
           type="range"
           min={0}
-          max={200}
+          max={MAX_USER_VOLUME * 100}
           step={1}
           value={pct}
           onChange={(e) => setUserVolume(userId, Number(e.target.value) / 100)}
           className="vol w-full"
-          style={{ ["--fill" as string]: `${pct / 2}%` }}
+          style={{ ["--fill" as string]: `${pct / MAX_USER_VOLUME}%` }}
         />
       </div>
       <button onClick={() => setUserVolume(userId, 1)} className="flex w-full items-center justify-between rounded px-2 py-1.5 hover:bg-accent hover:text-white">

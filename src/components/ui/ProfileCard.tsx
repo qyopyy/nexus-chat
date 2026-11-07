@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Aperture, Award, Copy, Download, ExternalLink, Eye, Gavel, Globe, Heart, MessageCircle, Phone, QrCode, Share2, ShieldCheck } from "lucide-react";
+import { Aperture, Award, Ban, Copy, Download, ExternalLink, Eye, Flag, Gavel, Globe, Heart, MessageCircle, Phone, QrCode, Share2, ShieldCheck } from "lucide-react";
+import { blockUser, loadBlocks, unblockUser, useIsBlocked } from "@/lib/blocks";
+import { openReport } from "@/lib/adminTools";
 import QRCode from "qrcode";
 import { openGram, publicProfileUrl } from "@/lib/gram";
 import { useApp, openModal, toast } from "@/store/app";
@@ -314,6 +316,7 @@ export function CardBody({ userId }: { userId: string }) {
             </button>
           </div>
         )}
+        {userId !== me && <SafetyRow userId={userId} name={p?.display_name ?? p?.username ?? "this person"} />}
 
         {canBadge && (
           <div className="mt-3 rounded-lg border border-white/10 p-2">
@@ -498,5 +501,29 @@ export function LinkRow({ link }: { link: ProfileLink }) {
       )}
       <ExternalLink className="size-3.5 shrink-0 text-sub" />
     </a>
+  );
+}
+
+/** block / unblock + report, under the Message & Call buttons */
+function SafetyRow({ userId, name }: { userId: string; name: string }) {
+  const blocked = useIsBlocked(userId);
+  const staff = useApp((s) => roleRank(s.profiles[userId]?.site_role) >= 2);
+  useEffect(() => {
+    void loadBlocks();
+  }, []);
+  return (
+    <div className="mt-2 flex items-center justify-center gap-4 text-xs font-semibold text-sub">
+      {!staff && (
+        <button
+          onClick={() => (blocked ? void unblockUser(userId, name) : confirm(`Block ${name}? They won't be able to DM you, call you or send friend requests, and you'll stop being friends.`) && void blockUser(userId, name))}
+          className={cn("flex items-center gap-1 hover:text-txt", blocked && "text-dnd")}
+        >
+          <Ban className="size-3.5" /> {blocked ? "Unblock" : "Block"}
+        </button>
+      )}
+      <button onClick={() => openReport({ userId, name })} className="flex items-center gap-1 hover:text-dnd">
+        <Flag className="size-3.5" /> Report
+      </button>
+    </div>
   );
 }

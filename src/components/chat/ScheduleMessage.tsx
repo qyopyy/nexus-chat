@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlarmClock, Mic, Square, Trash2, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/store/app";
+import { msgLimit, useMyTier } from "@/lib/premium";
 import { cn } from "@/lib/utils";
 import Sheet from "@/components/ui/Sheet";
 
@@ -36,6 +37,7 @@ function presets(): { label: string; at: Date }[] {
 /** "Send later" sheet — Nexus posts the message for you at the chosen time (even if your app is closed). */
 export function ScheduleSheet({ conversationId, initial = "", onClose }: { conversationId: string; initial?: string; onClose: () => void }) {
   const [text, setText] = useState(initial);
+  const limit = msgLimit(useMyTier());
   const [at, setAt] = useState(() => toLocalInput(new Date(Date.now() + 60 * 60_000)));
   const [busy, setBusy] = useState(false);
   const save = async (d: Date) => {
@@ -51,7 +53,7 @@ export function ScheduleSheet({ conversationId, initial = "", onClose }: { conve
   return (
     <Sheet open onClose={onClose} title="Schedule a message">
       <div className="space-y-3 p-1">
-        <textarea autoFocus value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={4000} placeholder="Message to send later…" className="w-full resize-none rounded-xl bg-rail px-3 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-accent/60" />
+        <textarea autoFocus value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={limit} placeholder="Message to send later…" className="w-full resize-none rounded-xl bg-rail px-3 py-2.5 text-[15px] outline-none focus:ring-2 focus:ring-accent/60" />
         <div className="grid grid-cols-2 gap-2">
           {presets().map((p) => (
             <button key={p.label} disabled={busy} onClick={() => void save(p.at)} className="rounded-xl bg-side px-3 py-2.5 text-left text-sm hover:bg-hover disabled:opacity-50">
