@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Ban, Moon, Trash2 } from "lucide-react";
+import { Ban, BellOff, BellRing, Moon, Music, Trash2 } from "lucide-react";
+import { loadWatchlist, setWatch, setWatchNotify, sp, type SpArtist, type Watch } from "@/lib/music";
 import { toast, useApp } from "@/store/app";
 import { CONNECTION_GROUPS, normalizeLink, platformById } from "@/lib/links";
 import type { ProfileLink } from "@/lib/types";
@@ -281,6 +282,89 @@ export function MoreConnections() {
             )}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/* ───────────── Notifications → new-release alerts from Nexus Bot ───────────── */
+export function ArtistAlertsBlock() {
+  const [list, setList] = useState<Watch[] | null>(null);
+  const [q, setQ] = useState("");
+  const [found, setFound] = useState<SpArtist[]>([]);
+  const load = () => void loadWatchlist().then(setList);
+  useEffect(load, []);
+  useEffect(() => {
+    const s = q.trim();
+    if (!s) return setFound([]);
+    const t = setTimeout(() => {
+      sp<{ items: SpArtist[] }>("search", { q: s, type: "artist" })
+        .then((r) => setFound(r.items.slice(0, 6)))
+        .catch(() => setFound([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q]);
+  const following = new Set((list ?? []).map((w) => w.spotify_id));
+  return (
+    <div className="mt-6 rounded-xl bg-side p-4">
+      <div className="flex items-center gap-2 font-medium">
+        <Music className="size-4 text-[#1DB954]" /> New release alerts
+      </div>
+      <p className="mt-1 mb-3 text-sm text-sub">Follow artists and Nexus Bot sends you a message the moment they drop a single or album on Spotify.</p>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search an artist to follow…" className="w-full rounded-md bg-rail px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent/60" />
+      {found.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {found.map((a) => (
+            <div key={a.id} className="flex items-center gap-2.5 rounded-lg bg-black/20 p-2">
+              {a.image ? <img src={a.image} alt="" className="size-9 rounded-full object-cover" /> : <div className="grid size-9 place-items-center rounded-full bg-hover">🎤</div>}
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{a.name}</span>
+              <button
+                disabled={following.has(a.id)}
+                onClick={async () => {
+                  if (await setWatch({ id: a.id, name: a.name, image: a.image }, true)) {
+                    setQ("");
+                    load();
+                  }
+                }}
+                className="rounded-full bg-accent px-3 py-1.5 text-xs font-bold text-white disabled:bg-white/10 disabled:text-sub"
+              >
+                {following.has(a.id) ? "Following" : "Follow"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="mt-3 space-y-1">
+        {list === null ? (
+          <div className="h-10 animate-pulse rounded-lg bg-black/20" />
+        ) : list.length === 0 ? (
+          <p className="py-2 text-sm text-sub">You&apos;re not following any artists yet.</p>
+        ) : (
+          list.map((w) => (
+            <div key={w.spotify_id} className="flex items-center gap-2.5 rounded-lg px-1 py-1.5">
+              {w.image_url ? <img src={w.image_url} alt="" className="size-9 rounded-full object-cover" /> : <div className="grid size-9 place-items-center rounded-full bg-hover">🎤</div>}
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{w.name}</span>
+              <button
+                onClick={async () => {
+                  if (await setWatchNotify(w.spotify_id, w.notify === false)) setList((l) => (l ?? []).map((x) => (x.spotify_id === w.spotify_id ? { ...x, notify: w.notify === false } : x)));
+                }}
+                className={`grid size-8 place-items-center rounded-full ${w.notify === false ? "bg-white/5 text-sub" : "bg-accent/20 text-accent"}`}
+                aria-label={w.notify === false ? "Turn alerts on" : "Turn alerts off"}
+                title={w.notify === false ? "Alerts off" : "Alerts on"}
+              >
+                {w.notify === false ? <BellOff className="size-4" /> : <BellRing className="size-4" />}
+              </button>
+              <button
+                onClick={async () => {
+                  if (await setWatch({ id: w.spotify_id, name: w.name, image: w.image_url }, false)) load();
+                }}
+                className="rounded-full px-2.5 py-1.5 text-xs font-semibold text-sub hover:bg-hover hover:text-dnd"
+              >
+                Unfollow
+              </button>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

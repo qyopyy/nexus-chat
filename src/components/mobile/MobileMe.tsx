@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { AppWindow, Bell, ChevronRight, Copy, Crown, Download, Gamepad2, Globe, Headphones, LayoutDashboard, LogOut, MapPin, Megaphone, Mic, Moon, Palette, Radio, Shield, Sparkles, Tv, UserPen, Users, Vault, Volume2, VolumeX } from "lucide-react";
+import { AppWindow, Bell, ChevronRight, Copy, Crown, Download, Gamepad2, Globe, Headphones, LayoutDashboard, LogOut, MapPin, Megaphone, Mic, Moon, Palette, Radio, Settings, Shield, Sparkles, Tv, UserPen, Users, Vault, Volume2, VolumeX } from "lucide-react";
 import { useApp, openModal, toast } from "@/store/app";
 import { useStudio } from "@/store/studio";
 import { openUntitled } from "@/lib/untitled";
@@ -60,7 +60,15 @@ export default function MobileMe() {
 
   return (
     <div ref={scroller} className="h-full overflow-y-auto overscroll-contain">
-      <LargeTitle title="You" scroller={scroller} />
+      <LargeTitle
+        title="You"
+        scroller={scroller}
+        right={
+          <button onClick={() => openModal("settings")} className="grid size-10 place-items-center rounded-full text-accent active:bg-white/10" aria-label="Settings">
+            <Settings className="size-[22px]" />
+          </button>
+        }
+      />
 
       {/* profile hero */}
       <div className="mx-4 overflow-hidden rounded-3xl bg-side">
@@ -180,6 +188,10 @@ export default function MobileMe() {
           useApp.setState({ hub: "studio" });
         })}
         {row(<Crown className="size-[18px]" />, "#f0b232", "Nexus Premium ⚡", () => openModal("premium"))}
+      </div>
+
+      <div className="mx-4 mt-4 overflow-hidden rounded-2xl bg-side">
+        {row(<Settings className="size-[18px]" />, "#4e5058", "Settings", () => openModal("settings"), <span className="mr-1 text-sm text-sub">All settings</span>)}
       </div>
 
       <div className="mx-4 mt-4 overflow-hidden rounded-2xl bg-side [&>button+button]:border-t [&>button+button]:border-white/[.05]">

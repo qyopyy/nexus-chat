@@ -88,12 +88,12 @@ export default function ArtistView({ spotifyId, handle }: { spotifyId?: string; 
               className={cn("flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition active:scale-95", watching ? "bg-white/10 text-txt ring-1 ring-white/20" : "bg-accent text-white hover:bg-accent-2")}
             >
               {watching ? <Check className="size-4" /> : <BellRing className="size-4" />}
-              {watching ? "Watching" : "Watch releases"}
+              {watching ? "Following · alerts on" : "Follow + release alerts"}
             </button>
           )}
           {artist?.url && (
             <a href={artist.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-full bg-[#1DB954] px-4 py-2 text-sm font-bold text-black hover:brightness-110">
-              ◉ Spotify
+              ◉ Follow on Spotify
             </a>
           )}
           {sid && !page?.owner_id && !claim && (

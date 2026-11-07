@@ -214,10 +214,10 @@ export async function pendingClaims(): Promise<ArtistClaim[]> {
 }
 
 // ------------------------------------------------------------------ watchlist
-export type Watch = { spotify_id: string; name: string; image_url: string | null; active: boolean };
+export type Watch = { spotify_id: string; name: string; image_url: string | null; active: boolean; notify?: boolean };
 
 export async function loadWatchlist(): Promise<Watch[]> {
-  const { data } = await supabase.from("artist_watch").select("spotify_id,name,image_url,active").eq("active", true).order("created_at", { ascending: false });
+  const { data } = await supabase.from("artist_watch").select("spotify_id,name,image_url,active,notify").eq("active", true).order("created_at", { ascending: false });
   return (data ?? []) as Watch[];
 }
 
@@ -225,9 +225,17 @@ export async function setWatch(a: { id: string; name: string; image: string | nu
   const me = useApp.getState().userId!;
   const { error } = await supabase
     .from("artist_watch")
-    .upsert({ user_id: me, spotify_id: a.id, name: a.name.slice(0, 120), image_url: a.image, active: on }, { onConflict: "user_id,spotify_id" });
+    .upsert({ user_id: me, spotify_id: a.id, name: a.name.slice(0, 120), image_url: a.image, active: on, ...(on ? { notify: true } : {}) }, { onConflict: "user_id,spotify_id" });
   if (error) toast(errorText(error), "error");
-  else toast(on ? `Watching ${a.name} — new releases show on Music home` : `Removed ${a.name} from your watchlist`, "success");
+  else toast(on ? `Following ${a.name} — Nexus Bot will message you when they drop something new` : `Unfollowed ${a.name}`, "success");
+  return !error;
+}
+
+/** turn Nexus Bot release DMs on/off for one followed artist */
+export async function setWatchNotify(spotifyId: string, notify: boolean) {
+  const me = useApp.getState().userId!;
+  const { error } = await supabase.from("artist_watch").update({ notify }).eq("user_id", me).eq("spotify_id", spotifyId);
+  if (error) toast(errorText(error), "error");
   return !error;
 }
 

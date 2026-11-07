@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BellOff, Bell, CheckCheck, Mic, Phone, Pin, PinOff, Search, SquarePen, Users, X } from "lucide-react";
+import { BellOff, Bell, CheckCheck, Mic, Phone, Pin, PinOff, Search, Settings, SquarePen, Users, X } from "lucide-react";
 import { useApp, openModal } from "@/store/app";
 import { usePrefs, toggleMute, togglePin } from "@/store/prefs";
 import { friendIds, markRead, openConversation, openDM } from "@/lib/data";
@@ -97,6 +97,9 @@ export default function MobileChats() {
               </button>
               <button onClick={() => openModal("newGroup")} className="grid size-10 place-items-center rounded-full text-accent active:bg-white/10" aria-label="New group">
                 <SquarePen className="size-[22px]" />
+              </button>
+              <button onClick={() => openModal("settings")} className="grid size-10 place-items-center rounded-full text-accent active:bg-white/10" aria-label="Settings">
+                <Settings className="size-[22px]" />
               </button>
             </div>
           }

@@ -200,7 +200,7 @@ function MeRow() {
       <IconBtn label={deafened ? "Undeafen" : "Deafen"} active={deafened} onClick={toggleDeafen}>
         {deafened ? <HeadphoneOff className="size-5" /> : <Headphones className="size-5" />}
       </IconBtn>
-      <IconBtn label="User Settings" onClick={() => openModal("settings", "voice")}>
+      <IconBtn label="User Settings" onClick={() => openModal("settings")}>
         <Settings className="size-5" />
       </IconBtn>
     </div>

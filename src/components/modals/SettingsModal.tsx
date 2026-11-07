@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Accessibility, Bell, Camera, Construction, Crown, Database, Keyboard, Link2, ShieldCheck, LogOut, Mic, Palette, Shield, Sparkles, Upload, User, Wifi, X } from "lucide-react";
+import { Accessibility, Bell, Camera, ChevronLeft, ChevronRight, Construction, Crown, Database, Keyboard, Link2, ShieldCheck, LogOut, Mic, Palette, Shield, Sparkles, Upload, User, Wifi, X } from "lucide-react";
 import { LIVE_STYLES, TYPING_STYLES, setChatFx, useChatFx } from "@/lib/chatFx";
 import { LiveText, TypingAnim } from "@/components/chat/TypingBubbles";
 import { useApp, closeModal, openModal, toast } from "@/store/app";
@@ -13,7 +13,7 @@ import DevelopmentModePanel from "@/components/admin/DevelopmentModePanel";
 import { updateMyProfile, uploadAvatar } from "@/lib/data";
 import { DECORATIONS, roleRank } from "@/lib/theme";
 import AppearanceSection from "./AppearanceSection";
-import { NotificationPrefsBlock } from "./ExtraSettings";
+import { ArtistAlertsBlock, NotificationPrefsBlock } from "./ExtraSettings";
 import AdminPanel from "./AdminPanel";
 import ProfileExtras from "./ProfileExtras";
 import NameTag from "@/components/ui/NameTag";
@@ -29,11 +29,91 @@ type Section = "account" | "connections" | "privacy" | "network" | "appearance" 
 const ALL: Section[] = ["account", "connections", "privacy", "network", "appearance", "accessibility", "chat", "voice", "vavatar", "notifications", "advanced", "admin", "devmode"];
 const MOBILE_LABEL: Partial<Record<Section, string>> = { network: "Network", vavatar: "V-Avatar", chat: "Chat", privacy: "Privacy", advanced: "Data", devmode: "Dev mode" };
 
+const MOBILE_GROUPS: { title: string; items: [Section, string, React.ReactNode, string][] }[] = [
+  {
+    title: "Your account",
+    items: [
+      ["account", "My Account", <User key="a" className="size-[18px]" />, "#5865f2"],
+      ["connections", "Connections", <Link2 key="c" className="size-[18px]" />, "#1DB954"],
+      ["privacy", "Privacy & Safety", <ShieldCheck key="p" className="size-[18px]" />, "#23a55a"],
+      ["network", "Network & Ad blocking", <Wifi key="n" className="size-[18px]" />, "#00a8fc"],
+    ],
+  },
+  {
+    title: "App",
+    items: [
+      ["appearance", "Appearance & fonts", <Palette key="ap" className="size-[18px]" />, "#9b59b6"],
+      ["accessibility", "Accessibility", <Accessibility key="ac" className="size-[18px]" />, "#f0b232"],
+      ["chat", "Chat & Typing", <Keyboard key="ch" className="size-[18px]" />, "#eb459e"],
+      ["voice", "Voice & Video", <Mic key="v" className="size-[18px]" />, "#23a55a"],
+      ["vavatar", "V-Avatar", <Sparkles key="va" className="size-[18px]" />, "#ff73fa"],
+      ["notifications", "Notifications & release alerts", <Bell key="no" className="size-[18px]" />, "#f23f43"],
+      ["advanced", "Data & Advanced", <Database key="d" className="size-[18px]" />, "#4e5058"],
+    ],
+  },
+];
+
+/** phone settings home: every page in an iOS-style list */
+function MobileSettingsHome({ isStaff, isAdmin, onPick }: { isStaff: boolean; isAdmin: boolean; onPick: (s: Section) => void }) {
+  const groups = isStaff
+    ? [...MOBILE_GROUPS, { title: "Staff", items: [["admin", "Admin Panel", <Shield key="ad" className="size-[18px]" />, "#ed4245"], ...(isAdmin ? [["devmode", "Dev / updating", <Construction key="dv" className="size-[18px]" />, "#f0a020"]] : [])] as [Section, string, React.ReactNode, string][] }]
+    : MOBILE_GROUPS;
+  return (
+    <div className="pb-safe-4 sm:hidden">
+      <div className="sticky top-0 z-10 flex items-center gap-2 bg-chat/95 px-4 pt-safe-3 pb-2 backdrop-blur">
+        <h1 className="flex-1 text-[28px] font-bold tracking-tight">Settings</h1>
+        <button onClick={closeModal} className="grid size-9 place-items-center rounded-full bg-hover text-sub" aria-label="Close settings">
+          <X className="size-5" />
+        </button>
+      </div>
+      {groups.map((g) => (
+        <div key={g.title} className="mt-3 px-4">
+          <div className="mb-1.5 px-1 text-xs font-bold tracking-wide text-sub uppercase">{g.title}</div>
+          <div className="overflow-hidden rounded-2xl bg-side">
+            {g.items.map(([id, label, icon, color], i) => (
+              <button key={id} onClick={() => onPick(id)} className={cn("flex min-h-[52px] w-full items-center gap-3 px-3.5 text-left active:bg-white/[.06]", i > 0 && "border-t border-white/[.05]")}>
+                <span className="grid size-8 shrink-0 place-items-center rounded-lg text-white" style={{ background: color }}>
+                  {icon}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[16px]">{label}</span>
+                <ChevronRight className="size-4 text-sub" />
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="mt-4 px-4">
+        <button onClick={() => openModal("premium")} className="flex min-h-[52px] w-full items-center gap-3 rounded-2xl bg-side px-3.5 text-left font-semibold text-[#f0b232] active:bg-white/[.06]">
+          <Crown className="size-5" /> Nexus Premium
+        </button>
+      </div>
+      <div className="mt-4 px-4">
+        <button
+          onClick={async () => {
+            closeModal();
+            await leaveCall();
+            await supabase.auth.signOut();
+          }}
+          className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-side font-semibold text-[#ff6b6b] active:bg-white/[.06]"
+        >
+          <LogOut className="size-[18px]" /> Log out
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsModal({ initial }: { initial: string | null }) {
   const [section, setSection] = useState<Section>(() => {
-    const base = (initial ?? "voice").split(":")[0];
-    return ALL.includes(base as Section) ? (base as Section) : "voice";
+    const base = (initial ?? "account").split(":")[0];
+    return ALL.includes(base as Section) ? (base as Section) : "account";
   });
+  // phones: a list of every settings page first (openModal("settings") or "home"), then the page
+  const [home, setHome] = useState(() => !initial || initial === "home");
+  const go = (s: Section) => {
+    setSection(s);
+    setHome(false);
+  };
   const focusUser = initial?.startsWith("admin:") ? initial.slice(6) : null;
   const isStaff = useApp((s) => roleRank(s.userId ? s.profiles[s.userId]?.site_role : null) >= 2);
   const isAdmin = useApp((s) => roleRank(s.userId ? s.profiles[s.userId]?.site_role : null) >= 3);
@@ -96,7 +176,11 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
         </div>
       </aside>
       <div className="min-w-0 flex-1 overflow-y-auto">
-        <div className="no-scrollbar sticky top-0 z-10 flex items-center gap-2 overflow-x-auto border-b border-line bg-chat/95 p-3 pt-safe-3 backdrop-blur sm:hidden">
+        {home && <MobileSettingsHome isStaff={isStaff} isAdmin={isAdmin} onPick={go} />}
+        <div className={cn("no-scrollbar sticky top-0 z-10 items-center gap-2 overflow-x-auto border-b border-line bg-chat/95 p-3 pt-safe-3 backdrop-blur sm:hidden", home ? "hidden" : "flex")}>
+          <button onClick={() => setHome(true)} className="flex h-8 shrink-0 items-center gap-0.5 rounded-full bg-hover pr-3 pl-1.5 text-sm font-semibold" aria-label="All settings">
+            <ChevronLeft className="size-4" /> Settings
+          </button>
           <button onClick={closeModal} className="grid size-8 shrink-0 place-items-center rounded-full bg-hover text-sub" aria-label="Close settings">
             <X className="size-4" />
           </button>
@@ -106,7 +190,7 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
             </button>
           ))}
         </div>
-        <div className={cn("px-4 py-6 pb-safe-2 sm:px-10 sm:py-14", section === "vavatar" ? "max-w-[1040px]" : "max-w-[740px]")}>
+        <div className={cn("px-4 py-6 pb-safe-2 sm:block sm:px-10 sm:py-14", home && "hidden", section === "vavatar" ? "max-w-[1040px]" : "max-w-[740px]")}>
           {section === "account" && <AccountSection />}
           {section === "appearance" && <AppearanceSection />}
           {section === "admin" && isStaff && <AdminPanel focusUser={focusUser} />}
@@ -672,6 +756,7 @@ function NotificationSection() {
         {status && <div className="mt-3 text-xs text-sub">Devices receiving your notifications: {status.devices}</div>}
       </div>
       <NotificationPrefsBlock />
+      <ArtistAlertsBlock />
 
       {isOwner && (
         <div className="mt-4 rounded-xl bg-side p-4">
