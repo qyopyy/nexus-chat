@@ -456,7 +456,7 @@ export async function linkbioInviteRevoke(id: string) {
   return data as LinkBioInvite[];
 }
 
-const MUSIC_MAX = 20 * 1024 * 1024;
+const MUSIC_MAX = 1024 * 1024 * 1024;
 
 function linkbioAudioType(file: File) {
   const t = (file.type || "").toLowerCase();
@@ -489,7 +489,7 @@ export async function linkbioUploadMusic(file: File): Promise<string | null> {
     return null;
   }
   if (file.size > MUSIC_MAX) {
-    toast("Music uploads can be up to 20 MB", "error");
+    toast("Music uploads can be up to 1 GB", "error");
     return null;
   }
   try {

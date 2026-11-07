@@ -3,7 +3,7 @@
 import { supabase, errorText } from "./supabase";
 import { toast } from "@/store/app";
 
-export type SystemBotKey = "nexus" | "music" | "orders" | "fun" | "trivia" | "spotify";
+export type SystemBotKey = "nexus" | "music" | "orders" | "fun" | "trivia" | "spotify" | "utility" | "games" | "stats";
 
 export type BotCommandDef = { cmd: string; reply: string };
 
@@ -49,12 +49,39 @@ export const SYSTEM_BOTS: BotCard[] = [
   },
   {
     kind: "system",
+    key: "utility",
+    slug: "utilitybot",
+    name: "Utility Bot",
+    description: "Calculator, world clock, weather, dictionary, reminders and QR codes.",
+    color: "#00A8FC",
+    commands: ["/calc", "/time", "/weather", "/define", "/remind", "/qr"],
+  },
+  {
+    kind: "system",
+    key: "games",
+    slug: "gamebot",
+    name: "Game Bot",
+    description: "Number guessing, would-you-rather, truth or dare, riddles and slots.",
+    color: "#F23F43",
+    commands: ["/guess", "/wyr", "/truth", "/dare", "/riddle", "/reveal", "/slots"],
+  },
+  {
+    kind: "system",
+    key: "stats",
+    slug: "statsbot",
+    name: "Stats Bot",
+    description: "Message counts, top chatters this week and user info.",
+    color: "#FAA61A",
+    commands: ["/stats", "/top", "/userinfo"],
+  },
+  {
+    kind: "system",
     key: "music",
     slug: "musicbot",
     name: "Music Bot",
-    description: "Audia ISRCs, track lookup, UPC — Spotify-first with Deezer fallback.",
+    description: "ISRCs, track & UPC lookup, new releases and artist follows with release alerts.",
     color: "#EB459E",
-    commands: ["/isrc", "/song", "/upc", "/spotify", "/track"],
+    commands: ["/isrc", "/song", "/upc", "/newreleases", "/follow", "/following", "/unfollow"],
   },
   {
     kind: "system",

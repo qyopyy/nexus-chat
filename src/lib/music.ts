@@ -140,7 +140,7 @@ export async function commentCounts(postIds: string[]): Promise<Record<string, n
   return out;
 }
 
-const MAX_MEDIA = 50 * 1024 * 1024;
+const MAX_MEDIA = 1024 * 1024 * 1024;
 
 export async function createPost(page: ArtistPage, content: string, file: File | null, link: string | null) {
   const me = useApp.getState().userId!;
@@ -148,7 +148,7 @@ export async function createPost(page: ArtistPage, content: string, file: File |
   let media_type: string | null = null;
   if (file) {
     if (file.size > MAX_MEDIA) {
-      toast("Media can be up to 50 MB", "error");
+      toast("Media can be up to 1 GB", "error");
       return null;
     }
     const path = `${page.id}/${crypto.randomUUID()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;

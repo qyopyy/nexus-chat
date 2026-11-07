@@ -335,7 +335,7 @@ function Dialog({ editId, onClose }: { editId: string | null; onClose: () => voi
                       const f = e.target.files?.[0];
                       e.target.value = "";
                       if (!f) return;
-                      if (f.size > 10 * 1024 * 1024) return toast("Thumbnail must be under 10 MB", "error");
+                      if (f.size > 1024 * 1024 * 1024) return toast("Thumbnail must be under 1 GB", "error");
                       setCustomThumb({ blob: f, url: URL.createObjectURL(f) });
                       setThumbPick("custom");
                     }}

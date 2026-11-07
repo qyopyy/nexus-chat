@@ -1,6 +1,6 @@
 "use client";
 
-// Soundboard: built-in synthesized sounds + your own uploaded clips (≤ 30 s, ≤ 100 MB) in the public "sounds" bucket.
+// Soundboard: built-in synthesized sounds + your own uploaded clips (≤ 30 s, ≤ 1 GB) in the public "sounds" bucket.
 // Playback/broadcast lives in call.ts (playSound) so everybody in the call hears it.
 
 import { create } from "zustand";
@@ -10,7 +10,7 @@ import { useApp, toast } from "@/store/app";
 export type Sound = { id: string; name: string; emoji: string; volume: number; duration: number; builtin?: string; url?: string; path?: string; size?: number };
 
 export const MAX_SECONDS = 30;
-export const MAX_BYTES = 100 * 1024 * 1024;
+export const MAX_BYTES = 1024 * 1024 * 1024;
 const BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/sounds/`;
 export const soundUrl = (path: string) => BASE + path.split("/").map(encodeURIComponent).join("/");
 export const isSoundUrl = (u: unknown): u is string => typeof u === "string" && u.startsWith(BASE) && u.length < 400 && !u.includes("..");
@@ -383,7 +383,7 @@ const EXT: Record<string, string> = { "audio/mpeg": "mp3", "audio/mp3": "mp3", "
 export async function uploadSound(file: File, meta: { name: string; emoji: string; volume: number }, decoded: AudioBuffer, trim?: [number, number]) {
   const me = useApp.getState().userId;
   if (!me) throw new Error("Sign in first");
-  if (file.size > MAX_BYTES) throw new Error("Max file size is 100 MB");
+  if (file.size > MAX_BYTES) throw new Error("Max file size is 1 GB");
   let body: Blob = file;
   let type = file.type || "audio/mpeg";
   let duration = decoded.duration;
@@ -394,7 +394,7 @@ export async function uploadSound(file: File, meta: { name: string; emoji: strin
     duration = Math.min(MAX_SECONDS, len, decoded.duration - start);
   }
   if (!EXT[type]) type = "audio/mpeg";
-  if (body.size > MAX_BYTES) throw new Error("The clip is still over 100 MB");
+  if (body.size > MAX_BYTES) throw new Error("The clip is still over 1 GB");
   const path = `${me}/${crypto.randomUUID()}.${EXT[type]}`;
   const up = await supabase.storage.from("sounds").upload(path, body, { contentType: type, cacheControl: "31536000", upsert: false });
   if (up.error) throw new Error(errorText(up.error));

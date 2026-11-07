@@ -21,7 +21,7 @@ export const PLANS: Plan[] = [
     perks: [
       "⚡ Lighting badge next to your name",
       "Animated profile backgrounds, borders & themes",
-      "Files up to 5 GB in chats (free: 100 MB)",
+      "Files up to 5 GB in chats (free: 1 GB)",
       "Original-quality photos & videos — no compression",
       "HD voice messages (256 kbps) + Studio mode for music",
       "1080p / 60fps HD camera in calls",

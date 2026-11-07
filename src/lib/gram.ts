@@ -291,7 +291,7 @@ export async function uploadMedia(file: File, onStep?: (s: string) => void): Pro
   if (!scan.ok) throw new Error(scan.reason);
   const kind = mediaKind(file);
   if (kind === "video") {
-    if (file.size > 100 * 1024 * 1024) throw new Error("Videos can be up to 100 MB");
+    if (file.size > 1024 * 1024 * 1024) throw new Error("Videos can be up to 1 GB");
     // Re-encode HEVC/.mov (and large clips) so stories/posts play on every device
     const progress = (label: string, ratio?: number) => {
       if (ratio == null) onStep?.(label);

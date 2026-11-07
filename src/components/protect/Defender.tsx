@@ -2,14 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Bell, BellOff, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
-import { toast, openModal } from "@/store/app";
+import { toast } from "@/store/app";
 import { studioGo } from "@/store/studio";
-import { useMyTier, needPlan } from "@/lib/premium";
+import { useMyTier } from "@/lib/premium";
 import { prefillTakedown } from "@/lib/takedown";
 import { addWatch, fmtNum, listAlerts, listWatches, removeWatch, scanWatch, setAlert, updateWatch, type DefAlert, type Watch } from "@/lib/protect";
 import { cn } from "@/lib/utils";
 
-const LIMIT = [1, 2, 5, 10, 50, 50];
+/** artist profiles anyone can protect (the database enforces the same number) */
+const LIMIT = 50;
 
 /** Profile Defender — watches Spotify artist profiles for releases that aren't yours */
 export default function Defender() {
@@ -18,6 +19,7 @@ export default function Defender() {
   const [alerts, setAlerts] = useState<DefAlert[]>([]);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
   const [filter, setFilter] = useState<"new" | "all">("new");
 
   const load = useCallback(async () => {
@@ -29,7 +31,8 @@ export default function Defender() {
 
   const byWatch = (id: string) => watches?.find((w) => w.id === id);
   const shown = alerts.filter((a) => filter === "all" || a.status === "new");
-  const limit = LIMIT[Math.min(5, tier)];
+  const limit = LIMIT;
+  void tier;
 
   const notMine = async (a: DefAlert) => {
     await setAlert(a.id, "not_mine");
@@ -67,40 +70,53 @@ export default function Defender() {
         </div>
         <div className="mt-1 text-2xl font-black">Nobody sneaks music onto your profile</div>
         <p className="mt-1 max-w-2xl text-sm text-white/80">
-          Paste your Spotify artist link. Nexus checks it every 3 hours and messages you the moment a release you didn&apos;t put out appears — or your name or photo changes. One tap turns it into a takedown notice.
+          Paste up to {LIMIT} Spotify artist links — one per line or separated by commas. Nexus checks them every 3 hours and messages you the moment a release you didn&apos;t put out appears — or your name or photo changes. One tap turns it into a takedown notice.
         </p>
         <form
           onSubmit={async (e) => {
             e.preventDefault();
-            if (!url.trim()) return;
+            // several artists at once: one link per line / comma / space
+            const links = [...new Set(url.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean))];
+            if (!links.length) return;
+            const room = Math.max(0, limit - (watches?.length ?? 0));
+            if (!room) return toast(`You're protecting ${limit} profiles — remove one to add another`, "error");
+            const batch = links.slice(0, room);
             setBusy("add");
-            try {
-              const r = await addWatch(url.trim());
-              toast(`Watching ${r.watch.name} — ${r.baseline} existing releases saved as yours`, "success");
-              setUrl("");
-              void load();
-            } catch (err) {
-              toast((err as Error).message, "error");
+            let ok = 0;
+            const failed: string[] = [];
+            for (let i = 0; i < batch.length; i++) {
+              setProgress(`${i + 1} / ${batch.length}`);
+              try {
+                const r = await addWatch(batch[i]);
+                ok++;
+                if (batch.length === 1) toast(`Watching ${r.watch.name} — ${r.baseline} existing releases saved as yours`, "success");
+              } catch (err) {
+                failed.push(`${batch[i].slice(0, 60)}: ${(err as Error).message}`);
+              }
             }
+            setProgress(null);
+            if (batch.length > 1) toast(`Protecting ${ok} new profile${ok === 1 ? "" : "s"}${failed.length ? ` · ${failed.length} couldn't be added` : ""}`, failed.length && !ok ? "error" : "success");
+            if (failed.length && batch.length === 1) toast(failed[0], "error");
+            if (links.length > room) toast(`Only ${room} more fit — the limit is ${limit} profiles`, "info");
+            setUrl(failed.map((f) => f.split(": ")[0]).join("\n"));
             setBusy(null);
+            void load();
           }}
-          className="mt-4 flex flex-wrap gap-2"
+          className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end"
         >
-          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://open.spotify.com/artist/…" className="min-w-0 flex-1 rounded-full bg-white/15 px-4 py-2.5 text-sm text-white placeholder-white/50 outline-none focus:bg-white/20" />
+          <textarea
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            rows={url.includes("\n") ? 4 : 1}
+            placeholder={"https://open.spotify.com/artist/…\n(paste several — one per line)"}
+            className="min-h-11 min-w-0 flex-1 resize-y rounded-2xl bg-white/15 px-4 py-2.5 text-sm text-white placeholder-white/50 outline-none focus:bg-white/20"
+          />
           <button disabled={!!busy} className="rounded-full bg-white px-5 py-2.5 text-sm font-black text-black disabled:opacity-50">
-            {busy === "add" ? "Adding…" : "Protect profile"}
+            {busy === "add" ? `Adding${progress ? ` ${progress}` : "…"}` : url.split(/[\s,]+/).filter(Boolean).length > 1 ? `Protect ${Math.min(url.split(/[\s,]+/).filter(Boolean).length, limit)} profiles` : "Protect profile"}
           </button>
         </form>
         <div className="mt-2 text-xs text-white/70">
-          {watches?.length ?? 0} of {limit} profile{limit === 1 ? "" : "s"} on your plan
-          {tier < 4 && (
-            <>
-              {" · "}
-              <button onClick={() => openModal("premium", needPlan(tier + 1).id)} className="underline">
-                protect more
-              </button>
-            </>
-          )}
+          {watches?.length ?? 0} of {limit} artist profiles protected
         </div>
       </div>
 

@@ -5,7 +5,7 @@ import { Check, Copy, FileDigit, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AppFrame from "./AppFrame";
 
-const MAX_BYTES = 200 * 1024 * 1024;
+const MAX_BYTES = 1024 * 1024 * 1024;
 type Algo = "SHA-256" | "SHA-384" | "SHA-512";
 
 function hex(buf: ArrayBuffer) {
@@ -25,7 +25,7 @@ export default function Checksum({ onBack, mobile }: { onBack: () => void; mobil
 
   async function run(file: File) {
     if (file.size > MAX_BYTES) {
-      setError("That file is over 200 MB.");
+      setError("That file is over 1 GB.");
       return;
     }
     setBusy(true);

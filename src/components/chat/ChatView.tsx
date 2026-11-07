@@ -93,7 +93,7 @@ export default function ChatView({ conversationId }: { conversationId: string })
         <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center bg-black/60">
           <div className="rounded-2xl border-2 border-dashed border-accent bg-accent/20 px-10 py-8 text-center">
             <div className="text-xl font-bold">Drop to upload</div>
-            <div className="text-sm text-sub">Images, videos, audio, any file up to 100 MB · 5 GB with ⚡ Lighting</div>
+            <div className="text-sm text-sub">Images, videos, audio, any file up to 1 GB · 5 GB with ⚡ Lighting</div>
           </div>
         </div>
       )}

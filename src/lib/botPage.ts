@@ -9,6 +9,9 @@ export type PublicBotPage = {
 
 const SYSTEM: PublicBotPage[] = [
   { kind: "system", slug: "nexusbot", name: "Nexus Bot", description: "Dice, flips, 8-ball, and choose-one helpers for every chat.", color: "#5865F2", commands: ["/help", "/roll", "/flip", "/8ball", "/choose"] },
+  { kind: "system", slug: "utilitybot", name: "Utility Bot", description: "Calculator, world clock, weather, dictionary, reminders and QR codes.", color: "#00A8FC", commands: ["/calc", "/time", "/weather", "/define", "/remind", "/qr"] },
+  { kind: "system", slug: "gamebot", name: "Game Bot", description: "Number guessing, would-you-rather, truth or dare, riddles and slots.", color: "#F23F43", commands: ["/guess", "/wyr", "/truth", "/dare", "/riddle", "/reveal", "/slots"] },
+  { kind: "system", slug: "statsbot", name: "Stats Bot", description: "Message counts, top chatters this week and user info.", color: "#FAA61A", commands: ["/stats", "/top", "/userinfo"] },
   { kind: "system", slug: "musicbot", name: "Music Bot", description: "Audia ISRCs, track lookup, UPC — Spotify-first with Deezer fallback.", color: "#EB459E", commands: ["/isrc", "/song", "/upc", "/spotify", "/track"] },
   { kind: "system", slug: "spotifybot", name: "Spotify Bot", description: "Search Spotify tracks, albums, and artists with open.spotify.com links.", color: "#1DB954", commands: ["/spotify", "/track", "/album", "/artist"] },
   { kind: "system", slug: "funbot", name: "Fun Bot", description: "Jokes, facts, rock-paper-scissors, rates, and ship percentages.", color: "#FEE75C", commands: ["/joke", "/fact", "/rps", "/rate", "/ship"] },

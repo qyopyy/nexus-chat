@@ -59,8 +59,8 @@ export default function Create() {
     else if (kind === "story") arr = arr.filter((f) => mediaKind(f)).slice(0, 1);
     else arr = arr.filter((f) => mediaKind(f)).slice(0, 10);
     if (!arr.length) return toast(kind === "short" ? "Shorts are videos — pick a video" : "Pick a photo or video", "error");
-    const big = arr.find((f) => f.size > 100 * 1024 * 1024);
-    if (big) return toast(`${big.name} is over 100 MB`, "error");
+    const big = arr.find((f) => f.size > 1024 * 1024 * 1024);
+    if (big) return toast(`${big.name} is over 1 GB`, "error");
     setFiles(multi ? [...files, ...arr].slice(0, 10) : arr);
   };
 

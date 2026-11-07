@@ -67,7 +67,7 @@ export const useRadio = create<State>(() => ({
   listeners: [],
 }));
 
-const MAX = 100 * 1024 * 1024;
+const MAX = 1024 * 1024 * 1024;
 let audio: HTMLAudioElement | null = null;
 let channel: RealtimeChannel | null = null;
 let currentSrcKey = "";
@@ -423,7 +423,7 @@ export async function radioUpload(file: File) {
       return toast("Pick an audio file (mp3, wav, m4a, mp4…)", "error");
     }
     if (file.size <= 0) return toast("That file is empty", "error");
-    if (file.size > MAX) return toast("Tracks can be up to 100 MB", "error");
+    if (file.size > MAX) return toast("Tracks can be up to 1 GB", "error");
     const { malwareGate } = await import("./malwareGuard");
     if (await malwareGate(file, { fileName: file.name, context: "audio" })) return;
     if (!(await radioShieldOk(file))) return;

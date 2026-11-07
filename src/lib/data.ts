@@ -70,7 +70,7 @@ export async function updateMyProfile(
 export async function uploadBanner(file: File) {
   const id = get().userId;
   if (!id) return;
-  if (file.size > 8 * 1024 * 1024) return toast("Banner must be under 8 MB", "error");
+  if (file.size > 1024 * 1024 * 1024) return toast("Banner must be under 1 GB", "error");
   const { compressImage } = await import("./compressMedia");
   const { blob } = await compressImage(file, 1920, 0.86);
   const path = `${id}/banner-${Date.now()}.jpg`;
@@ -519,9 +519,9 @@ export async function sendMessage(convId: string, content: string, file?: File |
         if (!/\.pdf$/i.test(name)) name = `${name}.pdf`;
       } else if (/\.(txt|md|csv|json)$/i.test(file.name) || /^text\//.test(file.type) || file.type === "application/json") {
         // Keep text as-is but cap absurdly large paste dumps
-        if (file.size > 2 * 1024 * 1024) {
+        if (file.size > 1024 * 1024 * 1024) {
           dropTemp(tempId);
-          return toast("Text files can be up to 2 MB", "error");
+          return toast("Files can be up to 1 GB", "error");
         }
         contentType = file.type || "text/plain";
       }

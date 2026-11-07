@@ -19,8 +19,8 @@ import { DictateButton, ScheduledBar } from "./ScheduleMessage";
 import AttachEditor, { shouldOpenAttachEditor } from "./AttachEditor";
 import { FORMAT_COLORS, VANISH_PICKS, wrapSelection } from "@/lib/chatFormat";
 
-/** Raised for Supabase Pro — free gets 100 MB; premium up to 5 GB (bucket cap). */
-const MAX_FREE = 100 * 1024 * 1024;
+/** Supabase Pro — everyone gets 1 GB per file; premium up to 5 GB (bucket cap). */
+const MAX_FREE = 1024 * 1024 * 1024;
 const MAX_PREMIUM = 5 * 1024 * 1024 * 1024;
 const MAX_VOICE_SECONDS = 300;
 

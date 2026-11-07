@@ -293,7 +293,7 @@ function AccountSection() {
               const f = e.target.files?.[0];
               e.target.value = "";
               if (!f) return;
-              if (f.size > 10 * 1024 * 1024) return alert("Avatars can be up to 10 MB.");
+              if (f.size > 1024 * 1024 * 1024) return alert("Avatars can be up to 1 GB.");
               setUploading(true);
               await uploadAvatar(f);
               setUploading(false);

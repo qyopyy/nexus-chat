@@ -347,7 +347,7 @@ async function audioDuration(file: File): Promise<number | null> {
 async function putAudio(projectId: string, file: File, onProgress?: (p: number) => void) {
   if (!isUntitledAudioFile(file)) throw new Error("Upload an audio file (mp3, wav, m4a, mp4…)");
   if (file.size <= 0) throw new Error("That file is empty — try picking it again");
-  if (file.size > 200 * 1024 * 1024) throw new Error("Tracks can be up to 200 MB");
+  if (file.size > 1024 * 1024 * 1024) throw new Error("Tracks can be up to 1 GB");
   const { scanUpload } = await import("./malwareGuard");
   const scan = await scanUpload(file, { fileName: file.name, context: "audio" });
   if (!scan.ok) throw new Error(scan.reason);

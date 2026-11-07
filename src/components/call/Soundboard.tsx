@@ -143,7 +143,7 @@ function UploadSound({ onClose }: { onClose: () => void }) {
 
   const choose = async (f: File | undefined) => {
     if (!f) return;
-    if (f.size > MAX_BYTES) return toast("Max file size is 100 MB", "error");
+    if (f.size > MAX_BYTES) return toast("Max file size is 1 GB", "error");
     if (!f.type.startsWith("audio/") && !/\.(mp3|wav|ogg|m4a|aac|flac|opus|webm)$/i.test(f.name)) return toast("Pick an audio file", "error");
     setBusy("Reading…");
     try {
@@ -211,7 +211,7 @@ function UploadSound({ onClose }: { onClose: () => void }) {
           >
             <Upload className="size-9" />
             <span className="font-semibold">{busy ?? "Choose an audio file"}</span>
-            <span className="text-xs">MP3, WAV, OGG, M4A, FLAC · up to 100 MB · max 30 seconds</span>
+            <span className="text-xs">MP3, WAV, OGG, M4A, FLAC · up to 1 GB · max 30 seconds</span>
           </button>
         ) : (
           <div className="space-y-3">

@@ -33,7 +33,7 @@ export const useSpaceMusic = create<State>(() => ({
   loading: false,
 }));
 
-const MAX = 50 * 1024 * 1024;
+const MAX = 1024 * 1024 * 1024;
 let audio: HTMLAudioElement | null = null;
 let channel: RealtimeChannel | null = null;
 let currentSrcKey = "";
@@ -220,7 +220,7 @@ export async function uploadTrack(spaceId: string, file: File) {
   const { youtubeCidGate } = await import("./audio");
   if (await youtubeCidGate(file, "space")) return;
   if (!file.type.startsWith("audio/")) return toast("Pick an audio file (mp3, m4a, wav…)", "error");
-  if (file.size > MAX) return toast("Tracks can be up to 50 MB", "error");
+  if (file.size > MAX) return toast("Tracks can be up to 1 GB", "error");
   const me = useApp.getState().userId!;
   const path = `${spaceId}/${crypto.randomUUID()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
   const { error } = await supabase.storage.from("space-music").upload(path, file, { contentType: file.type });
