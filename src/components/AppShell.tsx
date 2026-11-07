@@ -54,6 +54,7 @@ import { releaseByCode } from "@/lib/protect";
 import NexusGram from "./gram/NexusGram";
 import { getPost, openGram, useGram } from "@/lib/gram";
 import { openUntitled } from "@/lib/untitled";
+import { loadMyEmojis } from "@/lib/customEmoji";
 
 export default function AppShell({ userId, initialVideo, initialRelease, initialGram, initialGramPost, initialGramContent, initialUntitled }: { userId: string; initialVideo?: string; initialRelease?: string; initialGram?: string; initialGramPost?: string; initialGramContent?: string; initialUntitled?: string }) {
   const spaceId = useApp((s) => s.spaceId);
@@ -64,6 +65,12 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
   const me = useApp((s) => s.profiles[userId]);
   const mobile = useIsMobile();
   const hub = useApp((s) => s.hub);
+  const spaceKey = useApp((s) => s.spaces.map((x) => x.id).join(","));
+
+  // custom emojis you can use everywhere (personal + every server you're in)
+  useEffect(() => {
+    if (bootstrapped) void loadMyEmojis(true);
+  }, [bootstrapped, spaceKey]);
 
   useEffect(() => {
     useApp.setState({ userId });
