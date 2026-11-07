@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Fingerprint, ShieldAlert } from "lucide-react";
+import { Fingerprint, Radar, ShieldAlert } from "lucide-react";
 import { toast } from "@/store/app";
 import { studioGo } from "@/store/studio";
 import { loadProfiles } from "@/lib/data";
@@ -30,6 +30,7 @@ export default function ContentId() {
   const [ytStaff, setYtStaff] = useState(false);
   const [ytReady, setYtReady] = useState(false);
   const [ytBusy, setYtBusy] = useState(false);
+  const [engines, setEngines] = useState<{ acr: boolean; am: boolean; bucket: boolean } | null>(null);
 
   const load = useCallback(async () => {
     const [w, c, a, st] = await Promise.all([listWorks(), myClaims(), claimsAgainstMe(), checkStatus()]);
@@ -39,6 +40,7 @@ export default function ContentId() {
     setYtCid(!!st.youtubeCidBlock);
     setYtStaff(!!st.staff);
     setYtReady(!!st.configured);
+    setEngines({ acr: !!st.acrcloud, am: !!st.audibleMagic, bucket: !!st.shieldBucket });
     void loadProfiles([...c, ...a].flatMap((x) => [x.uploader_id, x.owner_id]).filter(Boolean) as string[]);
   }, []);
   useEffect(() => void load(), [load]);
@@ -90,6 +92,39 @@ export default function ContentId() {
         </div>
       </div>
 
+      {engines && (
+        <div className="rounded-2xl border border-line/70 bg-black/25 p-4">
+          <div className="flex items-center gap-2">
+            <Radar className="size-5 text-accent" />
+            <div className="font-semibold">360 scan engines</div>
+            <span className="ml-auto text-xs text-sub">{[engines.acr, engines.am].filter(Boolean).length}/2 fingerprint engines on</span>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {(
+              [
+                ["ACRCloud", "100M+ track catalog · YouTube IDs", engines.acr, "#00a8fc"],
+                ["Audible Magic", "Rights-holder registry · block rules", engines.am, "#7c3aed"],
+                ["Shield 360 bucket", "Your protected songs in ACRCloud", engines.bucket, "#f0b232"],
+              ] as const
+            ).map(([name, sub, live, color]) => (
+              <div key={name} className="rounded-xl bg-black/25 p-3" style={{ boxShadow: live ? `inset 0 0 0 1px ${color}66` : undefined }}>
+                <div className="flex items-center gap-1.5 text-sm font-bold">
+                  <span className="size-2 rounded-full" style={{ background: live ? color : "#4e5058" }} />
+                  {name}
+                </div>
+                <div className="mt-0.5 text-[11px] text-sub">{sub}</div>
+                <div className={cn("mt-1.5 text-[11px] font-bold", live ? "text-ok" : "text-faint")}>{live ? "Connected" : "Not connected"}</div>
+              </div>
+            ))}
+          </div>
+          {(!engines.acr || !engines.am) && ytStaff && (
+            <button onClick={() => studioGo("dist-settings")} className="mt-3 text-xs font-semibold text-accent hover:underline">
+              Connect engines in Distribution settings → Copyright check →
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="rounded-2xl border border-line/70 bg-black/25 p-4">
         <div className="flex flex-wrap items-start gap-3">
           <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#ff0033]/15 text-[#ff4d6d]">
@@ -105,7 +140,7 @@ export default function ContentId() {
             <p className="mt-0.5 text-sm text-sub">
               Separate site-wide kill switch. When on, audio that matches commercial / YouTube catalog recordings is blocked on upload — chat, videos, spaces, radio and releases. Does not replace your per-song Shield Content ID above.
             </p>
-            {!ytReady && <p className="mt-1 text-xs text-idle">Connect ACRCloud in Studio → Distribution → Copyright check first.</p>}
+            {!ytReady && <p className="mt-1 text-xs text-idle">Connect ACRCloud or Audible Magic in Studio → Distribution → Copyright check first.</p>}
           </div>
           {ytStaff && (
             <button
