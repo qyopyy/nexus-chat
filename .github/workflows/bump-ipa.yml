@@ -132,16 +132,16 @@ jobs:
           else
             echo "No embedded.mobileprovision (expected) — Transporter will fail 90174; use iOS App Store apps (signed) → wump"
           fi
-          cat > ../../TRANSPORTER_DO_NOT_USE.txt <<'NOTE'
-This Wump.ipa is UNSIGNED (Sideloadly / AltStore only).
-
-Transporter will fail with:
-  Missing Provisioning Profile (90174)
-
-For App Store Connect / Transporter run:
-  Actions → “iOS App Store apps (signed)” → app = wump
-and upload Wump-AppStore.ipa (tag wump-appstore-N) instead.
-NOTE
+          {
+            printf '%s\n' 'This Wump.ipa is UNSIGNED (Sideloadly / AltStore only).'
+            printf '%s\n' ''
+            printf '%s\n' 'Transporter will fail with:'
+            printf '%s\n' '  Missing Provisioning Profile (90174)'
+            printf '%s\n' ''
+            printf '%s\n' 'For App Store Connect / Transporter run:'
+            printf '%s\n' '  Actions → “iOS App Store apps (signed)” → app = wump'
+            printf '%s\n' 'and upload Wump-AppStore.ipa (tag wump-appstore-N) instead.'
+          } > ../../TRANSPORTER_DO_NOT_USE.txt
           rm -rf Payload && mkdir Payload
           cp -R "$APP" Payload/
           zip -qry ../../Wump.ipa Payload

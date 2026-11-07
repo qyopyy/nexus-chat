@@ -130,16 +130,16 @@ jobs:
           else
             echo "No embedded.mobileprovision (expected for Sideloadly IPA — use Actions → iOS App Store (signed) for ASC)"
           fi
-          cat > ../../TRANSPORTER_DO_NOT_USE.txt <<'NOTE'
-This Nexus.ipa is UNSIGNED (Sideloadly / AltStore only).
-
-Transporter will fail with:
-  Missing Provisioning Profile (90174)
-
-For App Store Connect / Transporter run:
-  Actions → “iOS App Store (signed)”
-and upload Nexus-AppStore.ipa (tag ios-appstore-N) instead.
-NOTE
+          {
+            printf '%s\n' 'This Nexus.ipa is UNSIGNED (Sideloadly / AltStore only).'
+            printf '%s\n' ''
+            printf '%s\n' 'Transporter will fail with:'
+            printf '%s\n' '  Missing Provisioning Profile (90174)'
+            printf '%s\n' ''
+            printf '%s\n' 'For App Store Connect / Transporter run:'
+            printf '%s\n' '  Actions → “iOS App Store (signed)”'
+            printf '%s\n' 'and upload Nexus-AppStore.ipa (tag ios-appstore-N) instead.'
+          } > ../../TRANSPORTER_DO_NOT_USE.txt
 
           rm -rf Payload && mkdir Payload
           cp -R "$APP" Payload/
