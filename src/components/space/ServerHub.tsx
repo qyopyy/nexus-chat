@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bell, BellRing, ShieldAlert, Sparkles, CalendarDays, CalendarPlus, Crown, Gauge, Hash, Image as ImageIcon, Link2, MapPin, ScrollText, Shield, Trash2, Trophy, X } from "lucide-react";
+import { BadgeCheck, Bell, BellRing, ShieldAlert, Smile, Sparkles, CalendarDays, CalendarPlus, Crown, Gauge, Hash, Image as ImageIcon, Link2, MapPin, ScrollText, Shield, Trash2, Trophy, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { createEvent, deleteEvent, events, icsFor, leaderboard, levelOf, rsvp, setInfo, setRole, setSlowmode, xpFor, type Rsvp, type SpaceEvent, type XpRow } from "@/lib/serverHub";
 import { loadEventReminders, scheduleEventReminder, useEventReminders } from "@/lib/eventReminders";
@@ -12,10 +12,13 @@ import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import { InvitesPanel, LookPanel, RolesPanel } from "./ServerStudio";
 import AutoModPanel from "./AutoModPanel";
+import EmojiManager from "./EmojiManager";
+import VerifyPanel from "./VerifyPanel";
+import VerifiedServerBadge from "@/components/ui/VerifiedServerBadge";
 import OnboardingPanel from "./OnboardingPanel";
 import type { Conversation, SpaceMember } from "@/lib/types";
 
-type Tab = "home" | "look" | "invites" | "roles" | "events" | "levels" | "members" | "channels" | "automod" | "onboarding";
+type Tab = "home" | "look" | "invites" | "emojis" | "verify" | "roles" | "events" | "levels" | "members" | "channels" | "automod" | "onboarding";
 const EMPTY_M: SpaceMember[] = [];
 const EMPTY_C: Conversation[] = [];
 
@@ -32,6 +35,7 @@ export default function ServerHub({ spaceId, onClose, initial = "home" }: { spac
     ["home", "Welcome", <ScrollText key="h" className="size-4" />],
     ["look", "Look", <ImageIcon key="lk" className="size-4" />],
     ["invites", "Invites", <Link2 key="i" className="size-4" />],
+    ["emojis", "Emojis", <Smile key="em" className="size-4" />],
     ["roles", "Roles", <Shield key="r" className="size-4" />],
     ["events", "Events", <CalendarDays key="e" className="size-4" />],
     ["levels", "Levels", <Trophy key="l" className="size-4" />],
@@ -43,6 +47,7 @@ export default function ServerHub({ spaceId, onClose, initial = "home" }: { spac
           ["onboarding", "Onboarding", <Sparkles key="o" className="size-4" />],
         ] as [Tab, string, React.ReactNode][])
       : []),
+    ["verify", space.verified ? "Verified" : "Get verified", <BadgeCheck key="v" className="size-4" />],
   ];
   const headerBg = space.banner_url
     ? undefined
@@ -70,7 +75,11 @@ export default function ServerHub({ spaceId, onClose, initial = "home" }: { spac
               </div>
               <div>
                 <div className="text-xs font-bold tracking-widest text-sub uppercase">Server hub</div>
-                <div className="text-2xl font-black">{space.name}</div>
+                <div className="flex items-center gap-1.5 text-2xl font-black">
+                  <span className="truncate">{space.name}</span>
+                  {space.verified && <VerifiedServerBadge size={20} />}
+                </div>
+                {space.description && <p className="line-clamp-2 max-w-md text-[12.5px] text-sub">{space.description}</p>}
               </div>
             </div>
             <div className="mt-3 flex gap-1 overflow-x-auto no-scrollbar">
@@ -86,6 +95,8 @@ export default function ServerHub({ spaceId, onClose, initial = "home" }: { spac
           {tab === "home" && <Home spaceId={spaceId} staff={staff} />}
           {tab === "look" && <LookPanel spaceId={spaceId} staff={staff} />}
           {tab === "invites" && <InvitesPanel spaceId={spaceId} staff={staff} owner={myRole === "owner"} />}
+          {tab === "emojis" && <EmojiManager spaceId={spaceId} canEdit={staff} />}
+          {tab === "verify" && <VerifyPanel spaceId={spaceId} owner={myRole === "owner"} />}
           {tab === "roles" && <RolesPanel spaceId={spaceId} staff={staff} />}
           {tab === "events" && <Events spaceId={spaceId} staff={staff} />}
           {tab === "levels" && <Levels spaceId={spaceId} />}
@@ -179,7 +190,10 @@ function Home({ spaceId, staff }: { spaceId: string; staff: boolean }) {
             )}
           </div>
           <div className="text-[10px] font-bold tracking-widest text-accent uppercase">Share preview · embeds</div>
-          <div className="text-lg font-black">{space.name}</div>
+          <div className="flex items-center gap-1.5 text-lg font-black">
+            {space.name}
+            {space.verified && <VerifiedServerBadge size={17} />}
+          </div>
           <p className="mt-0.5 line-clamp-2 text-xs text-sub">{space.description || space.welcome || "Join this Nexus server"}</p>
           <p className="mt-2 truncate font-mono text-[11px] text-faint">{shareUrl.replace(/^https?:\/\//, "")}</p>
           <div className="mt-3 flex gap-2">

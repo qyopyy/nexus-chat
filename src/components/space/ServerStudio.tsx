@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Copy, ImagePlus, Link2, Lock, Palette, Shield, Trash2 } from "lucide-react";
+import { Compass, Copy, ImagePlus, Link2, Lock, Palette, Shield, Trash2 } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import {
   ROLE_PERMS,
@@ -23,6 +23,8 @@ import type { SpaceInvite, SpaceMember, SpaceRole } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
+import VerifiedServerBadge from "@/components/ui/VerifiedServerBadge";
+import { DISCOVER_TAGS, setDiscoverable } from "@/lib/discover";
 
 const EMPTY_M: SpaceMember[] = [];
 const COLORS = ["#5865F2", "#3BA55D", "#FAA61A", "#ED4245", "#EB459E", "#2AABEE", "#9B59B6", "#1ABC9C", "#F47B67", "#23272A"];
@@ -72,8 +74,11 @@ export function LookPanel({ spaceId, staff }: { spaceId: string; staff: boolean 
             )}
           </div>
           <div>
-            <div className="text-lg font-black text-white drop-shadow">{space.name}</div>
-            {space.description && <div className="text-xs text-white/80">{space.description}</div>}
+            <div className="flex items-center gap-1.5 text-lg font-black text-white drop-shadow">
+              {space.name}
+              {space.verified && <VerifiedServerBadge size={18} />}
+            </div>
+            {space.description && <div className="line-clamp-2 text-xs text-white/80">{space.description}</div>}
           </div>
         </div>
       </div>
@@ -112,8 +117,10 @@ export function LookPanel({ spaceId, staff }: { spaceId: string; staff: boolean 
             <input value={name} maxLength={64} onChange={(e) => setName(e.target.value)} className="w-full rounded-xl border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-bold tracking-wide text-sub uppercase">Short description</span>
-            <textarea value={desc} maxLength={300} onChange={(e) => setDesc(e.target.value)} className="min-h-16 w-full rounded-xl border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent" placeholder="What is this server about?" />
+            <span className="mb-1 flex items-center justify-between text-xs font-bold tracking-wide text-sub uppercase">
+              Server description <span className="font-normal normal-case text-faint">{desc.length}/1000</span>
+            </span>
+            <textarea value={desc} maxLength={1000} onChange={(e) => setDesc(e.target.value)} className="min-h-24 w-full rounded-xl border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent" placeholder="What is this server about? Shown on invites, the server hub and link embeds." />
           </label>
           <div>
             <div className="mb-1 flex items-center gap-1 text-xs font-bold tracking-wide text-sub uppercase">
@@ -131,13 +138,65 @@ export function LookPanel({ spaceId, staff }: { spaceId: string; staff: boolean 
           >
             Save look
           </button>
+          <DiscoverListing spaceId={spaceId} />
         </>
       )}
     </div>
   );
 }
 
+/** opt-in listing in the public Discover directory */
+function DiscoverListing({ spaceId }: { spaceId: string }) {
+  const space = useApp((s) => s.spaces.find((x) => x.id === spaceId));
+  const [tags, setTags] = useState<string[]>(space?.discover_tags ?? []);
+  useEffect(() => setTags(space?.discover_tags ?? []), [space?.discover_tags]);
+  if (!space) return null;
+  const on = !!space.discoverable;
+  const toggleTag = (t: string) => setTags((l) => (l.includes(t) ? l.filter((x) => x !== t) : l.length >= 5 ? l : [...l, t]));
+  return (
+    <div className="rounded-2xl bg-side p-3">
+      <div className="flex items-center gap-3">
+        <Compass className="size-5 shrink-0 text-accent" />
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold">List in Discover</div>
+          <p className="text-[12px] text-sub">Anyone on Nexus can find and join from the Discover tab. {space.verified ? "Verified servers show first." : "Verified servers show first — apply in Get verified."}</p>
+        </div>
+        <button onClick={() => void setDiscoverable(spaceId, !on, tags)} className={cn("relative h-6 w-11 shrink-0 rounded-full transition", on ? "bg-ok" : "bg-hover")} role="switch" aria-checked={on} aria-label="List in Discover">
+          <span className={cn("absolute top-0.5 size-5 rounded-full bg-white transition-all", on ? "left-[22px]" : "left-0.5")} />
+        </button>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1">
+        {DISCOVER_TAGS.map((t) => (
+          <button key={t} onClick={() => toggleTag(t)} className={cn("rounded-full px-2.5 py-1 text-xs font-semibold capitalize", tags.includes(t) ? "bg-accent text-white" : "bg-rail text-sub hover:text-txt")}>
+            {t}
+          </button>
+        ))}
+      </div>
+      {JSON.stringify(tags) !== JSON.stringify(space.discover_tags ?? []) && (
+        <button onClick={() => void setDiscoverable(spaceId, on, tags)} className="mt-2 rounded-full bg-accent px-4 py-1.5 text-xs font-bold text-white">
+          Save tags ({tags.length}/5)
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** Custom invite codes + vanity URL */
+const EXPIRY_PICKS: [string, string][] = [
+  ["", "Never"],
+  ["1", "1 hour"],
+  ["24", "1 day"],
+  ["168", "7 days"],
+  ["720", "30 days"],
+];
+const USES_PICKS: [string, string][] = [
+  ["", "No limit"],
+  ["1", "1 use"],
+  ["10", "10"],
+  ["50", "50"],
+  ["100", "100"],
+];
+
 export function InvitesPanel({ spaceId, staff, owner }: { spaceId: string; staff: boolean; owner: boolean }) {
   const space = useApp((s) => s.spaces.find((x) => x.id === spaceId));
   const [list, setList] = useState<SpaceInvite[] | null>(null);
@@ -168,14 +227,17 @@ export function InvitesPanel({ spaceId, staff, owner }: { spaceId: string; staff
             <Copy className="size-3.5" />
           </button>
         </div>
-        <p className="mt-1 text-[11px] text-sub">Always works. Share {inviteLink(space.invite_code).replace(/^https?:\/\//, "")}</p>
+        <p className="mt-1 text-[11px] text-sub">
+          <b className="text-ok">Forever invite</b> — never expires, no use limit. Share {inviteLink(space.invite_code).replace(/^https?:\/\//, "")}
+        </p>
       </div>
 
-      {owner && (
+      {(owner || staff) && (
         <div className="rounded-2xl bg-side p-3">
           <div className="mb-1 flex items-center gap-1 text-xs font-bold tracking-wide text-sub uppercase">
-            <Link2 className="size-3.5" /> Custom vanity code
+            <Link2 className="size-3.5" /> Vanity invite <span className="ml-1 rounded-full bg-ok/20 px-1.5 py-px text-[9px] text-ok">Free</span>
           </div>
+          <p className="mb-2 text-[11px] text-sub">Pick a custom link like {inviteLink("my-crew").replace(/^https?:\/\//, "")} — free for every server, never expires.</p>
           <div className="flex gap-2">
             <input
               value={vanity}
@@ -187,6 +249,17 @@ export function InvitesPanel({ spaceId, staff, owner }: { spaceId: string; staff
               Save
             </button>
           </div>
+          {space.vanity_code && (
+            <div className="mt-2 flex items-center gap-2 rounded-lg bg-black/20 px-3 py-2">
+              <code className="min-w-0 flex-1 truncate font-mono text-[13px]">{inviteLink(space.vanity_code).replace(/^https?:\/\//, "")}</code>
+              <button onClick={() => copy(space.vanity_code!)} className="rounded-md bg-hover p-1.5" aria-label="Copy vanity link">
+                <Copy className="size-3.5" />
+              </button>
+              <button onClick={() => void setVanity(spaceId, "")} className="text-[11px] text-dnd hover:underline">
+                Remove
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -195,10 +268,27 @@ export function InvitesPanel({ spaceId, staff, owner }: { spaceId: string; staff
           <div className="text-xs font-bold tracking-wide text-sub uppercase">New custom invite</div>
           <input value={label} onChange={(e) => setLabel(e.target.value.slice(0, 40))} placeholder="Label (Friends, Stream viewers…)" className="w-full rounded-lg bg-rail px-3 py-2 text-sm outline-none" />
           <input value={code} onChange={(e) => setCode(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32))} placeholder="Custom code (optional)" className="w-full rounded-lg bg-rail px-3 py-2 font-mono text-sm outline-none" />
-          <div className="flex gap-2">
-            <input value={maxUses} onChange={(e) => setMaxUses(e.target.value.replace(/\D/g, "").slice(0, 5))} placeholder="Max uses" className="w-1/2 rounded-lg bg-rail px-3 py-2 text-sm outline-none" />
-            <input value={hours} onChange={(e) => setHours(e.target.value.replace(/\D/g, "").slice(0, 5))} placeholder="Expires (hours)" className="w-1/2 rounded-lg bg-rail px-3 py-2 text-sm outline-none" />
+          <div>
+            <div className="mb-1 text-[11px] font-bold text-sub">Expires after</div>
+            <div className="flex flex-wrap gap-1">
+              {EXPIRY_PICKS.map(([v, l]) => (
+                <button key={l} onClick={() => setHours(v)} className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", hours === v ? "bg-accent text-white" : "bg-rail text-sub hover:text-txt")}>
+                  {l}
+                </button>
+              ))}
+            </div>
           </div>
+          <div>
+            <div className="mb-1 text-[11px] font-bold text-sub">Max uses</div>
+            <div className="flex flex-wrap gap-1">
+              {USES_PICKS.map(([v, l]) => (
+                <button key={l} onClick={() => setMaxUses(v)} className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", maxUses === v ? "bg-accent text-white" : "bg-rail text-sub hover:text-txt")}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+          {!hours && !maxUses && <p className="text-[11px] font-semibold text-ok">∞ Forever invite — never expires, unlimited uses</p>}
           <button
             onClick={async () => {
               const row = await createInvite(spaceId, {
@@ -238,7 +328,7 @@ export function InvitesPanel({ spaceId, staff, owner }: { spaceId: string; staff
                   {inv.label ? `${inv.label} · ` : ""}
                   {inv.uses}
                   {inv.max_uses ? `/${inv.max_uses}` : ""} uses
-                  {inv.expires_at ? ` · expires ${new Date(inv.expires_at).toLocaleString()}` : ""}
+                  {inv.expires_at ? ` · expires ${new Date(inv.expires_at).toLocaleString()}` : " · never expires"}
                 </div>
               </div>
               <button onClick={() => copy(inv.code)} className="rounded-lg bg-hover p-2" aria-label="Copy">

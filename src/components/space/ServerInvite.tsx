@@ -7,6 +7,7 @@ import { joinSpace } from "@/lib/data";
 import { toast, useApp } from "@/store/app";
 import { cn, initials } from "@/lib/utils";
 import type { InvitePreview } from "@/lib/invitePage";
+import VerifiedServerBadge from "@/components/ui/VerifiedServerBadge";
 
 const INVITE_RE =
   /(?:https?:\/\/[^\s]+)?(?:\/i\/|\?join=)([a-z0-9_-]{2,64})\b/i;
@@ -66,7 +67,10 @@ export default function ServerInvite({ text }: { text: string }) {
           )}
         </div>
         <div className="text-[10px] font-bold tracking-widest text-accent uppercase">Server invite</div>
-        <div className="truncate text-base font-black">{preview?.name ?? `Invite · ${code}`}</div>
+        <div className="flex items-center gap-1 text-base font-black">
+          <span className="truncate">{preview?.name ?? `Invite · ${code}`}</span>
+          {preview?.verified && <VerifiedServerBadge size={16} />}
+        </div>
         {preview?.description ? <p className="mt-0.5 line-clamp-2 text-xs text-sub">{preview.description}</p> : null}
         <div className="mt-2 flex items-center gap-3 text-[11px] font-semibold text-sub">
           {preview && (
