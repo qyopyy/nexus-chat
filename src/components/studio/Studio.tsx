@@ -63,6 +63,7 @@ import Defender from "@/components/protect/Defender";
 import Checkmark from "@/components/protect/Checkmark";
 import MyVault from "@/components/protect/Vault";
 import ToolView, { IsrcTool, ToolsGrid, type ToolId } from "@/components/music/Tools";
+import TakedownShield from "@/components/music/TakedownShield";
 import ProfileClaims from "./ProfileClaims";
 import type { DistRelease, Video, VideoComment } from "@/lib/types";
 
@@ -248,6 +249,11 @@ export default function Studio() {
             {section === "vault" && <MyVault />}
             {section === "takedowns" && (
               <>
+                <H>Takedown protection</H>
+                <p className="-mt-3 mb-4 text-sm text-sub">Check releases for the things that get music removed, watch your live releases, and appeal fast if something goes missing.</p>
+                <div className="mb-10">
+                  <TakedownShield />
+                </div>
                 <H>Takedown notices</H>
                 <p className="-mt-3 mb-4 text-sm text-sub">
                   Someone uploaded your music to Spotify, Apple Music, Deezer, YouTube Claim / Content ID, SoundCloud, TIDAL, Amazon Music, TikTok or Snapchat? Fill this in and send an official copyright notice in one go.

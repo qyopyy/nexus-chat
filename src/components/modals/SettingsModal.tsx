@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Accessibility, Bell, Camera, Construction, Crown, Database, Keyboard, Link2, ShieldCheck, LogOut, Mic, Palette, Shield, Sparkles, Upload, User, X } from "lucide-react";
+import { Accessibility, Bell, Camera, Construction, Crown, Database, Keyboard, Link2, ShieldCheck, LogOut, Mic, Palette, Shield, Sparkles, Upload, User, Wifi, X } from "lucide-react";
 import { LIVE_STYLES, TYPING_STYLES, setChatFx, useChatFx } from "@/lib/chatFx";
 import { LiveText, TypingAnim } from "@/components/chat/TypingBubbles";
 import { useApp, closeModal, openModal, toast } from "@/store/app";
@@ -20,12 +20,13 @@ import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import { H, Label, Select, Slider, Toggle } from "./settingsUi";
+import NetworkSection from "./NetworkSection";
 import { AccessibilitySection, AdvancedSection, ChatPrefsBlock, ConnectionsSection, PrivacySection, UsernamesField } from "./MoreSettings";
 import TwoFactorSection from "./TwoFactorSection";
 
-type Section = "account" | "connections" | "privacy" | "appearance" | "accessibility" | "chat" | "voice" | "vavatar" | "notifications" | "advanced" | "admin" | "devmode";
-const ALL: Section[] = ["account", "connections", "privacy", "appearance", "accessibility", "chat", "voice", "vavatar", "notifications", "advanced", "admin", "devmode"];
-const MOBILE_LABEL: Partial<Record<Section, string>> = { vavatar: "V-Avatar", chat: "Chat", privacy: "Privacy", advanced: "Data", devmode: "Dev mode" };
+type Section = "account" | "connections" | "privacy" | "network" | "appearance" | "accessibility" | "chat" | "voice" | "vavatar" | "notifications" | "advanced" | "admin" | "devmode";
+const ALL: Section[] = ["account", "connections", "privacy", "network", "appearance", "accessibility", "chat", "voice", "vavatar", "notifications", "advanced", "admin", "devmode"];
+const MOBILE_LABEL: Partial<Record<Section, string>> = { network: "Network", vavatar: "V-Avatar", chat: "Chat", privacy: "Privacy", advanced: "Data", devmode: "Dev mode" };
 
 export default function SettingsModal({ initial }: { initial: string | null }) {
   const [section, setSection] = useState<Section>(() => {
@@ -60,6 +61,7 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
           {nav("account", "My Account", <User className="size-4" />)}
           {nav("connections", "Connections", <Link2 className="size-4" />)}
           {nav("privacy", "Privacy & Safety", <ShieldCheck className="size-4" />)}
+          {nav("network", "Network & Ad blocking", <Wifi className="size-4" />)}
           <p className="px-2.5 pt-4 pb-1 text-xs font-bold tracking-wide text-sub uppercase">App Settings</p>
           {nav("appearance", "Appearance", <Palette className="size-4" />)}
           {nav("accessibility", "Accessibility", <Accessibility className="size-4" />)}
@@ -126,6 +128,7 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
           {section === "notifications" && <NotificationSection />}
           {section === "connections" && <ConnectionsSection />}
           {section === "privacy" && <PrivacySection />}
+          {section === "network" && <NetworkSection />}
           {section === "accessibility" && <AccessibilitySection />}
           {section === "advanced" && <AdvancedSection />}
         </div>

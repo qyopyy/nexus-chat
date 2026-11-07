@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AudioWaveform, Barcode, Calculator, Clapperboard, Copy, Download, Drum, Fingerprint, Grid3x3, Mic, MicVocal, Piano, Printer, Scissors, ShieldAlert, Signature, SlidersHorizontal, Upload, Waves } from "lucide-react";
+import { AudioWaveform, Barcode, Calculator, Clapperboard, Copy, Download, Drum, Fingerprint, Grid3x3, Mic, MicVocal, Piano, Printer, Scissors, ShieldAlert, ShieldCheck, Signature, SlidersHorizontal, Upload, Waves } from "lucide-react";
 import { BeatTool, ConvertTool, KaraokeTool, MasterTool, ScaleTool } from "./Tools2";
 import VibeStudio from "./VibeStudio";
 import VisualizerMaker from "@/components/media/VisualizerMaker";
 import TakedownTool from "./Takedown";
+import TakedownShield from "./TakedownShield";
 import { supabase, errorText } from "@/lib/supabase";
 import { NEED, gate, useMyTier } from "@/lib/premium";
 import { openModal, useApp } from "@/store/app";
@@ -20,11 +21,12 @@ import { completeCode, drawUpcBars, sequentialBody, validateCode, type UpcMode }
 import { CheckView, ReportView, SplitEditor, printSplitSheet } from "./AudioBits";
 import type { Split } from "@/lib/types";
 
-export type ToolId = "isrc" | "upc" | "takedown" | "analyzer" | "copyright" | "splits" | "tempo" | "tuner" | "royalties" | "master" | "vibe" | "visualizer" | "beats" | "convert" | "karaoke" | "scales";
+export type ToolId = "isrc" | "upc" | "takedown" | "protect" | "analyzer" | "copyright" | "splits" | "tempo" | "tuner" | "royalties" | "master" | "vibe" | "visualizer" | "beats" | "convert" | "karaoke" | "scales";
 
 export const TOOLS: { id: ToolId; label: string; sub: string; color: string; icon: React.ReactNode }[] = [
   { id: "isrc", label: "Audia ISRC generator", sub: "Official QT6HV codes", color: "#1DB954", icon: <Barcode className="size-5" /> },
   { id: "upc", label: "UPC / EAN generator", sub: "GS1 barcodes for releases", color: "#22c55e", icon: <Barcode className="size-5" /> },
+  { id: "protect", label: "Takedown protection", sub: "Keep your music live on every store", color: "#10B981", icon: <ShieldCheck className="size-5" /> },
   { id: "takedown", label: "Takedown notice", sub: "Spotify & Apple Music", color: "#E5484D", icon: <ShieldAlert className="size-5" /> },
   { id: "master", label: "Quick master", sub: "Loud, clean, streaming-ready", color: "#8B5CFF", icon: <SlidersHorizontal className="size-5" /> },
   { id: "vibe", label: "Slowed / sped up", sub: "Live remix: reverb, 8D, lo-fi", color: "#FF2BD6", icon: <Waves className="size-5" /> },
@@ -79,6 +81,7 @@ export default function ToolView({ tool }: { tool: ToolId }) {
       {tool === "isrc" && <IsrcTool />}
       {tool === "upc" && <UpcTool />}
       {tool === "takedown" && <TakedownTool />}
+      {tool === "protect" && <TakedownShield />}
       {tool === "analyzer" && <AnalyzerTool />}
       {tool === "copyright" && <AnalyzerTool copyrightFirst />}
       {tool === "splits" && <SplitTool />}

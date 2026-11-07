@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { extractUrls, fetchLinkPreview, hostLabel, type LinkPreview } from "@/lib/unfurl";
+import { proxiedImage } from "@/lib/netPrefs";
 
 /** Discord-style link embeds (OG image + SEO title/description) for private chats. */
 export default function LinkEmbed({ text, mine }: { text: string; mine?: boolean }) {
@@ -46,7 +47,7 @@ function EmbedCard({ url, mine }: { url: string; mine?: boolean }) {
         className={cn("block overflow-hidden rounded-xl ring-1 transition hover:ring-white/30", mine ? "bg-black/20 ring-white/15" : "bg-black/25 ring-white/10")}
       >
         <div className="relative aspect-video bg-black">
-          <img src={preview.image ?? undefined} alt="" className="size-full object-cover" loading="lazy" />
+          <img src={proxiedImage(preview.image) ?? undefined} alt="" className="size-full object-cover" loading="lazy" />
           <span className="absolute inset-0 grid place-items-center">
             <span className="grid size-12 place-items-center rounded-full bg-[#ff0033] text-white shadow-lg">▶</span>
           </span>
@@ -84,7 +85,7 @@ function EmbedCard({ url, mine }: { url: string; mine?: boolean }) {
         <div className="max-h-44 overflow-hidden bg-black/40">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={preview.image}
+            src={proxiedImage(preview.image) ?? undefined}
             alt=""
             className="max-h-44 w-full object-cover"
             loading="lazy"
@@ -100,7 +101,7 @@ function EmbedCard({ url, mine }: { url: string; mine?: boolean }) {
           {preview.favicon && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={preview.favicon}
+              src={proxiedImage(preview.favicon) ?? undefined}
               alt=""
               className="size-3.5 rounded-sm"
               loading="lazy"

@@ -417,7 +417,8 @@ export async function markSpaceRead(spaceId: string) {
 export async function sendMessage(convId: string, content: string, file?: File | null, chosenEffect?: EffectKind | null) {
   const me = get().userId;
   if (!me) return;
-  const text = content.trim();
+  const { loadNetPrefs, stripTrackingFromText } = await import("./netPrefs");
+  const text = loadNetPrefs().stripTrackers ? stripTrackingFromText(content.trim()) : content.trim();
   if (!text && !file) return;
   if (file) {
     const { malwareGate } = await import("./malwareGuard");

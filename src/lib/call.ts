@@ -10,6 +10,7 @@
  */
 
 import { create } from "zustand";
+import { loadNetPrefs } from "./netPrefs";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { loadJSON, saveJSON } from "./utils";
@@ -245,9 +246,37 @@ type StatePayload = Envelope & {
   hand?: boolean;
 };
 
+// TURN relay credentials from the `turn` edge function (Cloudflare / Metered / own coturn, when configured)
+let turnIce: RTCIceServer[] = [];
+let turnAt = 0;
+let turnProvider = "none";
+export async function loadTurn(force = false): Promise<{ servers: number; provider: string }> {
+  if (!force && turnAt && Date.now() - turnAt < 3 * 3600_000) return { servers: turnIce.length, provider: turnProvider };
+  try {
+    const r = await Promise.race([
+      supabase.functions.invoke("turn", { body: {} }),
+      new Promise<{ data: null }>((res) => setTimeout(() => res({ data: null }), 3000)),
+    ]);
+    const d = (r as { data: { iceServers?: RTCIceServer[]; provider?: string } | null }).data;
+    if (d) {
+      turnIce = Array.isArray(d.iceServers) ? d.iceServers : [];
+      turnProvider = d.provider ?? "none";
+      turnAt = Date.now();
+    }
+  } catch {
+    /* calls still work peer-to-peer */
+  }
+  return { servers: turnIce.length, provider: turnProvider };
+}
+/** "Hide my IP in calls": relay-only when the user asked for it and a relay exists */
+function relayOnly() {
+  return turnIce.length > 0 && loadNetPrefs().relayCalls;
+}
+
 function iceServers(): RTCIceServer[] {
   const servers: RTCIceServer[] = [
-    { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun.cloudflare.com:3478"] },
+    ...(relayOnly() ? [] : [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun.cloudflare.com:3478"] }]),
+    ...turnIce,
   ];
   const turn = process.env.NEXT_PUBLIC_TURN_URL;
   if (turn) {
@@ -684,7 +713,7 @@ function ensurePeer(id: string, session?: string | null): Peer {
     removePeer(id, true, true);
   }
   const a = ensureAudio();
-  const pc = new RTCPeerConnection({ iceServers: iceServers() });
+  const pc = new RTCPeerConnection({ iceServers: iceServers(), iceTransportPolicy: relayOnly() ? "relay" : "all" });
   const gain = a.createGain();
   const analyser = a.createAnalyser();
   analyser.fftSize = 512;
@@ -1266,7 +1295,7 @@ export async function joinCall(conversationId: string, opts: { video?: boolean }
   });
 
   ensureAudio();
-  await buildMic();
+  await Promise.all([buildMic(), loadTurn()]);
   if (get().conversationId !== conversationId) return; // left while waiting for permission
   joinBoostUntil = performance.now() + 2000;
   applyMuteState();
