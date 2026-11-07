@@ -11,6 +11,7 @@ import Modal, { Button } from "@/components/ui/Modal";
 import Avatar from "@/components/ui/Avatar";
 import SettingsModal from "./SettingsModal";
 import PremiumModal from "@/components/premium/PremiumModal";
+import DiscoverModal from "@/components/space/DiscoverModal";
 
 export default function Modals() {
   const modal = useApp((s) => s.modal);
@@ -30,6 +31,8 @@ export default function Modals() {
       return arg ? <InviteModal spaceId={arg} /> : null;
     case "addBot":
       return arg ? <AddBotModal slug={arg} /> : null;
+    case "discover":
+      return <DiscoverModal />;
     default:
       return null;
   }

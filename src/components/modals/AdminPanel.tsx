@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, Award, Ban, Bell, ChevronRight, Clock, Construction, Download, Eraser, Flag, Gift, LifeBuoy, Lock, MessageSquare, Mic, RotateCcw, Search, Settings2, Shield, Trash2, Users } from "lucide-react";
+import { Activity, Award, BadgeCheck, Ban, Bell, ChevronRight, Clock, Construction, Download, Eraser, Flag, Gift, LifeBuoy, Lock, MessageSquare, Mic, RotateCcw, Search, Settings2, Shield, Trash2, Users } from "lucide-react";
 import TicketsTab from "@/components/admin/TicketsTab";
+import ServerVerifyTab from "@/components/admin/ServerVerifyTab";
 import { ActivityChart, MemberAdminExtras, MessageSearchTab, ReportsTab, SiteSettingsTab } from "@/components/admin/AdminTools";
 import { downloadCsv, refreshReportBadge, useReportBadge } from "@/lib/adminTools";
 import { supabase, errorText } from "@/lib/supabase";
@@ -32,7 +33,7 @@ import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import type { AdminAction, AdminUserRow, Profile } from "@/lib/types";
 
-type Tab = "overview" | "members" | "tickets" | "reports" | "messages" | "site" | "gifts" | "badges" | "claims" | "vault" | "audit" | "dev";
+type Tab = "overview" | "members" | "tickets" | "reports" | "servers" | "messages" | "site" | "gifts" | "badges" | "claims" | "vault" | "audit" | "dev";
 const EMPTY: string[] = [];
 
 export default function AdminPanel({ focusUser }: { focusUser: string | null }) {
@@ -53,6 +54,7 @@ export default function AdminPanel({ focusUser }: { focusUser: string | null }) 
     { id: "tickets", label: "Tickets", icon: <LifeBuoy className="size-4" />, min: 2 },
     { id: "reports", label: openReports ? `Reports (${openReports})` : "Reports", icon: <Flag className="size-4" />, min: 2 },
     { id: "messages", label: "Messages", icon: <MessageSquare className="size-4" />, min: 2 },
+    { id: "servers", label: "Server verification", icon: <BadgeCheck className="size-4" />, min: 3 },
     { id: "site", label: "Site settings", icon: <Settings2 className="size-4" />, min: 3 },
     { id: "gifts", label: "Gift links", icon: <Gift className="size-4" />, min: 2 },
     { id: "dev", label: "Dev mode", icon: <Construction className="size-4" />, min: 3 },
@@ -108,6 +110,7 @@ export default function AdminPanel({ focusUser }: { focusUser: string | null }) 
       )}
       {tab === "messages" && <MessageSearchTab />}
       {tab === "tickets" && <TicketsTab />}
+      {tab === "servers" && rank >= 3 && <ServerVerifyTab />}
       {tab === "site" && rank >= 3 && <SiteSettingsTab />}
       {tab === "gifts" && rank >= 2 && <GiftLinksPanel />}
       {tab === "dev" && rank >= 3 && <DevelopmentModePanel variant="admin" />}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Accessibility, Bell, Camera, ChevronLeft, ChevronRight, Construction, Crown, Database, Keyboard, Link2, ShieldCheck, LogOut, Mic, Palette, Shield, Sparkles, Upload, User, Wifi, X } from "lucide-react";
+import { Accessibility, Bell, Camera, ChevronLeft, ChevronRight, Construction, Crown, Database, Keyboard, Link2, ShieldCheck, LogOut, Mic, Palette, Shield, Smile, Sparkles, Upload, User, Wifi, X } from "lucide-react";
 import { LIVE_STYLES, TYPING_STYLES, setChatFx, useChatFx } from "@/lib/chatFx";
 import { LiveText, TypingAnim } from "@/components/chat/TypingBubbles";
 import { useApp, closeModal, openModal, toast } from "@/store/app";
@@ -24,9 +24,10 @@ import { H, Label, Select, Slider, Toggle } from "./settingsUi";
 import NetworkSection from "./NetworkSection";
 import { AccessibilitySection, AdvancedSection, ChatPrefsBlock, ConnectionsSection, PrivacySection, UsernamesField } from "./MoreSettings";
 import TwoFactorSection from "./TwoFactorSection";
+import EmojiManager from "@/components/space/EmojiManager";
 
-type Section = "account" | "connections" | "privacy" | "network" | "appearance" | "accessibility" | "chat" | "voice" | "vavatar" | "notifications" | "advanced" | "admin" | "devmode";
-const ALL: Section[] = ["account", "connections", "privacy", "network", "appearance", "accessibility", "chat", "voice", "vavatar", "notifications", "advanced", "admin", "devmode"];
+type Section = "account" | "connections" | "emojis" | "privacy" | "network" | "appearance" | "accessibility" | "chat" | "voice" | "vavatar" | "notifications" | "advanced" | "admin" | "devmode";
+const ALL: Section[] = ["account", "connections", "emojis", "privacy", "network", "appearance", "accessibility", "chat", "voice", "vavatar", "notifications", "advanced", "admin", "devmode"];
 const MOBILE_LABEL: Partial<Record<Section, string>> = { network: "Network", vavatar: "V-Avatar", chat: "Chat", privacy: "Privacy", advanced: "Data", devmode: "Dev mode" };
 
 const MOBILE_GROUPS: { title: string; items: [Section, string, React.ReactNode, string][] }[] = [
@@ -45,6 +46,7 @@ const MOBILE_GROUPS: { title: string; items: [Section, string, React.ReactNode, 
       ["appearance", "Appearance & fonts", <Palette key="ap" className="size-[18px]" />, "#9b59b6"],
       ["accessibility", "Accessibility", <Accessibility key="ac" className="size-[18px]" />, "#f0b232"],
       ["chat", "Chat & Typing", <Keyboard key="ch" className="size-[18px]" />, "#eb459e"],
+      ["emojis", "Custom emojis", <Smile key="em" className="size-[18px]" />, "#f0b232"],
       ["voice", "Voice & Video", <Mic key="v" className="size-[18px]" />, "#23a55a"],
       ["vavatar", "V-Avatar", <Sparkles key="va" className="size-[18px]" />, "#ff73fa"],
       ["notifications", "Notifications & release alerts", <Bell key="no" className="size-[18px]" />, "#f23f43"],
@@ -147,6 +149,7 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
           {nav("appearance", "Appearance", <Palette className="size-4" />)}
           {nav("accessibility", "Accessibility", <Accessibility className="size-4" />)}
           {nav("chat", "Chat & Typing", <Keyboard className="size-4" />)}
+          {nav("emojis", "Custom emojis", <Smile className="size-4" />)}
           {nav("voice", "Voice & Video", <Mic className="size-4" />)}
           {nav("vavatar", "V-Avatar", <Sparkles className="size-4" />)}
           {nav("notifications", "Notifications", <Bell className="size-4" />)}
@@ -202,6 +205,13 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
             </>
           )}
           {section === "chat" && <ChatSection />}
+          {section === "emojis" && (
+            <>
+              <h2 className="mb-4 text-xl font-bold">Custom emojis</h2>
+              <EmojiManager spaceId={null} canEdit />
+              <p className="mt-4 text-[12px] text-sub">Server owners and admins can add server emojis in Server hub → Emojis. Type :name: in any chat or pick them from the emoji picker.</p>
+            </>
+          )}
           {section === "voice" && <VoiceSection />}
           {section === "vavatar" && (
             <>
