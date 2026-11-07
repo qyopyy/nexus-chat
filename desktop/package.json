@@ -1,6 +1,6 @@
 {
   "name": "nexus-desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Nexus desktop shell (Windows .exe + macOS .app) — loads the live site like the Capacitor phone apps.",
   "main": "main.js",

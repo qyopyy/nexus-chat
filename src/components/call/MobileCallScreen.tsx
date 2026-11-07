@@ -191,7 +191,7 @@ export default function MobileCallScreen({ conversationId }: { conversationId: s
       {/* controls */}
       <div className="mx-3 mb-safe-3 rounded-[30px] bg-white/[.08] p-3 backdrop-blur-2xl">
         <CallExtraControls mobile />
-        <div className="mb-3 grid grid-cols-6 justify-items-center gap-1">
+        <div className="call-extras mb-3 grid grid-cols-6 justify-items-center gap-1">
           <AvatarButton mobile />
           <SoundboardButton mobile />
           <ReactButton mobile />
@@ -199,7 +199,7 @@ export default function MobileCallScreen({ conversationId }: { conversationId: s
           <PlayButton mobile />
           <PeopleVolumeButton mobile />
         </div>
-        <div className="flex items-center justify-around">
+        <div className="call-ctl-row flex items-center justify-around">
           <Ctl label={localCam ? "Camera off" : "Camera"} on={!!localCam} onClick={() => void toggleVideo()}>
             {localCam ? <Video className="size-6" /> : <VideoOff className="size-6" />}
           </Ctl>

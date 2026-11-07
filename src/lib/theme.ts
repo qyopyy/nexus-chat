@@ -539,7 +539,9 @@ export function paint(
   } else if (link) {
     link.remove();
   }
-  root.style.fontSize = (a.uiScale || 16) + "px";
+  // default size on very narrow phones (≤340px) steps down one notch so layouts don't crowd; a chosen size is respected
+  const base = a.uiScale || 16;
+  root.style.fontSize = (base === 16 && typeof window !== "undefined" && window.innerWidth <= 340 ? 15 : base) + "px";
   root.style.setProperty("--msg-size", (a.messageSize || 15) + "px");
   root.classList.toggle("msg-bubbles", a.messageBubbles !== false);
   root.classList.toggle("msg-flat", a.messageBubbles === false);

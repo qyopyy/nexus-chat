@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 import {
   Activity,
   AppWindow,
+  Calculator,
+  Music2,
+  NotebookPen,
+  ChartPie,
+  Ruler,
   ArrowLeft,
   AudioLines,
   Barcode,
@@ -49,6 +54,7 @@ import ReleaseChecklist from "./ReleaseChecklist";
 import PromoStudio from "./PromoStudio";
 import VoiceChangerApp from "./VoiceChangerApp";
 import FlStudioLab from "./FlStudioLab";
+import { FocusTimer, KeyScale, QuickNotes, RoyaltySplits, TipSplit, UnitConverter } from "./MoreApps";
 import SpotifyTakedown from "@/components/music/SpotifyTakedown";
 import BumpHub from "@/components/bump/BumpHub";
 import BrowserHub from "@/components/browser/BrowserHub";
@@ -81,7 +87,13 @@ type ToolId =
   | "bpm"
   | "json"
   | "token"
-  | "base64";
+  | "base64"
+  | "focus"
+  | "units"
+  | "tip"
+  | "keyscale"
+  | "splits"
+  | "notes";
 
 const TOOLS: {
   id: ToolId;
@@ -303,6 +315,60 @@ const TOOLS: {
     emoji: "64",
     Icon: Binary,
   },
+  {
+    id: "keyscale",
+    name: "Key & scale finder",
+    tag: "Notes · chords · keyboard",
+    desc: "Every scale and the chords in key, with a playable keyboard.",
+    bg: "linear-gradient(135deg,#eb459e,#3a0b5c)",
+    emoji: "🎹",
+    Icon: Music2,
+  },
+  {
+    id: "splits",
+    name: "Royalty splits",
+    tag: "Streams → payouts",
+    desc: "Split estimated streaming money between artists, producers and writers.",
+    bg: "linear-gradient(135deg,#ffd400,#5c3b0b)",
+    emoji: "💸",
+    Icon: ChartPie,
+  },
+  {
+    id: "focus",
+    name: "Focus timer",
+    tag: "Pomodoro",
+    desc: "25-minute focus sessions with short and long breaks.",
+    bg: "linear-gradient(135deg,#f23f42,#3d0b1a)",
+    emoji: "🍅",
+    Icon: Timer,
+  },
+  {
+    id: "units",
+    name: "Unit converter",
+    tag: "Length · weight · temp · data",
+    desc: "Convert between metric, imperial, speed and file sizes.",
+    bg: "linear-gradient(135deg,#00a8fc,#0b3d5c)",
+    emoji: "📏",
+    Icon: Ruler,
+  },
+  {
+    id: "tip",
+    name: "Tip & split",
+    tag: "Bills with friends",
+    desc: "Add a tip and split the bill evenly in seconds.",
+    bg: "linear-gradient(135deg,#57f287,#0b4d2a)",
+    emoji: "🧾",
+    Icon: Calculator,
+  },
+  {
+    id: "notes",
+    name: "Quick notes",
+    tag: "Saved on this device",
+    desc: "Jot down lyrics, ideas and lists — no account needed.",
+    bg: "linear-gradient(135deg,#fee75c,#5c4b0b)",
+    emoji: "📝",
+    Icon: NotebookPen,
+  },
 ];
 
 export default function AppsHub({ mobile }: { mobile?: boolean }) {
@@ -383,6 +449,12 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
   if (tool === "json") return <JsonLab mobile={mobile} onBack={backToGrid} />;
   if (tool === "token") return <TokenGen mobile={mobile} onBack={backToGrid} />;
   if (tool === "base64") return <Base64Lab mobile={mobile} onBack={backToGrid} />;
+  if (tool === "focus") return <FocusTimer mobile={mobile} onBack={backToGrid} />;
+  if (tool === "units") return <UnitConverter mobile={mobile} onBack={backToGrid} />;
+  if (tool === "tip") return <TipSplit mobile={mobile} onBack={backToGrid} />;
+  if (tool === "keyscale") return <KeyScale mobile={mobile} onBack={backToGrid} />;
+  if (tool === "splits") return <RoyaltySplits mobile={mobile} onBack={backToGrid} />;
+  if (tool === "notes") return <QuickNotes mobile={mobile} onBack={backToGrid} />;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-chat">
@@ -434,7 +506,7 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
           <IpaDownloads />
 
           <p className="text-sm text-sub">Creator &amp; artist utilities — UPC, pitch sheets, metadata packs, and more. File tools stay on-device; Music ID and Spotify takedown use server keys when connected.</p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3">
             {TOOLS.filter((item) => item.id !== "bump").map((item) => (
               <button
                 key={item.id}
@@ -453,15 +525,15 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
                   setTool(item.id);
                   useApp.setState({ appsTool: item.id, hub: "apps" });
                 }}
-                className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5"
+                className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5 active:scale-[.97]"
               >
-                <div className="relative grid h-36 place-items-center overflow-hidden text-6xl" style={{ background: item.bg }}>
+                <div className="relative grid h-24 place-items-center overflow-hidden text-4xl sm:h-36 sm:text-6xl" style={{ background: item.bg }}>
                   {item.iconSrc ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={item.iconSrc}
                       alt=""
-                      className="size-24 rounded-[28px] object-cover shadow-lg shadow-black/40 ring-1 ring-white/20 transition group-hover:scale-105"
+                      className="size-16 rounded-[22px] object-cover sm:size-24 sm:rounded-[28px] shadow-lg shadow-black/40 ring-1 ring-white/20 transition group-hover:scale-105"
                       width={96}
                       height={96}
                     />
@@ -470,10 +542,10 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
                   )}
                   <item.Icon className="absolute top-3 left-3 size-5 text-white" />
                 </div>
-                <div className="p-4">
-                  <div className="text-lg font-bold">{item.name}</div>
-                  <div className="text-xs font-semibold text-sub">{item.tag}</div>
-                  <p className="mt-1 text-sm text-sub">{item.desc}</p>
+                <div className="p-3 sm:p-4">
+                  <div className="truncate text-[15px] font-bold sm:text-lg">{item.name}</div>
+                  <div className="truncate text-xs font-semibold text-sub">{item.tag}</div>
+                  <p className="mt-1 hidden text-sm text-sub sm:block">{item.desc}</p>
                 </div>
               </button>
             ))}

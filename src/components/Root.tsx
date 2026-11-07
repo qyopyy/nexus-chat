@@ -9,6 +9,7 @@ import { mfaNeedsChallenge } from "@/lib/mfa";
 import AuthScreen, { ResetPasswordScreen, type AuthMode } from "@/components/AuthScreen";
 import AppShell from "@/components/AppShell";
 import SetupScreen from "@/components/SetupScreen";
+import HomeLanding from "@/components/site/HomeLanding";
 
 export default function Root({ mode, initialVideo, initialRelease, initialGram, initialGramPost, initialGramContent, initialUntitled }: { mode?: AuthMode; initialVideo?: string; initialRelease?: string; initialGram?: string; initialGramPost?: string; initialGramContent?: string; initialUntitled?: string }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -76,7 +77,25 @@ export default function Root({ mode, initialVideo, initialRelease, initialGram, 
     );
   }
   if (recovering && session) return <ResetPasswordScreen onDone={() => setRecovering(false)} />;
+  // logged-out visitors on "/" in a normal browser see the homepage; the iPhone/Android/desktop apps and installed PWA go straight to sign-in
+  if (!session && !mode && showLanding()) return <HomeLanding />;
   if (!session) return <AuthScreen initialMode={mode ?? "login"} />;
   if (needsMfa) return <AuthScreen initialMode="mfa" />;
   return <AppShell key={session.user.id} userId={session.user.id} initialVideo={initialVideo} initialRelease={initialRelease} initialGram={initialGram} initialGramPost={initialGramPost} initialGramContent={initialGramContent} initialUntitled={initialUntitled} />;
+}
+
+function showLanding() {
+  if (typeof window === "undefined") return false;
+  if (window.location.pathname !== "/") return false;
+  if (/NexusApp|NexusDesktop|Electron|BumpApp|WumpApp|LinkBioApp|NexusLink/i.test(navigator.userAgent)) return false;
+  const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+  if (cap?.isNativePlatform?.()) return false;
+  try {
+    if (window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone) return false;
+  } catch {
+    /* ignore */
+  }
+  // deep links (?c=…, invites, OAuth returns) still go to sign-in
+  if (window.location.search || window.location.hash) return false;
+  return true;
 }

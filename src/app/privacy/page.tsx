@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   const updated = "November 6, 2026";
   return (
-    <main className="min-h-screen bg-[#0b0c0f] text-white/90">
+    <main className="h-full overflow-y-auto bg-[#0b0c0f] text-white/90">
       <div className="mx-auto max-w-3xl px-5 py-12 sm:px-8 sm:py-16">
         <p className="text-sm font-medium tracking-wide text-white/45">
           <a href={SITE.url} className="hover:text-white">
