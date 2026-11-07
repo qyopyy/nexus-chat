@@ -12,6 +12,7 @@ import { EFFECTS, playEffect, type EffectKind } from "@/lib/effects";
 import { haptic } from "@/lib/haptics";
 import { cn, formatBytes } from "@/lib/utils";
 import EmojiPicker from "@/components/ui/EmojiPicker";
+import { withCustomEmojis } from "@/lib/customEmoji";
 import Sheet from "@/components/ui/Sheet";
 import { isVoice } from "./MessageBubble";
 import { ComposerPlus } from "./Extras";
@@ -168,7 +169,9 @@ export default function Composer({
     haptic.light();
     // Any /command — built-in or community bots
     const isCmd = !file && /^\/[a-z][\w-]{0,30}\b/i.test(t);
-    void sendMessage(conversationId, text, file, withEffect, mode).then(() => {
+    // `:name:` typed by hand → your custom emoji (personal first, then this server's / any server you're in)
+    const outText = isCmd ? text : withCustomEmojis(text);
+    void sendMessage(conversationId, outText, file, withEffect, mode).then(() => {
       if (isCmd) void runBotCommand(conversationId, t);
     });
     setText("");

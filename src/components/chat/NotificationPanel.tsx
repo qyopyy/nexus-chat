@@ -1,5 +1,6 @@
 "use client";
 
+import { emojiPlain } from "@/lib/customEmoji";
 import { Bell, CheckCheck, X } from "lucide-react";
 import {
   markNotificationsRead,
@@ -68,7 +69,7 @@ export default function NotificationPanel({ mobile }: { mobile?: boolean }) {
                       <span className={cn("truncate text-sm", !it.read_at ? "font-bold" : "font-semibold")}>{it.title}</span>
                       {!it.read_at && <span className="size-1.5 shrink-0 rounded-full bg-accent" />}
                     </div>
-                    <div className="truncate text-[12px] text-sub">{it.body}</div>
+                    <div className="truncate text-[12px] text-sub">{emojiPlain(it.body)}</div>
                     <div className="mt-0.5 text-[10px] text-faint">{fmtClock(new Date(it.created_at))}</div>
                   </div>
                 </button>
@@ -87,7 +88,7 @@ export default function NotificationPanel({ mobile }: { mobile?: boolean }) {
                       <span className={cn("truncate text-sm", !it.read_at ? "font-bold" : "font-semibold")}>{it.title}</span>
                       {!it.read_at && <span className="size-1.5 shrink-0 rounded-full bg-accent" />}
                     </div>
-                    <div className="truncate text-[12px] text-sub">{it.body}</div>
+                    <div className="truncate text-[12px] text-sub">{emojiPlain(it.body)}</div>
                     <div className="mt-0.5 text-[10px] text-faint">{fmtClock(new Date(it.created_at))}</div>
                   </div>
                 </button>

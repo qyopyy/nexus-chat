@@ -16,6 +16,7 @@ import { haptic } from "@/lib/haptics";
 import { cn, formatTime, QUICK_REACTIONS } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import EmojiPicker from "@/components/ui/EmojiPicker";
+import { EmojiText } from "@/components/ui/CustomEmoji";
 import Sheet, { SheetGroup, SheetItem } from "@/components/ui/Sheet";
 import VoicePlayer from "./VoicePlayer";
 import AttachViewer, { AttachDownloadButton } from "./AttachViewer";
@@ -442,7 +443,7 @@ function MessageBubbleImpl({
                   g.mine ? "border-accent bg-accent/25 text-white" : "border-transparent bg-black/30 text-txt hover:border-white/20",
                 )}
               >
-                <span>{emoji}</span>
+                <EmojiText value={emoji} />
                 <span className="text-xs font-semibold">{g.count}</span>
               </button>
             ))}
