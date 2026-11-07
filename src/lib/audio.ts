@@ -41,6 +41,12 @@ export type CheckMatch = {
   offset_s: number | null;
   spotify_id: string | null;
   youtube_id: string | null;
+  /** which engine found it (360 scan) */
+  engine?: "acrcloud" | "audible_magic" | "shield";
+  engines?: string[];
+  /** Audible Magic rule code (block / allow / …) */
+  rule?: string | null;
+  shield?: boolean;
 };
 export type AudioCheck = {
   id: string;
@@ -52,7 +58,11 @@ export type AudioCheck = {
   matches: CheckMatch[];
   note: string | null;
   created_at: string;
+  /** per-engine result, e.g. { acrcloud: "match", audible_magic: "clean" } */
+  engines?: Record<string, "clean" | "match" | "error">;
 };
+
+export const ENGINE_LABEL: Record<string, string> = { acrcloud: "ACRCloud", audible_magic: "Audible Magic", shield: "Shield 360" };
 
 const yieldUI = () => new Promise((r) => setTimeout(r, 0));
 
@@ -565,7 +575,7 @@ export async function clipFromFile(file: File, decoded?: AudioBuffer) {
   return clipFromMedia(file);
 }
 
-export type CheckStatus = { configured: boolean; provider: string | null; staff: boolean; shieldBucket?: boolean; youtubeCidBlock?: boolean };
+export type CheckStatus = { configured: boolean; provider: string | null; staff: boolean; acrcloud?: boolean; audibleMagic?: boolean; shieldBucket?: boolean; youtubeCidBlock?: boolean };
 export async function checkStatus(): Promise<CheckStatus> {
   const { data } = await supabase.functions.invoke("audiocheck", { body: { action: "status" } });
   const s = (data as CheckStatus) ?? { configured: false, provider: null, staff: false };
@@ -640,6 +650,15 @@ export async function youtubeCidGate(file: File | Blob, context: "chat" | "video
 
 export async function saveCheckConfig(host: string, key: string, secret: string) {
   const { error } = await supabase.functions.invoke("audiocheck", { body: { action: "set_config", host, key, secret } });
+  if (error) throw new Error(await fnError(error));
+}
+/** Audible Magic 360 — HTTPS relay next to the licensed Toolkit (see tools/audible-magic-relay) */
+export async function saveAudibleMagic(url: string, token: string) {
+  const { error } = await supabase.functions.invoke("audiocheck", { body: { action: "set_am_config", url, token } });
+  if (error) throw new Error(await fnError(error));
+}
+export async function clearAudibleMagic() {
+  const { error } = await supabase.functions.invoke("audiocheck", { body: { action: "clear_am_config" } });
   if (error) throw new Error(await fnError(error));
 }
 export async function clearCheckConfig() {

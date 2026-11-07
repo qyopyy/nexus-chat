@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePrefs } from "./prefs";
 import { URL_RE } from "./unfurl";
 import { cn } from "./utils";
+import { CustomEmojiImg } from "@/components/ui/CustomEmoji";
 
 const NAMED: Record<string, string> = {
   red: "#ef4444",
@@ -114,10 +115,11 @@ type Token =
   | { t: "bold" | "italic" | "under" | "strike" | "spoiler" | "code" | "rainbow" | "ghost"; kids: Token[] }
   | { t: "color"; color: string; kids: Token[] }
   | { t: "vanish"; secs: number; kids: Token[] }
-  | { t: "link"; href: string };
+  | { t: "link"; href: string }
+  | { t: "emoji"; id: string; name: string; big?: boolean };
 
 const INLINE_RE =
-  /\|\|(.+?)\|\||`([^`]+)`|\*\*(.+?)\*\*|__(.+?)__|~~(.+?)~~|\*(.+?)\*|\{c:([#\w]+)\}([\s\S]*?)\{\/c\}|\{rainbow\}([\s\S]*?)\{\/rainbow\}|\{ghost\}([\s\S]*?)\{\/ghost\}|\{v:([^}]+)\}([\s\S]*?)\{\/v\}/g;
+  /\|\|(.+?)\|\||`([^`]+)`|\*\*(.+?)\*\*|__(.+?)__|~~(.+?)~~|\*(.+?)\*|\{c:([#\w]+)\}([\s\S]*?)\{\/c\}|\{rainbow\}([\s\S]*?)\{\/rainbow\}|\{ghost\}([\s\S]*?)\{\/ghost\}|\{v:([^}]+)\}([\s\S]*?)\{\/v\}|<a?:([a-z0-9_]{2,32}):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})>/g;
 
 function tokenize(input: string): Token[] {
   const out: Token[] = [];
@@ -141,7 +143,7 @@ function tokenize(input: string): Token[] {
     else if (m[11] != null) {
       const secs = parseVanishSecs(m[11]) ?? 30;
       out.push({ t: "vanish", secs, kids: tokenize(m[12] ?? "") });
-    }
+    } else if (m[13] != null && m[14] != null) out.push({ t: "emoji", name: m[13], id: m[14] });
     last = m.index + m[0].length;
   }
   if (last < input.length) out.push(...linkSplit(input.slice(last)));
@@ -209,6 +211,8 @@ function renderTokens(tokens: Token[], keyBase: string, createdAt?: string): Rea
         return <Rainbow key={k}>{renderTokens(tok.kids, k, createdAt)}</Rainbow>;
       case "ghost":
         return <Ghost key={k}>{renderTokens(tok.kids, k, createdAt)}</Ghost>;
+      case "emoji":
+        return <CustomEmojiImg key={k} id={tok.id} name={tok.name} big={tok.big} />;
       case "vanish":
         return (
           <Vanish key={k} secs={tok.secs} createdAt={createdAt}>
@@ -223,7 +227,14 @@ function renderTokens(tokens: Token[], keyBase: string, createdAt?: string): Rea
 
 /** Rich message body — Discord-like markup + colored / vanishing spans. */
 export function FormattedText({ text, createdAt }: { text: string; createdAt?: string }) {
-  const tokens = useMemo(() => tokenize(text), [text]);
+  const tokens = useMemo(() => {
+    const toks = tokenize(text);
+    // emoji-only messages (up to 12 custom emojis) render jumbo, like unicode emoji do
+    const emojis = toks.filter((t) => t.t === "emoji");
+    if (emojis.length && emojis.length <= 12 && toks.every((t) => t.t === "emoji" || (t.t === "text" && !t.v.trim())))
+      return toks.map((t) => (t.t === "emoji" ? { ...t, big: true } : t));
+    return toks;
+  }, [text]);
   return <>{renderTokens(tokens, "r", createdAt)}</>;
 }
 

@@ -11,6 +11,7 @@ export type InvitePreview = {
   invite_code: string;
   member_count: number;
   online_count?: number;
+  verified?: boolean;
 };
 
 export function renderInvitePage(preview: InvitePreview, origin: string) {
@@ -98,7 +99,7 @@ ${head}
         : esc(initials)
     }</div>
     <div class="badge">Nexus server invite</div>
-    <h1>${esc(preview.name)}</h1>
+    <h1>${esc(preview.name)}${preview.verified ? ` <span title="Verified server" style="display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#23A55A;color:#fff;font-size:13px;vertical-align:middle">✓</span>` : ""}</h1>
     <p>${esc(desc)}</p>
     <div class="meta">
       <span>${members.toLocaleString()} member${members === 1 ? "" : "s"}</span>

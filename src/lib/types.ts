@@ -186,6 +186,10 @@ export type Space = {
   background_url?: string | null;
   vanity_code?: string | null;
   description?: string | null;
+  verified?: boolean;
+  verified_at?: string | null;
+  discoverable?: boolean;
+  discover_tags?: string[];
 };
 
 export type SpaceMember = {
