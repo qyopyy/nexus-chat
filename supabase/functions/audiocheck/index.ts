@@ -1,6 +1,8 @@
 // Nexus copyright audio check — audio fingerprint matching.
-// Provider: ACRCloud "identify" (self-serve; music database of 100M+ tracks).
-// Audible Magic needs an enterprise agreement and private API docs; once you have them it plugs in as another provider here.
+// Providers ("360 scan" = every connected engine runs in parallel and results are merged):
+//  • ACRCloud "identify" (self-serve; music database of 100M+ tracks + your Shield 360 custom bucket)
+//  • Audible Magic — licensed command-line Toolkit; reached through a small relay you host next to it
+//    (tools/audible-magic-relay). The relay runs `identify` and returns Audible Magic's compliance JSON.
 // The browser sends a ~12 s, 8 kHz mono WAV clip (≈190 KB) — full files never pass through this function.
 // Credentials live server-side only (dist_settings, service role), entered by an admin in Studio → Copyright check.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -67,6 +69,61 @@ async function acrIdentify(cfg: Acr, sample: Uint8Array) {
   };
 }
 
+// ---------------------------------------------------------------- Audible Magic (via relay)
+type Am = { url: string; token: string };
+async function amConfig(): Promise<Am | null> {
+  const [url, token] = await Promise.all([setting("am_url"), setting("am_token")]);
+  return url && token ? { url: url.replace(/\/+$/, ""), token } : null;
+}
+async function amFetch(cfg: Am, path: string, init: RequestInit = {}, timeoutMs = 25_000) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const res = await fetch(cfg.url + path, { ...init, signal: ctl.signal, headers: { Authorization: `Bearer ${cfg.token}`, ...(init.headers ?? {}) } });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new HttpError(res.status === 401 || res.status === 403 ? 400 : 502, `Audible Magic relay: ${data?.error ?? `HTTP ${res.status}`}`);
+    return data;
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw new HttpError(504, "Audible Magic relay timed out");
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
+}
+type AmMatch = { ruleCode?: string | number; matchType?: string; amItemID?: string; matchTimeInUnknown?: number; matchDurationInUnknown?: number; metadata?: Record<string, unknown> };
+/** Audible Magic compliance identification response → Nexus matches */
+function amMatches(data: any) {
+  const header = data?.header ?? data?.response ?? data ?? {};
+  const list: AmMatch[] = header.matches ?? data?.matches ?? [];
+  const code = Number(header.statusCode ?? data?.statusCode ?? 0);
+  return {
+    code,
+    msg: String(header.statusDescription ?? data?.statusDescription ?? ""),
+    matches: list.slice(0, 5).map((m) => {
+      const md = (m.metadata ?? {}) as Record<string, any>;
+      const artist = String(md.Artist ?? md.artist ?? md.Studio ?? "").trim();
+      return {
+        title: String(md.Title ?? md.title ?? "Unknown work"),
+        artists: artist ? artist.split(/\s*(?:,|&|feat\.?|ft\.)\s*/i).filter(Boolean) : [],
+        album: null,
+        label: (md.Label ?? md.Vendor ?? md.Studio ?? null) as string | null,
+        release_date: (md.AlbumReleaseDate ?? null) as string | null,
+        isrc: (md.ISRC ?? null) as string | null,
+        upc: (md.AlbumUPC ?? null) as string | null,
+        score: m.matchDurationInUnknown != null ? Math.min(100, Math.round(Number(m.matchDurationInUnknown) * 10)) : null,
+        offset_s: m.matchTimeInUnknown != null ? Math.round(Number(m.matchTimeInUnknown)) : null,
+        spotify_id: null,
+        youtube_id: null,
+        engine: "audible_magic",
+        rule: m.ruleCode != null ? String(m.ruleCode) : null,
+        am_item: m.amItemID ?? null,
+        category: (md.ContentCategory ?? m.matchType ?? null) as string | null,
+      };
+    }),
+  };
+}
+const amBlocks = (rule: string | null | undefined) => !!rule && /block|deny|reject|prohibit/i.test(rule);
+
 // ---------------------------------------------------------------- ACRCloud custom bucket (Nexus Shield 360)
 const CONSOLE = "https://api-v2.acrcloud.com/api";
 async function bucketConfig() {
@@ -124,11 +181,13 @@ Deno.serve(async (req: Request) => {
 
     switch (String(b.action ?? "")) {
       case "status": {
-        const cfg = await acrConfig();
+        const [cfg, am] = await Promise.all([acrConfig(), amConfig()]);
         const youtubeCidBlock = (await setting("youtube_cid_block")) === "on";
         return json({
-          configured: !!cfg,
-          provider: cfg ? "ACRCloud" : null,
+          configured: !!cfg || !!am,
+          acrcloud: !!cfg,
+          audibleMagic: !!am,
+          provider: [cfg && "ACRCloud", am && "Audible Magic"].filter(Boolean).join(" + ") || null,
           staff,
           shieldBucket: !!(await bucketConfig()),
           youtubeCidBlock,
@@ -212,6 +271,24 @@ Deno.serve(async (req: Request) => {
         return json({ ok: true });
       }
 
+      case "set_am_config": {
+        if (!staff) throw new HttpError(403, "Admins only");
+        const url = String(b.url ?? "").trim().replace(/\/+$/, "");
+        const token = String(b.token ?? "").trim();
+        if (!/^https:\/\/[a-z0-9.-]+(:\d+)?(\/[\w./-]*)?$/i.test(url)) throw new HttpError(400, "Relay URL must start with https://");
+        if (token.length < 16) throw new HttpError(400, "Relay token must be at least 16 characters");
+        const h = await amFetch({ url, token }, "/health", { method: "GET" }, 10_000);
+        if (!h?.ok) throw new HttpError(400, `Relay answered but isn't ready: ${h?.error ?? "toolkit not found"}`);
+        await Promise.all([saveSetting("am_url", url), saveSetting("am_token", token)]);
+        return json({ ok: true, toolkit: h.toolkit ?? null });
+      }
+
+      case "clear_am_config": {
+        if (!staff) throw new HttpError(403, "Admins only");
+        await admin.from("dist_settings").delete().in("key", ["am_url", "am_token"]);
+        return json({ ok: true });
+      }
+
       case "clear_config": {
         if (!staff) throw new HttpError(403, "Admins only");
         await admin.from("dist_settings").delete().in("key", ["acr_host", "acr_key", "acr_secret"]);
@@ -243,81 +320,137 @@ Deno.serve(async (req: Request) => {
         const sample = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
         if (String.fromCharCode(...sample.slice(0, 4)) !== "RIFF") throw new HttpError(400, "Sample must be WAV");
 
-        const cfg = await acrConfig();
-        if (!cfg) throw new HttpError(503, "Copyright check isn't connected yet — an admin adds the ACRCloud keys in Studio → Copyright check.");
+        const [cfg, am] = await Promise.all([acrConfig(), amConfig()]);
+        if (!cfg && !am) throw new HttpError(503, "Copyright check isn't connected yet — an admin connects ACRCloud and/or Audible Magic in Studio → Copyright check.");
 
-        const r = await acrIdentify(cfg, sample);
+        // 360 scan: every connected engine at once
+        const [acrRes, amRes] = await Promise.allSettled([
+          cfg ? acrIdentify(cfg, sample) : Promise.resolve(null),
+          am ? amFetch(am, "/identify", { method: "POST", body: sample, headers: { "Content-Type": "audio/wav", "X-Asset-Id": crypto.randomUUID() } }) : Promise.resolve(null),
+        ]);
+        const engines: Record<string, string> = {};
         let status: "clean" | "match" | "own" | "error" | "blocked" = "clean";
         let note: string | null = null;
         let matches: any[] = [];
+        const errors: string[] = [];
         const youtubeCidBlock = (await setting("youtube_cid_block")) === "on";
-        // songs protected with Nexus Shield (ACRCloud custom bucket attached to this project)
-        const custom = (r.metadata as any)?.custom_files ?? [];
         const shieldHits: any[] = [];
-        for (const c of custom) {
-          let ud: any = c.user_defined ?? {};
-          if (typeof ud === "string") {
-            try {
-              ud = JSON.parse(ud);
-            } catch {
-              ud = {};
-            }
-          }
-          const wid = ud.work_id ?? c.audio_id ?? null;
-          if (!wid) continue;
-          const { data: w } = await admin.from("shield_works").select("id, title, artist, owner_id, status, unlock_at, allow_users, isrc, upc").eq("id", wid).maybeSingle();
-          if (!w) continue;
-          const live = w.status === "locked" && (!w.unlock_at || new Date(w.unlock_at) > new Date());
-          const exempt = w.owner_id === subject || (w.allow_users ?? []).includes(subject);
-          if (!live || (exempt && kind !== "tool")) continue;
-          shieldHits.push({ title: w.title, artists: [w.artist ?? "Protected"], album: null, label: "Nexus Shield 360", release_date: null, isrc: w.isrc, upc: w.upc, score: c.score ?? null, offset_s: c.play_offset_ms != null ? Math.round(c.play_offset_ms / 1000) : null, spotify_id: null, youtube_id: null, shield: true, work_id: w.id });
-          if (kind !== "tool") await admin.from("shield_events").insert({ work_id: w.id, user_id: subject, context: kind === "track" ? "release" : kind === "video" ? "video" : "tool", score: Math.round(c.score ?? 100) });
+
+        // ---- ACRCloud
+        const r = acrRes.status === "fulfilled" ? acrRes.value : null;
+        if (cfg && acrRes.status === "rejected") {
+          engines.acrcloud = "error";
+          errors.push(`ACRCloud: ${(acrRes.reason as Error)?.message ?? "failed"}`);
         }
-        if (r.status.code === 0) {
-          matches = (r.metadata?.music ?? []).slice(0, 5).map((m) => ({
-            title: m.title ?? "",
-            artists: (m.artists ?? []).map((a: any) => a.name).filter(Boolean),
-            album: m.album?.name ?? null,
-            label: m.label ?? null,
-            release_date: m.release_date ?? null,
-            isrc: m.external_ids?.isrc ?? null,
-            upc: m.external_ids?.upc ?? null,
-            score: m.score ?? null,
-            offset_s: m.play_offset_ms != null ? Math.round(m.play_offset_ms / 1000) : null,
-            spotify_id: m.external_metadata?.spotify?.track?.id ?? null,
-            youtube_id: m.external_metadata?.youtube?.vid ?? null,
-          }));
-          // matches on your own artist names (or your own ISRCs) are your own music, not a claim
-          const { data: arts } = await admin.from("dist_artists").select("name").eq("owner_id", uid);
-          const own = new Set([...(arts ?? []).map((a) => norm(a.name)), norm(prof?.display_name ?? ""), norm(prof?.username ?? "")].filter((x) => x.length >= 2));
-          const { data: myTracks } = await admin.from("dist_tracks").select("isrc, release:dist_releases!inner(owner_id)").eq("release.owner_id", uid).not("isrc", "is", null);
-          const ownIsrc = new Set((myTracks ?? []).map((t) => t.isrc));
-          const isOwn = (m: any) => (m.isrc && ownIsrc.has(m.isrc)) || m.artists.some((a: string) => own.has(norm(a)));
-          status = matches.length && matches.every(isOwn) ? "own" : matches.length ? "match" : "clean";
-          if (shieldHits.length) {
-            matches = [...shieldHits, ...matches].slice(0, 6);
-            status = "match";
+        if (r) {
+          // songs protected with Nexus Shield (ACRCloud custom bucket attached to this project)
+          const custom = (r.metadata as any)?.custom_files ?? [];
+          for (const c of custom) {
+            let ud: any = c.user_defined ?? {};
+            if (typeof ud === "string") {
+              try {
+                ud = JSON.parse(ud);
+              } catch {
+                ud = {};
+              }
+            }
+            const wid = ud.work_id ?? c.audio_id ?? null;
+            if (!wid) continue;
+            const { data: w } = await admin.from("shield_works").select("id, title, artist, owner_id, status, unlock_at, allow_users, isrc, upc").eq("id", wid).maybeSingle();
+            if (!w) continue;
+            const live = w.status === "locked" && (!w.unlock_at || new Date(w.unlock_at) > new Date());
+            const exempt = w.owner_id === subject || (w.allow_users ?? []).includes(subject);
+            if (!live || (exempt && kind !== "tool")) continue;
+            shieldHits.push({ title: w.title, artists: [w.artist ?? "Protected"], album: null, label: "Nexus Shield 360", release_date: null, isrc: w.isrc, upc: w.upc, score: c.score ?? null, offset_s: c.play_offset_ms != null ? Math.round(c.play_offset_ms / 1000) : null, spotify_id: null, youtube_id: null, shield: true, engine: "shield", work_id: w.id });
+            if (kind !== "tool") await admin.from("shield_events").insert({ work_id: w.id, user_id: subject, context: kind === "track" ? "release" : kind === "video" ? "video" : "tool", score: Math.round(c.score ?? 100) });
           }
-          // Global YouTube Content ID block — separate from per-work Shield Content ID.
-          // When live+on, hard-block commercial catalog matches (esp. tracks with a YouTube ID).
-          if (youtubeCidBlock) {
-            const commercial = matches.filter((m) => !m.shield && !isOwn(m));
-            const ytHit = commercial.find((m) => m.youtube_id);
-            if (commercial.length && (ytHit || commercial.some((m) => (m.score ?? 0) >= 70))) {
-              status = "blocked";
-              const hit = ytHit ?? commercial[0];
-              note = `Blocked by global YouTube Content ID: “${hit.title}”${hit.artists?.[0] ? ` by ${hit.artists[0]}` : ""}${ytHit?.youtube_id ? ` (YouTube ${ytHit.youtube_id})` : ""}`.slice(0, 500);
+          if (r.status.code === 0) {
+            matches = (r.metadata?.music ?? []).slice(0, 5).map((m) => ({
+              title: m.title ?? "",
+              artists: (m.artists ?? []).map((a: any) => a.name).filter(Boolean),
+              album: m.album?.name ?? null,
+              label: m.label ?? null,
+              release_date: m.release_date ?? null,
+              isrc: m.external_ids?.isrc ?? null,
+              upc: m.external_ids?.upc ?? null,
+              score: m.score ?? null,
+              offset_s: m.play_offset_ms != null ? Math.round(m.play_offset_ms / 1000) : null,
+              spotify_id: m.external_metadata?.spotify?.track?.id ?? null,
+              youtube_id: m.external_metadata?.youtube?.vid ?? null,
+              engine: "acrcloud",
+            }));
+            engines.acrcloud = matches.length || shieldHits.length ? "match" : "clean";
+          } else if (r.status.code === 1001) {
+            engines.acrcloud = shieldHits.length ? "match" : "clean";
+          } else {
+            engines.acrcloud = "error";
+            errors.push(`ACRCloud: ${r.status.msg} (${r.status.code})`);
+          }
+        }
+
+        // ---- Audible Magic
+        let amHits: any[] = [];
+        if (am) {
+          if (amRes.status === "rejected") {
+            engines.audible_magic = "error";
+            errors.push(String((amRes.reason as Error)?.message ?? "Audible Magic failed"));
+          } else {
+            const parsed = amMatches(amRes.value);
+            if (!parsed.matches.length && /error|fail|invalid|unauthori|expired|denied/i.test(parsed.msg)) {
+              engines.audible_magic = "error";
+              errors.push(`Audible Magic: ${parsed.msg || parsed.code}`);
+            } else {
+              amHits = parsed.matches;
+              engines.audible_magic = amHits.length ? "match" : "clean";
             }
           }
-        } else if (r.status.code === 1001) {
-          status = "clean";
-        } else {
+        }
+
+        // ---- merge (dedupe by ISRC / title+artist; keep the first engine's richer data)
+        const key = (m: any) => (m.isrc ? `i:${m.isrc}` : `t:${norm(m.title)}|${norm(m.artists?.[0] ?? "")}`);
+        const seen = new Map<string, any>();
+        for (const m of [...matches, ...amHits]) {
+          const k = key(m);
+          const prev = seen.get(k);
+          if (prev) {
+            prev.engines = Array.from(new Set([...(prev.engines ?? [prev.engine]), m.engine]));
+            if (m.rule && !prev.rule) prev.rule = m.rule;
+          } else seen.set(k, { ...m, engines: [m.engine] });
+        }
+        matches = Array.from(seen.values()).slice(0, 8);
+
+        // matches on your own artist names (or your own ISRCs) are your own music, not a claim
+        const { data: arts } = await admin.from("dist_artists").select("name").eq("owner_id", uid);
+        const own = new Set([...(arts ?? []).map((a) => norm(a.name)), norm(prof?.display_name ?? ""), norm(prof?.username ?? "")].filter((x) => x.length >= 2));
+        const { data: myTracks } = await admin.from("dist_tracks").select("isrc, release:dist_releases!inner(owner_id)").eq("release.owner_id", uid).not("isrc", "is", null);
+        const ownIsrc = new Set((myTracks ?? []).map((t) => t.isrc));
+        const isOwn = (m: any) => (m.isrc && ownIsrc.has(m.isrc)) || (m.artists ?? []).some((a: string) => own.has(norm(a)));
+        status = matches.length && matches.every(isOwn) ? "own" : matches.length ? "match" : "clean";
+        if (shieldHits.length) {
+          matches = [...shieldHits, ...matches].slice(0, 8);
+          status = "match";
+        }
+        // Global Content ID block (YouTube catalog via ACRCloud + Audible Magic block rules) — separate from per-work Shield Content ID.
+        if (youtubeCidBlock) {
+          const commercial = matches.filter((m) => !m.shield && !isOwn(m));
+          const ytHit = commercial.find((m) => m.youtube_id);
+          const amBlock = commercial.find((m) => amBlocks(m.rule));
+          if (commercial.length && (ytHit || amBlock || commercial.some((m) => (m.score ?? 0) >= 70))) {
+            status = "blocked";
+            const hit = amBlock ?? ytHit ?? commercial[0];
+            const by = amBlock ? `Audible Magic rule “${amBlock.rule}”` : "global YouTube Content ID";
+            note = `Blocked by ${by}: “${hit.title}”${hit.artists?.[0] ? ` by ${hit.artists[0]}` : ""}${ytHit?.youtube_id && !amBlock ? ` (YouTube ${ytHit.youtube_id})` : ""}`.slice(0, 500);
+          }
+        }
+        const allFailed = Object.values(engines).length > 0 && Object.values(engines).every((v) => v === "error");
+        if (allFailed) {
           status = "error";
-          note = `${r.status.msg} (${r.status.code})`.slice(0, 500);
-        }
+          note = errors.join(" · ").slice(0, 500);
+        } else if (errors.length && !note) note = errors.join(" · ").slice(0, 500);
+        const provider = [cfg && "acrcloud", am && "audiblemagic"].filter(Boolean).join("+");
         const { data: row, error } = await admin
           .from("audio_checks")
-          .insert({ user_id: uid, target_kind: kind, target_id: targetId, provider: "acrcloud", status, matches, note })
+          .insert({ user_id: uid, target_kind: kind, target_id: targetId, provider, status, matches, note, engines })
           .select()
           .single();
         if (error) throw new HttpError(500, error.message);

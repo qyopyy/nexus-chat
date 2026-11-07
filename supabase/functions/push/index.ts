@@ -49,7 +49,7 @@ function preview(m: any) {
   if (m.hidden) return "🙈 Hidden message";
   if (m.spoiler) return "⚠️ Spoiler";
   const t = String(m.attachment_type ?? "");
-  if (m.content?.trim()) return m.content.trim().slice(0, 160);
+  if (m.content?.trim()) return m.content.trim().replace(/<a?:([a-z0-9_]{2,32}):[0-9a-f-]{36}>/g, ":$1:").slice(0, 160);
   if (t.startsWith("audio/") && String(m.attachment_name ?? "").startsWith("voice-")) return "🎤 Voice message";
   if (t.startsWith("image/")) return "📷 Photo";
   if (t.startsWith("video/")) return "🎥 Video";
