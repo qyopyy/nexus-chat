@@ -22,6 +22,7 @@ export type ModalKind =
   | "spaceInvite"
   | "profile"
   | "addBot"
+  | "discover"
   | null;
 
 export type ProfileCardState = { userId: string; x: number; y: number } | null;
