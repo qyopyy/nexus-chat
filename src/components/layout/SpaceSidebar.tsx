@@ -18,6 +18,7 @@ import SpaceMusic from "@/components/music/SpaceMusic";
 import ServerHub, { WelcomeGate } from "@/components/space/ServerHub";
 import { inviteLink } from "@/lib/spaceExtras";
 import type { Conversation, SpaceMember } from "@/lib/types";
+import VerifiedServerBadge from "@/components/ui/VerifiedServerBadge";
 
 const EMPTY_C: Conversation[] = [];
 const EMPTY_M: SpaceMember[] = [];
@@ -89,7 +90,10 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
               space.name.slice(0, 2).toUpperCase()
             )}
           </span>
-          <span className="min-w-0 flex-1 truncate text-left">{space.name}</span>
+          <span className="flex min-w-0 flex-1 items-center gap-1 text-left">
+            <span className="truncate">{space.name}</span>
+            {space.verified && <VerifiedServerBadge size={15} />}
+          </span>
           <ChevronDown className={cn("size-4 shrink-0 transition", menu && "rotate-180")} />
         </button>
         {menu && (

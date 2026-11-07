@@ -1,5 +1,6 @@
 "use client";
 
+import { emojiPlain } from "@/lib/customEmoji";
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Phone, Search, SquarePen, Users } from "lucide-react";
 import { useApp, openModal } from "@/store/app";
@@ -228,7 +229,7 @@ export default function HomeSidebar() {
                       {c.last_message ? (
                         <>
                           {lastAuthor && <span className={active ? "text-white" : "text-txt"}>{lastAuthor}: </span>}
-                          {c.last_message}
+                          {emojiPlain(c.last_message)}
                         </>
                       ) : (
                         <i>No messages yet</i>

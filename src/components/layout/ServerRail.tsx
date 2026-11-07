@@ -18,6 +18,7 @@ import {
   ChevronUp,
   Pencil,
   Plus,
+  Compass,
   Radio,
   Star,
   Tv,
@@ -383,7 +384,7 @@ export default function ServerRail() {
               <RailItem
                 active={spaceId === sp.id && !hub}
                 unread={spaceUnread}
-                label={quiet ? `${sp.name} (muted)` : reorderSpaces ? `${sp.name} — use ↑↓ to reorder` : sp.name}
+                label={quiet ? `${sp.name}${sp.verified ? " ✓" : ""} (muted)` : reorderSpaces ? `${sp.name} — use ↑↓ to reorder` : `${sp.name}${sp.verified ? " ✓ Verified" : ""}`}
                 onClick={() => {
                   if (reorderSpaces) return;
                   useApp.setState({ hub: null });
@@ -405,6 +406,9 @@ export default function ServerRail() {
         })}
         <RailItem active={false} label="Add a Server" onClick={() => openModal("createSpace")}>
           <Plus className="size-6 text-ok group-hover:text-white" />
+        </RailItem>
+        <RailItem active={false} label="Discover servers" onClick={() => openModal("discover")}>
+          <Compass className="size-6 text-ok group-hover:text-white" />
         </RailItem>
       </nav>
       <RailCustomize open={customize} onClose={() => setCustomize(false)} />
