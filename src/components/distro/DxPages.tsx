@@ -12,9 +12,11 @@ import { supabase } from "@/lib/supabase";
 import { makeZip, saveBlob } from "@/lib/zipStore";
 import { DEFAULT_BRAND, DX_THEMES, themeAccent, onColor, saveBrand, uploadBrandLogo, useBrand, useBrandStore, type DistBrand, type DxTheme } from "@/lib/distBrand";
 import { cn } from "@/lib/utils";
-import type { DistArtist, DistRelease, DistStatus } from "@/lib/types";
+import type { DistArtist, DistRelease, DistStatus, DistTrack } from "@/lib/types";
+import { LaunchPlan, exportCatalogCsv } from "./DxExtras";
 import type { DxSection } from "./DistroApp";
 import { dxSfx, loadDxSound, setDxSound, useDxSound } from "@/lib/dxSound";
+import { DPID_RE, getDdex, saveDdex, type DdexConfig, type DdexRecipient } from "@/lib/ddex";
 import { TOOLOST_REDIRECT, connectTooLost, saveTooLostClient, setTooLostEnv, tooLostStatus, toolost, type TooLostEnv, type TooLostStatus } from "@/lib/toolost";
 
 /* ───────────────────────── shared bits ───────────────────────── */
@@ -195,6 +197,8 @@ export function DxOverview({ go, releases }: { go: (s: DxSection, rel?: string |
           New release
         </button>
       </div>
+
+      <LaunchPlan releases={releases} go={go} />
 
       <Panel title="Needs you" pad={false}>
         <div className="border-t border-[var(--dx-line)]">
@@ -466,6 +470,16 @@ export function DxReleases({ releases, onReload }: { releases: DistRelease[]; on
         sub="Your catalog: drafts, submissions, and what is live."
         actions={
           <>
+            <button
+              disabled={!releases.length}
+              onClick={async () => {
+                const { data } = releases.length ? await supabase.from("dist_tracks").select("*").in("release_id", releases.map((r) => r.id).slice(0, 300)) : { data: [] };
+                exportCatalogCsv(releases, (data ?? []) as DistTrack[]);
+              }}
+              className="dx-btn"
+            >
+              <Download className="size-4" /> Export CSV
+            </button>
             <button onClick={newRelease} className="dx-btn dx-btn-primary pr-0">
               New release
               <span className="ml-2 grid h-full w-9 place-items-center border-l border-black/15">
@@ -846,14 +860,14 @@ export function DxTools({ go }: { go: (s: DxSection) => void }) {
 
 /* ───────────────────────── Settings ───────────────────────── */
 
-type SetKey = "plan" | "prefs" | "security" | "data" | "labels" | "branding" | "agreements" | "platform" | "toolost";
+type SetKey = "plan" | "prefs" | "security" | "data" | "labels" | "branding" | "agreements" | "platform" | "toolost" | "ddex";
 export function DxSettings() {
   const me = useApp((s) => s.userId)!;
   const profile = useApp((s) => s.profiles[me]);
   const staff = myRank() >= 3;
   const [k, setK] = useState<SetKey>(() => {
     const sub = typeof window !== "undefined" ? window.location.hash.split("/")[1] : "";
-    return (["plan", "prefs", "security", "data", "labels", "branding", "agreements", "platform", "toolost"] as SetKey[]).includes(sub as SetKey) ? (sub as SetKey) : "plan";
+    return (["plan", "prefs", "security", "data", "labels", "branding", "agreements", "platform", "toolost", "ddex"] as SetKey[]).includes(sub as SetKey) ? (sub as SetKey) : "plan";
   });
   const plan = activePlan(profile);
   const groups: { label: string; items: [SetKey, string, string, React.ComponentType<{ className?: string }>][] }[] = [
@@ -874,7 +888,7 @@ export function DxSettings() {
       ],
     },
     { label: "Legal", items: [["agreements", "Agreements", "What you accepted, and when", FileText]] },
-    ...(staff ? [{ label: "Admin", items: [["platform", "Platform branding", "Default look for every workspace", PaletteIcon], ["toolost", "Too Lost", "Deliver releases via the API", KeyRound]] as [SetKey, string, string, React.ComponentType<{ className?: string }>][] }] : []),
+    ...(staff ? [{ label: "Admin", items: [["platform", "Platform branding", "Default look for every workspace", PaletteIcon], ["toolost", "Too Lost", "Deliver releases via the API", KeyRound], ["ddex", "DDEX", "Party ID and recipients", FileText]] as [SetKey, string, string, React.ComponentType<{ className?: string }>][] }] : []),
   ];
   const cur = groups.flatMap((g) => g.items).find((i) => i[0] === k)!;
   const CurIcon = cur[3];
@@ -937,6 +951,7 @@ export function DxSettings() {
           {k === "platform" && staff && <BrandingPane scope="global" />}
           {k === "prefs" && <PrefsPane />}
           {k === "toolost" && staff && <TooLostPane />}
+          {k === "ddex" && staff && <DdexPane />}
         </div>
       </div>
     </div>
@@ -952,6 +967,7 @@ const SET_SUB: Record<SetKey, string> = {
   platform: "The default brand every workspace sees unless it sets its own.",
   prefs: "How the workspace feels on this device.",
   toolost: "Connect your Too Lost account so approved releases are delivered straight from Nexus.",
+  ddex: "Your DDEX Party ID and the DSPs or distributors you deliver ERN 4.3 packages to.",
 };
 
 function PlanPane() {
@@ -1450,6 +1466,113 @@ function TooLostPane() {
 
       <p className="text-[12px] leading-relaxed text-[var(--dx-dim)]">
         Credentials and tokens stay on the server and are only ever shown masked. Once connected, open any release in Manage releases and press <b className="text-[var(--dx-sub)]">Send to Too Lost</b> — artwork, audio, credits and metadata go across, and status, UPC and ISRCs sync back.
+      </p>
+    </div>
+  );
+}
+
+function DdexPane() {
+  const [cfg, setCfg] = useState<DdexConfig | null>(null);
+  const [f, setF] = useState({ sender_dpid: "", sender_name: "", label_name: "", test_mode: true });
+  const [recips, setRecips] = useState<DdexRecipient[]>([]);
+  const [nr, setNr] = useState<DdexRecipient>({ dpid: "", name: "" });
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void getDdex()
+      .then((c) => {
+        setCfg(c);
+        setF({ sender_dpid: c.sender_dpid ?? "", sender_name: c.sender_name ?? "", label_name: c.label_name ?? "", test_mode: c.test_mode });
+        setRecips(c.recipients ?? []);
+      })
+      .catch((e) => toast((e as Error).message, "error"));
+  }, []);
+  const dpidOk = !f.sender_dpid || DPID_RE.test(f.sender_dpid.toUpperCase());
+  const save = async () => {
+    setBusy(true);
+    try {
+      const c = await saveDdex({ ...f, recipients: recips });
+      setCfg(c);
+      setRecips(c.recipients);
+      toast("DDEX settings saved", "success");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+    setBusy(false);
+  };
+  return (
+    <div className="space-y-4">
+      <div className="dx-panel space-y-3 p-4">
+        <div className="text-[15px] font-medium">Sender</div>
+        <label className="block">
+          <span className="dx-label">Your DDEX Party ID (DPID)</span>
+          <input value={f.sender_dpid} onChange={(e) => setF({ ...f, sender_dpid: e.target.value.toUpperCase().replace(/\s/g, "") })} placeholder="PADPIDA2014120301A" spellCheck={false} className={cn("dx-input mt-1.5 font-mono", !dpidOk && "border-[#a33]")} />
+          <span className="mt-1 block text-[12px] text-[var(--dx-dim)]">
+            Issued free by DDEX —{" "}
+            <a href="https://dpid.ddex.net" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-white">
+              request one at dpid.ddex.net
+            </a>
+            .
+          </span>
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="dx-label">Sender name</span>
+            <input value={f.sender_name} onChange={(e) => setF({ ...f, sender_name: e.target.value })} placeholder="Audia Music Recordings LLC" className="dx-input mt-1.5" />
+          </label>
+          <label className="block">
+            <span className="dx-label">Default label (ReleaseLabel)</span>
+            <input value={f.label_name} onChange={(e) => setF({ ...f, label_name: e.target.value })} placeholder="Uses each release's label if empty" className="dx-input mt-1.5" />
+          </label>
+        </div>
+        <label className="flex items-center gap-3 pt-1">
+          <button role="switch" aria-checked={f.test_mode} onClick={() => setF({ ...f, test_mode: !f.test_mode })} className="dx-switch" aria-label="Test messages" />
+          <span className="text-[14px]">
+            Send as <b>TestMessage</b> by default <span className="text-[var(--dx-muted)]">— switch off once the recipient has approved your test deliveries</span>
+          </span>
+        </label>
+      </div>
+
+      <div className="dx-panel p-4">
+        <div className="text-[15px] font-medium">Recipients</div>
+        <p className="mt-1 text-[13px] text-[var(--dx-muted)]">DSPs or distributors you have a direct DDEX feed with. Each gives you their DPID and an SFTP/S3 drop.</p>
+        <ul className="mt-3 divide-y divide-[var(--dx-line)] rounded-[7px] border border-[var(--dx-line)]">
+          {recips.length === 0 && <li className="px-3 py-3 text-[13px] text-[var(--dx-muted)]">No recipients yet.</li>}
+          {recips.map((r, i) => (
+            <li key={r.dpid} className="flex items-center gap-3 px-3 py-2.5">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[14px] font-medium">{r.name}</span>
+                <span className="block font-mono text-[12px] text-[var(--dx-muted)]">{r.dpid}</span>
+              </span>
+              <button onClick={() => setRecips(recips.filter((_, k) => k !== i))} className="dx-btn dx-btn-sm dx-btn-danger">
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <input value={nr.name} onChange={(e) => setNr({ ...nr, name: e.target.value })} placeholder="Recipient name (e.g. Spotify)" className="dx-input" />
+          <input value={nr.dpid} onChange={(e) => setNr({ ...nr, dpid: e.target.value.toUpperCase().replace(/\s/g, "") })} placeholder="Recipient DPID" spellCheck={false} className="dx-input font-mono" />
+          <button
+            disabled={!DPID_RE.test(nr.dpid) || recips.some((r) => r.dpid === nr.dpid)}
+            onClick={() => {
+              setRecips([...recips, { dpid: nr.dpid, name: nr.name.trim() || nr.dpid }]);
+              setNr({ dpid: "", name: "" });
+            }}
+            className="dx-btn shrink-0"
+          >
+            <Plus className="size-4" /> Add
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button disabled={busy || !dpidOk} onClick={() => void save()} className="dx-btn dx-btn-primary">
+          {busy ? <Loader2 className="size-4 animate-spin" /> : null} Save DDEX settings
+        </button>
+        {cfg?.updated_at && <span className="text-[12px] text-[var(--dx-dim)]">Saved {new Date(cfg.updated_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</span>}
+      </div>
+      <p className="text-[12px] leading-relaxed text-[var(--dx-dim)]">
+        Build a package from any release in <b className="text-[var(--dx-sub)]">Manage releases → DDEX delivery</b>. Releases need a UPC and an ISRC on every track. Validate your first messages with the recipient (or DDEX&apos;s validator) before switching off test mode.
       </p>
     </div>
   );

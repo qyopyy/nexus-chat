@@ -7,6 +7,7 @@ import { supabase, isConfigured } from "@/lib/supabase";
 import { brandVars, loadBrands, useBrand } from "@/lib/distBrand";
 import { PLANS } from "@/lib/premium";
 import { cn } from "@/lib/utils";
+import { DISTRO_FAQ, STORE_PAGES } from "@/lib/distroSeo";
 
 const STORES = ["Spotify", "Apple Music", "TikTok", "YouTube Music", "Amazon Music", "Deezer", "Tidal", "Instagram", "Snapchat", "SoundCloud", "Pandora", "Shazam"];
 
@@ -19,13 +20,6 @@ const FEATURES: { icon: React.ComponentType<{ className?: string }>; title: stri
   { icon: ShieldCheck, title: "Protection included", body: "Shield 360, Content ID scans and Profile Defender keep leaks and fakes off." },
 ];
 
-const FAQ: [string, string][] = [
-  ["Do I keep my rights?", "Yes. You own your masters. We only get the permission needed to deliver and collect for you, and you can take a release down whenever you like."],
-  ["How long until my release is live?", "Most releases are reviewed within a couple of days. Give yourself two to three weeks before the release date so pre-saves and pitching have time to work."],
-  ["Which stores do you send to?", "Spotify, Apple Music, TikTok, YouTube Music, Amazon, Deezer, Tidal, Instagram, Snapchat and more than 150 others."],
-  ["Can I use my own label name and logo?", "Yes. Labels can white-label the workspace with their own name, logo and colour, so artists see your brand instead of ours."],
-  ["Do I get ISRC and UPC codes?", "Yes, every release gets them for free. Already have your own? Add them on the release."],
-];
 
 /** Public distribution landing at /distro — workspace lives at /distro/app. */
 export default function DistroLanding() {
@@ -41,38 +35,7 @@ export default function DistroLanding() {
 
   return (
     <div className="dx dx-scroll min-h-dvh overflow-x-hidden" data-dx-theme={brand.theme} style={brandVars(brand.accent)}>
-      {/* nav */}
-      <header className="sticky top-0 z-20 border-b border-[var(--dx-line)] bg-[var(--dx-bg)]/90 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-[1180px] items-center gap-6 px-4">
-          <Link href="/distro" className="flex items-center gap-2.5">
-            <span className="grid size-7 place-items-center overflow-hidden bg-[var(--dx-hi)] text-[11px] font-black text-black">
-              {brand.logo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={brand.logo_url} alt="" className="size-full object-cover" />
-              ) : (
-                brand.name.slice(0, 2).toUpperCase()
-              )}
-            </span>
-            <span className="text-[15px] font-semibold">{brand.name}</span>
-          </Link>
-          <nav className="hidden gap-5 text-[14px] text-[var(--dx-sub)] md:flex">
-            <a href="#features" className="hover:text-white">Features</a>
-            <a href="#white-label" className="hover:text-white">For labels</a>
-            <a href="#pricing" className="hover:text-white">Pricing</a>
-            <a href="#faq" className="hover:text-white">FAQ</a>
-          </nav>
-          <div className="ml-auto flex gap-2">
-            {!signedIn && (
-              <Link href="/distro/app" className="dx-btn dx-btn-sm max-sm:hidden">
-                Log in
-              </Link>
-            )}
-            <Link href="/distro/app" className="dx-btn dx-btn-primary dx-btn-sm">
-              {signedIn ? "Workspace" : "Get started"}
-            </Link>
-          </div>
-        </div>
-      </header>
+      <DistroHeader signedIn={signedIn} />
 
       {/* hero */}
       <section className="relative overflow-hidden border-b border-[var(--dx-line)]">
@@ -82,6 +45,7 @@ export default function DistroLanding() {
           <div>
             <span className="dx-tag">Music distribution</span>
             <h1 className="mt-4 text-[44px] leading-[1.02] font-medium tracking-[-0.03em] sm:text-[64px]">
+              <span className="sr-only">Music distribution to Spotify, Apple Music and TikTok — </span>
               Put your music
               <br />
               everywhere.
@@ -107,9 +71,16 @@ export default function DistroLanding() {
         <div className="mx-auto max-w-[1180px] px-4 py-8">
           <div className="dx-label mb-4">Delivered to</div>
           <div className="flex flex-wrap gap-x-8 gap-y-3 text-[17px] font-medium text-[var(--dx-muted)]">
-            {STORES.map((s) => (
-              <span key={s}>{s}</span>
-            ))}
+            {STORES.map((s) => {
+              const page = STORE_PAGES.find((p) => p.name.startsWith(s) || p.slug === s.toLowerCase().replace(/\s+/g, "-"));
+              return page ? (
+                <Link key={s} href={`/distro/${page.slug}`} className="transition hover:text-white">
+                  {s}
+                </Link>
+              ) : (
+                <span key={s}>{s}</span>
+              );
+            })}
             <span className="text-[var(--dx-hi)]">+140 more</span>
           </div>
         </div>
@@ -217,13 +188,13 @@ export default function DistroLanding() {
         <div className="mx-auto grid max-w-[1180px] gap-10 px-4 py-16 lg:grid-cols-[1fr_1.4fr]">
           <h2 className="text-[34px] leading-[1.1] font-medium tracking-[-0.02em] sm:text-[42px]">Questions.</h2>
           <div className="border-t border-[var(--dx-line)]">
-            {FAQ.map(([q, a], i) => (
+            {DISTRO_FAQ.map(([q, a], i) => (
               <div key={q} className="border-b border-[var(--dx-line)]">
-                <button onClick={() => setOpen(open === i ? null : i)} className="flex w-full items-center gap-3 py-4 text-left text-[16px] font-medium">
+                <button onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i} className="flex w-full items-center gap-3 py-4 text-left text-[16px] font-medium">
                   <span className="flex-1">{q}</span>
                   <Plus className={cn("size-4 shrink-0 transition", open === i && "rotate-45")} />
                 </button>
-                {open === i && <p className="pb-4 text-[15px] leading-relaxed text-[var(--dx-sub)]">{a}</p>}
+                <p className={cn("pb-4 text-[15px] leading-relaxed text-[var(--dx-sub)]", open !== i && "sr-only")}>{a}</p>
               </div>
             ))}
           </div>
@@ -242,19 +213,7 @@ export default function DistroLanding() {
         </div>
       </section>
 
-      <footer className="border-t border-[var(--dx-line)]">
-        <div className="mx-auto flex max-w-[1180px] flex-wrap items-center gap-4 px-4 py-6 text-[13px] text-[var(--dx-muted)]">
-          <span>
-            © {new Date().getFullYear()} {brand.name}
-          </span>
-          {brand.support_email && <a href={`mailto:${brand.support_email}`} className="hover:text-white">{brand.support_email}</a>}
-          <div className="ml-auto flex gap-4">
-            <Link href="/privacy" className="hover:text-white">Privacy</Link>
-            <Link href="/contact" className="hover:text-white">Contact</Link>
-            {!brand.hide_nexus && <Link href="/" className="hover:text-white">Powered by Nexus</Link>}
-          </div>
-        </div>
-      </footer>
+      <DistroFooter />
     </div>
   );
 }
@@ -322,5 +281,92 @@ function MockWorkspace({ name }: { name: string }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** shared top bar for the public distro pages */
+export function DistroHeader({ signedIn, home = true }: { signedIn: boolean; home?: boolean }) {
+  const brand = useBrand();
+  const pre = home ? "" : "/distro";
+  return (
+      <header className="dx-safe-top-sticky sticky top-0 z-20 border-b border-[var(--dx-line)] bg-[var(--dx-bg)]/90 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-[1180px] items-center gap-6 px-4">
+          <Link href="/distro" className="flex items-center gap-2.5">
+            <span className="grid size-7 place-items-center overflow-hidden bg-[var(--dx-hi)] text-[11px] font-black text-black">
+              {brand.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={brand.logo_url} alt="" className="size-full object-cover" />
+              ) : (
+                brand.name.slice(0, 2).toUpperCase()
+              )}
+            </span>
+            <span className="text-[15px] font-semibold">{brand.name}</span>
+          </Link>
+          <nav className="hidden gap-5 text-[14px] text-[var(--dx-sub)] md:flex">
+            <a href={`${pre}#features`} className="hover:text-white">Features</a>
+            <a href={`${pre}#white-label`} className="hover:text-white">For labels</a>
+            <a href={`${pre}#pricing`} className="hover:text-white">Pricing</a>
+            <a href={`${pre}#faq`} className="hover:text-white">FAQ</a>
+          </nav>
+          <div className="ml-auto flex gap-2">
+            {!signedIn && (
+              <Link href="/distro/app" className="dx-btn dx-btn-sm max-sm:hidden">
+                Log in
+              </Link>
+            )}
+            <Link href="/distro/app" className="dx-btn dx-btn-primary dx-btn-sm">
+              {signedIn ? "Workspace" : "Get started"}
+            </Link>
+          </div>
+        </div>
+      </header>
+  );
+}
+
+/** shared footer with store links (internal linking for SEO) */
+export function DistroFooter() {
+  const brand = useBrand();
+  return (
+    <footer className="border-t border-[var(--dx-line)]">
+      <div className="mx-auto max-w-[1180px] px-4 py-10">
+        <div className="grid gap-8 sm:grid-cols-3">
+          <div>
+            <div className="text-[15px] font-semibold">{brand.name}</div>
+            <p className="mt-2 max-w-[280px] text-[13px] text-[var(--dx-muted)]">Music distribution for independent artists and labels — 150+ stores, your rights, your money.</p>
+          </div>
+          <div>
+            <div className="dx-label mb-3">Release on</div>
+            <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[13px] text-[var(--dx-sub)]">
+              {STORE_PAGES.map((p) => (
+                <li key={p.slug}>
+                  <Link href={`/distro/${p.slug}`} className="hover:text-white">
+                    {p.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <div className="dx-label mb-3">Distro</div>
+            <ul className="space-y-1.5 text-[13px] text-[var(--dx-sub)]">
+              <li><Link href="/distro#pricing" className="hover:text-white">Pricing</Link></li>
+              <li><Link href="/distro#faq" className="hover:text-white">FAQ</Link></li>
+              <li><Link href="/distro/app" className="hover:text-white">Open the workspace</Link></li>
+              <li><Link href="/contact" className="hover:text-white">Contact</Link></li>
+            </ul>
+          </div>
+        </div>
+        <div className="mt-8 flex flex-wrap items-center gap-4 border-t border-[var(--dx-line)] pt-5 text-[13px] text-[var(--dx-muted)]">
+          <span>
+            © {new Date().getFullYear()} {brand.name}
+          </span>
+          {brand.support_email && <a href={`mailto:${brand.support_email}`} className="hover:text-white">{brand.support_email}</a>}
+          <div className="ml-auto flex gap-4">
+            <Link href="/privacy" className="hover:text-white">Privacy</Link>
+            {!brand.hide_nexus && <Link href="/" className="hover:text-white">Powered by Nexus</Link>}
+          </div>
+        </div>
+      </div>
+    </footer>
   );
 }

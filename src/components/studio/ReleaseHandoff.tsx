@@ -12,6 +12,7 @@ import Avatar from "@/components/ui/Avatar";
 import { CheckPill } from "@/components/music/AudioBits";
 import type { DistRelease, DistStatus, DistTrack } from "@/lib/types";
 import TooLostSend from "./TooLostSend";
+import DdexSend from "./DdexSend";
 import { myRank } from "@/lib/admin";
 
 /* ───────────────────────── helpers ───────────────────────── */
@@ -515,6 +516,7 @@ export function ReleaseSheet({ id, onBack, onChanged }: { id: string; onBack: ()
       </div>
 
       {myRank() >= 3 && <TooLostSend r={r} tracks={tracks} onDone={() => void load().then(onChanged)} />}
+      {myRank() >= 2 && <DdexSend r={r} tracks={tracks} />}
       <ReviewActions r={r} tracks={tracks} onDone={() => void load().then(onChanged)} />
     </div>
   );

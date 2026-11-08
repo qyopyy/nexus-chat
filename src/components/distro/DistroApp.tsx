@@ -51,6 +51,7 @@ import OrdersAdmin from "@/components/studio/OrdersAdmin";
 import { DxAnalytics, DxArtists, DxOverview, DxReleases, DxSettings, DxTools, DxEmbed } from "./DxPages";
 import type { DistRelease } from "@/lib/types";
 import { dxSfx, loadDxSound } from "@/lib/dxSound";
+import { NotificationsPanel, ShortcutsHelp, useNotifications, useShortcuts } from "./DxExtras";
 
 export type DxSection =
   | "overview"
@@ -261,6 +262,13 @@ function Workspace() {
   }, []);
 
   const needsYou = releases.filter((r) => ["changes_requested", "rejected", "error"].includes(r.status)).length;
+  const notif = useNotifications(releases);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [help, setHelp] = useState(false);
+  const goRef = useRef(go);
+  goRef.current = go;
+  const shortcutHandlers = useMemo(() => ({ go: (s: DxSection, rel?: string | null) => goRef.current(s, rel ?? null), search: () => setPalette(true), help: () => setHelp(true) }), []);
+  useShortcuts(shortcutHandlers);
   const initials = (profile?.display_name || profile?.username || "N").replace(/[^\p{L}\p{N} ]/gu, "").split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "N";
   const Title = ICONS[section];
 
@@ -283,7 +291,7 @@ function Workspace() {
   const group = (label: string) => (!collapsed ? <div className="mt-4 mb-1 px-3 text-[12px] text-[var(--dx-dim)]">{label}</div> : <div className="mx-3 mt-3 mb-1 border-t border-[var(--dx-line)]" />);
 
   const sidebar = (
-    <aside className={cn("flex h-full flex-col bg-[var(--dx-bg)]", collapsed ? "w-[64px]" : "w-[232px]")}>
+    <aside className={cn("dx-safe-side flex h-full flex-col bg-[var(--dx-bg)]", collapsed ? "w-[64px]" : "w-[232px]")}>
       {/* workspace switcher */}
       <div className="relative px-2 pt-3">
         <button onClick={() => setUserMenu(false)} className={cn("flex w-full items-center gap-2.5 p-2 text-left hover:bg-[var(--dx-raise)]", collapsed && "justify-center")}>
@@ -443,7 +451,7 @@ function Workspace() {
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-[60px] shrink-0 items-center gap-3 border-b border-[var(--dx-line)] px-3 sm:px-4">
+        <header className="dx-safe-top flex h-[60px] shrink-0 items-center gap-3 border-b border-[var(--dx-line)] px-3 sm:px-4">
           <button onClick={() => setDrawer(true)} className="grid size-9 place-items-center border border-[var(--dx-line-2)] md:hidden" aria-label="Menu">
             <Menu className="size-4" />
           </button>
@@ -457,16 +465,16 @@ function Workspace() {
           <button onClick={() => setPalette(true)} className="grid size-9 place-items-center border border-[var(--dx-line-2)] sm:hidden" aria-label="Search">
             <Search className="size-4" />
           </button>
-          <button onClick={() => go("releases")} className="relative grid size-9 place-items-center border border-[var(--dx-line-2)] hover:bg-[var(--dx-raise)]" aria-label="Notifications">
+          <button onClick={() => setNotifOpen((o) => !o)} className="relative grid size-9 place-items-center border border-[var(--dx-line-2)] hover:bg-[var(--dx-raise)]" aria-label="Notifications">
             <Bell className="size-4" />
-            {needsYou > 0 && <span className="absolute -top-1 -right-1 grid min-w-4 place-items-center bg-[#f0b232] px-1 text-[10px] font-bold text-black">{needsYou}</span>}
+            {needsYou + notif.unread > 0 && <span className="absolute -top-1 -right-1 grid min-w-4 place-items-center rounded-[4px] bg-[#f0b232] px-1 text-[10px] font-bold text-black">{needsYou + notif.unread}</span>}
           </button>
           <button onClick={() => go("settings")} className="grid size-9 place-items-center border border-[var(--dx-line-2)] bg-[var(--dx-raise)] text-[12px] font-semibold" aria-label="Account">
             {initials}
           </button>
         </header>
         <main className="dx-scroll min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto min-h-full max-w-[1120px] border-[var(--dx-line)] px-4 py-6 sm:px-8 sm:py-9 lg:border-x">
+          <div className="dx-safe-main mx-auto min-h-full max-w-[1120px] border-[var(--dx-line)] px-4 py-6 sm:px-8 sm:py-9 lg:border-x">
             {section === "overview" && <DxOverview go={go} releases={releases} />}
             {section === "releases" && (releaseId ? <DxEmbed><Releases /></DxEmbed> : <DxReleases releases={releases} onReload={() => void listReleases().then(setReleases)} />)}
             {section === "artists" && <DxArtists releases={releases} />}
@@ -487,9 +495,27 @@ function Workspace() {
         </main>
       </div>
       {palette && <Palette releases={releases} onGo={go} onClose={() => setPalette(false)} reviewer={reviewer} staff={staff} />}
-      <a href={brand.support_email ? `mailto:${brand.support_email}` : "/contact"} className="fixed right-4 bottom-4 z-20 grid size-11 place-items-center rounded-[12px] shadow-lg border border-[var(--dx-line-2)] bg-[var(--dx-panel)] hover:bg-[var(--dx-raise)]" aria-label="Help">
+      <a href={brand.support_email ? `mailto:${brand.support_email}` : "/contact"} className="dx-safe-fab fixed right-4 bottom-4 z-20 grid size-11 place-items-center rounded-[12px] shadow-lg border border-[var(--dx-line-2)] bg-[var(--dx-panel)] hover:bg-[var(--dx-raise)]" aria-label="Help">
         <LifeBuoy className="size-5" />
       </a>
+      {notifOpen && (
+        <NotificationsPanel
+          log={notif.log}
+          seen={notif.seen}
+          releases={releases}
+          onOpen={(id) => {
+            setNotifOpen(false);
+            notif.markRead();
+            go("releases", id);
+          }}
+          onClose={() => {
+            setNotifOpen(false);
+            notif.markRead();
+          }}
+          onMarkRead={notif.markRead}
+        />
+      )}
+      {help && <ShortcutsHelp onClose={() => setHelp(false)} />}
       <Modals />
       <Toasts />
     </div>

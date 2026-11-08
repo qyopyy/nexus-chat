@@ -665,4 +665,37 @@ html.streamer .sensitive:hover { filter: none; }
 }
 .dx[data-dx-theme="sunset"] ::selection { background: #b45309; color: #fff; }
 .dx[data-dx-theme="sunset"] .dx-scroll::-webkit-scrollbar-thumb, .dx[data-dx-theme="sunset"].dx-scroll::-webkit-scrollbar-thumb { background: #553820; }
-.dx[data-dx-theme]:not([data-dx-theme="classic"]) .dx-panel { background: var(--dx-panel-bg); backdrop-filter: blur(2px); }
+.dx[data-dx-theme]:not([data-dx-theme="classic"]) .dx-panel { background: var(--dx-panel-bg); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+
+/* ── Mobile / iOS Safari ── */
+.dx { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+.dx.h-dvh { height: 100vh; height: 100dvh; }
+/* notch / home-indicator safe areas (viewport-fit=cover) */
+.dx-safe-top { height: calc(60px + env(safe-area-inset-top, 0px)); padding-top: env(safe-area-inset-top, 0px); padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); }
+.dx-safe-top-sticky { padding-top: env(safe-area-inset-top, 0px); }
+.dx-safe-side { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); padding-left: env(safe-area-inset-left, 0px); }
+.dx-safe-main { padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+@media (max-width: 767px) { .dx-safe-main { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); } }
+@media (min-width: 640px) { .dx-safe-main { padding-left: max(32px, env(safe-area-inset-left, 0px)); padding-right: max(32px, env(safe-area-inset-right, 0px)); } }
+.dx-safe-fab { right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+/* iOS zooms into any focused field under 16px — keep fields at 16px on phones */
+@media (max-width: 767px) {
+  .dx input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), .dx select, .dx textarea, .dx .dx-input { font-size: 16px; }
+  .dx .dx-input { height: 42px; }
+}
+/* comfortable touch targets */
+@media (pointer: coarse) {
+  .dx-btn { min-height: 40px; }
+  .dx-btn-sm { min-height: 34px; }
+  .dx aside nav button { min-height: 42px; }
+  .dx-seg > button { height: 32px; }
+  .dx-switch { width: 46px; height: 26px; }
+  .dx-switch::after { width: 20px; height: 20px; }
+  .dx-switch[aria-checked="true"]::after { transform: translateX(20px); }
+}
+/* iOS: fixed backgrounds jank / don't paint inside scrollers — let them scroll with the page */
+@supports (-webkit-touch-callout: none) {
+  .dx[data-dx-theme] { background-attachment: scroll; }
+  .dx-grain { mix-blend-mode: normal; opacity: .18; }
+}
+@media (hover: none) { .dx-btn:not(.dx-btn-primary):hover { background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.012)); } }
