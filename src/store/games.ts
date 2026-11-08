@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import type { SoloScoreGame } from "@/lib/games";
 
-export type RoomGame = "streets" | "geo" | "four" | "flappy" | "classicstrike" | "globalstrike";
+export type RoomGame = "streets" | "geo" | "four" | "flappy" | "classicstrike" | "globalstrike" | "beat";
 export type GameInvite = { id: string; from_id: string; game: RoomGame; code: string; created_at: string };
 
 /** Incoming score duel from a DM — schema-free, local-only. */
@@ -32,6 +32,8 @@ export const useGames = create<{
   activeScoreChallenge: ActiveScoreChallenge | null;
   /** open this solo arcade game in GamesHub (score duel accept, deep links) */
   soloFocus: SoloScoreGame | null;
+  /** Beat Battle: community song id from an invite link, opened once the hub mounts */
+  beatSong: string | null;
 }>(() => ({
   joinCode: null,
   joinGame: "streets",
@@ -40,11 +42,19 @@ export const useGames = create<{
   scoreInvites: [],
   activeScoreChallenge: null,
   soloFocus: null,
+  beatSong: null,
 }));
 
 export function joinGame(code: string, game: RoomGame = "streets") {
   const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
   useGames.setState({ joinCode: code.toUpperCase(), joinGame: game });
+  void import("@/store/app").then(({ useApp }) => useApp.setState(mobile ? { mobileTab: "games", hub: null, mobileSidebar: true } : { hub: "games" }));
+}
+
+/** open Beat Battle on a shared community song (?beat=<id> links) */
+export function openBeatSongId(id: string) {
+  const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+  useGames.setState({ beatSong: id });
   void import("@/store/app").then(({ useApp }) => useApp.setState(mobile ? { mobileTab: "games", hub: null, mobileSidebar: true } : { hub: "games" }));
 }
 

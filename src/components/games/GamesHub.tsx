@@ -105,6 +105,10 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
   useEffect(() => {
     if (joinCode) setOpen(joinFor === "flappy" ? "flappy" : joinFor);
   }, [joinCode, joinFor]);
+  const beatSong = useGames((s) => s.beatSong);
+  useEffect(() => {
+    if (beatSong) setOpen("beat");
+  }, [beatSong]);
   useEffect(() => {
     if (!soloFocus) return;
     setOpen(soloFocus);

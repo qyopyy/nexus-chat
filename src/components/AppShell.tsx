@@ -169,6 +169,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
     const play = q.get("play");
     const g = q.get("g");
     const join = q.get("join");
+    const beatSong = q.get("beat");
     const gift = q.get("gift");
     const addbot = q.get("addbot");
     const bump = q.get("bump");
@@ -187,8 +188,11 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       window.history.replaceState(null, "", `/?bump=${encodeURIComponent(bump)}`);
       void import("@/lib/bump").then(({ openBump }) => openBump());
     } else if (play && /^[A-Za-z2-9]{6}$/.test(play)) {
-      joinGame(play, g === "geo" || g === "four" || g === "flappy" ? g : "streets");
+      joinGame(play, g === "geo" || g === "four" || g === "flappy" || g === "beat" || g === "classicstrike" || g === "globalstrike" ? g : "streets");
       window.history.replaceState(null, "", "/");
+    } else if (beatSong && /^[0-9a-f-]{36}$/i.test(beatSong)) {
+      window.history.replaceState(null, "", "/");
+      void import("@/store/games").then(({ openBeatSongId }) => openBeatSongId(beatSong));
     } else if (gift) {
       window.history.replaceState(null, "", "/");
       void import("@/lib/premium").then(async ({ redeemPremiumGift, anyPlan }) => {

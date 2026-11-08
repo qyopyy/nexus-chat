@@ -11,7 +11,10 @@ import { HEALTH_GAIN, HEALTH_MISS, JUDGE, SAFE_MS, accuracy, beatAt, fcLabel, gr
 import { analyze, buildChart, decodeFile, fitGrid, type Analysis, type Difficulty } from "./autochart";
 import type { Song } from "./songs";
 import { BeatLibrary } from "./BeatLibrary";
-import { countBeatPlay } from "@/lib/beatLibrary";
+import BeatRoom, { BeatRoomResults, BeatRoomStart, type RivalState } from "./BeatRoom";
+import { beatFileUrl, countBeatPlay, getBeatSong } from "@/lib/beatLibrary";
+import { useGames } from "@/store/games";
+import type { Room } from "@/lib/room";
 import { arrow, burst, drawBoombox, drawFlash, drawHex, drawSparks, drawStage, drawVolt, iconHex, iconVolt, newStage, trail, LANE_COLORS, type Pose, type Spark } from "./art";
 
 // ─────────────────────────────── songs ───────────────────────────────
@@ -49,7 +52,7 @@ type Result = { stats: Stats; title: string; ranked: boolean; died: boolean; bes
 
 export default function BeatBattle({ onBack, mobile }: { onBack: () => void; mobile?: boolean }) {
   const [opts, setOptsState] = useState<Opts>(DEF_OPTS);
-  const [screen, setScreen] = useState<"menu" | "options" | "play" | "results">("menu");
+  const [screen, setScreen] = useState<"menu" | "options" | "play" | "results" | "room" | "roomresults">("menu");
   const [song, setSong] = useState<Song>(SONGS[0]);
   const [customs, setCustoms] = useState<Song[]>([]);
   const addCustom = (song: Song) => setCustoms((list) => [song, ...list.filter((x) => x.id !== song.id)].slice(0, 30));
@@ -57,6 +60,38 @@ export default function BeatBattle({ onBack, mobile }: { onBack: () => void; mob
   const [rows, setRows] = useState<Row[]>([]);
   const [run, setRun] = useState(0);
   const me = useApp((s) => s.userId);
+  // ── multiplayer room ──
+  const [roomCode, setRoomCode] = useState<string | null>(null);
+  const room = useRef<Room | null>(null);
+  const [rivals, setRivals] = useState<RivalState[]>([]);
+  const [mineFinal, setMineFinal] = useState<RivalState | null>(null);
+  const inRoom = useRef(false);
+  const myName = useApp((s) => s.profiles[s.userId ?? ""]?.display_name || s.profiles[s.userId ?? ""]?.username || "You");
+
+  // invite link: ?beat=<community song id>
+  const pendingSong = useGames((s) => s.beatSong);
+  useEffect(() => {
+    if (!pendingSong) return;
+    useGames.setState({ beatSong: null });
+    void getBeatSong(pendingSong).then((bs) => {
+      if (!bs) return toast("That song link isn't available any more", "error");
+      addCustom({
+        id: `community-${bs.id}`,
+        title: bs.title,
+        credit: bs.credit || "Shared with you",
+        diff: `${bs.difficulty} · ${bs.notes} notes`,
+        chart: beatFileUrl(bs.chart_path),
+        inst: beatFileUrl(bs.inst_path),
+        voices: bs.voices_path ? beatFileUrl(bs.voices_path) : undefined,
+        color: bs.color || "#22c55a",
+        ranked: false,
+        source: "community",
+        communityId: bs.id,
+      });
+      toast(`“${bs.title}” added — play it from the list`, "success");
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSong]);
   useEffect(() => setOptsState(loadOpts()), []);
   const setOpts = (p: Partial<Opts>) =>
     setOptsState((o) => {
@@ -71,6 +106,64 @@ export default function BeatBattle({ onBack, mobile }: { onBack: () => void; mob
   const loadBoard = useCallback(() => void leaderboard("beat").then(setRows), []);
   useEffect(loadBoard, [loadBoard]);
 
+  if (screen === "room" && roomCode)
+    return (
+      <div className="relative flex h-full min-h-0 flex-col overflow-y-auto bg-[#0b0618] text-white">
+        <BeatRoom
+          code={roomCode}
+          songs={[...SONGS, ...customs]}
+          mobile={mobile}
+          onLeave={() => {
+            room.current = null;
+            inRoom.current = false;
+            setRoomCode(null);
+            setScreen("menu");
+          }}
+          onPlay={(s, r) => {
+            room.current = r;
+            inRoom.current = true;
+            setRivals([]);
+            setMineFinal(null);
+            r.on("score", (p) => {
+              const id = String(p.from);
+              setRivals((list) => {
+                const next = list.filter((x) => x.id !== id);
+                return [...next, { id, name: String(p.name ?? "Player"), score: Number(p.score) || 0, combo: Number(p.combo) || 0, done: !!p.done }];
+              });
+            });
+            r.on("done", (p) => {
+              const id = String(p.from);
+              setRivals((list) => {
+                const next = list.filter((x) => x.id !== id);
+                return [...next, { id, name: String(p.name ?? "Player"), score: Number(p.score) || 0, combo: 0, done: true }];
+              });
+            });
+            if (s.communityId) countBeatPlay(s.communityId);
+            setSong(s);
+            setRun((x) => x + 1);
+            setScreen("play");
+          }}
+        />
+      </div>
+    );
+
+  if (screen === "roomresults" && mineFinal)
+    return (
+      <div className="relative flex h-full min-h-0 flex-col justify-center overflow-y-auto bg-[#0b0618] text-white">
+        <BeatRoomResults
+          rivals={rivals}
+          mine={mineFinal}
+          onAgain={() => setScreen("room")}
+          onLeave={() => {
+            room.current = null;
+            inRoom.current = false;
+            setRoomCode(null);
+            setScreen("menu");
+          }}
+        />
+      </div>
+    );
+
   if (screen === "play")
     return (
       <Game
@@ -78,8 +171,16 @@ export default function BeatBattle({ onBack, mobile }: { onBack: () => void; mob
         song={song}
         opts={opts}
         mobile={!!mobile}
-        onQuit={() => setScreen("menu")}
+        vs={inRoom.current ? { rivals } : null}
+        onProgress={inRoom.current ? (st) => room.current?.send("score", { name: myName, score: st.score, combo: st.combo, done: false }) : undefined}
+        onQuit={() => setScreen(inRoom.current ? "room" : "menu")}
         onDone={(stats, died) => {
+          if (inRoom.current) {
+            room.current?.send("done", { name: myName, score: stats.score });
+            setMineFinal({ id: me ?? "me", name: myName, score: stats.score, combo: stats.maxCombo, done: true });
+            setScreen("roomresults");
+            return;
+          }
           const ranked = song.ranked && !opts.botplay && !opts.practice && !died;
           const best = localBest("beat");
           if (ranked) {
@@ -146,6 +247,12 @@ export default function BeatBattle({ onBack, mobile }: { onBack: () => void; mob
                   </span>
                 </button>
               ))}
+              <BeatRoomStart
+                onOpen={(c) => {
+                  setRoomCode(c);
+                  setScreen("room");
+                }}
+              />
               <BeatLibrary onReady={addCustom} />
               <AutoChart onReady={addCustom} />
               <ImportChart onReady={addCustom} />
@@ -455,6 +562,9 @@ const W = 1280,
 const NOTE = 112; // Psych: 160 px arrows at 0.7 scale
 const STRUM_X = 42 + 50;
 
+/** other players in a multiplayer room, as drawn on the in-game scoreboard */
+export type VsLive = { rivals: { id: string; name: string; score: number; combo: number; done: boolean }[] };
+
 type Live = {
   chart: Chart;
   ctx: AudioContext;
@@ -465,7 +575,7 @@ type Live = {
   stats: Stats;
 };
 
-function Game({ song, opts, mobile, onQuit, onDone, onRestart }: { song: Song; opts: Opts; mobile: boolean; onQuit: () => void; onDone: (s: Stats, died: boolean) => void; onRestart: () => void }) {
+function Game({ song, opts, mobile, onQuit, onDone, onRestart, vs, onProgress }: { song: Song; opts: Opts; mobile: boolean; onQuit: () => void; onDone: (s: Stats, died: boolean) => void; onRestart: () => void; vs?: VsLive | null; onProgress?: (s: Stats) => void }) {
   const cv = useRef<HTMLCanvasElement>(null);
   const [phase, setPhase] = useState<"loading" | "playing" | "paused" | "dead" | "error">("loading");
   const [err, setErr] = useState("");
@@ -474,6 +584,10 @@ function Game({ song, opts, mobile, onQuit, onDone, onRestart }: { song: Song; o
   const api = useRef<{ hit: (lane: number, down: boolean) => void; pause: () => void; resume: () => void } | null>(null);
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
+  const vsRef = useRef<VsLive | null | undefined>(vs);
+  vsRef.current = vs;
+  const progRef = useRef(onProgress);
+  progRef.current = onProgress;
 
   useEffect(() => {
     let alive = true;
@@ -661,6 +775,7 @@ function Game({ song, opts, mobile, onQuit, onDone, onRestart }: { song: Song; o
 
         setPhase("playing");
         let last = performance.now();
+        let lastSent = 0;
         const g = cv.current!.getContext("2d")!;
         let firstNoteIdx = 0;
 
@@ -864,6 +979,30 @@ function Game({ song, opts, mobile, onQuit, onDone, onRestart }: { song: Song; o
           const line = opts.botplay ? "BOTPLAY" : `Score: ${st.score.toLocaleString()} | Misses: ${st.misses} | Rating: ${st.hits + st.misses ? `${grade(acc)} (${acc.toFixed(2)}%) - ${fcLabel(st)}` : "?"}`;
           g.strokeText(line, W / 2, hbY + 56);
           g.fillText(line, W / 2, hbY + 56);
+          // multiplayer: send my score a few times a second, draw the room's scoreboard
+          if (progRef.current && t - lastSent > 0.25) {
+            lastSent = t;
+            progRef.current(st);
+          }
+          const room = vsRef.current;
+          if (room?.rivals.length) {
+            const rows = [{ name: "You", score: st.score, combo: st.combo, done: false, me: true }, ...room.rivals.map((r) => ({ ...r, me: false }))]
+              .sort((a, b) => b.score - a.score)
+              .slice(0, 4);
+            g.textAlign = "left";
+            g.font = "bold 17px system-ui, sans-serif";
+            const rx = 22,
+              ry = opts.downscroll ? 40 : H - 40 - rows.length * 24;
+            g.fillStyle = "rgba(0,0,0,.55)";
+            g.fillRect(rx - 10, ry - 20, 290, rows.length * 24 + 12);
+            rows.forEach((r, i) => {
+              g.fillStyle = r.me ? "#ffd400" : r.done ? "#9aa0b4" : "#fff";
+              const txt = `${i + 1}. ${r.name.slice(0, 12)}  ${r.score.toLocaleString()}${r.combo > 4 ? `  x${r.combo}` : ""}${r.done ? "  ✓" : ""}`;
+              g.strokeText(txt, rx, ry + i * 24);
+              g.fillText(txt, rx, ry + i * 24);
+            });
+            g.textAlign = "center";
+          }
           // time bar
           const tbY = opts.downscroll ? H - 32 : 18;
           const prog = Math.max(0, Math.min(1, pos / songEnd));

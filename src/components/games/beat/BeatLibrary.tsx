@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Disc3, Folder, Globe, Loader2, Play, Search, Trash2, Upload, Wand2, X } from "lucide-react";
+import { Disc3, Folder, Globe, Link2, Loader2, Play, Search, Trash2, Upload, Wand2, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { cn } from "@/lib/utils";
 import { myRank } from "@/lib/admin";
@@ -10,7 +10,7 @@ import { parseChart } from "./chart";
 import type { Difficulty } from "./autochart";
 import { SYNTH_PRESETS, makeSynthSong, type SynthPreset } from "./synth";
 import { findModSongs, readZip, type ModSong } from "./modzip";
-import { beatFileUrl, deleteBeatSong, hideBeatSong, listBeatSongs, publishBeatSong, type BeatSong } from "@/lib/beatLibrary";
+import { beatFileUrl, beatInviteLink, deleteBeatSong, hideBeatSong, listBeatSongs, myBeatSongs, publishBeatSong, type BeatSong } from "@/lib/beatLibrary";
 import type { Song } from "./songs";
 
 type Tab = "synth" | "community" | "mod";
@@ -185,12 +185,12 @@ function ModZip({ onReady }: { onReady: (s: Song) => void }) {
 function Community({ onReady }: { onReady: (s: Song) => void }) {
   const me = useApp((s) => s.userId);
   const profiles = useApp((s) => s.profiles);
-  const [sort, setSort] = useState<"new" | "top">("new");
+  const [sort, setSort] = useState<"new" | "top" | "mine">("new");
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<BeatSong[] | null>(null);
   const [publishing, setPublishing] = useState(false);
   const staff = myRank() >= 2;
-  const load = () => void listBeatSongs(sort, q).then(setRows);
+  const load = () => void (sort === "mine" ? myBeatSongs() : listBeatSongs(sort, q)).then(setRows);
   useEffect(() => {
     const t = setTimeout(load, q ? 350 : 0);
     return () => clearTimeout(t);
@@ -217,9 +217,9 @@ function Community({ onReady }: { onReady: (s: Song) => void }) {
       <div className="flex flex-wrap items-center gap-2">
         <div className="text-sm font-bold">Community songs</div>
         <div className="flex gap-1 rounded-xl bg-black/25 p-1">
-          {(["new", "top"] as const).map((s) => (
-            <button key={s} onClick={() => setSort(s)} className={cn("rounded-lg px-3 py-1 text-xs font-bold capitalize", sort === s ? "bg-[#22c55a] text-black" : "text-white/70")}>
-              {s === "new" ? "Newest" : "Most played"}
+          {(["new", "top", "mine"] as const).map((s) => (
+            <button key={s} onClick={() => setSort(s)} className={cn("rounded-lg px-3 py-1 text-xs font-bold", sort === s ? "bg-[#22c55a] text-black" : "text-white/70")}>
+              {s === "new" ? "Newest" : s === "top" ? "Most played" : "Mine"}
             </button>
           ))}
         </div>
@@ -240,7 +240,7 @@ function Community({ onReady }: { onReady: (s: Song) => void }) {
       {rows === null ? (
         <div className="py-6 text-center text-sm text-white/55">Loading…</div>
       ) : !rows.length ? (
-        <div className="py-6 text-center text-sm text-white/55">{q ? "Nothing matches." : "No community songs yet — publish the first one."}</div>
+        <div className="py-6 text-center text-sm text-white/55">{sort === "mine" ? "You haven't uploaded a song yet." : q ? "Nothing matches." : "No community songs yet — publish the first one."}</div>
       ) : (
         <ul className="max-h-80 space-y-1 overflow-y-auto">
           {rows.map((s) => (
@@ -251,9 +251,17 @@ function Community({ onReady }: { onReady: (s: Song) => void }) {
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-bold">{s.title}</span>
                 <span className="flex items-center gap-1 truncate text-[11px] text-white/55">
-                  <Avatar userId={s.owner_id} size={14} plain /> {s.credit || profiles[s.owner_id]?.username || "member"} · {s.difficulty} · {s.notes} notes · {s.plays} plays
+                  <Avatar userId={s.owner_id} size={14} plain /> {s.credit || profiles[s.owner_id]?.username || "member"} · {s.difficulty} · {s.notes} notes · {s.plays} plays{s.visibility === "unlisted" ? " · unlisted" : ""}
                 </span>
               </span>
+              <button
+                onClick={() => void navigator.clipboard?.writeText(beatInviteLink(s.id)).then(() => toast("Invite link copied — anyone can play this song", "success"))}
+                className="grid size-8 place-items-center rounded-full text-white/50 hover:bg-white/10 hover:text-white"
+                aria-label={`Copy invite link for ${s.title}`}
+                title="Copy invite link"
+              >
+                <Link2 className="size-3.5" />
+              </button>
               {(s.owner_id === me || staff) && (
                 <button
                   onClick={() => {
@@ -283,6 +291,7 @@ function Publish({ onDone }: { onDone: () => void }) {
   const [credit, setCredit] = useState("");
   const [difficulty, setDifficulty] = useState("Hard");
   const [rights, setRights] = useState(false);
+  const [unlisted, setUnlisted] = useState(false);
   const [step, setStep] = useState<string | null>(null);
   const pick = (k: keyof typeof files, accept: string, label: string) => (
     <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-black/25 px-3 py-2 text-sm hover:bg-black/40">
@@ -311,9 +320,11 @@ function Publish({ onDone }: { onDone: () => void }) {
         notes,
         bpm: parsed.bpm,
         lengthMs: parsed.length,
+        visibility: unlisted ? "unlisted" : "public",
         onStep: setStep,
       });
       if (r) {
+        void navigator.clipboard?.writeText(beatInviteLink(r.id)).catch(() => {});
         setFiles({});
         setTitle("");
         setCredit("");
@@ -346,6 +357,9 @@ function Publish({ onDone }: { onDone: () => void }) {
       </div>
       <label className="flex items-start gap-2 text-xs text-white/70">
         <input type="checkbox" checked={rights} onChange={(e) => setRights(e.target.checked)} className="mt-0.5" /> I made this song and chart, or I have the rights to share them on Nexus.
+      </label>
+      <label className="flex items-start gap-2 text-xs text-white/70">
+        <input type="checkbox" checked={unlisted} onChange={(e) => setUnlisted(e.target.checked)} className="mt-0.5" /> Unlisted — keep it out of the browse list; only people with the invite link can play it.
       </label>
       <p className="text-[11px] text-white/45">Tip: use MP3 or M4A so it plays on iPhone. Songs aren&apos;t ranked on the leaderboard.</p>
       <button disabled={!!step} onClick={() => void go()} className="flex w-full items-center justify-center gap-2 rounded-full bg-[#22c55a] py-2 text-sm font-bold text-black disabled:opacity-60">

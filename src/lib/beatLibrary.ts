@@ -20,14 +20,26 @@ export type BeatSong = {
   color: string | null;
   plays: number;
   hidden: boolean;
+  /** "unlisted" songs are playable by link but stay out of the browse list */
+  visibility?: "public" | "unlisted";
   created_at: string;
 };
 
 const BUCKET = "beat-songs";
 export const beatFileUrl = (path: string) => supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 
+export const beatInviteLink = (id: string) => `${typeof window !== "undefined" ? window.location.origin : "https://nexusproject.cc"}/?beat=${id}`;
+
+/** One song by id — used by invite links (works for unlisted songs too). */
+export async function getBeatSong(id: string) {
+  const { data } = await supabase.rpc("beat_song_by_id", { p_id: id });
+  const row = (Array.isArray(data) ? data[0] : data) as BeatSong | null;
+  if (row) void loadProfiles([row.owner_id]);
+  return row ?? null;
+}
+
 export async function listBeatSongs(sort: "new" | "top" = "new", q = "") {
-  let query = supabase.from("beat_songs").select("*").eq("hidden", false).limit(60);
+  let query = supabase.from("beat_songs").select("*").eq("hidden", false).eq("visibility", "public").limit(60);
   query = sort === "top" ? query.order("plays", { ascending: false }).order("created_at", { ascending: false }) : query.order("created_at", { ascending: false });
   if (q.trim()) query = query.or(`title.ilike.%${q.trim().replace(/[%,]/g, "")}%,credit.ilike.%${q.trim().replace(/[%,]/g, "")}%`);
   const { data, error } = await query;
@@ -64,6 +76,7 @@ export async function publishBeatSong(input: {
   bpm?: number | null;
   lengthMs?: number | null;
   color?: string;
+  visibility?: "public" | "unlisted";
   onStep?: (s: string) => void;
 }) {
   const me = useApp.getState().userId;
@@ -100,12 +113,13 @@ export async function publishBeatSong(input: {
         bpm: input.bpm ?? null,
         length_ms: input.lengthMs ? Math.round(input.lengthMs) : null,
         color: input.color ?? null,
+        visibility: input.visibility ?? "public",
         rights_confirmed: true,
       })
       .select()
       .single();
     if (error) throw new Error(errorText(error));
-    toast("Published to the community list", "success");
+    toast(input.visibility === "unlisted" ? "Uploaded — share the link to let people play it" : "Published to the community list", "success");
     return data as BeatSong;
   } catch (e) {
     await supabase.storage.from(BUCKET).remove([chartPath, instPath, ...(voicesPath ? [voicesPath] : [])]).catch(() => {});
