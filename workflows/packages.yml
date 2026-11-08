@@ -1,0 +1,44 @@
+name: Publish packages
+
+# Builds packages/* and publishes new versions to GitHub Packages (npm.pkg.github.com) with the built-in GITHUB_TOKEN.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["pkg-v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [net-guard, md5, geo-utils]
+    defaults:
+      run:
+        working-directory: packages/${{ matrix.pkg }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          scope: "@qyopyy"
+      - name: Build
+        run: |
+          npm install --no-save --no-audit --no-fund typescript@5.9.3 @types/node@22
+          npx tsc -p tsconfig.json
+      - name: Publish (skip if this version exists)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VER=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+            echo "$NAME@$VER already published — skipping"
+          else
+            npm publish
+          fi
