@@ -1,11 +1,11 @@
 {
   "name": "nexus-project",
-  "version": "7.1.1",
+  "version": "7.1.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "postinstall": "prisma generate",
-    "build": "prisma generate && next build",
+    "postinstall": "prisma generate --schema=./db/schema.prisma",
+    "build": "prisma generate --schema=./db/schema.prisma && next build",
     "start": "next start",
     "lint": "next lint"
   },
