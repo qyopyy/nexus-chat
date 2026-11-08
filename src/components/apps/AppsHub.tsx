@@ -30,6 +30,11 @@ import {
   QrCode,
   ShieldAlert,
   Timer,
+  Gauge,
+  Radio,
+  PenLine,
+  CalendarDays,
+  Clock,
   type LucideIcon,
 } from "lucide-react";
 import { useApp } from "@/store/app";
@@ -55,6 +60,7 @@ import PromoStudio from "./PromoStudio";
 import VoiceChangerApp from "./VoiceChangerApp";
 import FlStudioLab from "./FlStudioLab";
 import { FocusTimer, KeyScale, QuickNotes, RoyaltySplits, TipSplit, UnitConverter } from "./MoreApps";
+import { LyricLab, ReleasePlanner, ToneGenerator, Tuner, WorldClock } from "./MoreApps2";
 import SpotifyTakedown from "@/components/music/SpotifyTakedown";
 import BumpHub from "@/components/bump/BumpHub";
 import BrowserHub from "@/components/browser/BrowserHub";
@@ -93,7 +99,12 @@ type ToolId =
   | "tip"
   | "keyscale"
   | "splits"
-  | "notes";
+  | "notes"
+  | "tuner"
+  | "tone"
+  | "lyrics"
+  | "planner"
+  | "worldclock";
 
 const TOOLS: {
   id: ToolId;
@@ -369,6 +380,51 @@ const TOOLS: {
     emoji: "📝",
     Icon: NotebookPen,
   },
+  {
+    id: "tuner",
+    name: "Instrument tuner",
+    tag: "Guitar · bass · vocals",
+    desc: "Chromatic tuner that listens through your mic — cents meter and custom A4.",
+    bg: "linear-gradient(135deg,#57f287,#0b3d24)",
+    emoji: "🎸",
+    Icon: Gauge,
+  },
+  {
+    id: "tone",
+    name: "Tone generator",
+    tag: "20 Hz – 20 kHz",
+    desc: "Sine, square, saw and triangle tones for speaker checks, subs and tuning.",
+    bg: "linear-gradient(135deg,#eb459e,#4a0b2e)",
+    emoji: "〰️",
+    Icon: Radio,
+  },
+  {
+    id: "lyrics",
+    name: "Lyric lab",
+    tag: "Syllables + rhymes",
+    desc: "Write verses with a live syllable count per line and instant rhyme finder.",
+    bg: "linear-gradient(135deg,#fee75c,#5c3b0b)",
+    emoji: "✍️",
+    Icon: PenLine,
+  },
+  {
+    id: "planner",
+    name: "Release planner",
+    tag: "Timeline + calendar",
+    desc: "Pick a release date and get a 10-week rollout plan you can add to your calendar.",
+    bg: "linear-gradient(135deg,#00a8fc,#0b2a5c)",
+    emoji: "🗓️",
+    Icon: CalendarDays,
+  },
+  {
+    id: "worldclock",
+    name: "World clock",
+    tag: "Time zones · meetings",
+    desc: "Cities side by side with a slider to find a call time that works for everyone.",
+    bg: "linear-gradient(135deg,#5865f2,#0b0b3d)",
+    emoji: "🌍",
+    Icon: Clock,
+  },
 ];
 
 export default function AppsHub({ mobile }: { mobile?: boolean }) {
@@ -455,6 +511,11 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
   if (tool === "keyscale") return <KeyScale mobile={mobile} onBack={backToGrid} />;
   if (tool === "splits") return <RoyaltySplits mobile={mobile} onBack={backToGrid} />;
   if (tool === "notes") return <QuickNotes mobile={mobile} onBack={backToGrid} />;
+  if (tool === "tuner") return <Tuner mobile={mobile} onBack={backToGrid} />;
+  if (tool === "tone") return <ToneGenerator mobile={mobile} onBack={backToGrid} />;
+  if (tool === "lyrics") return <LyricLab mobile={mobile} onBack={backToGrid} />;
+  if (tool === "planner") return <ReleasePlanner mobile={mobile} onBack={backToGrid} />;
+  if (tool === "worldclock") return <WorldClock mobile={mobile} onBack={backToGrid} />;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-chat">

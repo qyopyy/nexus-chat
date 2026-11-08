@@ -63,6 +63,7 @@ export const FEATURES: Feature[] = [
 export const NAV = [
   { href: "/", label: "Home" },
   { href: "/features", label: "Features" },
+  { href: "/distro", label: "Distribution" },
   { href: "/download", label: "Download" },
   { href: "/about", label: "About us" },
   { href: "/contact", label: "Contact" },

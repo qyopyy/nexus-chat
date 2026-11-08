@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { finishSpotifyLogin } from "@/lib/spotifyUser";
+import { finishSpotifyLogin, spotifyReturnPath } from "@/lib/spotifyUser";
 
 export default function SpotifyCallback() {
   const [msg, setMsg] = useState("Connecting your Spotify…");
@@ -17,7 +17,8 @@ export default function SpotifyCallback() {
     finishSpotifyLogin(code)
       .then(() => {
         setMsg("Spotify connected ✓");
-        window.location.replace("/?spotify=connected");
+        const back = spotifyReturnPath();
+        window.location.replace(back ? `${back}${back.includes("?") ? "&" : "?"}spotify=connected` : "/?spotify=connected");
       })
       .catch((e: Error) => {
         setMsg(e.message);

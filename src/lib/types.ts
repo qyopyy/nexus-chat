@@ -326,6 +326,11 @@ export type DistArtist = {
 
 export type DistRelease = {
   link_code?: string;
+  /** store / smart links recorded when an admin marks it released (spotify, apple_music, youtube_music, …) */
+  store_links?: Record<string, string>;
+  /** where it was delivered (Too Lost, Tunearo, …) + that distributor's release id */
+  distributor?: string | null;
+  distributor_ref?: string | null;
   shield_auto?: boolean;
   id: string;
   owner_id: string;

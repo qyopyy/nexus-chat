@@ -41,6 +41,7 @@ import NameTag from "@/components/ui/NameTag";
 import { Card, H, StatusPill } from "./Studio";
 import { DefaultsDialog, PitchCard, PitchSummary, ReadinessCard, SmartLinkCard, Timeline } from "./ReleaseExtras";
 import LiveDeliveryCard from "./LiveDeliveryCard";
+import { ManageReleases, StoreLinksCard } from "./ReleaseHandoff";
 import { duplicateRelease, getDefaults, getPitch, getSmartLink, readiness, remoteImageSize, savePitch, statusLog, type Pitch, type SmartLink, type StatusLog } from "@/lib/distExtras";
 import { CheckPill, CheckView, Chips, ReportView, SplitEditor, printSplitSheet } from "@/components/music/AudioBits";
 import { analyzeAudio, checkStatus, clearAudibleMagic, clearCheckConfig, saveAudibleMagic, saveShieldBucket, clipFromBuffer, copyrightCheck, decodeFile, latestChecks, lyricsLookExplicit, saveCheckConfig, setYoutubeCidBlock, type AudioCheck, type AudioReport } from "@/lib/audio";
@@ -472,6 +473,7 @@ function ReleaseEditor({ id }: { id: string }) {
       {["live", "pending", "approved", "sending", "takedown_requested"].includes(r.status) && (
         <LiveDeliveryCard release={r} onRefresh={() => void load(r.id)} />
       )}
+      <StoreLinksCard r={r} />
       {r.status === "live" && <ReleaseRoyalties id={r.id} />}
     </div>
   );
@@ -995,7 +997,12 @@ function Sel({ label, value, options, onChange }: { label: string; value: string
 }
 
 // ------------------------------------------------------------------ review queue (admins)
+/** Admin: Too Lost–style "Manage releases" (search, sort, status filters) → full release sheet with downloads */
 export function ReviewQueue() {
+  return <ManageReleases />;
+}
+
+export function LegacyReviewQueue() {
   const [rows, setRows] = useState<DistRelease[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const load = useCallback(() => void listReleases(true).then((l) => setRows(l)), []);

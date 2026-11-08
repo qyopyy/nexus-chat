@@ -87,7 +87,7 @@ const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: st
   { id: "defender", label: "Profile Defender", icon: <UserRoundCheck className="size-5" />, group: "Protection" },
   { id: "takedowns", label: "Takedowns", icon: <ShieldAlert className="size-5" />, group: "Protection" },
   { id: "vault", label: "Nexus Drive", icon: <Vault className="size-5" />, group: "Protection" },
-  { id: "review", label: "Review queue", icon: <ShieldCheck className="size-5" />, group: "Admin", reviewer: true },
+  { id: "review", label: "Manage releases", icon: <ShieldCheck className="size-5" />, group: "Admin", reviewer: true },
   { id: "orders", label: "Orders & requests", icon: <Crown className="size-5" />, group: "Admin", staff: true },
   { id: "dist-settings", label: "Distribution settings", icon: <Settings className="size-5" />, group: "Admin", staff: true },
 ];

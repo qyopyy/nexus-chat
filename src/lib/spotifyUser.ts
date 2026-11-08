@@ -69,7 +69,26 @@ const b64url = (buf: ArrayBuffer | Uint8Array) =>
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 
-export async function connectSpotify() {
+const RETURN_KEY = "nexus:spotify-return";
+
+/** where /spotify-callback sends you afterwards (same-site paths only) */
+export function spotifyReturnPath() {
+  try {
+    const v = localStorage.getItem(RETURN_KEY);
+    localStorage.removeItem(RETURN_KEY);
+    return v && /^\/(?!\/)/.test(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function connectSpotify(returnTo?: string) {
+  try {
+    if (returnTo && /^\/(?!\/)/.test(returnTo)) localStorage.setItem(RETURN_KEY, returnTo);
+    else localStorage.removeItem(RETURN_KEY);
+  } catch {
+    /* storage unavailable */
+  }
   const cfg = await spotifyConfig();
   if (!cfg.client_id) throw new Error("Spotify isn't set up on this server yet (an admin needs to add the Spotify app keys).");
   const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));

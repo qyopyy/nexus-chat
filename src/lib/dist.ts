@@ -127,6 +127,31 @@ export async function requestChanges(id: string, note: string) {
   return (await q(supabase.rpc("review_release", { p_release: id, p_note: note }), "Sent back to the artist")) !== null;
 }
 
+/** admin: released in your own distributor portal (e.g. Too Lost) → record identifiers + links, DM the artist */
+export async function markReleaseDelivered(
+  id: string,
+  o: { status: "pending" | "approved" | "live"; distributor: string; ref?: string; upc?: string; isrcs?: Record<string, string>; links?: Record<string, string> },
+) {
+  return (
+    (await q(
+      supabase.rpc("admin_mark_release_delivered", {
+        p_release: id,
+        p_status: o.status,
+        p_distributor: o.distributor,
+        p_ref: o.ref || null,
+        p_upc: o.upc || null,
+        p_isrcs: o.isrcs ?? {},
+        p_links: o.links ?? {},
+      }),
+      o.status === "live" ? "Marked live — the artist got a message" : "Approved — the artist got a message",
+    )) !== null
+  );
+}
+/** admin: reject or request changes with a reason (artist gets a Nexus Bot DM) */
+export async function decideRelease(id: string, decision: "reject" | "changes", note: string) {
+  return (await q(supabase.rpc("admin_decide_release", { p_release: id, p_decision: decision, p_note: note }), decision === "reject" ? "Rejected — the artist got a message" : "Sent back with your notes")) !== null;
+}
+
 // ------------------------------------------------------------------ tracks
 export async function addTrack(releaseId: string, position: number, title: string) {
   return (await q(supabase.from("dist_tracks").insert({ release_id: releaseId, position, title }).select().single())) as DistTrack | null;
@@ -164,10 +189,16 @@ export async function uploadDistFile(releaseId: string, file: File, kind: "artwo
   return path;
 }
 
-export async function distFileUrl(path: string | null | undefined) {
+export async function distFileUrl(path: string | null | undefined, opts?: { download?: string; days?: number }) {
   if (!path) return null;
-  const { data } = await supabase.storage.from("dist-files").createSignedUrl(path, 3600);
+  const ttl = opts?.days ? Math.min(7, opts.days) * 86_400 : 3600;
+  const { data } = await supabase.storage.from("dist-files").createSignedUrl(path, ttl, opts?.download ? { download: opts.download } : undefined);
   return data?.signedUrl ?? null;
+}
+export async function distFileBlob(path: string) {
+  const { data, error } = await supabase.storage.from("dist-files").download(path);
+  if (error || !data) throw new Error(errorText(error) || "Download failed");
+  return data;
 }
 
 /** XHR so we get upload progress (fetch can't report it) */

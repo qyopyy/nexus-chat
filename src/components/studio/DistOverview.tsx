@@ -104,6 +104,9 @@ export default function DistOverview() {
       <H
         right={
           <div className="flex items-center gap-2">
+            <a href="/distro/app" className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-black hover:bg-white/90">
+              Open distro workspace ↗
+            </a>
             {staff && (
               <div className="flex rounded-full bg-black/25 p-0.5 text-sm">
                 <button onClick={() => setAll(false)} className={cn("rounded-full px-3 py-1.5 font-semibold", !all && "bg-active")}>

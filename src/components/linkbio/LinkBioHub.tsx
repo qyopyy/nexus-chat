@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, BadgeCheck, ChevronDown, ChevronUp, Copy, Download, ExternalLink, Link2, Lock, LogOut, Plus, Settings2, Shield, Sparkles, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, BadgeCheck, CalendarClock, ChevronDown, ChevronUp, Copy, Download, ExternalLink, Link2, Lock, LogOut, Plus, Settings2, Shield, Sparkles, Star, Trash2 } from "lucide-react";
 import QRCode from "qrcode";
 import { supabase } from "@/lib/supabase";
 import { useApp, toast } from "@/store/app";
@@ -19,6 +19,7 @@ import {
   linkbioSave,
   linkbioStats,
   linkbioUploadMusic,
+  linkIsLive,
   openLinkBio,
   publicLinkBioUrl,
   type LinkBioBackground,
@@ -36,6 +37,7 @@ import { resolveMusicEmbed } from "@/lib/links";
 import { studioGo } from "@/store/studio";
 import LinkBioAdmin from "@/components/linkbio/LinkBioAdmin";
 import PinToLinkPanel from "@/components/music/PinToLinkPanel";
+import LinkBioExtras, { fromLocalInput, toLocalInput } from "@/components/linkbio/LinkBioExtras";
 
 export { openLinkBio };
 
@@ -84,6 +86,9 @@ export default function LinkBioHub({
   const [linkInput, setLinkInput] = useState("");
   const [plat, setPlat] = useState("website");
   const [pagePw, setPagePw] = useState("");
+  const [schedIdx, setSchedIdx] = useState<number | null>(null);
+  const [schedStart, setSchedStart] = useState("");
+  const [schedEnd, setSchedEnd] = useState("");
   const [stats, setStats] = useState<LinkBioStats | null>(null);
   const [statsDays, setStatsDays] = useState(7);
 
@@ -497,9 +502,29 @@ export default function LinkBioHub({
               <h2 className="mb-3 text-sm font-bold tracking-wide text-white/70 uppercase">Links</h2>
               <div className="mb-3 space-y-2">
                 {links.map((l, i) => (
-                  <div key={`${l.url}-${i}`} className="flex items-center gap-1.5 rounded-xl bg-black/25 px-2 py-2">
+                  <div key={`${l.url}-${i}`}>
+                    <div className="flex items-center gap-1.5 rounded-xl bg-black/25 px-2 py-2">
                     <Link2 className="size-4 shrink-0 text-white/40" />
-                    <div className="min-w-0 flex-1 truncate text-sm">{l.label || l.url}</div>
+                    <div className="min-w-0 flex-1 truncate text-sm">
+                      {l.label || l.url}
+                      {(l.start || l.end) && (
+                        <span className={cn("ml-2 rounded-full px-1.5 py-px text-[10px] font-bold", linkIsLive(l) ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-400/20 text-amber-200")}>
+                          {linkIsLive(l) ? "Live · scheduled" : l.start && Date.parse(l.start) > Date.now() ? "Scheduled" : "Ended"}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      title="Schedule (show only between dates)"
+                      className={cn("grid size-8 place-items-center rounded-full hover:bg-white/10", schedIdx === i && "bg-white/10")}
+                      onClick={() => {
+                        setSchedIdx(schedIdx === i ? null : i);
+                        setSchedStart(toLocalInput(l.start));
+                        setSchedEnd(toLocalInput(l.end));
+                      }}
+                    >
+                      <CalendarClock className={cn("size-3.5", l.start || l.end ? "text-amber-300" : "text-white/40")} />
+                    </button>
                     <button
                       type="button"
                       title={l.featured ? "Unfeature" : "Feature as CTA"}
@@ -545,6 +570,45 @@ export default function LinkBioHub({
                     >
                       <Trash2 className="size-3.5 text-white/50" />
                     </button>
+                    </div>
+                    {schedIdx === i && (
+                      <div className="mt-1 grid gap-2 rounded-xl bg-black/30 p-2.5 ring-1 ring-white/10 sm:grid-cols-[1fr_1fr_auto]">
+                        <label className="text-[11px] text-white/50">
+                          Show from
+                          <input type="datetime-local" value={schedStart} onChange={(e) => setSchedStart(e.target.value)} className="mt-0.5 w-full rounded-lg bg-black/40 px-2 py-1.5 text-sm text-white outline-none ring-1 ring-white/10" />
+                        </label>
+                        <label className="text-[11px] text-white/50">
+                          Hide after
+                          <input type="datetime-local" value={schedEnd} onChange={(e) => setSchedEnd(e.target.value)} className="mt-0.5 w-full rounded-lg bg-black/40 px-2 py-1.5 text-sm text-white outline-none ring-1 ring-white/10" />
+                        </label>
+                        <div className="flex items-end gap-1.5">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="rounded-lg bg-[#a855f7] px-3 py-1.5 text-xs font-bold"
+                            onClick={() => {
+                              const next = links.map((x, j) => (j === i ? { ...x, start: fromLocalInput(schedStart), end: fromLocalInput(schedEnd) } : x));
+                              void save({ links: next }).then(() => setSchedIdx(null));
+                            }}
+                          >
+                            Save
+                          </button>
+                          {(l.start || l.end) && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold"
+                              onClick={() => {
+                                const next = links.map((x, j) => (j === i ? { ...x, start: null, end: null } : x));
+                                void save({ links: next }).then(() => setSchedIdx(null));
+                              }}
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -669,6 +733,8 @@ export default function LinkBioHub({
                 <h2 className="mb-3 flex items-center gap-2 text-sm font-bold tracking-wide text-white/70 uppercase">
                   <Lock className="size-4 text-[#c084fc]" /> Settings
                 </h2>
+
+                <LinkBioExtras page={page} onPage={setPage} />
 
                 <div className="mb-4 rounded-xl bg-black/25 p-3 ring-1 ring-white/10">
                   <div className="mb-2 text-xs font-bold text-white/60 uppercase">Password protect page</div>
@@ -914,6 +980,25 @@ export default function LinkBioHub({
                 </div>
               )}
               {page.bio && <p className="mx-auto mt-3 max-w-xs whitespace-pre-wrap text-center text-sm text-white/65">{page.bio}</p>}
+              {page.countdown_at && Date.parse(page.countdown_at) > Date.now() && (
+                <div className="mx-auto mt-3 max-w-xs rounded-2xl bg-white/10 px-3 py-2 text-center text-xs">
+                  <div className="font-bold text-[#c084fc]">⏳ {page.countdown_label || "Countdown"}</div>
+                  <div className="text-white/60">{new Date(page.countdown_at).toLocaleString()}</div>
+                </div>
+              )}
+              {page.show_now_playing !== false && page.now_playing && (
+                <div className="mx-auto mt-3 flex max-w-xs items-center gap-2 rounded-2xl bg-[#1DB954]/15 p-2 text-left text-xs ring-1 ring-[#1DB954]/30">
+                  {page.now_playing.image && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={page.now_playing.image} alt="" className="size-10 rounded-lg object-cover" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-bold tracking-wide text-[#1DB954] uppercase">Listening on Spotify</div>
+                    <div className="truncate font-bold">{page.now_playing.title}</div>
+                    <div className="truncate text-white/60">{page.now_playing.artist}</div>
+                  </div>
+                </div>
+              )}
               <div className="mt-4 space-y-2">
                 {links.slice(0, 5).map((l, i) => (
                   <div

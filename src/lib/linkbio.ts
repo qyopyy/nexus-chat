@@ -20,7 +20,30 @@ export type LinkBioFont = "glow" | "marker" | "display" | "space" | "mono" | "ju
 export type LinkBioButtonStyle = "pill" | "square" | "outline" | "glass";
 export type LinkBioLayout = "classic" | "cards" | "minimal";
 
-export type LinkBioLink = { type?: string; url: string; label?: string; featured?: boolean };
+export type LinkBioLink = {
+  type?: string;
+  url: string;
+  label?: string;
+  featured?: boolean;
+  /** scheduled links: only shown between these ISO times (either side optional) */
+  start?: string | null;
+  end?: string | null;
+};
+
+/** Spotify "Listening to" snapshot (written by the nowplaying function) */
+export type LinkBioNowPlaying = {
+  title: string;
+  artist: string;
+  album?: string | null;
+  url?: string | null;
+  album_url?: string | null;
+  image?: string | null;
+  explicit?: boolean;
+  progress_ms?: number;
+  duration_ms?: number;
+  at?: string;
+  artists?: { name: string; url: string | null }[];
+};
 
 export type LinkBioStatsSeriesDay = { day: string; views: number; clicks: number };
 
@@ -68,6 +91,11 @@ export type LinkBioPage = {
   music_url?: string | null;
   custom_status?: string | null;
   presence?: { status?: string; online_at?: string | null; hidden?: boolean } | null;
+  show_now_playing?: boolean;
+  now_playing?: LinkBioNowPlaying | null;
+  countdown_at?: string | null;
+  countdown_label?: string | null;
+  countdown_url?: string | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -261,6 +289,24 @@ export async function linkbioSave(patch: Record<string, unknown>): Promise<LinkB
   }
   toast("Saved");
   return data as LinkBioPage;
+}
+
+/** Spotify card + release countdown (separate RPC so the main save stays unchanged) */
+export async function linkbioSaveExtras(patch: { show_now_playing?: boolean; countdown_at?: string | null; countdown_label?: string | null; countdown_url?: string | null }) {
+  const { data, error } = await supabase.rpc("linkbio_save_extras", { p: patch });
+  if (error) {
+    toast(errorText(error), "error");
+    return null;
+  }
+  toast("Saved");
+  return data as LinkBioPage;
+}
+
+/** is a scheduled link live right now? */
+export function linkIsLive(l: Pick<LinkBioLink, "start" | "end">, now = Date.now()) {
+  const s = l.start ? Date.parse(l.start) : NaN;
+  const e = l.end ? Date.parse(l.end) : NaN;
+  return !(Number.isFinite(s) && now < s) && !(Number.isFinite(e) && now >= e);
 }
 
 export async function linkbioStats(days = 7): Promise<LinkBioStats | null> {

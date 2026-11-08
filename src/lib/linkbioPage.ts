@@ -18,7 +18,7 @@ export type PublicLinkBio = {
   display_name: string;
   bio: string | null;
   avatar_url: string | null;
-  links: { type?: string; url: string; label?: string }[];
+  links: { type?: string; url: string; label?: string; featured?: boolean; start?: string | null; end?: string | null }[];
   theme: string;
   background: string;
   animated_bg: boolean;
@@ -46,6 +46,28 @@ export type PublicLinkBio = {
   presence?: { status?: string; online_at?: string | null; hidden?: boolean } | null;
   suspended?: boolean;
   suspend_reason?: string | null;
+  show_now_playing?: boolean;
+  now_playing?: {
+    title: string;
+    artist: string;
+    album?: string | null;
+    url?: string | null;
+    image?: string | null;
+    explicit?: boolean;
+    progress_ms?: number;
+    duration_ms?: number;
+    at?: string;
+  } | null;
+  countdown_at?: string | null;
+  countdown_label?: string | null;
+  countdown_url?: string | null;
+};
+
+/** scheduled links: hidden before `start` and from `end` on */
+const linkLive = (l: { start?: string | null; end?: string | null }, now = Date.now()) => {
+  const st = l.start ? Date.parse(l.start) : NaN;
+  const en = l.end ? Date.parse(l.end) : NaN;
+  return !(Number.isFinite(st) && now < st) && !(Number.isFinite(en) && now >= en);
 };
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -230,7 +252,7 @@ a{display:inline-flex;margin-top:18px;padding:12px 20px;border-radius:999px;back
   const linkBg =
     btn === "outline" ? "transparent" : btn === "glass" ? "rgba(255,255,255,.08)" : t.card;
   const linkBorder = btn === "outline" ? `1px solid ${accent}` : "inset 0 0 0 1px rgba(255,255,255,.08)";
-  const links = locked ? [] : (p.links ?? []).map((l) => ({ ...l, url: safeUrl(l.url) })).filter((l) => l.url);
+  const links = locked ? [] : (p.links ?? []).filter((l) => linkLive(l)).map((l) => ({ ...l, url: safeUrl(l.url) })).filter((l) => l.url);
   const av = p.avatar_url
     ? `<img class="av" src="${esc(p.avatar_url)}" alt="">`
     : `<div class="av av-ph">${esc((p.display_name || p.username).slice(0, 2).toUpperCase())}</div>`;
@@ -329,6 +351,26 @@ body{background:${t.bg};overflow-x:hidden}
 .nsfw{margin:14px auto 0;max-width:360px;padding:10px 12px;border-radius:12px;background:rgba(255,80,80,.12);color:#ffb4b4;font-size:12px;font-weight:700}
 .music{margin-top:18px;border-radius:16px;overflow:hidden}
 .music audio{width:100%;display:block;border-radius:16px;background:rgba(0,0,0,.35)}
+.np{display:flex;align-items:center;gap:12px;margin-top:18px;padding:10px;border-radius:18px;background:rgba(29,185,84,.12);box-shadow:inset 0 0 0 1px rgba(29,185,84,.35);text-align:left;color:${t.text};text-decoration:none;transition:transform .15s}
+.np:hover{transform:translateY(-2px)}
+.np.off{display:none}
+.np img{width:56px;height:56px;border-radius:12px;object-fit:cover;flex:none;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.np .meta{min-width:0;flex:1}
+.np .kicker{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#1DB954}
+.np .eq{display:inline-flex;gap:2px;align-items:flex-end;height:10px}
+.np .eq i{display:block;width:2px;background:#1DB954;border-radius:1px;animation:eq 1s ease-in-out infinite}
+.np .eq i:nth-child(2){animation-delay:.2s}.np .eq i:nth-child(3){animation-delay:.4s}
+@keyframes eq{0%,100%{height:3px}50%{height:10px}}
+.np .tt{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.np .ar{font-size:13px;color:${t.muted};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.np .bar{margin-top:6px;height:3px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden}
+.np .bar b{display:block;height:100%;width:0;background:#1DB954;transition:width 1s linear}
+.cd{display:block;margin-top:18px;padding:14px;border-radius:18px;background:${t.card};box-shadow:inset 0 0 0 1px ${accent}55,0 8px 28px ${accent}22;color:${t.text};text-decoration:none}
+.cd .lb{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:${accent}}
+.cd .digits{display:flex;justify-content:center;gap:10px;margin-top:8px}
+.cd .digits span{min-width:54px;padding:8px 4px;border-radius:12px;background:rgba(0,0,0,.3);font:900 24px/1 ui-monospace,monospace}
+.cd .digits small{display:block;margin-top:4px;font:700 10px/1 system-ui;letter-spacing:.08em;color:${t.muted};text-transform:uppercase}
+.cd .out{margin-top:8px;font-weight:900;font-size:18px}
 .foot{margin-top:28px;font-size:12px;color:${t.muted};opacity:.7}
 .foot a{color:${accent};font-weight:700;text-decoration:none}
 .wm{position:fixed;right:12px;bottom:10px;z-index:2;font:900 64px/1 "Bebas Neue",sans-serif;color:${accent};opacity:.12;pointer-events:none;letter-spacing:.06em}
@@ -345,6 +387,20 @@ body{background:${t.bg};overflow-x:hidden}
       ? `<div class="music"><audio controls preload="metadata" src="${esc(emb.src)}"><a href="${esc(emb.src)}">Play track</a></audio></div>`
       : `<div class="music"><iframe src="${esc(emb.src)}" width="100%" height="${emb.height}" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" ${emb.kind === "soundcloud" ? 'scrolling="no"' : ""}></iframe></div>`
     : "";
+
+  const cdAt = !locked && p.countdown_at ? Date.parse(p.countdown_at) : NaN;
+  const cdUrl = p.countdown_url ? safeUrl(p.countdown_url) : "";
+  const countdown = Number.isFinite(cdAt)
+    ? `<${cdUrl ? `a href="${esc(cdUrl)}" target="_blank" rel="noopener nofollow"` : "div"} class="cd" id="nx-cd" data-at="${cdAt}"><div class="lb">⏳ ${esc(p.countdown_label || "Countdown")}</div><div class="digits">${["Days", "Hrs", "Min", "Sec"].map((u) => `<span><em>--</em><small>${u}</small></span>`).join("")}</div><div class="out" hidden>${cdUrl ? "Out now — listen ›" : "It's here 🎉"}</div></${cdUrl ? "a" : "div"}>`
+    : "";
+  const np = !locked && p.show_now_playing !== false ? p.now_playing : null;
+  const nowPlaying =
+    !locked && p.show_now_playing !== false
+      ? `<a class="np${np ? "" : " off"}" id="nx-np" data-u="${esc(p.username)}" href="${esc(np?.url ? safeUrl(np.url) : "#")}" target="_blank" rel="noopener nofollow" data-p="${np?.progress_ms ?? 0}" data-d="${np?.duration_ms ?? 0}" data-at="${np?.at ? Date.parse(np.at) : 0}">
+  <img src="${esc(np?.image ?? "")}" alt=""${np?.image ? "" : " hidden"}>
+  <div class="meta"><div class="kicker"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>Listening on Spotify</div>
+  <div class="tt">${esc(np?.title ?? "")}${np?.explicit ? " 🅴" : ""}</div><div class="ar">${esc(np?.artist ?? "")}</div><div class="bar"><b></b></div></div></a>`
+      : "";
 
   const body = `<div class="stage font-${esc(p.font)} layout-${esc(p.layout || "classic")}">
 ${bgLayer(p.background, p.animated_bg, accent)}
@@ -372,6 +428,8 @@ ${t.watermark ? `<div class="wm">${esc(t.watermark)}</div>` : ""}
   ${p.nsfw && !locked ? `<div class="nsfw">18+ · Sensitive content</div>` : ""}
   ${!locked && p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ""}
   ${!locked && p.show_views ? `<div class="views">${esc(p.view_count)} views</div>` : ""}
+  ${countdown}
+  ${nowPlaying}
   ${unlockForm}
   ${
     links.length
@@ -422,6 +480,47 @@ ${FX_JS}
     };
     setInterval(poll,25000);
     setTimeout(poll,8000);
+  }
+  var cd=document.getElementById('nx-cd');
+  if(cd){
+    var at=Number(cd.getAttribute('data-at'))||0, cells=cd.querySelectorAll('.digits em'), out=cd.querySelector('.out'), dg=cd.querySelector('.digits');
+    var tickCd=function(){
+      var s=Math.max(0,Math.floor((at-Date.now())/1000));
+      var v=[Math.floor(s/86400),Math.floor(s%86400/3600),Math.floor(s%3600/60),s%60];
+      for(var i=0;i<cells.length;i++) cells[i].textContent=(i===0?String(v[i]):String(v[i]).padStart(2,'0'));
+      if(s<=0){ if(dg) dg.hidden=true; if(out) out.hidden=false; return false; }
+      return true;
+    };
+    if(tickCd()){ var cdT=setInterval(function(){ if(!tickCd()) clearInterval(cdT); },1000); }
+  }
+  var np=document.getElementById('nx-np');
+  if(np){
+    var bar=np.querySelector('.bar b');
+    var paint=function(){
+      var d=Number(np.getAttribute('data-d'))||0, p0=Number(np.getAttribute('data-p'))||0, t0=Number(np.getAttribute('data-at'))||Date.now();
+      if(!d||!bar) return;
+      var p=Math.min(d,p0+(Date.now()-t0));
+      bar.style.width=(p/d*100).toFixed(1)+'%';
+    };
+    var setNp=function(j){
+      var n=j&&j.show!==false?j.now:null;
+      if(!n){ np.className='np off'; return; }
+      np.className='np';
+      np.setAttribute('href',(n.url||'').indexOf('https://')===0?n.url:'#');
+      var img=np.querySelector('img'); if(img){ if(n.image){ img.src=n.image; img.hidden=false; } else img.hidden=true; }
+      var tt=np.querySelector('.tt'); if(tt) tt.textContent=(n.title||'')+(n.explicit?' 🅴':'');
+      var ar=np.querySelector('.ar'); if(ar) ar.textContent=n.artist||'';
+      np.setAttribute('data-p',String(n.progress_ms||0)); np.setAttribute('data-d',String(n.duration_ms||0));
+      np.setAttribute('data-at',String(n.at?Date.parse(n.at):Date.now()));
+      paint();
+    };
+    var pollNp=function(){
+      if(document.hidden) return;
+      fetch(${JSON.stringify(`${base}/api/linkbio/nowplaying?u=`)}+encodeURIComponent(np.getAttribute('data-u')||''),{cache:'no-store'})
+        .then(function(r){return r.json()}).then(setNp).catch(function(){});
+    };
+    paint(); setInterval(paint,1000); setInterval(pollNp,15000); setTimeout(pollNp,4000);
+    document.addEventListener('visibilitychange',function(){ if(!document.hidden) pollNp(); });
   }
 })();
 </script>`;
