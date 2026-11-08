@@ -12,15 +12,20 @@ const HOSTS: Record<Env, { api: string; auth: string }> = {
   production: { api: "https://api.toolost.com/v1", auth: "https://toolost.com" },
   sandbox: { api: "https://api-sandbox.toolost.com/v1", auth: "https://sandbox.toolost.com" },
 };
-const SCOPES = "read:profile read:catalog read:releases write:releases";
+const SCOPES = "read:profile read:catalog read:releases write:releases read:analytics read:sales";
+const PERIODS = ["allTime", "lastSevenDays", "lastThirtyDays", "lastMonth", "lastThreeMonths", "lastSixMonths", "lastYear"];
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SITE = (Deno.env.get("SITE_URL") || "https://nexusproject.cc").replace(/\/+$/, "");
 const REDIRECT = `${SITE}/distro/toolost-callback`;
 const MAX_TRANSFER = 140 * 1024 * 1024; // edge memory headroom
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
+// Only our own site may call this from a browser (JWT is still required; this just narrows CSRF / token-replay surface).
+const ALLOWED_ORIGINS = new Set([SITE, "https://www.nexusproject.cc", "capacitor://localhost", "http://localhost:3000"]);
+let cors: Record<string, string> = {
+  "Access-Control-Allow-Origin": SITE,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  Vary: "Origin",
 };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
@@ -100,6 +105,14 @@ async function tl(env: Env, path: string, init: { method?: string; body?: unknow
     headers: { Authorization: `Bearer ${await accessToken(env)}`, Accept: "application/json", ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}) },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
   });
+  // remember quota headers so Settings can show usage
+  const used = res.headers.get("X-Api-Quota-Used");
+  if (used !== null) {
+    void saveSetting(`toolost_quota_${env}`, JSON.stringify({
+      plan: res.headers.get("X-Api-Plan"), limit: Number(res.headers.get("X-Api-Quota-Limit")) || null, used: Number(used) || 0,
+      remaining: Number(res.headers.get("X-Api-Quota-Remaining")) || 0, at: new Date().toISOString(),
+    })).catch(() => {});
+  }
   const text = await res.text();
   let data: any = null;
   try {
@@ -109,7 +122,11 @@ async function tl(env: Env, path: string, init: { method?: string; body?: unknow
   }
   if (!res.ok) {
     const errs = data?.errors && typeof data.errors === "object" ? " — " + Object.entries(data.errors).map(([k, v]) => `${k}: ${(Array.isArray(v) ? v : [v]).join(", ")}`).join("; ") : "";
-    const msg = res.status === 429 ? "Too Lost rate limit / quota reached — try again shortly" : `Too Lost: ${data?.message ?? data?.error ?? res.statusText}${errs}`;
+    const retry = res.headers.get("Retry-After");
+    const msg = res.status === 429
+      ? data?.error === "quota_exceeded" ? "Too Lost monthly API quota used up — upgrade the Too Lost developer plan" : `Too Lost rate limit — try again in ${retry || "a few"} seconds`
+      : res.status === 403 ? "Too Lost: missing permission — press Connect again in Settings to grant the new scopes"
+      : `Too Lost: ${data?.message ?? data?.error ?? res.statusText}${errs}`;
     throw new HttpError(res.status === 401 ? 401 : res.status === 422 ? 422 : 502, msg.slice(0, 1500), data);
   }
   return data;
@@ -230,6 +247,8 @@ function mapStatus(s: string): { status: string; last_error?: string | null } {
 }
 
 Deno.serve(async (req: Request) => {
+  const origin = req.headers.get("Origin");
+  cors = { ...cors, "Access-Control-Allow-Origin": origin && ALLOWED_ORIGINS.has(origin) ? origin : SITE };
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   try {
@@ -241,7 +260,8 @@ Deno.serve(async (req: Request) => {
     if ((RANK[prof?.site_role ?? "member"] ?? 0) < 3) throw new HttpError(403, "Admins only");
 
     const b = await req.json().catch(() => ({}));
-    const action = String(b.action ?? "");
+    const action = String(b.action ?? "").slice(0, 40);
+    if (b.release_id !== undefined && !UUID_RE.test(String(b.release_id))) throw new HttpError(400, "Bad release id");
     const env: Env = b.env === "production" || b.env === "sandbox" ? b.env : await activeEnv();
 
     switch (action) {
@@ -394,6 +414,49 @@ Deno.serve(async (req: Request) => {
           await admin.rpc("dist_notify_owner", { p_owner: r.owner_id, p_text: `🎉 “${r.title}” is live!${d.upc ? `\nUPC: ${d.upc}` : ""}\nOpen Distro → Releases to see your codes and links.` });
         }
         return json({ ok: true, toolost_status: d.status, status: m.status, upc: d.upc ?? null, isrcs_updated: isrcs });
+      }
+
+      // ── insights (read-only) ──
+      case "quota":
+        return json({ quota: JSON.parse((await setting(`toolost_quota_${env}`)) || "null") });
+
+      case "analytics": {
+        const period = PERIODS.includes(String(b.period)) ? String(b.period) : "lastThirtyDays";
+        const d = (await tl(env, `/analytics/overview?period=${period}`))?.data ?? null;
+        return json({ analytics: d });
+      }
+
+      case "track_analytics": {
+        const isrc = String(b.isrc ?? "").toUpperCase();
+        if (!/^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(isrc)) throw new HttpError(400, "Bad ISRC");
+        const period = PERIODS.includes(String(b.period)) ? String(b.period) : "lastThirtyDays";
+        return json({ analytics: (await tl(env, `/analytics/tracks/${isrc}?period=${period}`))?.data ?? null });
+      }
+
+      case "sales": {
+        const page = Math.max(1, Math.min(50, Number(b.page) || 1));
+        const d = await tl(env, `/sales/overview?page=${page}&per_page=24`);
+        return json({ months: d?.data ?? [], page: d?.currentPage ?? page, pages: d?.totalPages ?? 1 });
+      }
+
+      case "validate_isrc": {
+        const isrc = String(b.isrc ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
+        return json({ valid: !!(await tl(env, "/releases/validate/isrc", { method: "POST", body: { isrc } }))?.data?.valid });
+      }
+
+      case "validate_upc": {
+        const upc = String(b.upc ?? "").replace(/\D/g, "").slice(0, 14);
+        return json({ valid: !!(await tl(env, "/releases/validate/upc", { method: "POST", body: { upc } }))?.data?.valid });
+      }
+
+      case "takedown": {
+        const { r } = await loadRelease(String(b.release_id));
+        const id = tlId(r);
+        if (b.confirm !== true) throw new HttpError(400, "Confirm the takedown first");
+        const res = await tl(env, `/releases/${id}/takedown`, { method: "POST" });
+        await setRelease(r.id, mapStatus(res?.data?.status ?? "takedown_pending"));
+        await admin.rpc("dist_notify_owner", { p_owner: r.owner_id, p_text: `🗑️ A takedown was requested for “${r.title}”. Stores usually remove it within a few days.` });
+        return json({ ok: true, status: res?.data?.status ?? "takedown_pending", message: res?.message ?? null });
       }
 
       default:

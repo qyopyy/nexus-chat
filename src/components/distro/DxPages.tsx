@@ -17,7 +17,7 @@ import { LaunchPlan, exportCatalogCsv } from "./DxExtras";
 import type { DxSection } from "./DistroApp";
 import { dxSfx, loadDxSound, setDxSound, useDxSound } from "@/lib/dxSound";
 import { DPID_RE, getDdex, saveDdex, type DdexConfig, type DdexRecipient } from "@/lib/ddex";
-import { TOOLOST_REDIRECT, connectTooLost, saveTooLostClient, setTooLostEnv, tooLostStatus, toolost, type TooLostEnv, type TooLostStatus } from "@/lib/toolost";
+import { TL_PERIODS, TOOLOST_REDIRECT, connectTooLost, saveTooLostClient, setTooLostEnv, tooLostAnalytics, tooLostQuota, tooLostSales, tooLostStatus, toolost, type TooLostAnalytics, type TooLostEnv, type TooLostQuota, type TooLostStatus } from "@/lib/toolost";
 
 /* ───────────────────────── shared bits ───────────────────────── */
 
@@ -1388,7 +1388,7 @@ function TooLostPane() {
           <a href="https://developer.toolost.com/dashboard" target="_blank" rel="noreferrer" className="underline decoration-[var(--dx-line-3)] underline-offset-2 hover:text-white">
             Too Lost Developer Portal
           </a>{" "}
-          ({env} credentials). Request the scopes <span className="font-mono text-[12px] text-[var(--dx-sub-2)]">read:profile read:catalog read:releases write:releases</span>.
+          ({env} credentials). Request the scopes <span className="font-mono text-[12px] text-[var(--dx-sub-2)]">read:profile read:catalog read:releases write:releases read:analytics read:sales</span>.
         </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <input value={cid} onChange={(e) => setCid(e.target.value)} placeholder={cur?.client_id ?? "Client ID"} autoComplete="off" spellCheck={false} className="dx-input font-mono" />
@@ -1464,9 +1464,100 @@ function TooLostPane() {
         </div>
       </div>
 
+      {cur?.connected && <TooLostInsights env={env} />}
+
       <p className="text-[12px] leading-relaxed text-[var(--dx-dim)]">
         Credentials and tokens stay on the server and are only ever shown masked. Once connected, open any release in Manage releases and press <b className="text-[var(--dx-sub)]">Send to Too Lost</b> — artwork, audio, credits and metadata go across, and status, UPC and ISRCs sync back.
       </p>
+    </div>
+  );
+}
+
+function TooLostInsights({ env }: { env: TooLostEnv }) {
+  const [period, setPeriod] = useState<string>("lastThirtyDays");
+  const [a, setA] = useState<TooLostAnalytics | null>(null);
+  const [months, setMonths] = useState<{ date: string; total: number }[] | null>(null);
+  const [quota, setQuota] = useState<TooLostQuota>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const load = async (p = period) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const [an, sales] = await Promise.all([tooLostAnalytics(p, env), tooLostSales(env).catch(() => null)]);
+      setA(an);
+      setMonths(sales);
+      setQuota(await tooLostQuota(env).catch(() => null));
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+    setBusy(false);
+  };
+  const max = Math.max(1, ...(a?.chart ?? []).map((c) => c.totalStreams));
+  const fmt = (n: number) => new Intl.NumberFormat(undefined, { notation: n >= 100000 ? "compact" : "standard" }).format(n);
+  return (
+    <div className="dx-panel p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="grid size-6 place-items-center rounded-full bg-[var(--dx-active)] text-[12px] font-semibold dx-round">3</span>
+        <div className="text-[15px] font-medium">Streams & earnings from Too Lost</div>
+        <div className="dx-seg ml-auto">
+          {TL_PERIODS.map(([id, label]) => (
+            <button key={id} aria-pressed={period === id} onClick={() => (setPeriod(id), a && void load(id))}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {!a && !err && (
+        <button disabled={busy} onClick={() => void load()} className="dx-btn mt-3">
+          {busy ? <Loader2 className="size-4 animate-spin" /> : null} Load insights
+        </button>
+      )}
+      {err && <p className="mt-3 text-[13px] text-[var(--dx-muted)]">{err}</p>}
+      {a && (
+        <>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              ["Streams", fmt(a.totalStreams)],
+              ["Saves", fmt(a.totalSaves)],
+              ["Skips", fmt(a.totalSkips)],
+              ["Engagement", `${Math.round((a.engagement ?? 0) * (a.engagement <= 1 ? 100 : 1))}%`],
+            ].map(([k, v]) => (
+              <div key={k} className="rounded-[7px] border border-[var(--dx-line)] bg-[var(--dx-input-bg)] p-2.5">
+                <div className="dx-label">{k}</div>
+                <div className="mt-0.5 text-[18px] font-semibold tabular-nums">{v}</div>
+              </div>
+            ))}
+          </div>
+          {a.chart?.length > 0 && (
+            <div className="mt-3 flex h-24 items-end gap-[2px]" aria-label="Streams per day">
+              {a.chart.slice(-60).map((c) => (
+                <div key={c.date} title={`${c.date}: ${c.totalStreams}`} className="h-full flex-1 flex items-end">
+                  <div className="w-full rounded-t-[2px]" style={{ height: `${Math.max(2, (c.totalStreams / max) * 100)}%`, background: "var(--dx-hi, #e5e5e5)", opacity: 0.85 }} />
+                </div>
+              ))}
+            </div>
+          )}
+          {months && months.length > 0 && (
+            <div className="mt-3">
+              <div className="dx-label mb-1">Earnings by month</div>
+              <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+                {months.slice(0, 12).map((m) => (
+                  <div key={m.date} className="rounded-[6px] border border-[var(--dx-line)] px-2 py-1.5 text-[12px]">
+                    <div className="text-[var(--dx-muted)]">{m.date}</div>
+                    <div className="font-semibold tabular-nums">${Number(m.total || 0).toFixed(2)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      {quota && (
+        <p className="mt-3 text-[12px] text-[var(--dx-dim)]">
+          API plan {quota.plan ?? "—"} · {fmt(quota.used)}{quota.limit ? ` / ${fmt(quota.limit)}` : ""} calls this month · {fmt(quota.remaining)} left
+        </p>
+      )}
     </div>
   );
 }

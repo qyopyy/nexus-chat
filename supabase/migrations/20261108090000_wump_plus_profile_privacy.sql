@@ -187,7 +187,7 @@ alter table public.premium_gifts add constraint premium_gifts_tier_check check (
 alter table public.premium_orders drop constraint if exists premium_orders_tier_check;
 alter table public.premium_orders add constraint premium_orders_tier_check check (tier in ('lighting', 'premium', 'dist', 'dist_pro', 'dist_video', 'wump_plus'));
 
-create or replace function public.create_premium_gift(p_tier text, p_days integer, p_max_claims integer, p_expires_days integer, p_note text)
+create or replace function public.create_premium_gift(p_tier text, p_days integer, p_max_claims integer default 1, p_expires_days integer default 30, p_note text default null)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare code text; gid uuid; exp timestamptz;
 begin
@@ -293,7 +293,7 @@ begin
       from public.wump_plus w where w.user_id = p_user and public.wump_is_plus(p_user)),
     'bio', coalesce(bp.bio, p.bio),
     'spotify_track', case when mine or coalesce(bp.show_song, true) then bp.spotify_track end,
-    'apple_maps_url', case when mine or coalesce(bp.show_place, 'friends') = 'everyone' or (bp.show_place = 'friends' and friend) or bp.show_place is null then bp.apple_maps_url end,
+    'apple_maps_url', case when mine or coalesce(bp.show_place, 'friends') = 'everyone' or (coalesce(bp.show_place, 'friends') = 'friends' and friend) then bp.apple_maps_url end,
     'place_name', case when mine or coalesce(bp.show_place, 'friends') = 'everyone' or (coalesce(bp.show_place, 'friends') = 'friends' and friend) then bp.place_name end,
     'place_address', case when mine or coalesce(bp.show_place, 'friends') = 'everyone' or (coalesce(bp.show_place, 'friends') = 'friends' and friend) then bp.place_address end,
     'place_lat', case when mine or coalesce(bp.show_place, 'friends') = 'everyone' or (coalesce(bp.show_place, 'friends') = 'friends' and friend) then bp.place_lat end,
@@ -401,7 +401,7 @@ begin
 end $$;
 
 -- follower lists respect show_follows / visibility
-create or replace function public.bump_follow_list(p_user uuid, p_which text)
+create or replace function public.bump_follow_list(p_user uuid, p_which text default 'followers')
 returns table (user_id uuid, created_at timestamptz) language plpgsql stable security definer set search_path = '' as $$
 declare bp public.bump_profiles%rowtype; me uuid := auth.uid();
 begin
@@ -419,7 +419,7 @@ begin
 end $$;
 
 -- Orders: fulfilling a Wump Plus order extends Wump Plus instead of the Nexus plan.
-create or replace function public.set_order_status(p_order bigint, p_status text, p_note text)
+create or replace function public.set_order_status(p_order bigint, p_status text, p_note text default null)
 returns void language plpgsql security definer set search_path = '' as $$
 declare
   o public.premium_orders;

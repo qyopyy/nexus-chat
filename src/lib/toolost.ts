@@ -55,6 +55,24 @@ export async function connectTooLost(env: TooLostEnv) {
   window.location.href = url;
 }
 
+// ── insights (read-only; needs read:analytics + read:sales — press Reconnect once to grant) ──
+export const TL_PERIODS = [
+  ["lastSevenDays", "7 days"],
+  ["lastThirtyDays", "30 days"],
+  ["lastThreeMonths", "3 months"],
+  ["lastSixMonths", "6 months"],
+  ["lastYear", "Year"],
+  ["allTime", "All time"],
+] as const;
+export type TooLostAnalytics = { period: string; dateRange: { from: string; to: string } | null; totalStreams: number; totalSaves: number; totalSkips: number; engagement: number; chart: { date: string; totalStreams: number }[] };
+export type TooLostQuota = { plan: string | null; limit: number | null; used: number; remaining: number; at: string } | null;
+export const tooLostAnalytics = (period: string, env?: TooLostEnv) => toolost<{ analytics: TooLostAnalytics | null }>("analytics", { period, env }).then((r) => r.analytics);
+export const tooLostSales = (env?: TooLostEnv) => toolost<{ months: { date: string; total: number }[] }>("sales", { env }).then((r) => r.months);
+export const tooLostQuota = (env?: TooLostEnv) => toolost<{ quota: TooLostQuota }>("quota", { env }).then((r) => r.quota);
+export const tooLostValidateIsrc = (isrc: string) => toolost<{ valid: boolean }>("validate_isrc", { isrc }).then((r) => r.valid);
+export const tooLostValidateUpc = (upc: string) => toolost<{ valid: boolean }>("validate_upc", { upc }).then((r) => r.valid);
+export const tooLostTakedown = (releaseId: string) => toolost<{ ok: boolean; status: string; message: string | null }>("takedown", { release_id: releaseId, confirm: true });
+
 export type DeliverStep = { label: string; state: "todo" | "doing" | "done" | "error"; note?: string };
 
 /** create draft → artwork → audio per track → tracklist → submit */
