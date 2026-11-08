@@ -1,30 +1,38 @@
 {
-  "name": "nexus-project",
-  "version": "7.1.2",
+  "name": "nexus-chat",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "postinstall": "prisma generate --schema=./db/schema.prisma",
-    "build": "prisma generate --schema=./db/schema.prisma && next build",
+    "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@prisma/client": "^5.5.2",
-    "@supabase/supabase-js": "^2.38.0",
-    "@upstash/redis": "^1.25.0",
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest"
+    "@supabase/supabase-js": "^2.119.0",
+    "@vercel/analytics": "^2.0.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.70.0",
+    "next": "^16.4.5",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "6.5.438",
+    "qrcode": "^1.5.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tus-js-client": "^4.3.1",
+    "zustand": "^5.0.16"
   },
   "devDependencies": {
-    "autoprefixer": "latest",
-    "postcss": "latest",
-    "prisma": "^5.5.2",
-    "tailwindcss": "latest",
-    "typescript": "latest",
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest"
+    "@tailwindcss/postcss": "^4.3.4",
+    "@types/node": "^22.19.21",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "supabase": "^3.0.0",
+    "tailwindcss": "^4.3.4",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20.9"
   }
 }
