@@ -1,14 +1,16 @@
 {
   "name": "nexus-project",
-  "version": "7.1.0",
+  "version": "7.1.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "postinstall": "prisma generate",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
+    "@prisma/client": "^5.5.2",
     "@supabase/supabase-js": "^2.38.0",
     "@upstash/redis": "^1.25.0",
     "next": "latest",
