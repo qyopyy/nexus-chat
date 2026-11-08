@@ -11,6 +11,8 @@ import NameTag from "@/components/ui/NameTag";
 import Avatar from "@/components/ui/Avatar";
 import { CheckPill } from "@/components/music/AudioBits";
 import type { DistRelease, DistStatus, DistTrack } from "@/lib/types";
+import TooLostSend from "./TooLostSend";
+import { myRank } from "@/lib/admin";
 
 /* ───────────────────────── helpers ───────────────────────── */
 
@@ -512,6 +514,7 @@ export function ReleaseSheet({ id, onBack, onChanged }: { id: string; onBack: ()
         </div>
       </div>
 
+      {myRank() >= 3 && <TooLostSend r={r} tracks={tracks} onDone={() => void load().then(onChanged)} />}
       <ReviewActions r={r} tracks={tracks} onDone={() => void load().then(onChanged)} />
     </div>
   );
@@ -551,7 +554,7 @@ function ReviewActions({ r, tracks, onDone }: { r: DistRelease; tracks: DistTrac
     <>
       <div className={panel}>
         <div className="mb-1 flex items-center gap-2 text-xs font-bold tracking-wide text-sub uppercase">
-          <Check className="size-4 text-ok" /> Approve — released in your distributor
+          <Check className="size-4 text-ok" /> Or approve manually — released elsewhere
         </div>
         <p className="mb-3 text-[12px] text-sub">Create it in Too Lost with the files above, then paste the UPC, ISRCs and links here. The artist gets a Nexus Bot message with everything.</p>
         <div className="grid gap-2 sm:grid-cols-3">

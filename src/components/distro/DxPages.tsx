@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import type { DistArtist, DistRelease, DistStatus } from "@/lib/types";
 import type { DxSection } from "./DistroApp";
 import { dxSfx, loadDxSound, setDxSound, useDxSound } from "@/lib/dxSound";
+import { TOOLOST_REDIRECT, connectTooLost, saveTooLostClient, setTooLostEnv, tooLostStatus, toolost, type TooLostEnv, type TooLostStatus } from "@/lib/toolost";
 
 /* ───────────────────────── shared bits ───────────────────────── */
 
@@ -850,7 +851,10 @@ export function DxSettings() {
   const me = useApp((s) => s.userId)!;
   const profile = useApp((s) => s.profiles[me]);
   const staff = myRank() >= 3;
-  const [k, setK] = useState<SetKey>("plan");
+  const [k, setK] = useState<SetKey>(() => {
+    const sub = typeof window !== "undefined" ? window.location.hash.split("/")[1] : "";
+    return (["plan", "prefs", "security", "data", "labels", "branding", "agreements", "platform", "toolost"] as SetKey[]).includes(sub as SetKey) ? (sub as SetKey) : "plan";
+  });
   const plan = activePlan(profile);
   const groups: { label: string; items: [SetKey, string, string, React.ComponentType<{ className?: string }>][] }[] = [
     {
@@ -870,7 +874,7 @@ export function DxSettings() {
       ],
     },
     { label: "Legal", items: [["agreements", "Agreements", "What you accepted, and when", FileText]] },
-    ...(staff ? [{ label: "Admin", items: [["platform", "Platform branding", "Default look for every workspace", PaletteIcon], ["toolost", "Too Lost", "API keys for delivery", KeyRound]] as [SetKey, string, string, React.ComponentType<{ className?: string }>][] }] : []),
+    ...(staff ? [{ label: "Admin", items: [["platform", "Platform branding", "Default look for every workspace", PaletteIcon], ["toolost", "Too Lost", "Deliver releases via the API", KeyRound]] as [SetKey, string, string, React.ComponentType<{ className?: string }>][] }] : []),
   ];
   const cur = groups.flatMap((g) => g.items).find((i) => i[0] === k)!;
   const CurIcon = cur[3];
@@ -947,7 +951,7 @@ const SET_SUB: Record<SetKey, string> = {
   agreements: "The terms you agreed to when you signed up and released music.",
   platform: "The default brand every workspace sees unless it sets its own.",
   prefs: "How the workspace feels on this device.",
-  toolost: "Connect Too Lost so approved releases can be delivered from here. Keys stay on the server.",
+  toolost: "Connect your Too Lost account so approved releases are delivered straight from Nexus.",
 };
 
 function PlanPane() {
@@ -1302,35 +1306,49 @@ function PrefsPane() {
   );
 }
 
-type TooLostStatus = { env: "sandbox" | "production"; keys: Partial<Record<"sandbox" | "production", { masked: string; updated_at: string }>> };
 function TooLostPane() {
   const [st, setSt] = useState<TooLostStatus | null>(null);
-  const [env, setEnv] = useState<"sandbox" | "production">("sandbox");
-  const [key, setKey] = useState("");
-  const [busy, setBusy] = useState(false);
-  const run = async (fn: string, args: Record<string, unknown>, ok?: string) => {
-    setBusy(true);
-    const { data, error } = await supabase.rpc(fn, args);
-    setBusy(false);
-    if (error) return toast(error.message, "error");
-    setSt(data as TooLostStatus);
-    if (ok) toast(ok, "success");
+  const [env, setEnv] = useState<TooLostEnv>("sandbox");
+  const [cid, setCid] = useState("");
+  const [secret, setSecret] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const redirect = TOOLOST_REDIRECT();
+  const act = async <T,>(key: string, fn: () => Promise<T>, ok?: string) => {
+    setBusy(key);
+    try {
+      const r = await fn();
+      if (ok) toast(ok, "success");
+      return r;
+    } catch (e) {
+      toast((e as Error).message, "error");
+      return null;
+    } finally {
+      setBusy(null);
+    }
   };
+  const reload = () =>
+    tooLostStatus()
+      .then((s) => {
+        setSt(s);
+        return s;
+      })
+      .catch((e) => {
+        toast((e as Error).message, "error");
+        return null;
+      });
   useEffect(() => {
-    void supabase.rpc("admin_toolost_status").then(({ data, error }) => {
-      if (error) return toast(error.message, "error");
-      setSt(data as TooLostStatus);
-      setEnv((data as TooLostStatus).env ?? "sandbox");
-    });
+    void reload().then((s) => s && setEnv(s.env));
   }, []);
-  const cur = st?.keys?.[env];
+  const cur = st?.envs?.[env];
+  const ready = !!cur?.client_id;
+
   return (
     <div className="space-y-4">
       <div className="dx-panel p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-[15px] font-medium">Environment</div>
-            <div className="text-[13px] text-[var(--dx-muted)]">Use sandbox while testing; switch to production when you're ready to deliver for real.</div>
+            <div className="text-[13px] text-[var(--dx-muted)]">Sandbox has its own credentials and never reaches the stores. Switch to production to deliver for real.</div>
           </div>
           <div className="dx-seg">
             {(["sandbox", "production"] as const).map((e) => (
@@ -1342,42 +1360,96 @@ function TooLostPane() {
           </div>
         </div>
       </div>
+
       <div className="dx-panel p-4">
         <div className="flex items-center gap-2">
-          <div className="text-[15px] font-medium">{env === "sandbox" ? "Sandbox" : "Production"} API key</div>
-          <span className={cn("dx-tag", cur ? "" : "opacity-70")}>{cur ? "Connected" : "Not set"}</span>
+          <span className="grid size-6 place-items-center rounded-full bg-[var(--dx-active)] text-[12px] font-semibold dx-round">1</span>
+          <div className="text-[15px] font-medium">App credentials</div>
+          <span className="dx-tag ml-auto">{ready ? (cur?.has_secret ? "Saved" : "ID only (PKCE)") : "Not set"}</span>
         </div>
-        {cur && (
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px] text-[var(--dx-muted)]">
-            <span className="font-mono text-[var(--dx-sub-2)]">{cur.masked}</span>
-            <span>· saved {new Date(cur.updated_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</span>
-          </div>
-        )}
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <input type="password" autoComplete="off" spellCheck={false} value={key} onChange={(e) => setKey(e.target.value)} placeholder={cur ? "Paste a new key to replace it" : "Paste your Too Lost API key"} className="dx-input font-mono" />
-          <button
-            disabled={busy || key.trim().length < 16}
-            onClick={() => void run("admin_set_toolost", { p_env: env, p_key: key.trim(), p_make_active: true }, "Too Lost key saved").then(() => setKey(""))}
-            className="dx-btn dx-btn-primary"
-          >
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />} Save key
-          </button>
+        <p className="mt-1.5 text-[13px] text-[var(--dx-muted)]">
+          From your approved app in the{" "}
+          <a href="https://developer.toolost.com/dashboard" target="_blank" rel="noreferrer" className="underline decoration-[var(--dx-line-3)] underline-offset-2 hover:text-white">
+            Too Lost Developer Portal
+          </a>{" "}
+          ({env} credentials). Request the scopes <span className="font-mono text-[12px] text-[var(--dx-sub-2)]">read:profile read:catalog read:releases write:releases</span>.
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <input value={cid} onChange={(e) => setCid(e.target.value)} placeholder={cur?.client_id ?? "Client ID"} autoComplete="off" spellCheck={false} className="dx-input font-mono" />
+          <input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder={cur?.has_secret ? "Client Secret saved — paste to replace" : "Client Secret (blank for a Public/PKCE app)"} autoComplete="new-password" spellCheck={false} className="dx-input font-mono" />
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
-          {cur && st?.env !== env && (
-            <button disabled={busy} onClick={() => void run("admin_set_toolost_env", { p_env: env }, `Using ${env}`)} className="dx-btn dx-btn-sm">
-              Use {env} for deliveries
+          <button
+            disabled={!!busy || !(cid.trim() || (ready && secret.trim()))}
+            onClick={() =>
+              void act("save", () => saveTooLostClient(env, cid.trim() || "", secret.trim()), "Credentials saved").then((s) => {
+                if (s) {
+                  setSt(s);
+                  setCid("");
+                  setSecret("");
+                }
+              })
+            }
+            className="dx-btn dx-btn-primary"
+          >
+            {busy === "save" ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />} Save credentials
+          </button>
+          {ready && (
+            <button disabled={!!busy} onClick={() => confirm(`Remove the ${env} credentials and disconnect?`) && void act("clear", () => saveTooLostClient(env, "", ""), "Removed").then((s) => s && setSt(s))} className="dx-btn dx-btn-danger">
+              Remove
             </button>
           )}
-          {cur && (
-            <button disabled={busy} onClick={() => confirm(`Remove the ${env} key?`) && void run("admin_set_toolost", { p_env: env, p_key: "" }, "Key removed")} className="dx-btn dx-btn-sm dx-btn-danger">
-              Remove key
+        </div>
+        <div className="mt-3 rounded-[7px] border border-[var(--dx-line)] bg-[var(--dx-input-bg)] p-2.5">
+          <div className="dx-label">Redirect URI — add this exact URL to your Too Lost app</div>
+          <div className="mt-1 flex items-center gap-2">
+            <code className="min-w-0 flex-1 truncate text-[13px] text-[var(--dx-sub-2)]">{redirect}</code>
+            <button onClick={() => void navigator.clipboard.writeText(redirect).then(() => toast("Copied", "success"))} className="dx-btn dx-btn-sm">
+              Copy
             </button>
+          </div>
+        </div>
+      </div>
+
+      <div className={cn("dx-panel p-4", !ready && "opacity-60")}>
+        <div className="flex items-center gap-2">
+          <span className="grid size-6 place-items-center rounded-full bg-[var(--dx-active)] text-[12px] font-semibold dx-round">2</span>
+          <div className="text-[15px] font-medium">Connect your Too Lost account</div>
+          <span className="dx-tag ml-auto">{cur?.connected ? "Connected" : "Not connected"}</span>
+        </div>
+        {cur?.connected ? (
+          <p className="mt-1.5 text-[13px] text-[var(--dx-muted)]">
+            <span className="text-[var(--dx-sub-2)]">{cur.account || "Connected"}</span>
+            {cur.connected_at && <> · since {new Date(cur.connected_at).toLocaleDateString([], { dateStyle: "medium" })}</>}
+            {cur.expires_at && <> · reconnect by {new Date(cur.expires_at).toLocaleDateString([], { dateStyle: "medium" })} if unused</>}
+          </p>
+        ) : (
+          <p className="mt-1.5 text-[13px] text-[var(--dx-muted)]">You'll sign in on Too Lost and approve Nexus. Releases you approve are then created, uploaded and submitted on that account.</p>
+        )}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button disabled={!ready || !!busy} onClick={() => void act("connect", () => connectTooLost(env))} className="dx-btn dx-btn-primary">
+            {busy === "connect" ? <Loader2 className="size-4 animate-spin" /> : null} {cur?.connected ? "Reconnect" : "Connect Too Lost"}
+          </button>
+          {cur?.connected && (
+            <>
+              <button disabled={!!busy} onClick={() => void act("test", () => toolost<{ account: string | null; releases: number | null }>("test", { env }), undefined).then((r) => r && toast(`Working — ${r.account ?? "account OK"}${r.releases != null ? ` · ${r.releases} releases` : ""}`, "success"))} className="dx-btn">
+                {busy === "test" ? <Loader2 className="size-4 animate-spin" /> : null} Test connection
+              </button>
+              {st?.env !== env && (
+                <button disabled={!!busy} onClick={() => void act("env", () => setTooLostEnv(env), `Deliveries now use ${env}`).then((s) => s && setSt(s))} className="dx-btn">
+                  Use {env} for deliveries
+                </button>
+              )}
+              <button disabled={!!busy} onClick={() => void act("disc", () => toolost("disconnect", { env }), "Disconnected").then(() => void reload())} className="dx-btn dx-btn-danger">
+                Disconnect
+              </button>
+            </>
           )}
         </div>
       </div>
+
       <p className="text-[12px] leading-relaxed text-[var(--dx-dim)]">
-        Keys are stored server-side and only ever shown masked — nobody can read them back from the browser. Delivery through the Too Lost API turns on once their API docs are wired in; until then use Manage releases to hand releases off.
+        Credentials and tokens stay on the server and are only ever shown masked. Once connected, open any release in Manage releases and press <b className="text-[var(--dx-sub)]">Send to Too Lost</b> — artwork, audio, credits and metadata go across, and status, UPC and ISRCs sync back.
       </p>
     </div>
   );
