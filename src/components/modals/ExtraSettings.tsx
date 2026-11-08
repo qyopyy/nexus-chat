@@ -128,6 +128,9 @@ export function NotificationPrefsBlock() {
       <Toggle label="@mentions in servers" hint="Includes @everyone from server owners and admins." checked={p.mentions} onChange={(v) => void save({ mentions: v })} />
       <Toggle label="Incoming calls" checked={p.calls} onChange={(v) => void save({ calls: v })} />
       <Toggle label="Show message text" hint="Off shows just “New message” on your lock screen." checked={p.previews} onChange={(v) => void save({ previews: v })} />
+      {p.wump_live !== undefined && (
+        <Toggle label="Friends going Live on Wump" hint="When a friend or family member starts sharing their location." checked={p.wump_live} onChange={(v) => void save({ wump_live: v })} />
+      )}
 
       <div className="mt-6 rounded-xl bg-side p-4">
         <div className="flex items-center gap-2 font-medium">
@@ -149,8 +152,8 @@ export function NotificationPrefsBlock() {
           <Toggle label="Let calls ring through" hint="Calls still notify you during quiet hours." checked={p.quiet_allow_calls} onChange={(v) => void save({ quiet_allow_calls: v })} />
         </div>
       </div>
-      {JSON.stringify(p) !== JSON.stringify({ ...NOTIF_DEFAULTS, tz: p.tz }) && (
-        <button onClick={() => void save({ ...NOTIF_DEFAULTS, tz: p.tz })} className="mt-3 text-sm text-sub hover:text-txt">
+      {JSON.stringify({ ...p, wump_live: undefined }) !== JSON.stringify({ ...NOTIF_DEFAULTS, tz: p.tz, wump_live: undefined }) && (
+        <button onClick={() => void save({ ...NOTIF_DEFAULTS, tz: p.tz, ...(p.wump_live !== undefined ? { wump_live: true } : {}) })} className="mt-3 text-sm text-sub hover:text-txt">
           Reset to defaults
         </button>
       )}

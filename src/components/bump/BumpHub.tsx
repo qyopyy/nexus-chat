@@ -359,6 +359,21 @@ export default function BumpHub({
       });
       return;
     }
+    // opened from a push notification: /wump/app?dm=<user> or ?u=<user>
+    const dm = u0.searchParams.get("dm");
+    const person = u0.searchParams.get("u");
+    if (dm || person) {
+      u0.searchParams.delete("dm");
+      u0.searchParams.delete("u");
+      window.history.replaceState(null, "", u0.pathname + u0.search);
+      if (dm && /^[0-9a-f-]{36}$/i.test(dm)) {
+        setThreadUser(dm);
+        setTab("messages");
+      } else if (person && /^[0-9a-f-]{36}$/i.test(person)) {
+        setViewUser(person);
+        setTab("social");
+      }
+    }
     const q = u0.searchParams.get("bump");
     const pathCode = window.location.pathname.match(/^\/(?:bump|wump)\/([a-z0-9]+)/i)?.[1];
     const code = q || (pathCode && !["app", "g"].includes(pathCode.toLowerCase()) ? pathCode : null);

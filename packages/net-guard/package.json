@@ -1,0 +1,42 @@
+{
+  "name": "@qyopyy/net-guard",
+  "version": "1.0.0",
+  "description": "SSRF guard for server routes that fetch user-supplied URLs: blocks private/loopback/metadata IPs (incl. DNS rebinding to them) and re-checks every redirect.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "keywords": [
+    "ssrf",
+    "security",
+    "fetch",
+    "proxy"
+  ],
+  "license": "MIT",
+  "author": "qyopy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qyopyy/nexus-chat.git",
+    "directory": "packages/net-guard"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false
+}

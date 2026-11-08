@@ -1,6 +1,6 @@
 {
   "name": "bump-mobile",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Standalone Wump iOS/Android shell (Capacitor). Loads the live Wump web app \u2014 same Nexus backend, separate home-screen icon.",
   "scripts": {
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@capacitor-community/apple-sign-in": "^7.1.0",
+    "@capacitor-community/background-geolocation": "^1.2.27",
     "@capacitor/android": "^8.6.0",
     "@capacitor/core": "^8.6.0",
     "@capacitor/geolocation": "^8.2.4",

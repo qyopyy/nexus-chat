@@ -155,6 +155,8 @@ export type NotifPrefs = {
   quiet_end: number;
   quiet_allow_calls: boolean;
   tz: string;
+  /** Wump: "<friend> is Live" (present once the column exists) */
+  wump_live?: boolean;
 };
 export const NOTIF_DEFAULTS: NotifPrefs = { dms: true, groups: true, mentions: true, calls: true, previews: true, quiet_enabled: false, quiet_start: 22 * 60, quiet_end: 8 * 60, quiet_allow_calls: true, tz: "UTC" };
 

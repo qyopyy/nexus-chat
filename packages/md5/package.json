@@ -1,0 +1,42 @@
+{
+  "name": "@qyopyy/md5",
+  "version": "1.0.0",
+  "description": "Tiny incremental MD5 (RFC 1321) for browsers and Node \u2014 hash Blobs/streams in chunks (DDEX file checksums). Zero dependencies.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "keywords": [
+    "md5",
+    "hash",
+    "ddex",
+    "checksum"
+  ],
+  "license": "MIT",
+  "author": "qyopy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qyopyy/nexus-chat.git",
+    "directory": "packages/md5"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false
+}

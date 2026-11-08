@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Link2, Shield } from "lucide-react";
+import { Bell, Link2, Shield } from "lucide-react";
+import { detectPush, enablePush, usePush } from "@/lib/push";
+import { wumpBackgroundCapable } from "@/lib/bumpBackground";
 import { toast } from "@/store/app";
 import {
   fetchWumpPrivacy,
@@ -118,6 +120,8 @@ export default function WumpSettings({ userId }: { userId: string }) {
         </Field>
       </section>
 
+      <WumpNotifyCard />
+
       <WumpLookPanel />
 
       <WumpProfilePrivacy userId={userId} />
@@ -137,6 +141,41 @@ export default function WumpSettings({ userId }: { userId: string }) {
         </ul>
       </section>
     </div>
+  );
+}
+
+function WumpNotifyCard() {
+  const { state, busy } = usePush();
+  useEffect(() => {
+    void detectPush().then((st) => usePush.setState({ state: st }));
+  }, []);
+  const on = state === "on" || state === "native-push" || state === "native-local";
+  const bg = wumpBackgroundCapable();
+  return (
+    <section className="rounded-2xl bg-side p-4 ring-1 ring-white/5">
+      <div className="mb-1 flex items-center gap-2 text-sm font-bold">
+        <Bell className="size-4 text-accent" /> Notifications & background
+      </div>
+      <p className="mb-3 text-xs text-sub">
+        Get Wump messages and “friend is Live” alerts even when the app is closed.{" "}
+        {bg ? "This app build keeps sharing your location in the background while you're Live." : "Background location sharing needs the latest Wump app from TestFlight."}
+      </p>
+      {on ? (
+        <span className="text-sm font-semibold text-ok">
+          On ✓{state === "native-local" ? " — banners while the app runs in the background" : ""}
+        </span>
+      ) : state === "denied" ? (
+        <span className="text-sm text-dnd">Blocked — allow notifications for Wump in your phone settings.</span>
+      ) : state === "ios-install" ? (
+        <span className="text-sm text-sub">On iPhone, install the Wump app (or add this site to your Home Screen) to get notifications.</span>
+      ) : state === "unsupported" ? (
+        <span className="text-sm text-sub">Not supported in this browser.</span>
+      ) : (
+        <button type="button" disabled={busy} onClick={() => void enablePush()} className="rounded-full bg-accent px-4 py-2 text-xs font-bold text-white disabled:opacity-60">
+          {busy ? "Turning on…" : "Turn on notifications"}
+        </button>
+      )}
+    </section>
   );
 }
 

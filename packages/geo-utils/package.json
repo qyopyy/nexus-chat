@@ -1,0 +1,42 @@
+{
+  "name": "@qyopyy/geo-utils",
+  "version": "1.0.0",
+  "description": "Small geo helpers from Wump: haversine distance, coordinate parsing, distance/duration formatting and Apple/Google Maps direction links.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "keywords": [
+    "geo",
+    "haversine",
+    "maps",
+    "distance"
+  ],
+  "license": "MIT",
+  "author": "qyopy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qyopyy/nexus-chat.git",
+    "directory": "packages/geo-utils"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false
+}

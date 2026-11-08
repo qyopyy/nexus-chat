@@ -814,7 +814,71 @@ function NotificationSection() {
           </div>
         </div>
       )}
+      {isOwner && <ApnsBlock />}
     </>
+  );
+}
+
+/** Owner: APNs auth key so iPhone apps (Nexus / Wump IPAs) get notifications while closed. */
+function ApnsBlock() {
+  const [st, setSt] = useState<{ key_id: string | null; team_id: string | null; has_key: boolean; sandbox: boolean; ios_devices: number } | null>(null);
+  const [keyId, setKeyId] = useState("");
+  const [teamId, setTeamId] = useState("");
+  const [p8, setP8] = useState("");
+  const [sandbox, setSandbox] = useState(false);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    void supabase.rpc("admin_apns_status").then(({ data }) => {
+      if (!data) return;
+      const d = data as NonNullable<typeof st>;
+      setSt(d);
+      setKeyId(d.key_id ?? "");
+      setTeamId(d.team_id ?? "");
+      setSandbox(d.sandbox);
+    });
+  }, []);
+  return (
+    <div className="mt-4 rounded-xl bg-side p-4">
+      <div className="font-medium">iPhone app push (APNs)</div>
+      <p className="mt-1 mb-3 text-sm text-sub">
+        For notifications in the Nexus and Wump iPhone apps while they're closed: developer.apple.com → Keys → + → Apple Push Notifications service → download the .p8 once. Also turn on
+        Push Notifications for both App IDs and regenerate their App Store profiles. Status:{" "}
+        {st?.has_key ? <b className="text-ok">key saved ✓ · {st.ios_devices} iPhone{st.ios_devices === 1 ? "" : "s"} registered</b> : "not set up"}
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <input value={keyId} onChange={(e) => setKeyId(e.target.value.toUpperCase().slice(0, 10))} placeholder="Key ID (10 chars)" autoComplete="off" className="rounded-md bg-black/30 px-2 py-2 font-mono text-sm outline-none" />
+        <input value={teamId} onChange={(e) => setTeamId(e.target.value.toUpperCase().slice(0, 10))} placeholder="Team ID (10 chars)" autoComplete="off" className="rounded-md bg-black/30 px-2 py-2 font-mono text-sm outline-none" />
+      </div>
+      <textarea
+        value={p8}
+        onChange={(e) => setP8(e.target.value)}
+        rows={3}
+        placeholder={st?.has_key ? "Key saved — paste a new .p8 to replace" : "-----BEGIN PRIVATE KEY----- …"}
+        autoComplete="off"
+        spellCheck={false}
+        className="mt-2 w-full rounded-md bg-black/30 p-2 font-mono text-xs outline-none"
+      />
+      <label className="mt-2 flex items-center gap-2 text-xs text-sub">
+        <input type="checkbox" checked={sandbox} onChange={(e) => setSandbox(e.target.checked)} /> Sandbox (Xcode debug builds only — leave off for TestFlight / App Store)
+      </label>
+      <button
+        disabled={saving || keyId.length !== 10 || teamId.length !== 10 || (!st?.has_key && !p8.trim())}
+        onClick={async () => {
+          setSaving(true);
+          const { data, error } = await supabase.rpc("admin_set_apns", { p_key_id: keyId, p_team_id: teamId, p_key_p8: p8.trim() || null, p_sandbox: sandbox });
+          setSaving(false);
+          if (error) toast(error.message, "error");
+          else {
+            setP8("");
+            setSt(data as NonNullable<typeof st>);
+            toast("APNs saved", "success");
+          }
+        }}
+        className="mt-2 rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-60"
+      >
+        Save
+      </button>
+    </div>
   );
 }
 

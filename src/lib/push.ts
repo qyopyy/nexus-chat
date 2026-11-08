@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { supabase, errorText } from "./supabase";
 import { useApp, toast } from "@/store/app";
 import { openConversation } from "./data";
-import { isNativeApp } from "./useMobile";
+import { isBumpApp, isNativeApp } from "./useMobile";
 
 // Push notifications for new messages.
 //  • Browsers + installed web app (Android Chrome, desktop, iPhone "Add to Home Screen" on iOS 16.4+) → Web Push
@@ -35,6 +35,11 @@ const standalone = () =>
 const webPushSupported = () => typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 const fcmBuild = () => typeof navigator !== "undefined" && /NexusFCM/.test(navigator.userAgent);
 const isIosNative = () => isNativeApp() && platform() === "ios";
+/** real closed-app push: FCM on Android builds, APNs on iOS builds (needs Push Notifications capability in the IPA) */
+const nativePushCapable = () => !!cap()?.Plugins?.PushNotifications && (fcmBuild() || isIosNative());
+/** App Store bundle ids — APNs topic must match the app that registered */
+const appBundle = () => (isBumpApp() ? "hu.qyopy.bump.B44X8B76QR" : "hu.qyopy.nexus.B44X8B76QR");
+let apnsRegistered = false;
 
 function b64ToBytes(b64: string) {
   const pad = "=".repeat((4 - (b64.length % 4)) % 4);
@@ -42,8 +47,10 @@ function b64ToBytes(b64: string) {
   return Uint8Array.from(raw, (c) => c.charCodeAt(0));
 }
 
-async function save(kind: "web" | "fcm", endpoint: string, p256dh: string | null, auth: string | null) {
-  const { error } = await supabase.rpc("register_push", { p_kind: kind, p_endpoint: endpoint, p_p256dh: p256dh, p_auth: auth, p_platform: platform() });
+async function save(kind: "web" | "fcm" | "apns", endpoint: string, p256dh: string | null, auth: string | null) {
+  const args: Record<string, unknown> = { p_kind: kind, p_endpoint: endpoint, p_p256dh: p256dh, p_auth: auth, p_platform: platform() };
+  if (kind === "apns") args.p_app = appBundle();
+  const { error } = await supabase.rpc("register_push", args);
   if (error) throw new Error(errorText(error));
 }
 
@@ -51,9 +58,15 @@ async function save(kind: "web" | "fcm", endpoint: string, p256dh: string | null
 export async function detectPush(): Promise<PushState> {
   if (isNativeApp()) {
     const plugins = cap()?.Plugins;
-    if (plugins?.PushNotifications && fcmBuild()) {
+    if (plugins?.PushNotifications && nativePushCapable()) {
       const p = await plugins.PushNotifications.checkPermissions().catch(() => ({ receive: "prompt" }));
-      return p.receive === "granted" ? "native-push" : p.receive === "denied" ? "denied" : "default";
+      if (p.receive === "granted") return "native-push";
+      // older iPhone builds: local banners already allowed → keep them working until push is turned on
+      if (plugins.LocalNotifications) {
+        const l = await plugins.LocalNotifications.checkPermissions().catch(() => ({ display: "prompt" }));
+        if (l.display === "granted") return "native-local";
+      }
+      return p.receive === "denied" ? "denied" : "default";
     }
     if (plugins?.LocalNotifications) {
       const p = await plugins.LocalNotifications.checkPermissions().catch(() => ({ display: "prompt" }));
@@ -92,15 +105,20 @@ async function wireLocalListeners(LN: any) {
 
 async function nativeRegister() {
   const plugins = cap()?.Plugins!;
-  if (plugins.PushNotifications && fcmBuild()) {
+  if (plugins.PushNotifications && nativePushCapable()) {
     const P = plugins.PushNotifications;
+    const kind = isIosNative() ? "apns" : "fcm";
     if (!nativeListeners) {
       nativeListeners = true;
-      await P.addListener("registration", (t: { value: string }) => void save("fcm", t.value, null, null).catch(() => {}));
+      await P.addListener("registration", (t: { value: string }) => {
+        if (kind === "apns") apnsRegistered = true;
+        void save(kind, t.value, null, null).catch(() => {});
+      });
       await P.addListener("registrationError", (e: unknown) => console.warn("push registration failed", e));
-      await P.addListener("pushNotificationActionPerformed", (a: { notification?: { data?: { conversation_id?: string } } }) => {
-        const c = a.notification?.data?.conversation_id;
-        if (c) openChat(c);
+      await P.addListener("pushNotificationActionPerformed", (a: { notification?: { data?: { conversation_id?: string; url?: string } } }) => {
+        const d = a.notification?.data;
+        if (d?.conversation_id) openChat(d.conversation_id);
+        else if (d?.url && /^\/(wump|bump)\//.test(d.url)) window.location.href = d.url;
       });
     }
     await P.createChannel?.({ id: "messages", name: "Messages", importance: 5, visibility: 1, vibration: true }).catch(() => {});
@@ -133,7 +151,7 @@ export async function enablePush() {
   try {
     if (isNativeApp()) {
       const plugins = cap()?.Plugins;
-      const api = plugins?.PushNotifications && fcmBuild() ? plugins.PushNotifications : plugins?.LocalNotifications;
+      const api = plugins?.PushNotifications && nativePushCapable() ? plugins.PushNotifications : plugins?.LocalNotifications;
       if (!api) throw new Error("Notifications aren't available in this app build");
       const p = await api.requestPermissions();
       if ((p.receive ?? p.display) !== "granted") {
@@ -220,7 +238,7 @@ export async function nativeLocalNotify(title: string, body: string, conversatio
   const st = usePush.getState().state;
   // FCM/APNs handles closed-app delivery on Android FCM builds; still show a local banner
   // on iOS IPA (and non-FCM Android) while the WebView is alive in the background.
-  if (st === "native-push" && !isIosNative()) return true;
+  if (st === "native-push" && (!isIosNative() || apnsRegistered)) return true;
   if (st !== "native-local" && st !== "native-push" && st !== "default") return false;
   const LN = cap()?.Plugins?.LocalNotifications;
   if (!LN) return false;

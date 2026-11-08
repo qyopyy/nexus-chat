@@ -48,6 +48,26 @@ let opts: {
   onExplore?: () => void;
 } = { visible: "friends", label: null, alerts: true, radiusM: 800 };
 
+/** @capacitor-community/background-geolocation (Wump IPA ≥ this build): keeps GPS + JS alive when the app is closed to the background. */
+type BgGeo = {
+  addWatcher: (
+    o: { backgroundMessage?: string; backgroundTitle?: string; requestPermissions?: boolean; stale?: boolean; distanceFilter?: number },
+    cb: (loc?: { latitude: number; longitude: number; accuracy?: number; bearing?: number | null; speed?: number | null }, err?: { code?: string; message?: string }) => void,
+  ) => Promise<string>;
+  removeWatcher: (o: { id: string }) => Promise<void>;
+  openSettings?: () => Promise<void>;
+};
+function bgGeo(): BgGeo | null {
+  if (typeof window === "undefined" || !isNativeApp()) return null;
+  const cap = (window as unknown as { Capacitor?: { Plugins?: { BackgroundGeolocation?: BgGeo }; isPluginAvailable?: (n: string) => boolean } }).Capacitor;
+  if (cap?.isPluginAvailable && !cap.isPluginAvailable("BackgroundGeolocation")) return null;
+  return cap?.Plugins?.BackgroundGeolocation ?? null;
+}
+let bgWatcherId: string | null = null;
+
+/** true when this app build can share location with the app in the background / screen locked */
+export const wumpBackgroundCapable = () => !!bgGeo();
+
 function ln(): CapLN | null {
   if (typeof window === "undefined") return null;
   const cap = (window as unknown as { Capacitor?: { Plugins?: { LocalNotifications?: CapLN } } }).Capacitor;
@@ -178,8 +198,28 @@ export async function startBumpBackground(input: {
   running = true;
   void bumpExpireStale();
 
-  // Continuous GPS → realtime moving pin
-  watch = await watchDeviceLocation(
+  // Native background GPS (survives app switch / screen lock) when the plugin is in this build
+  const bg = bgGeo();
+  if (bg) {
+    try {
+      bgWatcherId = await bg.addWatcher(
+        { backgroundTitle: "Wump Live", backgroundMessage: "Sharing your location with friends — tap to open", requestPermissions: true, stale: false, distanceFilter: 10 },
+        (loc, err) => {
+          if (err) {
+            if (err.code === "NOT_AUTHORIZED") void bg.openSettings?.();
+            return;
+          }
+          if (!loc || !running) return;
+          void publishQuiet({ lat: loc.latitude, lng: loc.longitude, accuracy: loc.accuracy ?? null, heading: loc.bearing ?? null, speed: loc.speed ?? null, source: "capacitor" });
+        },
+      );
+    } catch {
+      bgWatcherId = null;
+    }
+  }
+
+  // Continuous GPS → realtime moving pin (foreground; also the fallback on older builds)
+  if (!bgWatcherId) watch = await watchDeviceLocation(
     (loc) => {
       void publishQuiet(loc);
     },
@@ -221,6 +261,11 @@ export async function stopBumpBackground(optsStop?: { clearServer?: boolean }) {
   running = false;
   watch?.stop();
   watch = null;
+  if (bgWatcherId) {
+    const id = bgWatcherId;
+    bgWatcherId = null;
+    void bgGeo()?.removeWatcher({ id }).catch(() => {});
+  }
   if (heartbeat) clearInterval(heartbeat);
   heartbeat = null;
   if (nearbyPoll) clearInterval(nearbyPoll);
