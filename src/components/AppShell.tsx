@@ -191,10 +191,10 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       window.history.replaceState(null, "", "/");
     } else if (gift) {
       window.history.replaceState(null, "", "/");
-      void import("@/lib/premium").then(async ({ redeemPremiumGift, planOf }) => {
+      void import("@/lib/premium").then(async ({ redeemPremiumGift, anyPlan }) => {
         try {
           const r = await redeemPremiumGift(gift);
-          const name = planOf(r.tier)?.short ?? r.tier;
+          const name = anyPlan(r.tier)?.short ?? r.tier;
           toast(`Gift claimed — ${r.days} days of ${name}`, "success");
           // refresh my profile so premium UI unlocks immediately
           const me = useApp.getState().userId;

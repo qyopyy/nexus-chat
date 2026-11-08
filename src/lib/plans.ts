@@ -64,3 +64,27 @@ export const PLANS: Plan[] = [
     perks: ["Everything in Distribution Pro", "Official music video distribution (YouTube & video stores)", "Music video requests handled by the label"],
   },
 ];
+
+/** Wump Plus — sold & gifted like the Nexus plans but separate from the plan ladder (Nexus Premium and up include it). */
+export type GiftTier = PremiumTier | "wump_plus";
+export type SellPlan = Omit<Plan, "id"> & { id: GiftTier };
+export const WUMP_PLUS_PLAN: SellPlan = {
+  id: "wump_plus",
+  rank: 0,
+  name: "Wump Plus",
+  short: "Wump Plus",
+  price: 2.99,
+  color: "#facc15",
+  emoji: "📍",
+  perks: [
+    "✦ Plus badge on your Wump profile and a glowing map pin",
+    "Custom map pin emoji & color",
+    "Custom profile banner color",
+    "See who viewed your profile",
+    "Browse privately — stay off other people’s viewer lists",
+    "Satellite, hybrid & outdoors HD map styles",
+    "Included with Nexus Lighting Premium and up",
+  ],
+};
+export const GIFT_PLANS: SellPlan[] = [...PLANS, WUMP_PLUS_PLAN];
+export const anyPlan = (id?: string | null): SellPlan | null => GIFT_PLANS.find((p) => p.id === id) ?? null;

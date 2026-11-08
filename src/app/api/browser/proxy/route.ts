@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseBrowserDnsFromRequest, resolveDoh } from "@/lib/browserDns";
 import { applyShieldsToHtml, emptyShieldStats, type ShieldFilterOptions } from "@/lib/browserShields";
+import { rateLimit } from "@/lib/apiGuard";
+import { SANDBOX_HEADERS, escHtml, fetchPublic } from "@/lib/netGuard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,6 +39,8 @@ function rewriteAssetUrls(html: string, pageUrl: string, proxyBase: string, shie
 }
 
 export async function GET(req: NextRequest) {
+  const limited = rateLimit(req, "browser-proxy", 120, 60_000);
+  if (limited) return limited;
   const sp = req.nextUrl.searchParams;
   const raw = (sp.get("url") || "").trim();
   const shields = parseShields(sp);
@@ -62,11 +66,12 @@ export async function GET(req: NextRequest) {
 <style>body{font-family:system-ui;background:#0b1220;color:#e2e8f0;display:grid;place-items:center;min-height:100vh;margin:0;padding:24px;text-align:center}
 card{max-width:420px}h1{font-size:1.25rem;margin:0 0 8px}p{color:#94a3b8;line-height:1.5}</style></head>
 <body><div><h1>Blocked by ${dns.dns === "nextdns" ? "NextDNS" : "DNS"}</h1>
-<p><code>${url.hostname}</code> was blocked by your DNS shield before the page loaded.</p>
-<p style="font-size:12px;opacity:.7">${url.toString()}</p></div></body></html>`;
+<p><code>${escHtml(url.hostname)}</code> was blocked by your DNS shield before the page loaded.</p>
+<p style="font-size:12px;opacity:.7">${escHtml(url.toString())}</p></div></body></html>`;
       return new NextResponse(html, {
         status: 200,
         headers: {
+          ...SANDBOX_HEADERS,
           "content-type": "text/html; charset=utf-8",
           "x-nexus-shield-blocked": "dns",
           "cache-control": "no-store",
@@ -76,28 +81,33 @@ card{max-width:420px}h1{font-size:1.25rem;margin:0 0 8px}p{color:#94a3b8;line-he
   }
 
   try {
-    const res = await fetch(url.toString(), {
+    const { res, url: landed } = await fetchPublic(url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 NexusBrowser/1.0",
         Accept: "text/html,application/xhtml+xml",
         "Accept-Language": "en-US,en;q=0.9",
       },
-      redirect: "follow",
       cache: "no-store",
       signal: AbortSignal.timeout(15_000),
     });
 
     const ctype = res.headers.get("content-type") || "";
-    const finalUrl = res.url || url.toString();
+    const finalUrl = landed.toString();
 
     if (!/text\/html|application\/xhtml/i.test(ctype)) {
       // Pass through non-HTML (rare for iframe navigations)
+      // only inert media types pass through; anything else downloads (never renders on our origin)
+      const inert = /^(image\/(png|jpe?g|gif|webp|avif)|audio\/|video\/|application\/pdf|text\/plain)/i.test(ctype);
+      const len = Number(res.headers.get("content-length") ?? 0);
+      if (len > 25 * 1024 * 1024) return new NextResponse("Too large to open here", { status: 413, headers: SANDBOX_HEADERS });
       const buf = await res.arrayBuffer();
       return new NextResponse(buf, {
         status: res.status,
         headers: {
-          "content-type": ctype || "application/octet-stream",
+          ...SANDBOX_HEADERS,
+          "content-type": inert ? ctype : "application/octet-stream",
+          ...(inert ? {} : { "content-disposition": "attachment" }),
           "cache-control": "no-store",
         },
       });
@@ -137,6 +147,7 @@ card{max-width:420px}h1{font-size:1.25rem;margin:0 0 8px}p{color:#94a3b8;line-he
     return new NextResponse(html, {
       status: 200,
       headers: {
+        ...SANDBOX_HEADERS,
         "content-type": "text/html; charset=utf-8",
         "cache-control": "no-store",
         "x-nexus-shield-blocked": String(stats.blocked),
@@ -147,7 +158,7 @@ card{max-width:420px}h1{font-size:1.25rem;margin:0 0 8px}p{color:#94a3b8;line-he
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Proxy failed";
-    const html = `<!doctype html><html><body style="font-family:system-ui;background:#0b1220;color:#fff;padding:24px"><h1>Couldn't load page</h1><p>${msg}</p></body></html>`;
-    return new NextResponse(html, { status: 502, headers: { "content-type": "text/html; charset=utf-8" } });
+    const html = `<!doctype html><html><body style="font-family:system-ui;background:#0b1220;color:#fff;padding:24px"><h1>Couldn't load page</h1><p>${escHtml(msg)}</p></body></html>`;
+    return new NextResponse(html, { status: 502, headers: { ...SANDBOX_HEADERS, "content-type": "text/html; charset=utf-8" } });
   }
 }

@@ -2,13 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  Bookmark,
   BookmarkPlus,
   Compass,
   Crosshair,
   Layers,
+  Lock,
   LocateFixed,
-  MapPinned,
   Pause,
   Play,
   MessageCircle,
@@ -26,7 +25,13 @@ import {
   type LMap,
   type LeafletNS,
   type WumpMapStyle,
+  WUMP_HD,
+  WUMP_STYLE_LABEL,
 } from "@/lib/geo";
+import WumpMapTools from "./WumpMapTools";
+import WumpLiveWith from "./WumpLiveWith";
+import { useWumpPlus, wumpPlusStyles, PLUS_GOLD, type WumpPlusStyle } from "@/lib/wumpPlus";
+import { effectiveLook, useWumpLook, wumpTheme } from "@/lib/wumpLook";
 import { formatMeters } from "@/lib/location";
 import { wumpGeocode, wumpPlaceShort } from "@/lib/wumpGeocode";
 import type { WumpSavedPlace } from "@/lib/wumpPlaces";
@@ -86,6 +91,9 @@ export default function WumpMap({
   onPlaces,
   onGoLive,
   onSavePlace,
+  onMessagePerson,
+  onFocusChange,
+  onUpgradePlus,
 }: {
   me: string | null;
   myLat: number | null;
@@ -113,6 +121,10 @@ export default function WumpMap({
   onPlaces: () => void;
   onGoLive?: () => void;
   onSavePlace?: (place: { name: string; lat: number; lng: number; locality?: string | null; source: "map" | "live" | "tap" }) => void | Promise<void>;
+  onMessagePerson?: (id: string) => void;
+  /** "Live with" a friend started / stopped — lets the hub poll faster */
+  onFocusChange?: (id: string | null) => void;
+  onUpgradePlus?: () => void;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LMap | null>(null);
@@ -129,12 +141,60 @@ export default function WumpMap({
   const [ready, setReady] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [follow, setFollow] = useState(true);
-  const [mapStyle, setMapStyle] = useState<WumpMapStyle>("streets");
-  const [tapPlace, setTapPlace] = useState<string | null>(null);
+  const [mapStyle, setMapStyle] = useState<WumpMapStyle>(() => {
+    try {
+      const v = localStorage.getItem("wump-map-style") as WumpMapStyle | null;
+      return v && v in WUMP_STYLE_LABEL ? v : "streets";
+    } catch {
+      return "streets";
+    }
+  });
+  const [styleMenu, setStyleMenu] = useState(false);
+  const [, setTapPlace] = useState<string | null>(null);
   const [tapSave, setTapSave] = useState<TapSave | null>(null);
   const [saving, setSaving] = useState(false);
   const [resolvedMine, setResolvedMine] = useState<string | null>(null);
   const profiles = useApp((s) => s.profiles);
+  const plus = useWumpPlus();
+  const look = effectiveLook(useWumpLook(), !!plus?.active);
+  const theme = wumpTheme(look.theme);
+  const iconKeys = useRef<Map<string, string>>(new Map());
+  const anims = useRef<Map<string, number>>(new Map());
+  const [plusStyles, setPlusStyles] = useState<Record<string, WumpPlusStyle>>({});
+  const [withId, setWithId] = useState<string | null>(null);
+  const PLUS_STYLES: WumpMapStyle[] = ["satellite", "hybrid", "outdoors"];
+
+  const focusFriend = (id: string | null) => {
+    setWithId(id);
+    if (id) {
+      followRef.current = false;
+      setFollow(false);
+    }
+  };
+  useEffect(() => {
+    onFocusChange?.(withId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [withId]);
+
+  // Wump Plus cosmetics (emoji pins, colors) for everyone on the map
+  const nearbyKey = nearby.map((n) => n.user_id).sort().join(",");
+  useEffect(() => {
+    const ids = nearbyKey ? nearbyKey.split(",") : [];
+    if (!ids.length) return;
+    let off = false;
+    void wumpPlusStyles(ids).then((r) => {
+      if (!off) setPlusStyles(r);
+    });
+    return () => {
+      off = true;
+    };
+  }, [nearbyKey]);
+
+  // Plus-only map styles fall back when Plus isn't active
+  useEffect(() => {
+    if (plus && !plus.active && PLUS_STYLES.includes(mapStyle)) setMapStyle("streets");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plus?.active, mapStyle]);
 
   useEffect(() => {
     followRef.current = follow;
@@ -193,7 +253,14 @@ export default function WumpMap({
       accuracyRef.current = null;
       trailRef.current?.remove();
       trailRef.current = null;
-      mapRef.current?.remove();
+      for (const a of anims.current.values()) cancelAnimationFrame(a);
+      anims.current.clear();
+      iconKeys.current.clear();
+      try {
+        mapRef.current?.remove();
+      } catch {
+        /* already torn down */
+      }
       mapRef.current = null;
     };
     // init once — position updates handled below
@@ -203,6 +270,11 @@ export default function WumpMap({
   useEffect(() => {
     if (!ready || !setStyleRef.current) return;
     setStyleRef.current(mapStyle);
+    try {
+      localStorage.setItem("wump-map-style", mapStyle);
+    } catch {
+      /* private mode */
+    }
   }, [ready, mapStyle]);
 
   // Resize when container settles
@@ -232,39 +304,55 @@ export default function WumpMap({
         username?: string | null;
         heading?: number | null;
         stale?: boolean;
+        emoji?: string | null;
+        plus?: boolean;
+        focus?: boolean;
+        arrow?: "classic" | "arrow" | "beam" | "orb" | "ghost" | "comet";
       },
     ) => {
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return;
       want.add(id);
-      const icon = wumpAvatarIcon(L, opts);
+      // Heading jitter → only re-render the icon when it turns ≥ 6°
+      const heading = opts.heading != null && Number.isFinite(opts.heading) ? Math.round(opts.heading / 6) * 6 : null;
+      const o = { ...opts, heading };
+      const key = JSON.stringify(o);
       const existing = markersRef.current.get(id);
       if (existing?.setLatLng) {
-        existing.setIcon?.(icon);
+        if (iconKeys.current.get(id) !== key) {
+          existing.setIcon?.(wumpAvatarIcon(L, o));
+          iconKeys.current.set(id, key);
+        }
         const marker = existing;
         const cur = marker.getLatLng?.();
-        if (cur) {
-          const steps = 10;
-          let i = 0;
+        const prev = anims.current.get(id);
+        if (prev) cancelAnimationFrame(prev);
+        const far = cur ? Math.abs(cur.lat - lat) + Math.abs(cur.lng - lng) > 0.05 : true;
+        if (cur && !far) {
+          const t0 = performance.now();
+          const dur = 650;
           const from = { lat: cur.lat, lng: cur.lng };
-          const tick = () => {
-            i++;
-            const k = i / steps;
-            marker.setLatLng?.([from.lat + (lat - from.lat) * k, from.lng + (lng - from.lng) * k]);
-            if (i < steps) requestAnimationFrame(tick);
+          const tick = (t: number) => {
+            const k = Math.min(1, (t - t0) / dur);
+            const e = 1 - (1 - k) ** 3;
+            marker.setLatLng?.([from.lat + (lat - from.lat) * e, from.lng + (lng - from.lng) * e]);
+            if (k < 1) anims.current.set(id, requestAnimationFrame(tick));
+            else anims.current.delete(id);
           };
-          requestAnimationFrame(tick);
+          anims.current.set(id, requestAnimationFrame(tick));
         } else {
           existing.setLatLng([lat, lng]);
         }
         return;
       }
       existing?.remove();
-      const marker = L.marker([lat, lng], { icon }).addTo(map) as unknown as MarkerHandle;
+      iconKeys.current.set(id, key);
+      const marker = L.marker([lat, lng], { icon: wumpAvatarIcon(L, o) }).addTo(map) as unknown as MarkerHandle;
       marker.on?.("click", () => {
         if (opts.me) {
           if (opts.username && onOpenProfilePage) onOpenProfilePage(opts.username);
           return;
         }
-        onOpenPerson(id);
+        focusFriend(id);
       });
       markersRef.current.set(id, marker);
     };
@@ -274,7 +362,10 @@ export default function WumpMap({
       const place = myPlaceName || resolvedMine;
       const username = myUsername || profiles[me]?.username || null;
       upsert(me, myLat, myLng, {
-        color: "#0ea5e9",
+        color: plus?.active && plus.pin_color ? plus.pin_color : theme.pin,
+        emoji: plus?.active ? plus.pin_emoji : null,
+        plus: !!plus?.active,
+        arrow: look.arrow,
         initial: name.slice(0, 1),
         me: true,
         label: "You",
@@ -334,8 +425,12 @@ export default function WumpMap({
       const dist = formatMeters(n.meters);
       const ageTxt = ageLabel(age);
       const place = n.place_name || n.place_locality || null;
+      const ps = plusStyles[n.user_id];
       upsert(n.user_id, n.lat, n.lng, {
-        color: p?.avatar_color || "#22c55a",
+        color: ps ? ps.pin_color || PLUS_GOLD : p?.avatar_color || "#22c55a",
+        emoji: ps?.pin_emoji ?? null,
+        plus: !!ps,
+        focus: n.user_id === withId,
         initial: name.slice(0, 1),
         label: ageTxt ? `${dist} · ${ageTxt}` : dist,
         place,
@@ -349,6 +444,10 @@ export default function WumpMap({
       if (!want.has(id)) {
         m.remove();
         markersRef.current.delete(id);
+        iconKeys.current.delete(id);
+        const a = anims.current.get(id);
+        if (a) cancelAnimationFrame(a);
+        anims.current.delete(id);
       }
     }
 
@@ -403,7 +502,7 @@ export default function WumpMap({
     // Camera: follow me OR one-shot fit when first going live (not after user pans)
     if (followRef.current && live && myLat != null && myLng != null) {
       map.setView([myLat, myLng], Math.max(map.getZoom?.() ?? 15, 15));
-    } else if (!userPannedRef.current && live && myLat != null && myLng != null && nearby.length) {
+    } else if (!withId && !userPannedRef.current && live && myLat != null && myLng != null && nearby.length) {
       const pts: [number, number][] = [[myLat, myLng], ...nearby.map((n) => [n.lat, n.lng] as [number, number])];
       try {
         map.fitBounds(pts, { padding: [56, 56], maxZoom: 16 });
@@ -428,6 +527,11 @@ export default function WumpMap({
     onOpenPerson,
     onOpenProfilePage,
     follow,
+    plus,
+    plusStyles,
+    withId,
+    look.arrow,
+    theme.pin,
   ]);
 
   // Resolve my place name on the client when server hasn't filled it yet
@@ -457,25 +561,7 @@ export default function WumpMap({
     else onGoLive?.();
   };
 
-  const cycleStyle = () => {
-    const order: WumpMapStyle[] = ["streets", "dark", "satellite"];
-    const next = order[(order.indexOf(mapStyle) + 1) % order.length]!;
-    setMapStyle(next);
-  };
-
-  const saveTap = async () => {
-    if (!tapSave || !onSavePlace) return;
-    setSaving(true);
-    await onSavePlace({
-      name: tapSave.name,
-      lat: tapSave.lat,
-      lng: tapSave.lng,
-      locality: tapSave.locality,
-      source: "tap",
-    });
-    setSaving(false);
-    setTapSave(null);
-  };
+  const cycleStyle = () => setStyleMenu((o) => !o);
 
   const saveHere = async () => {
     if (!onSavePlace || myLat == null || myLng == null) return;
@@ -505,6 +591,7 @@ export default function WumpMap({
   return (
     <div className="relative mx-auto aspect-[9/14] w-full max-w-md overflow-hidden rounded-[2rem] bg-slate-200 shadow-2xl ring-1 ring-black/10">
       <div ref={wrapRef} className="absolute inset-0 z-0 bg-[#e2e8f0] [&_.leaflet-control-attribution]:text-[9px]" />
+      {look.tintMap && theme.tint && <div className="pointer-events-none absolute inset-0 z-[1]" style={{ background: theme.tint, mixBlendMode: "multiply" }} />}
 
       {err && (
         <div className="absolute inset-0 z-20 grid place-items-center bg-slate-200/95 p-6 text-center text-sm font-semibold text-slate-700 backdrop-blur">
@@ -523,17 +610,17 @@ export default function WumpMap({
             {live ? `${liveFriends} live · ${nearby.length} nearby` : `${viewsToday} on map`}
           </span>
           <span className="h-3 w-px shrink-0 bg-slate-200" />
+          {shownPlace && (
+            <>
+              <span className="hidden max-w-[7rem] truncate text-[11px] font-semibold text-slate-500 min-[380px]:inline">{shownPlace}</span>
+              <span className="h-3 w-px shrink-0 bg-slate-200" />
+            </>
+          )}
           <span className="inline-flex items-center gap-1 text-[11px] font-bold tabular-nums text-emerald-700" title={exploreTitle}>
             <Compass className="size-3 shrink-0" />
             {pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1)}%
           </span>
         </div>
-        {(shownPlace || tapPlace) && (
-          <div className="inline-flex max-w-full items-center gap-1.5 rounded-2xl bg-slate-950/80 px-2.5 py-1 text-[10px] font-semibold text-white shadow backdrop-blur">
-            <MapPinned className="size-3 shrink-0 text-sky-300" />
-            <span className="truncate">{tapPlace || shownPlace}</span>
-          </div>
-        )}
       </div>
 
       <div className="absolute top-3 right-3 z-10 flex flex-col items-center gap-2">
@@ -610,39 +697,84 @@ export default function WumpMap({
         </button>
       )}
 
-      {tapSave && onSavePlace && (
-        <div className="absolute inset-x-3 bottom-[7.75rem] z-20 overflow-hidden rounded-2xl bg-white/96 shadow-2xl ring-1 ring-black/8 backdrop-blur-md">
-          <div className="flex items-start gap-3 p-3.5">
-            <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-sky-50 text-sky-600">
-              <Bookmark className="size-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-bold text-slate-900">{tapSave.name}</div>
-              <div className="mt-0.5 text-[11px] text-slate-500">
-                {tapSave.locality || `${tapSave.lat.toFixed(4)}, ${tapSave.lng.toFixed(4)}`}
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-2 border-t border-slate-100 px-3 py-2.5">
+      <WumpMapTools
+        mapRef={mapRef}
+        LRef={LRef}
+        ready={ready}
+        me={myLat != null && myLng != null ? [myLat, myLng] : null}
+        tap={tapSave}
+        onClearTap={() => {
+          setTapSave(null);
+          setTapPlace(null);
+        }}
+        onSavePlace={onSavePlace}
+        onOpenPerson={onOpenPerson}
+        onFocusFriend={(id) => focusFriend(id)}
+        liveIds={nearbyKey}
+      />
+
+      {/* live friends rail — tap to go "Live with" them */}
+      {nearby.length > 0 && !withId && (
+        <div className="absolute top-[8.9rem] left-3 z-10 flex flex-col gap-1.5">
+          {[...nearby]
+            .sort((a, b) => (a.age_seconds ?? 1e9) - (b.age_seconds ?? 1e9))
+            .slice(0, 5)
+            .map((n) => {
+              const fresh = (n.age_seconds ?? 1e9) < 90;
+              const ps = plusStyles[n.user_id];
+              return (
+                <button
+                  key={n.user_id}
+                  type="button"
+                  onClick={() => focusFriend(n.user_id)}
+                  className="relative rounded-full shadow-lg transition active:scale-95"
+                  aria-label={`Live with ${n.display_name || n.username || "friend"}`}
+                  title={`Live with ${n.username ? "@" + n.username : "friend"}`}
+                >
+                  <Avatar userId={n.user_id} size={36} className={cn("ring-2", ps ? "ring-amber-300" : "ring-white")} />
+                  <span className={cn("absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-white", fresh ? "animate-pulse bg-emerald-500" : "bg-slate-400")} />
+                </button>
+              );
+            })}
+        </div>
+      )}
+
+      {withId && (
+        <WumpLiveWith
+          mapRef={mapRef}
+          LRef={LRef}
+          ready={ready}
+          me={live && myLat != null && myLng != null ? [myLat, myLng] : null}
+          friendId={withId}
+          friend={nearby.find((n) => n.user_id === withId) ?? null}
+          onClose={() => focusFriend(null)}
+          onMessage={onMessagePerson}
+          onProfile={onOpenPerson}
+        />
+      )}
+
+      {styleMenu && (
+        <div className="absolute top-3 right-16 z-30 w-40 overflow-hidden rounded-2xl bg-white/97 py-1 shadow-2xl ring-1 ring-black/5 backdrop-blur">
+          {(Object.keys(WUMP_STYLE_LABEL) as WumpMapStyle[]).map((st) => (
             <button
-              type="button"
-              disabled={saving}
-              onClick={() => void saveTap()}
-              className="flex-1 rounded-xl bg-slate-900 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800 disabled:opacity-60"
-            >
-              {saving ? "Saving…" : "Save place"}
-            </button>
-            <button
+              key={st}
               type="button"
               onClick={() => {
-                setTapSave(null);
-                setTapPlace(null);
+                if (PLUS_STYLES.includes(st) && !plus?.active) {
+                  setStyleMenu(false);
+                  onUpgradePlus?.();
+                  return;
+                }
+                setMapStyle(st);
+                setStyleMenu(false);
               }}
-              className="rounded-xl bg-slate-100 px-3.5 py-2.5 text-xs font-bold text-slate-600 transition hover:bg-slate-200"
+              className={cn("flex w-full items-center justify-between px-3 py-2 text-left text-xs font-bold", mapStyle === st ? "text-sky-600" : "text-slate-700 hover:bg-slate-50")}
             >
-              Cancel
+              {WUMP_STYLE_LABEL[st]}
+              {mapStyle === st ? <span>✓</span> : PLUS_STYLES.includes(st) && !plus?.active ? <Lock className="size-3 text-amber-500" /> : null}
             </button>
-          </div>
+          ))}
+          {WUMP_HD && <div className="border-t border-slate-100 px-3 py-1.5 text-[10px] font-semibold text-slate-400">HD maps · MapTiler</div>}
         </div>
       )}
 
@@ -663,6 +795,7 @@ export default function WumpMap({
         onClick={onSearch}
         className="absolute bottom-28 right-4 z-10 grid size-11 place-items-center rounded-full bg-white text-slate-500 shadow-lg ring-1 ring-black/5"
         aria-label="Search people"
+        title="Find friends"
       >
         <Search className="size-5" />
       </button>

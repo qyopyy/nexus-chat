@@ -7,8 +7,9 @@ import { useApp, toast } from "@/store/app";
 import { roleRank } from "./theme";
 import type { PremiumTier, Profile } from "./types";
 
-import { PLANS, type Plan } from "./plans";
+import { PLANS, type Plan, type GiftTier } from "./plans";
 export { PLANS, type Plan };
+export { GIFT_PLANS, WUMP_PLUS_PLAN, anyPlan, type GiftTier, type SellPlan } from "./plans";
 
 export const planOf = (id?: string | null) => PLANS.find((p) => p.id === id) ?? null;
 
@@ -50,9 +51,9 @@ export function gate(rank: number, what: string) {
 }
 
 // ------------------------------------------------------------------ orders
-export type Order = { id: number; user_id: string; tier: PremiumTier; months: number; amount_usd: number; status: "pending" | "awaiting_payment" | "paid" | "fulfilled" | "cancelled"; note: string | null; handled_by: string | null; created_at: string; updated_at: string };
+export type Order = { id: number; user_id: string; tier: GiftTier; months: number; amount_usd: number; status: "pending" | "awaiting_payment" | "paid" | "fulfilled" | "cancelled"; note: string | null; handled_by: string | null; created_at: string; updated_at: string };
 
-export async function createOrder(tier: PremiumTier, months: number) {
+export async function createOrder(tier: GiftTier, months: number) {
   const { data, error } = await supabase.rpc("create_order", { p_tier: tier, p_months: months });
   if (error) throw new Error(errorText(error));
   return data as { order_id: number; amount: number; conversation_id: string; bot_conversation_id: string };
@@ -86,7 +87,7 @@ export async function grantPremium(userId: string, tier: PremiumTier | null, day
 export type PremiumGift = {
   id: string;
   code: string;
-  tier: PremiumTier;
+  tier: GiftTier;
   days: number;
   max_claims: number;
   claims: number;
@@ -97,7 +98,7 @@ export type PremiumGift = {
 };
 export type PremiumGiftPreview = {
   code: string;
-  tier: PremiumTier;
+  tier: GiftTier;
   days: number;
   max_claims: number;
   claims: number;
@@ -112,7 +113,7 @@ export function giftLink(code: string) {
   return `/gift/${encodeURIComponent(code)}`;
 }
 
-export async function createPremiumGift(opts: { tier: PremiumTier; days: number; maxClaims?: number; expiresDays?: number; note?: string }) {
+export async function createPremiumGift(opts: { tier: GiftTier; days: number; maxClaims?: number; expiresDays?: number; note?: string }) {
   const { data, error } = await supabase.rpc("create_premium_gift", {
     p_tier: opts.tier,
     p_days: opts.days,
@@ -139,7 +140,7 @@ export async function listPremiumGifts() {
 export async function redeemPremiumGift(code: string) {
   const { data, error } = await supabase.rpc("redeem_premium_gift", { p_code: code });
   if (error) throw new Error(errorText(error));
-  return data as { ok: boolean; tier: PremiumTier; days: number; until: string };
+  return data as { ok: boolean; tier: GiftTier; days: number; until: string };
 }
 
 export async function previewPremiumGift(code: string): Promise<PremiumGiftPreview | null> {

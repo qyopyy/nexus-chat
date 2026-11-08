@@ -7,6 +7,8 @@ import { loadProfiles, openDM } from "@/lib/data";
 import { supabase, errorText } from "@/lib/supabase";
 import {
   PLANS,
+  GIFT_PLANS,
+  anyPlan,
   allOrders,
   createPremiumGift,
   giftLink,
@@ -22,6 +24,7 @@ import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import { Card, H } from "./Studio";
 import type { PremiumTier } from "@/lib/types";
+import type { GiftTier } from "@/lib/plans";
 
 const FLOW: { s: Order["status"]; label: string; cls: string }[] = [
   { s: "awaiting_payment", label: "PayPal sent", cls: "bg-hover hover:bg-active" },
@@ -88,7 +91,7 @@ export default function OrdersAdmin() {
         ) : (
           <div className="space-y-2">
             {shown.map((o) => {
-              const plan = PLANS.find((p) => p.id === o.tier)!;
+              const plan = anyPlan(o.tier) ?? { name: o.tier, short: o.tier, emoji: "🧾", color: "#888", price: 0 };
               return (
                 <div key={o.id} className="rounded-xl border border-line/70 p-3">
                   <div className="flex flex-wrap items-center gap-2">
@@ -226,7 +229,7 @@ function GrantCard() {
 
 /** Discord Nitro-style shareable claim links */
 function GiftLinkCard() {
-  const [tier, setTier] = useState<PremiumTier>("lighting");
+  const [tier, setTier] = useState<GiftTier>("lighting");
   const [days, setDays] = useState(30);
   const [maxClaims, setMaxClaims] = useState(1);
   const [expiresDays, setExpiresDays] = useState(30);
@@ -259,8 +262,8 @@ function GiftLinkCard() {
         }}
         className="grid gap-2 sm:grid-cols-2"
       >
-        <select value={tier} onChange={(e) => setTier(e.target.value as PremiumTier)} className="rounded-lg border border-line bg-transparent px-2 py-2 text-sm outline-none">
-          {PLANS.map((p) => (
+        <select value={tier} onChange={(e) => setTier(e.target.value as GiftTier)} className="rounded-lg border border-line bg-transparent px-2 py-2 text-sm outline-none">
+          {GIFT_PLANS.map((p) => (
             <option key={p.id} value={p.id} className="bg-side">
               {p.emoji} {p.short}
             </option>
@@ -285,7 +288,7 @@ function GiftLinkCard() {
               className="font-semibold text-[#ffd400]"
               onClick={() =>
                 void navigator.clipboard
-                  .writeText(giftShareText(lastUrl, days, PLANS.find((p) => p.id === tier)?.name))
+                  .writeText(giftShareText(lastUrl, days, anyPlan(tier)?.name))
                   .then(() => toast("Gift text copied", "success"))
               }
             >
@@ -300,7 +303,7 @@ function GiftLinkCard() {
             <li key={g.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-line/50 px-2 py-1.5">
               <span className="font-mono text-txt">{g.code}</span>
               <span>
-                {PLANS.find((p) => p.id === g.tier)?.short ?? g.tier} · {g.days}d · {g.claims}/{g.max_claims}
+                {anyPlan(g.tier)?.short ?? g.tier} · {g.days}d · {g.claims}/{g.max_claims}
               </span>
               <button type="button" className="ml-auto font-semibold text-accent" onClick={() => void navigator.clipboard.writeText(giftLink(g.code)).then(() => toast("Copied", "success"))}>
                 Link
@@ -310,7 +313,7 @@ function GiftLinkCard() {
                 className="font-semibold text-[#ffd400]"
                 onClick={() =>
                   void navigator.clipboard
-                    .writeText(giftShareText(giftLink(g.code), g.days, PLANS.find((p) => p.id === g.tier)?.name))
+                    .writeText(giftShareText(giftLink(g.code), g.days, anyPlan(g.tier)?.name))
                     .then(() => toast("Gift text copied", "success"))
                 }
               >

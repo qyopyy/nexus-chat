@@ -42,6 +42,24 @@ const nextConfig: NextConfig = {
           { key: "Vercel-CDN-Cache-Control", value: noStore },
           // Allow geolocation for Nexus Bump (iPhone Safari / Capacitor WebView)
           { key: "Permissions-Policy", value: "geolocation=(self), microphone=(self), camera=(self)" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+        ],
+      },
+      // admin / distribution workspace: never framed by other sites (clickjacking)
+      {
+        source: "/distro/app/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+        ],
+      },
+      {
+        source: "/distro/app",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
         ],
       },
     ];

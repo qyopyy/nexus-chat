@@ -14,6 +14,8 @@ import {
 } from "@/lib/wumpPrivacy";
 import type { BumpVisible } from "@/lib/bump";
 import { WUMP } from "@/lib/wumpBrand";
+import { WumpProfilePrivacy } from "./WumpProfileBits";
+import WumpLookPanel from "./WumpLookPanel";
 import { cn } from "@/lib/utils";
 
 export default function WumpSettings({ userId }: { userId: string }) {
@@ -116,6 +118,10 @@ export default function WumpSettings({ userId }: { userId: string }) {
         </Field>
       </section>
 
+      <WumpLookPanel />
+
+      <WumpProfilePrivacy userId={userId} />
+
       <section className="rounded-2xl bg-side p-4 ring-1 ring-white/5">
         <div className="mb-1 flex items-center gap-2 text-sm font-bold">
           <Link2 className="size-4 text-accent" /> Two ways to use {WUMP}
@@ -134,7 +140,7 @@ export default function WumpSettings({ userId }: { userId: string }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="mb-4">
       <div className="mb-1.5 text-[11px] font-bold tracking-wide text-sub uppercase">{label}</div>
@@ -143,7 +149,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Seg({
+export function Seg({
   value,
   options,
   onChange,
@@ -174,7 +180,7 @@ function Seg({
   );
 }
 
-function Toggle({
+export function Toggle({
   label,
   hint,
   checked,

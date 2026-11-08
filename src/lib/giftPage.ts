@@ -18,6 +18,7 @@ const PLAN_META: Record<string, { name: string; emoji: string; color: string }> 
   dist: { name: "Lighting + Music Distribution", emoji: "🎵", color: "#1DB954" },
   dist_pro: { name: "Distribution Pro", emoji: "🚀", color: "#7c4dff" },
   dist_video: { name: "Pro + Music Video", emoji: "🎬", color: "#ff2bd6" },
+  wump_plus: { name: "Wump Plus", emoji: "📍", color: "#facc15" },
 };
 
 export function renderGiftPage(preview: GiftPreview, origin: string) {

@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { parseBrowserDnsFromRequest, resolveDoh } from "@/lib/browserDns";
 import { extractArticleFromHtml } from "@/lib/browserReading";
 import { applyShieldsToHtml, emptyShieldStats } from "@/lib/browserShields";
+import { rateLimit } from "@/lib/apiGuard";
+import { fetchPublic } from "@/lib/netGuard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Fetch a page from the open internet and return a readable text preview (+ shield stats). */
 export async function GET(req: NextRequest) {
+  const limited = rateLimit(req, "browser-fetch", 60, 60_000);
+  if (limited) return limited;
   const raw = (req.nextUrl.searchParams.get("url") || "").trim();
   const shieldsOn = req.nextUrl.searchParams.get("shields") !== "0";
   const blockAds = req.nextUrl.searchParams.get("ads") !== "0";
@@ -42,18 +46,17 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const res = await fetch(url.toString(), {
+    const { res, url: landed } = await fetchPublic(url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 NexusBrowser/1.0",
         Accept: "text/html,application/xhtml+xml",
       },
-      redirect: "follow",
       cache: "no-store",
       signal: AbortSignal.timeout(12_000),
     });
     const ctype = res.headers.get("content-type") || "";
-    const finalUrl = res.url || url.toString();
+    const finalUrl = landed.toString();
     if (!/text\/html|application\/xhtml/i.test(ctype) && !ctype.includes("text/")) {
       return NextResponse.json({
         url: finalUrl,

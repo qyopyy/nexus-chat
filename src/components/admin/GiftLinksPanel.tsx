@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { Gift, Copy } from "lucide-react";
 import { toast } from "@/store/app";
-import { PLANS, createPremiumGift, giftLink, listPremiumGifts, type PremiumGift } from "@/lib/premium";
+import { GIFT_PLANS, anyPlan, createPremiumGift, giftLink, listPremiumGifts, type PremiumGift } from "@/lib/premium";
 import { giftReelText, giftShareText, giftStoryText } from "@/lib/promoCopy";
 import { can } from "@/lib/privileges";
-import type { PremiumTier } from "@/lib/types";
+import type { GiftTier } from "@/lib/plans";
 
 /** Mint / copy premium gift links — mods & admins (rank ≥ 2). */
 export default function GiftLinksPanel({ compact }: { compact?: boolean }) {
-  const [tier, setTier] = useState<PremiumTier>("lighting");
+  const [tier, setTier] = useState<GiftTier>("lighting");
   const [days, setDays] = useState(30);
   const [maxClaims, setMaxClaims] = useState(1);
   const [expiresDays, setExpiresDays] = useState(30);
@@ -28,7 +28,7 @@ export default function GiftLinksPanel({ compact }: { compact?: boolean }) {
     return <p className="text-sm text-sub">Mods and admins can mint gift links.</p>;
   }
 
-  const planLabel = PLANS.find((p) => p.id === tier)?.name ?? "Nexus Lighting";
+  const planLabel = anyPlan(tier)?.name ?? "Nexus Lighting";
 
   return (
     <div className={compact ? "space-y-3" : "space-y-4"}>
@@ -38,7 +38,7 @@ export default function GiftLinksPanel({ compact }: { compact?: boolean }) {
         </div>
         <div>
           <h3 className="font-bold">Premium gift links</h3>
-          <p className="text-sm text-sub">Mods & admins — mint Lighting gifts, then copy DM / Story / Reel caption text with the claim URL.</p>
+          <p className="text-sm text-sub">Mods & admins — mint Lighting or Wump Plus gifts, then copy DM / Story / Reel caption text with the claim URL.</p>
         </div>
       </div>
       <form
@@ -62,8 +62,8 @@ export default function GiftLinksPanel({ compact }: { compact?: boolean }) {
         }}
         className="grid gap-2 sm:grid-cols-2"
       >
-        <select value={tier} onChange={(e) => setTier(e.target.value as PremiumTier)} className="rounded-lg border border-line bg-transparent px-2 py-2 text-sm outline-none">
-          {PLANS.map((p) => (
+        <select value={tier} onChange={(e) => setTier(e.target.value as GiftTier)} className="rounded-lg border border-line bg-transparent px-2 py-2 text-sm outline-none">
+          {GIFT_PLANS.map((p) => (
             <option key={p.id} value={p.id} className="bg-side">
               {p.emoji} {p.short}
             </option>
@@ -112,8 +112,8 @@ export default function GiftLinksPanel({ compact }: { compact?: boolean }) {
         <ul className="max-h-56 space-y-1.5 overflow-y-auto text-xs text-sub">
           {gifts.slice(0, 20).map((g) => {
             const url = giftLink(g.code);
-            const name = PLANS.find((p) => p.id === g.tier)?.name ?? "Nexus Lighting";
-            const label = PLANS.find((p) => p.id === g.tier)?.short ?? g.tier;
+            const name = anyPlan(g.tier)?.name ?? "Nexus Lighting";
+            const label = anyPlan(g.tier)?.short ?? g.tier;
             return (
               <li key={g.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-line/50 px-2 py-1.5">
                 <span className="font-mono text-txt">{g.code}</span>

@@ -50,6 +50,44 @@ export type BumpProfile = {
   follows_you: boolean;
   is_me: boolean;
   updated_at: string | null;
+  /** Set when the page can't be shown: why. */
+  locked?: BumpLock | null;
+  password_hint?: string | null;
+  is_friend?: boolean;
+  can_message?: boolean;
+  /** Owner only. */
+  views?: number | null;
+  views_7d?: number | null;
+  privacy?: BumpPrivacy | null;
+  is_plus?: boolean;
+  plus_style?: { pin_emoji: string | null; pin_color: string | null; banner_color: string | null } | null;
+};
+
+export type BumpLock = "private" | "friends" | "password" | "wrong_password" | "too_many";
+export type BumpAudience = "everyone" | "friends" | "nobody";
+export type BumpPrivacy = {
+  visibility: "everyone" | "friends" | "private";
+  show_place: BumpAudience;
+  show_song: boolean;
+  show_follows: boolean;
+  dm_from: BumpAudience;
+  searchable: boolean;
+  has_password: boolean;
+  password_hint: string | null;
+  password_friends_bypass: boolean;
+  hide_my_views: boolean;
+};
+export const BUMP_PRIVACY_DEF: BumpPrivacy = {
+  visibility: "everyone",
+  show_place: "friends",
+  show_song: true,
+  show_follows: true,
+  dm_from: "everyone",
+  searchable: true,
+  has_password: false,
+  password_hint: null,
+  password_friends_bypass: true,
+  hide_my_views: false,
 };
 
 export type BumpMessage = {
@@ -294,8 +332,8 @@ export async function bumpRedeemInvite(code: string) {
 
 // ------------------------------------------------------------------ profiles / follow / messages
 
-export async function bumpGetProfile(userId: string) {
-  const { data, error } = await supabase.rpc("bump_get_profile", { p_user: userId });
+export async function bumpGetProfile(userId: string, password?: string) {
+  const { data, error } = await supabase.rpc("bump_get_profile", password ? { p_user: userId, p_password: password } : { p_user: userId });
   if (error) {
     toast(errorText(error) || "Couldn't load Bump profile", "error");
     return null;
@@ -333,6 +371,68 @@ export async function bumpSaveProfile(input: {
   }
   toast("Bump profile saved", "success");
   return data as BumpProfile;
+}
+
+/** Privacy settings (incl. page password: pass "" to remove, a 4–64 char string to set). */
+export async function bumpSetPrivacy(patch: Partial<Omit<BumpPrivacy, "has_password">> & { password?: string }) {
+  const { data, error } = await supabase.rpc("bump_set_privacy", { p: patch });
+  if (error) {
+    toast(errorText(error) || "Couldn't save privacy", "error");
+    return null;
+  }
+  return data as BumpProfile;
+}
+
+/** Set (or clear with null) the profile song — one Spotify track link. */
+export async function bumpSetSong(trackUrl: string | null) {
+  const { data, error } = await supabase.rpc("bump_set_song", { p_track: trackUrl });
+  if (error) {
+    toast(errorText(error) || "Couldn't set song", "error");
+    return null;
+  }
+  toast(trackUrl ? "Profile song set" : "Profile song removed", "success");
+  return data as BumpProfile;
+}
+
+export type BumpViewer = { viewer_id: string; viewed_at: string; is_friend: boolean };
+export async function bumpViewers(limit = 50) {
+  const { data, error } = await supabase.rpc("bump_profile_viewers", { p_limit: limit });
+  if (error) return [] as BumpViewer[];
+  const rows = (data ?? []) as BumpViewer[];
+  if (rows.length) await loadProfiles(rows.map((r) => r.viewer_id));
+  return rows;
+}
+
+export type BumpPerson = { user_id: string; username: string; display_name: string | null; avatar_url: string | null; avatar_color: string | null; is_friend: boolean };
+export async function bumpSearchPeople(q: string) {
+  if (q.trim().length < 2) return [] as BumpPerson[];
+  const { data, error } = await supabase.rpc("bump_search_people", { p_q: q.trim() });
+  if (error) return [] as BumpPerson[];
+  return (data ?? []) as BumpPerson[];
+}
+
+export type BumpSong = { id: string; name: string; url: string; artists: string; image: string | null; preview_url: string | null; explicit: boolean };
+/** Search Spotify tracks (server keys, via the spotify edge function). */
+export async function bumpSearchSongs(q: string): Promise<BumpSong[]> {
+  if (q.trim().length < 2) return [];
+  const { data, error } = await supabase.functions.invoke("spotify", { body: { action: "search", type: "track", q: q.trim() } });
+  if (error || !data) return [];
+  const items = ((data as { items?: unknown[] }).items ?? []) as {
+    id: string | null; name: string; url: string | null; explicit?: boolean; preview_url?: string | null;
+    album?: { image?: string | null } | null; artists?: { name: string }[];
+  }[];
+  return items
+    .filter((t) => t.id)
+    .slice(0, 10)
+    .map((t) => ({
+      id: t.id as string,
+      name: t.name,
+      url: t.url || `https://open.spotify.com/track/${t.id}`,
+      artists: (t.artists ?? []).map((a) => a.name).join(", "),
+      image: t.album?.image ?? null,
+      preview_url: t.preview_url ?? null,
+      explicit: !!t.explicit,
+    }));
 }
 
 /** Resolve an Apple Maps share link (or lat/lng) and save it onto the Bump profile. */

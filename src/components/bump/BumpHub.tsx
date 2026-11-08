@@ -72,6 +72,10 @@ import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import WumpMap from "./WumpMap";
 import WumpSettings from "./WumpSettings";
+import WumpPlusPanel, { PlusBadge } from "./WumpPlusPanel";
+import { effectiveLook, useWumpLook, wumpTheme } from "@/lib/wumpLook";
+import { useWumpPlus } from "@/lib/wumpPlus";
+import { WumpLockedProfile, WumpProfileViews, WumpSongSearch, WumpTrackPlayer } from "./WumpProfileBits";
 import WumpGroups from "./WumpGroups";
 import { WUMP, WUMP_TAGLINE } from "@/lib/wumpBrand";
 import { pauseBumpMusic, playBumpTrack, useBumpMusic } from "@/lib/bumpMusic";
@@ -92,7 +96,7 @@ import WumpExplorePanel from "./WumpExplorePanel";
 import WumpSavedPlacesPanel from "./WumpSavedPlacesPanel";
 import WumpFriendsPanel from "./WumpFriendsPanel";
 
-type Tab = "nearby" | "friends" | "music" | "profile" | "social" | "messages" | "settings" | "groups";
+type Tab = "nearby" | "friends" | "music" | "profile" | "social" | "messages" | "settings" | "groups" | "plus";
 
 export default function BumpHub({
   mobile,
@@ -132,6 +136,10 @@ export default function BumpHub({
   const [live, setLive] = useState(false);
   const [busy, setBusy] = useState(false);
   const [nearby, setNearby] = useState<BumpNearby[]>([]);
+  const [focusFriend, setFocusFriend] = useState<string | null>(null);
+  const plusSt = useWumpPlus();
+  const look = effectiveLook(useWumpLook(), !!plusSt?.active);
+  const lookVars = wumpTheme(look.theme).vars as React.CSSProperties;
   const [family, setFamily] = useState<string[]>([]);
   const [invite, setInvite] = useState<string | null>(null);
   const [redeem, setRedeem] = useState("");
@@ -254,11 +262,14 @@ export default function BumpHub({
   // Restore Live + nearby; poll fast while Live so pins feel realtime
   useEffect(() => {
     void refresh();
-    const t = setInterval(() => {
-      if (live) void refresh();
-    }, 6_000);
+    const t = setInterval(
+      () => {
+        if (live || focusFriend) void refresh();
+      },
+      focusFriend ? 3_000 : 6_000,
+    );
     return () => clearInterval(t);
-  }, [refresh, live]);
+  }, [refresh, live, focusFriend]);
 
   // Realtime presence / family — Cap shells pick this up over the live website
   useEffect(() => {
@@ -469,7 +480,8 @@ export default function BumpHub({
     { id: "profile", label: "Profile" },
     { id: "social", label: "People" },
     { id: "messages", label: "Messages" },
-    { id: "settings", label: "Privacy" },
+    { id: "settings", label: "Look & privacy" },
+    { id: "plus", label: "✦ Plus" },
   ];
 
   const flashLeft =
@@ -532,7 +544,12 @@ export default function BumpHub({
         </div>
       )}
 
-    <div className={cn("flex h-full flex-col bg-chat", (mobile || bumpOnly) && !hideChromeTabs && "pb-safe-2")}>
+    <div
+      className={cn("wump-look flex h-full flex-col bg-chat text-txt", (mobile || bumpOnly) && !hideChromeTabs && "pb-safe-2")}
+      data-wump-bg={look.bg}
+      data-wump-theme={look.theme}
+      style={lookVars}
+    >
       {hideChromeTabs ? (
         <div className="flex shrink-0 flex-col gap-2 border-b border-white/5 px-3 py-2">
           <div className="flex items-center gap-2">
@@ -686,6 +703,9 @@ export default function BumpHub({
               onScratch={() => setTab("messages")}
               onGoLive={() => void goLive()}
               onSavePlace={(p) => handleSavePlace(p)}
+              onMessagePerson={(id) => openMessages(id)}
+              onFocusChange={setFocusFriend}
+              onUpgradePlus={() => setTab("plus")}
               onPlaces={() => {
                 setPlacesPanel((v) => !v);
                 if (!live) void goLive();
@@ -1007,6 +1027,7 @@ export default function BumpHub({
         )}
 
         {tab === "settings" && me && <WumpSettings userId={me} />}
+        {tab === "plus" && me && <WumpPlusPanel />}
 
         {tab === "groups" && <WumpGroups friendIds={friendIds} />}
 
@@ -1042,7 +1063,7 @@ export default function BumpHub({
         {tab === "profile" && me && <BumpProfileEditor userId={me} />}
 
         {tab === "social" && (
-          <BumpSocialPane me={me} focusUser={viewUser} onFocusUser={setViewUser} onMessage={openMessages} />
+          <BumpSocialPane me={me} focusUser={viewUser} onFocusUser={setViewUser} onMessage={openMessages} onUpgrade={() => setTab("plus")} />
         )}
 
         {tab === "messages" && me && (
@@ -1315,17 +1336,19 @@ function BumpProfileEditor({ userId }: { userId: string }) {
               Connect Spotify
             </button>
           )}
-          <label className="block text-[11px] font-semibold text-sub">
-            Pinned track link
+          <div className="mb-1 text-[11px] font-semibold text-sub">Profile song — search and tap Set, it plays on your profile</div>
+          <WumpSongSearch current={spotify} compact onSet={(url) => setSpotify(url ?? "")} />
+          <details className="mt-2">
+            <summary className="cursor-pointer text-[11px] font-semibold text-sub">Or paste a track link</summary>
             <input
               value={spotify}
               onChange={(e) => setSpotify(e.target.value)}
               placeholder="https://open.spotify.com/track/…"
               className="mt-1 w-full rounded-xl bg-black/30 px-3 py-2.5 text-sm font-normal text-txt outline-none ring-1 ring-transparent focus:ring-accent"
             />
-          </label>
+          </details>
         </div>
-        {embed && <iframe src={embed} title="Wump Spotify track" loading="lazy" allow="encrypted-media; clipboard-write" className="h-[80px] w-full rounded-xl border-0" />}
+        {embed && <WumpTrackPlayer url={spotify} tall />}
 
         <div>
           <div className="mb-1 text-xs font-bold tracking-wide text-sub uppercase">Apple Maps hangout</div>
@@ -1367,11 +1390,13 @@ function BumpSocialPane({
   focusUser,
   onFocusUser,
   onMessage,
+  onUpgrade,
 }: {
   me: string | null | undefined;
   focusUser: string | null;
   onFocusUser: (id: string | null) => void;
   onMessage: (id: string) => void;
+  onUpgrade?: () => void;
 }) {
   const [prof, setProf] = useState<BumpProfile | null>(null);
   const [list, setList] = useState<{ user_id: string; created_at: string }[]>([]);
@@ -1386,6 +1411,21 @@ function BumpSocialPane({
   }, [target, which]);
 
   if (!target) return <p className="text-sm text-sub">Sign in to browse Wump profiles.</p>;
+
+  if (prof?.locked && prof.user_id === target) {
+    return (
+      <div className="mx-auto max-w-lg space-y-4">
+        <WumpLockedProfile
+          key={prof.user_id}
+          prof={prof}
+          onUnlocked={(p) => {
+            setProf(p);
+            void bumpFollowList(p.user_id, which).then(setList);
+          }}
+        />
+      </div>
+    );
+  }
 
   async function toggleFollow() {
     if (!prof || prof.is_me) return;
@@ -1402,13 +1442,16 @@ function BumpSocialPane({
           <div
             className="h-16"
             style={{
-              background: "linear-gradient(120deg, color-mix(in oklab, #22c55a 45%, transparent), transparent 70%)",
+              background: `linear-gradient(120deg, color-mix(in oklab, ${prof.plus_style?.banner_color || (prof.is_plus ? "#facc15" : "#22c55a")} ${prof.plus_style?.banner_color ? 75 : 45}%, transparent), transparent 70%)`,
             }}
           />
           <div className="flex items-start gap-3 px-4 pb-4 -mt-8">
             <Avatar userId={prof.user_id} size={72} className="ring-[3px] ring-side" />
             <div className="min-w-0 flex-1 pt-8">
-                  <div className="truncate text-lg font-extrabold tracking-tight">{prof.display_name}</div>
+              <div className="flex items-center gap-1.5">
+                <div className="truncate text-lg font-extrabold tracking-tight">{prof.display_name}</div>
+                {prof.is_plus && <PlusBadge />}
+              </div>
               <div className="mt-0.5 flex flex-wrap items-center gap-2">
                 <div className="truncate text-sm text-sub">{wumpUsernameHandle(prof.username) || `@${prof.username}`}</div>
                 {prof.username && (
@@ -1423,6 +1466,10 @@ function BumpSocialPane({
                 )}
               </div>
               <div className="mt-1 text-[11px] text-sub">
+                {prof.followers == null ? (
+                  <span>Follows hidden</span>
+                ) : (
+                  <>
                 <button type="button" className="font-semibold hover:underline" onClick={() => setWhich("followers")}>
                   {prof.followers} followers
                 </button>
@@ -1430,6 +1477,8 @@ function BumpSocialPane({
                 <button type="button" className="font-semibold hover:underline" onClick={() => setWhich("following")}>
                   {prof.following} following
                 </button>
+                  </>
+                )}
                 {prof.follows_you && <span className="ml-1 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">Follows you</span>}
               </div>
               {prof.bio && <p className="mt-2 text-sm whitespace-pre-wrap text-txt/90">{prof.bio}</p>}
@@ -1461,19 +1510,30 @@ function BumpSocialPane({
                     {prof.is_following ? <UserMinus className="size-3.5" /> : <UserPlus className="size-3.5" />}
                     {prof.is_following ? "Following" : "Follow"}
                   </button>
-                  <button type="button" onClick={() => onMessage(prof.user_id)} className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">
-                    <MessageCircle className="size-3.5" /> Message
-                  </button>
+                  {prof.can_message !== false ? (
+                    <button type="button" onClick={() => onMessage(prof.user_id)} className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">
+                      <MessageCircle className="size-3.5" /> Message
+                    </button>
+                  ) : (
+                    <span className="inline-flex items-center rounded-full bg-white/5 px-3 py-1.5 text-[11px] text-sub">Messages off</span>
+                  )}
                 </div>
               )}
             </div>
           </div>
           {bumpSpotifyTrackEmbed(prof.spotify_track) && (
             <div className="border-t border-white/5 px-3 pb-3 pt-2">
-              <div className="mb-1 text-[10px] font-bold tracking-wide text-sub uppercase">Bio track</div>
-              <iframe src={bumpSpotifyTrackEmbed(prof.spotify_track)!} title="Wump Spotify track" loading="lazy" allow="encrypted-media; clipboard-write" className="h-[80px] w-full rounded-xl border-0" />
+              <div className="mb-1 text-[10px] font-bold tracking-wide text-sub uppercase">Profile song</div>
+              <WumpTrackPlayer url={prof.spotify_track} />
             </div>
           )}
+          {prof.is_me && (
+            <div className="border-t border-white/5 px-3 pb-3 pt-2">
+              <div className="mb-1 text-[10px] font-bold tracking-wide text-sub uppercase">{prof.spotify_track ? "Change song" : "Add a profile song"}</div>
+              <WumpSongSearch current={prof.spotify_track} compact onSet={(_u, p) => p && setProf(p)} />
+            </div>
+          )}
+          <WumpProfileViews prof={prof} onOpen={(id) => onFocusUser(id)} onUpgrade={onUpgrade} />
         </section>
       ) : (
         <p className="text-sm text-sub">Loading profile…</p>

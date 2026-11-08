@@ -164,6 +164,8 @@ export type LMap = {
   remove: () => void;
   getZoom?: () => number;
   removeLayer?: (layer: unknown) => void;
+  flyTo?: (c: [number, number], z?: number, o?: Record<string, unknown>) => LMap;
+  getCenter?: () => { lat: number; lng: number };
 };
 export type LTileLayer = { addTo: (m: LMap) => LTileLayer; remove?: () => void };
 export type LCircle = {
@@ -232,25 +234,33 @@ export function newMap(L: LeafletNS, el: HTMLElement): LMap {
   return m;
 }
 
-export type WumpMapStyle = "streets" | "dark" | "satellite";
+export type WumpMapStyle = "streets" | "dark" | "satellite" | "hybrid" | "outdoors";
+export const WUMP_STYLE_LABEL: Record<WumpMapStyle, string> = { streets: "Streets", dark: "Dark", satellite: "Satellite", hybrid: "Hybrid", outdoors: "Outdoors" };
 
-const WUMP_TILES: Record<WumpMapStyle, { url: string; attr: string; maxZoom: number }> = {
-  streets: {
-    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-    attr: "© OpenStreetMap © CARTO",
-    maxZoom: 19,
-  },
-  dark: {
-    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-    attr: "© OpenStreetMap © CARTO",
-    maxZoom: 19,
-  },
-  satellite: {
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    attr: "© Esri",
-    maxZoom: 18,
-  },
-};
+/** Optional HD map provider: set NEXT_PUBLIC_MAPTILER_KEY (a public, domain-restricted MapTiler key) in Vercel. */
+const MT = process.env.NEXT_PUBLIC_MAPTILER_KEY || "";
+type TileDef = { url: string; attr: string; maxZoom: number; subdomains?: string; tileSize?: number; zoomOffset?: number; overlay?: { url: string; attr: string } };
+const WUMP_TILES: Record<WumpMapStyle, TileDef> = MT
+  ? {
+      streets: { url: `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}@2x.png?key=${MT}`, attr: "© MapTiler © OpenStreetMap", maxZoom: 20, tileSize: 512, zoomOffset: -1 },
+      dark: { url: `https://api.maptiler.com/maps/streets-v2-dark/{z}/{x}/{y}@2x.png?key=${MT}`, attr: "© MapTiler © OpenStreetMap", maxZoom: 20, tileSize: 512, zoomOffset: -1 },
+      satellite: { url: `https://api.maptiler.com/maps/satellite/{z}/{x}/{y}@2x.jpg?key=${MT}`, attr: "© MapTiler © OpenStreetMap", maxZoom: 20, tileSize: 512, zoomOffset: -1 },
+      hybrid: { url: `https://api.maptiler.com/maps/hybrid/{z}/{x}/{y}@2x.jpg?key=${MT}`, attr: "© MapTiler © OpenStreetMap", maxZoom: 20, tileSize: 512, zoomOffset: -1 },
+      outdoors: { url: `https://api.maptiler.com/maps/outdoor-v2/{z}/{x}/{y}@2x.png?key=${MT}`, attr: "© MapTiler © OpenStreetMap", maxZoom: 20, tileSize: 512, zoomOffset: -1 },
+    }
+  : {
+      streets: { url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", attr: "© OpenStreetMap © CARTO", maxZoom: 19, subdomains: "abcd" },
+      dark: { url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", attr: "© OpenStreetMap © CARTO", maxZoom: 19, subdomains: "abcd" },
+      satellite: { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attr: "© Esri", maxZoom: 18 },
+      hybrid: {
+        url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        attr: "© Esri",
+        maxZoom: 18,
+        overlay: { url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png", attr: "© OpenStreetMap © CARTO" },
+      },
+      outdoors: { url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", attr: "© OpenStreetMap © OpenTopoMap (CC-BY-SA)", maxZoom: 17, subdomains: "abc" },
+    };
+export const WUMP_HD = !!MT;
 
 /** Wump live map — OSM/CARTO tiles, street-level default, zoom controls hidden (FABs own chrome). */
 export function newWumpMap(
@@ -263,27 +273,33 @@ export function newWumpMap(
   const m = L.map(el, {
     worldCopyJump: true,
     minZoom: 2,
-    maxZoom: 19,
+    maxZoom: 20,
     zoomControl: false,
     attributionControl: true,
   }).setView(center, zoom);
   let current: WumpMapStyle = style;
-  let layer: LTileLayer | null = null;
+  let layers: LTileLayer[] = [];
   const setStyle = (s: WumpMapStyle) => {
     const t = WUMP_TILES[s] || WUMP_TILES.streets;
-    if (layer) {
+    for (const l of layers) {
       try {
-        m.removeLayer?.(layer);
-        layer.remove?.();
+        m.removeLayer?.(l);
+        l.remove?.();
       } catch {
         /* ignore */
       }
     }
-    layer = L.tileLayer(t.url, {
-      attribution: t.attr,
-      subdomains: "abcd",
-      maxZoom: t.maxZoom,
-    }).addTo(m);
+    layers = [
+      L.tileLayer(t.url, {
+        attribution: t.attr,
+        subdomains: t.subdomains ?? "abc",
+        maxZoom: 20,
+        maxNativeZoom: t.maxZoom,
+        ...(t.tileSize ? { tileSize: t.tileSize, zoomOffset: t.zoomOffset } : { detectRetina: false }),
+        crossOrigin: true,
+      }).addTo(m),
+    ];
+    if (t.overlay) layers.push(L.tileLayer(t.overlay.url, { attribution: t.overlay.attr, subdomains: "abcd", maxZoom: 20, maxNativeZoom: 19, pane: "overlayPane" }).addTo(m));
     current = s;
   };
   setStyle(style);
@@ -314,10 +330,25 @@ export const wumpAvatarIcon = (
     username?: string | null;
     heading?: number | null;
     stale?: boolean;
+    /** Wump Plus: emoji instead of the initial + gold glow */
+    emoji?: string | null;
+    plus?: boolean;
+    /** "Live with" focus — pulsing ring */
+    focus?: boolean;
+    /** my location marker style */
+    arrow?: "classic" | "arrow" | "beam" | "orb" | "ghost" | "comet";
   },
 ) => {
-  const ring = opts.me ? "#38bdf8" : opts.color || "#22c55a";
-  const opacity = opts.stale ? 0.45 : 1;
+  if (opts.me && opts.arrow && opts.arrow !== "classic" && opts.arrow !== "ghost") return wumpArrowIcon(L, opts.arrow, opts.color || "#0ea5e9", opts.heading ?? null, !!opts.plus, opts.emoji ?? null);
+  const ring = opts.me && !opts.plus ? "#38bdf8" : opts.color || "#22c55a";
+  const glyph = opts.emoji
+    ? `<span style="font-size:20px;line-height:1">${escHtml(opts.emoji.slice(0, 16))}</span>`
+    : `<span style="font:800 15px system-ui;color:#fff">${escHtml(opts.initial.slice(0, 1).toUpperCase())}</span>`;
+  const glow = opts.plus ? `,0 0 0 2px #facc15,0 0 16px rgba(250,204,21,.75)` : "";
+  const pulse = opts.me || opts.focus
+    ? `<span style="position:absolute;left:-4px;top:2px;width:52px;height:52px;border-radius:999px;border:2px solid ${opts.focus ? "#facc15" : "#38bdf8"};opacity:.55;animation:wump-pulse 1.6s ease-out infinite"></span>`
+    : "";
+  const opacity = opts.stale ? 0.45 : opts.arrow === "ghost" ? 0.5 : 1;
   const place = opts.place ? escHtml(opts.place.slice(0, 28)) : "";
   const user = opts.username ? escHtml(`@${opts.username.slice(0, 18)}`) : "";
   const meta = opts.label ? escHtml(opts.label) : "";
@@ -338,15 +369,47 @@ export const wumpAvatarIcon = (
     iconAnchor: [22, 28],
     html: `<div style="position:relative;width:44px;height:56px;opacity:${opacity}">
       ${cone}
-      <div style="position:absolute;left:0;top:6px;width:44px;height:44px;border-radius:999px;background:${ring};box-shadow:0 4px 14px rgba(0,0,0,.35);display:grid;place-items:center;border:3px solid #fff">
-        <span style="font:800 15px system-ui;color:#fff">${opts.initial.slice(0, 1).toUpperCase()}</span>
+      <div style="position:absolute;left:0;top:6px;width:44px;height:44px;border-radius:999px;background:${ring};box-shadow:0 4px 14px rgba(0,0,0,.35)${glow};display:grid;place-items:center;border:3px solid #fff">
+        ${glyph}
       </div>
-      ${opts.me ? `<span style="position:absolute;left:-4px;top:2px;width:52px;height:52px;border-radius:999px;border:2px solid #38bdf8;opacity:.55;animation:wump-pulse 1.6s ease-out infinite"></span>` : ""}
+      ${pulse}
+      ${opts.plus ? `<span style="position:absolute;right:-3px;top:2px;width:16px;height:16px;border-radius:999px;background:#facc15;color:#000;font:900 10px system-ui;display:grid;place-items:center;border:2px solid #fff">✦</span>` : ""}
       ${sub}
     </div>
     <style>@keyframes wump-pulse{0%{transform:scale(.92);opacity:.7}100%{transform:scale(1.35);opacity:0}}</style>`,
   });
 };
+
+/** Alternative "you are here" markers. Heading rotates the arrow; without heading the arrow points north. */
+function wumpArrowIcon(L: LeafletNS, kind: "arrow" | "beam" | "orb" | "comet", color: string, heading: number | null, plus: boolean, emoji: string | null) {
+  const c = /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : "#0ea5e9";
+  const rot = heading != null && Number.isFinite(heading) ? Math.round(heading) : 0;
+  const glow = plus ? "filter:drop-shadow(0 0 6px rgba(250,204,21,.85));" : "filter:drop-shadow(0 3px 6px rgba(0,0,0,.35));";
+  let html = "";
+  if (kind === "orb") {
+    html = `<div style="position:relative;width:44px;height:44px;display:grid;place-items:center">
+      <span style="position:absolute;width:44px;height:44px;border-radius:999px;background:${c};opacity:.18"></span>
+      <span style="--wump-orb:${c}88;width:20px;height:20px;border-radius:999px;background:${c};border:3px solid #fff;animation:wump-orb 2s ease-in-out infinite;${glow}"></span>
+      ${emoji ? `<span style="position:absolute;top:-6px;right:-2px;font-size:14px">${escHtml(emoji.slice(0, 16))}</span>` : ""}
+    </div>`;
+  } else if (kind === "beam") {
+    html = `<div style="position:relative;width:44px;height:44px">
+      <div style="position:absolute;left:50%;top:50%;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:999px;background:conic-gradient(from ${rot - 32}deg, ${c}77, ${c}00 64deg, transparent 0);mask:radial-gradient(circle, #000 0 58%, transparent 60%);-webkit-mask:radial-gradient(circle, #000 0 58%, transparent 60%)"></div>
+      <span style="position:absolute;left:11px;top:11px;width:22px;height:22px;border-radius:999px;background:${c};border:3px solid #fff;${glow}"></span>
+    </div>`;
+  } else {
+    const tail =
+      kind === "comet"
+        ? `<div style="position:absolute;left:50%;top:50%;width:14px;height:46px;margin-left:-7px;border-radius:999px;background:linear-gradient(to bottom, ${c}cc, ${c}00);transform:rotate(${rot}deg) translateY(10px);transform-origin:7px 0"></div>`
+        : "";
+    html = `<div style="position:relative;width:44px;height:44px;display:grid;place-items:center">
+      ${tail}
+      <span style="position:absolute;width:40px;height:40px;border-radius:999px;background:${c};opacity:.16"></span>
+      <svg viewBox="0 0 24 24" width="30" height="30" style="transform:rotate(${rot}deg);${glow}"><path d="M12 2 20 21 12 16.8 4 21Z" fill="${c}" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>
+    </div>`;
+  }
+  return L.divIcon({ className: "", iconSize: [44, 44], iconAnchor: [22, 22], html });
+}
 
 /** Pinned profile place marker on the Wump map */
 export const wumpPlaceIcon = (L: LeafletNS, opts: { title: string; color?: string }) => {

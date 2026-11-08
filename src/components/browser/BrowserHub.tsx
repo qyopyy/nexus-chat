@@ -827,7 +827,8 @@ export default function BrowserHub({
               title="Nexus Browser"
               src={shieldsActive || prefs.dns !== "system" ? proxiedUrl(view.url) : view.url}
               className="min-h-0 w-full flex-1 bg-white"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+              // proxied pages come from our own origin: never give them allow-same-origin (it would let them read your session)
+              sandbox={shieldsActive || prefs.dns !== "system" ? "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox" : "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"}
               onLoad={() => {
                 if (readingMode) void loadReadingArticle(view.url);
               }}

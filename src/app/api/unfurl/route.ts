@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit } from "@/lib/apiGuard";
+import { fetchPublic } from "@/lib/netGuard";
 import { cacheGet, cacheSet } from "@/lib/serverCache";
 
 export const runtime = "nodejs";
@@ -138,8 +139,7 @@ export async function GET(req: NextRequest) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(target.toString(), {
-      redirect: "follow",
+    const { res, url: landed } = await fetchPublic(target, {
       signal: ctrl.signal,
       headers: {
         "User-Agent": "NexusBot/1.0 (+https://nexusproject.cc; link-preview)",
@@ -147,7 +147,7 @@ export async function GET(req: NextRequest) {
         "Accept-Language": "en-US,en;q=0.8",
       },
     });
-    const finalUrl = res.url || target.toString();
+    const finalUrl = landed.toString();
     try {
       const finalHost = new URL(finalUrl).hostname;
       if (blockedHost(finalHost)) {
