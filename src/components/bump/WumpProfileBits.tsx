@@ -51,11 +51,16 @@ export function WumpSongSearch({
   onSet,
   autoFocus,
   compact,
+  pickOnly,
+  onPick,
 }: {
   current?: string | null;
   onSet?: (url: string | null, prof: BumpProfile | null) => void;
   autoFocus?: boolean;
   compact?: boolean;
+  /** just choose a song (e.g. to send to friends) — doesn't change the profile song */
+  pickOnly?: boolean;
+  onPick?: (url: string, label: string) => void;
 }) {
   const [q, setQ] = useState("");
   const dq = useDebounced(q);
@@ -131,10 +136,10 @@ export function WumpSongSearch({
                   <button
                     type="button"
                     disabled={busy || isCur}
-                    onClick={() => void set(t.url)}
+                    onClick={() => (pickOnly ? onPick?.(t.url, `${t.name} — ${t.artists}`) : void set(t.url))}
                     className={cn("shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold disabled:opacity-60", isCur ? "bg-ok/20 text-ok" : "bg-[#1DB954] text-black")}
                   >
-                    {isCur ? "On profile" : "Set"}
+                    {pickOnly ? "Pick" : isCur ? "On profile" : "Set"}
                   </button>
                 </div>
                 {preview?.id === t.id && <WumpTrackPlayer url={t.url} className="mt-1" />}
@@ -144,7 +149,7 @@ export function WumpSongSearch({
         </ul>
       )}
 
-      {current && (
+      {current && !pickOnly && (
         <button type="button" disabled={busy} onClick={() => void set(null)} className="inline-flex items-center gap-1 px-1 text-[11px] font-semibold text-sub hover:text-dnd">
           <Trash2 className="size-3" /> Remove profile song
         </button>

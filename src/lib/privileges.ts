@@ -57,6 +57,12 @@ export function myRole(): RoleId {
   return (ROLE_INFO[r as SiteRole] ? r : "member") as RoleId;
 }
 
+/** set by the Wump Plus status loader (keeps privileges free of a wumpPlus import cycle) */
+let longStoryPlus = false;
+export function setLongStoryPlus(v: boolean) {
+  longStoryPlus = v;
+}
+
 export function hasRank(min: number) {
   return myRank() >= min;
 }
@@ -66,7 +72,14 @@ export const can = {
   boostGram: () => hasRank(1),
   longPulse: () => hasRank(1),
   extraGenrePins: () => hasRank(1),
-  longStories: () => hasRank(1),
+  /** 48-hour stories: VIP / staff, any active premium plan, or Wump Plus */
+  longStories: () => {
+    if (hasRank(1)) return true;
+    const st = useApp.getState();
+    const p = st.userId ? st.profiles[st.userId] : null;
+    if (p?.premium_tier && p.premium_until && new Date(p.premium_until) > new Date()) return true;
+    return longStoryPlus;
+  },
   gramAdmin: () => hasRank(2),
   pulseMod: () => hasRank(2),
   muteBan: () => hasRank(2),

@@ -225,12 +225,25 @@ export default function Create() {
           {kind === "story" && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
               <span className="text-sub">Visible for</span>
-              {([24, 48] as const).map((h) => (
-                <button key={h} onClick={() => setHours(h)} className={cn("rounded-full px-4 py-1.5 font-bold", hours === h ? "bg-accent text-white" : "bg-hover")}>
-                  {h} hours
-                </button>
-              ))}
-              {can.longStories() && <span className="text-[11px] font-semibold text-[#eb459e]">VIP · 48h unlocked</span>}
+              {([24, 48] as const).map((h) => {
+                const locked = h === 48 && !can.longStories();
+                return (
+                  <button
+                    key={h}
+                    disabled={locked}
+                    title={locked ? "48-hour stories are for VIP, premium and staff" : undefined}
+                    onClick={() => setHours(h)}
+                    className={cn("rounded-full px-4 py-1.5 font-bold disabled:opacity-40", hours === h ? "bg-accent text-white" : "bg-hover")}
+                  >
+                    {h} hours{locked ? " 🔒" : ""}
+                  </button>
+                );
+              })}
+              {can.longStories() ? (
+                <span className="text-[11px] font-semibold text-[#eb459e]">48h unlocked</span>
+              ) : (
+                <span className="text-[11px] text-sub">48h: VIP, premium & staff</span>
+              )}
             </div>
           )}
         </div>

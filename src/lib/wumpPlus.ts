@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase, errorText } from "./supabase";
 import { toast } from "@/store/app";
+import { setLongStoryPlus } from "./privileges";
 
 export type WumpPlusStatus = {
   active: boolean;
@@ -24,6 +25,7 @@ let inflight: Promise<WumpPlusStatus> | null = null;
 const subs = new Set<(s: WumpPlusStatus) => void>();
 const emit = (s: WumpPlusStatus) => {
   cache = s;
+  setLongStoryPlus(!!s.active);
   subs.forEach((f) => f(s));
 };
 

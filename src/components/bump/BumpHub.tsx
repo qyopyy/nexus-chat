@@ -73,6 +73,12 @@ import NameTag from "@/components/ui/NameTag";
 import WumpMap from "./WumpMap";
 import WumpSettings from "./WumpSettings";
 import WumpPlusPanel, { PlusBadge } from "./WumpPlusPanel";
+import WumpShareMusic, { WumpMessageBody } from "./WumpShareMusic";
+import { WumpSocialEditor, WumpSocialLinks } from "./WumpSocial";
+import NexusGram from "@/components/gram/NexusGram";
+import Create from "@/components/gram/Create";
+import { StoryTray, StoryViewer } from "@/components/gram/Stories";
+import { gramHome } from "@/lib/gram";
 import { effectiveLook, useWumpLook, wumpTheme } from "@/lib/wumpLook";
 import { useWumpPlus } from "@/lib/wumpPlus";
 import { WumpLockedProfile, WumpProfileViews, WumpSongSearch, WumpTrackPlayer } from "./WumpProfileBits";
@@ -96,7 +102,7 @@ import WumpExplorePanel from "./WumpExplorePanel";
 import WumpSavedPlacesPanel from "./WumpSavedPlacesPanel";
 import WumpFriendsPanel from "./WumpFriendsPanel";
 
-type Tab = "nearby" | "friends" | "music" | "profile" | "social" | "messages" | "settings" | "groups" | "plus";
+type Tab = "nearby" | "friends" | "music" | "profile" | "social" | "messages" | "settings" | "groups" | "plus" | "gram";
 
 export default function BumpHub({
   mobile,
@@ -494,6 +500,7 @@ export default function BumpHub({
     { id: "music", label: "Music" },
     { id: "profile", label: "Profile" },
     { id: "social", label: "People" },
+    { id: "gram", label: "Gram" },
     { id: "messages", label: "Messages" },
     { id: "settings", label: "Look & privacy" },
     { id: "plus", label: "✦ Plus" },
@@ -773,6 +780,7 @@ export default function BumpHub({
                   if (ok) setSavedPlaces((prev) => prev.filter((x) => x.id !== id));
                 });
               }}
+              onChanged={(id, patch) => setSavedPlaces((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)))}
             />
             {!bumpOnly && (
               <a
@@ -1047,9 +1055,23 @@ export default function BumpHub({
         {tab === "groups" && <WumpGroups friendIds={friendIds} />}
 
         {tab === "music" && (
-          <div className="mx-auto h-full max-w-xl">
+          <div className="mx-auto max-w-xl space-y-4">
             <BumpMusicPanel />
+            <WumpShareMusic friendIds={friendIds} />
           </div>
+        )}
+
+        {tab === "gram" && (
+          <div className="mx-auto h-[calc(100dvh-12rem)] min-h-[480px] max-w-xl overflow-hidden rounded-2xl ring-1 ring-white/5">
+            <NexusGram mobile />
+          </div>
+        )}
+        {/* stories from the People tab (the Gram tab mounts its own) */}
+        {tab !== "gram" && (
+          <>
+            <Create />
+            <StoryViewer />
+          </>
         )}
 
         {tab === "friends" && (
@@ -1078,7 +1100,17 @@ export default function BumpHub({
         {tab === "profile" && me && <BumpProfileEditor userId={me} />}
 
         {tab === "social" && (
-          <BumpSocialPane me={me} focusUser={viewUser} onFocusUser={setViewUser} onMessage={openMessages} onUpgrade={() => setTab("plus")} />
+          <BumpSocialPane
+            me={me}
+            focusUser={viewUser}
+            onFocusUser={setViewUser}
+            onMessage={openMessages}
+            onUpgrade={() => setTab("plus")}
+            onOpenGram={(username) => {
+              gramHome({ view: "profile", username });
+              setTab("gram");
+            }}
+          />
         )}
 
         {tab === "messages" && me && (
@@ -1396,6 +1428,7 @@ function BumpProfileEditor({ userId }: { userId: string }) {
           Save Wump profile
         </button>
       </section>
+      <WumpSocialEditor />
     </div>
   );
 }
@@ -1406,12 +1439,14 @@ function BumpSocialPane({
   onFocusUser,
   onMessage,
   onUpgrade,
+  onOpenGram,
 }: {
   me: string | null | undefined;
   focusUser: string | null;
   onFocusUser: (id: string | null) => void;
   onMessage: (id: string) => void;
   onUpgrade?: () => void;
+  onOpenGram?: (username: string) => void;
 }) {
   const [prof, setProf] = useState<BumpProfile | null>(null);
   const [list, setList] = useState<{ user_id: string; created_at: string }[]>([]);
@@ -1452,6 +1487,15 @@ function BumpSocialPane({
 
   return (
     <div className="mx-auto max-w-lg space-y-4">
+      {me && (
+        <section className="overflow-hidden rounded-2xl bg-side ring-1 ring-white/5">
+          <div className="flex items-center justify-between px-4 pt-3 text-[11px] font-bold tracking-wide text-sub uppercase">
+            Stories
+            <span className="font-medium normal-case tracking-normal">24h · 48h for VIP & premium</span>
+          </div>
+          <StoryTray />
+        </section>
+      )}
       {prof ? (
         <section className="overflow-hidden rounded-2xl bg-side ring-1 ring-white/5">
           <div
@@ -1497,6 +1541,7 @@ function BumpSocialPane({
                 {prof.follows_you && <span className="ml-1 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">Follows you</span>}
               </div>
               {prof.bio && <p className="mt-2 text-sm whitespace-pre-wrap text-txt/90">{prof.bio}</p>}
+              <WumpSocialLinks userId={prof.user_id} className="mt-2" />
               {(prof.place_name || prof.place_address) && (
                 <div className="mt-2 flex items-start gap-1.5 text-xs text-sub">
                   <MapPin className="mt-0.5 size-3.5 shrink-0 text-ok" />
@@ -1510,6 +1555,11 @@ function BumpSocialPane({
                     )}
                   </div>
                 </div>
+              )}
+              {prof.is_me && prof.username && onOpenGram && (
+                <button type="button" onClick={() => onOpenGram(prof.username)} className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#d62976] to-[#4f5bd5] px-3 py-1.5 text-xs font-bold text-white">
+                  My Nexusgram
+                </button>
               )}
               {!prof.is_me && (
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1525,6 +1575,11 @@ function BumpSocialPane({
                     {prof.is_following ? <UserMinus className="size-3.5" /> : <UserPlus className="size-3.5" />}
                     {prof.is_following ? "Following" : "Follow"}
                   </button>
+                  {prof.username && onOpenGram && (
+                    <button type="button" onClick={() => onOpenGram(prof.username)} className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#d62976] to-[#4f5bd5] px-3 py-1.5 text-xs font-bold text-white">
+                      Nexusgram
+                    </button>
+                  )}
                   {prof.can_message !== false ? (
                     <button type="button" onClick={() => onMessage(prof.user_id)} className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">
                       <MessageCircle className="size-3.5" /> Message
@@ -1719,7 +1774,7 @@ function BumpMessagesPane({
                     bubbles && last && (mine ? "rounded-br-md bubble-tail-me" : "rounded-bl-md bubble-tail"),
                   )}
                 >
-                  <div className="whitespace-pre-wrap break-words">{m.body}</div>
+                  <WumpMessageBody body={m.body} />
                   <div className={cn("mt-0.5 text-right text-[10px] tabular-nums", mine ? "text-white/55" : "text-sub")}>
                     {fmtClock(new Date(m.created_at))}
                   </div>

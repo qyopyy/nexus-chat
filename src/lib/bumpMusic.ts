@@ -522,3 +522,8 @@ export function formatBumpBytes(n: number) {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+/** The audio file of a library track (for uploading / sharing it with friends). */
+export async function getBumpTrackBlob(id: string) {
+  return idbGet(id);
+}

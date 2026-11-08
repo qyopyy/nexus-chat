@@ -15,6 +15,7 @@ export type WumpSavedPlace = {
   note: string | null;
   source: WumpPlaceSource;
   created_at: string;
+  folder_id?: string | null;
 };
 
 export type WumpExploreStats = {

@@ -9,12 +9,14 @@ import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import { HEALTH_GAIN, HEALTH_MISS, JUDGE, SAFE_MS, accuracy, beatAt, fcLabel, grade, judge, newStats, parseChart, type Chart, type Note, type Stats } from "./chart";
 import { analyze, buildChart, decodeFile, fitGrid, type Analysis, type Difficulty } from "./autochart";
+import type { Song } from "./songs";
+import { BeatLibrary } from "./BeatLibrary";
+import { countBeatPlay } from "@/lib/beatLibrary";
 import { arrow, burst, drawBoombox, drawFlash, drawHex, drawSparks, drawStage, drawVolt, iconHex, iconVolt, newStage, trail, LANE_COLORS, type Pose, type Spark } from "./art";
 
 // ─────────────────────────────── songs ───────────────────────────────
-type Song = { id: string; title: string; credit: string; diff: string; chart: string; inst: string; voices?: string; color: string; ranked: boolean };
 const SONGS: Song[] = [
-  { id: "sippin", title: "Sippin", credit: "Mod by qyopy & friends", diff: "Hard", chart: "/games/beat/sippin/chart.json", inst: "/games/beat/sippin/inst.m4a", voices: "/games/beat/sippin/voices.m4a", color: "#aa00ff", ranked: true },
+  { id: "sippin", title: "Sippin", credit: "Mod by qyopy & friends", diff: "Hard", chart: "/games/beat/sippin/chart.json", inst: "/games/beat/sippin/inst.m4a", voices: "/games/beat/sippin/voices.m4a", color: "#aa00ff", ranked: true, source: "built-in" },
 ];
 
 // ─────────────────────────────── options ───────────────────────────────
@@ -49,7 +51,8 @@ export default function BeatBattle({ onBack, mobile }: { onBack: () => void; mob
   const [opts, setOptsState] = useState<Opts>(DEF_OPTS);
   const [screen, setScreen] = useState<"menu" | "options" | "play" | "results">("menu");
   const [song, setSong] = useState<Song>(SONGS[0]);
-  const [custom, setCustom] = useState<Song | null>(null);
+  const [customs, setCustoms] = useState<Song[]>([]);
+  const addCustom = (song: Song) => setCustoms((list) => [song, ...list.filter((x) => x.id !== song.id)].slice(0, 30));
   const [result, setResult] = useState<Result | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [run, setRun] = useState(0);
@@ -91,6 +94,7 @@ export default function BeatBattle({ onBack, mobile }: { onBack: () => void; mob
     );
 
   const start = (s: Song) => {
+    if (s.communityId) countBeatPlay(s.communityId);
     setSong(s);
     setRun((r) => r + 1);
     setScreen("play");
@@ -124,7 +128,7 @@ export default function BeatBattle({ onBack, mobile }: { onBack: () => void; mob
               <p className="mx-auto mt-2 max-w-md text-sm text-white/75">Hit the arrows on the beat to out-sing your rival. Miss too many and you lose the battle.</p>
             </div>
             <div className="mt-6 space-y-3">
-              {[...SONGS, ...(custom ? [custom] : [])].map((s) => (
+              {[...SONGS, ...customs].map((s) => (
                 <button key={s.id} onClick={() => start(s)} className="group flex w-full items-center gap-4 rounded-2xl bg-white/5 p-4 text-left ring-1 ring-white/10 transition hover:bg-white/10 hover:ring-[#aa00ff]">
                   <div className="grid size-14 shrink-0 place-items-center rounded-xl text-2xl" style={{ background: `linear-gradient(135deg, ${s.color}, #2a0b4a)` }}>
                     <FileMusic className="size-7" />
@@ -134,6 +138,7 @@ export default function BeatBattle({ onBack, mobile }: { onBack: () => void; mob
                     <div className="truncate text-sm text-white/65">
                       {s.credit} · {s.diff}
                       {!s.ranked && " · unranked"}
+                      {s.source && s.source !== "built-in" && <span className="ml-1.5 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-bold uppercase">{s.source}</span>}
                     </div>
                   </div>
                   <span className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-bold text-black transition group-hover:scale-105">
@@ -141,8 +146,9 @@ export default function BeatBattle({ onBack, mobile }: { onBack: () => void; mob
                   </span>
                 </button>
               ))}
-              <AutoChart onReady={(s) => setCustom(s)} />
-              <ImportChart onReady={(s) => setCustom(s)} />
+              <BeatLibrary onReady={addCustom} />
+              <AutoChart onReady={addCustom} />
+              <ImportChart onReady={addCustom} />
             </div>
             <div className="mt-5 rounded-2xl bg-white/5 p-3 ring-1 ring-white/10">
               <div className="mb-2 flex items-center gap-2 text-sm font-bold">
@@ -284,7 +290,6 @@ const DIFFS: { id: Difficulty; label: string }[] = [
   { id: "normal", label: "Normal" },
   { id: "hard", label: "Hard" },
 ];
-let autoUrls: string[] = [];
 function AutoChart({ onReady }: { onReady: (s: Song) => void }) {
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -314,12 +319,10 @@ function AutoChart({ onReady }: { onReady: (s: Song) => void }) {
     const title = file.name.replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").trim().slice(0, 60) || "My song";
     try {
       const { json, playerNotes } = buildChart(an, diff, title);
-      // blob URLs live for the session (the game screen replaces this menu, so don't revoke on unmount)
-      autoUrls.forEach((u) => URL.revokeObjectURL(u));
+      // blob URLs live for the session — the song list keeps several custom entries playable
       const chart = URL.createObjectURL(new Blob([JSON.stringify(json)], { type: "application/json" }));
       const inst = URL.createObjectURL(file);
-      autoUrls = [chart, inst];
-      onReady({ id: "custom", title, credit: "Auto-charted on this device", diff: `${DIFFS.find((d) => d.id === diff)?.label} · ${playerNotes} notes`, chart, inst, color: "#ff7a00", ranked: false });
+      onReady({ id: `auto-${Date.now()}`, title, credit: "Auto-charted on this device", diff: `${DIFFS.find((d) => d.id === diff)?.label} · ${playerNotes} notes`, chart, inst, color: "#ff7a00", ranked: false, source: "device" });
       toast(`“${title}” is ready — play it from the list`, "success");
       setOpen(false);
       setFile(null);
@@ -397,7 +400,7 @@ function ImportChart({ onReady }: { onReady: (s: Song) => void }) {
     try {
       const c = parseChart(JSON.parse(await files.chart.text()), files.chart.name.replace(/\.json$/i, ""));
       onReady({
-        id: "custom",
+        id: `import-${Date.now()}`,
         title: c.title,
         credit: "Imported on this device",
         diff: `${c.notes.filter((n) => n.player).length} notes`,
@@ -406,6 +409,7 @@ function ImportChart({ onReady }: { onReady: (s: Song) => void }) {
         voices: files.voices ? URL.createObjectURL(files.voices) : undefined,
         color: "#00b3ff",
         ranked: false,
+        source: "device",
       });
       setOpen(false);
       toast(`“${c.title}” added — play it from the list`, "success");
