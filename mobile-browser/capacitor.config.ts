@@ -1,6 +1,8 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
-// Standalone Nexus Browser shell — Google search + page fetch, dedicated home-screen icon.
+// Nexus Browser — a private web browser (search, ad/tracker shields, encrypted DNS, reader mode).
+// App Review 2.5.19: no over-the-air code updater, no push, and the shell only serves /browser/app
+// (other nexusproject.cc pages redirect back there for this user agent — see src/proxy.ts).
 const url = process.env.BROWSER_URL || process.env.NEXUS_URL || "https://nexusproject.cc/browser/app";
 
 const config: CapacitorConfig = {
@@ -14,10 +16,6 @@ const config: CapacitorConfig = {
     url,
     cleartext: false,
     allowNavigation: [
-      "nexusproject.cc",
-      "*.nexusproject.cc",
-      "*.supabase.co",
-      "*.vercel.app",
       "fonts.googleapis.com",
       "fonts.gstatic.com",
       "www.google.com",
@@ -35,8 +33,6 @@ const config: CapacitorConfig = {
       "cloudflare-dns.com",
       "dns.quad9.net",
       "dns.adguard-dns.com",
-      "accounts.google.com",
-      "accounts.spotify.com",
     ],
   },
   ios: {
@@ -53,16 +49,7 @@ const config: CapacitorConfig = {
     webContentsDebuggingEnabled: false,
   },
   plugins: {
-    CapacitorUpdater: {
-      autoUpdate: true,
-      keepUrlPathAfterReload: true,
-      statsUrl: "https://stats.capgo.app/stats",
-      updateUrl: "https://plugin.capgo.app/updates",
-      appReadyTimeout: 20000,
-    },
     Haptics: {},
-    PushNotifications: { presentationOptions: ["badge", "sound", "alert"] },
-    LocalNotifications: { iconColor: "#60a5fa", sound: "default" },
   },
 };
 

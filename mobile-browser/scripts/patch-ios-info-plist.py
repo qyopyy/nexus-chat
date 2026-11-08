@@ -4,14 +4,14 @@ import plistlib, sys
 from pathlib import Path
 DEFAULT = Path(__file__).resolve().parents[1] / "ios" / "App" / "App" / "Info.plist"
 STRING_KEYS = {'NSMicrophoneUsageDescription': 'Nexus Browser may use the microphone for web pages that request it.', 'NSCameraUsageDescription': 'Nexus Browser may use the camera for web pages that request it.', 'NSPhotoLibraryUsageDescription': 'Choose photos to upload in Nexus Browser.', 'NSPhotoLibraryAddUsageDescription': 'Save photos from Nexus Browser.', 'UIUserInterfaceStyle': 'Dark', 'NSHumanReadableCopyright': '© 2026 qyopy'}
-BACKGROUND = ['audio', 'remote-notification', 'fetch']
+BACKGROUND = ['audio']  # media playback only — no push / background fetch in the browser
 DISPLAY = 'Nexus Browser'
 
 def patch(path: Path):
     data = plistlib.load(path.open("rb"))
     for k,v in STRING_KEYS.items():
         data[k]=v
-    modes=list(data.get("UIBackgroundModes") or [])
+    modes=[m for m in (data.get("UIBackgroundModes") or []) if m in BACKGROUND]
     for m in BACKGROUND:
         if m not in modes: modes.append(m)
     data["UIBackgroundModes"]=modes

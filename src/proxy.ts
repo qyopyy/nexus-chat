@@ -37,7 +37,17 @@ async function lookup(host: string): Promise<string | null> {
   return user;
 }
 
+// The Nexus Browser App Store app is a web browser only — keep its WebView on /browser/app (+ legal pages).
+const BROWSER_APP_UA = /NexusBrowser/;
+const BROWSER_APP_ALLOWED = /^\/(browser\/app|privacy|terms|contact)(\/|$)/;
+
 export async function proxy(req: NextRequest) {
+  if (BROWSER_APP_UA.test(req.headers.get("user-agent") ?? "") && !BROWSER_APP_ALLOWED.test(req.nextUrl.pathname)) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/browser/app";
+    url.search = "";
+    return NextResponse.redirect(url, 307);
+  }
   const host = (req.headers.get("host") ?? "").split(":")[0].toLowerCase().replace(/^www\./, "");
   if (!host || host === SITE_HOST || MAIN.test(host)) return NextResponse.next();
   const username = await lookup(host);
