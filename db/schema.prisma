@@ -1,0 +1,5 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql" url = env("DATABASE_URL") }
+model User { id String @id @default(uuid()) username String @unique devices Device[] }
+model Device { id String @id userId String deviceName String lastBatteryPct Int @default(100) remoteEnabled Boolean @default(true) accessories Accessory[] user User @relation(fields: [userId], references: [id]) }
+model Accessory { id String @id deviceId String name String batteryLeft Int? batteryRight Int? batteryCase Int? device Device @relation(fields: [deviceId], references: [id]) }
