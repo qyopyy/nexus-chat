@@ -1,0 +1,18 @@
+Acetate is a separate Capacitor target from Nexus, Wump, Browser, and Link.
+It opens https://nexusproject.cc/acetate/app and uses the same Nexus account.
+
+The Xcode project is generated, not committed (ios/ is gitignored), same as Wump:
+
+  cd mobile-acetate
+  npm install
+  npx cap add ios
+  npx cap sync ios
+  npx cap open ios
+
+Bundle id: hu.qyopy.acetate
+Register that id (and an App Store provisioning profile) before Transporter.
+Until then, install the web app: Safari → Share → Add to Home Screen,
+or run Actions → “Acetate iOS app (.ipa)” for an unsigned Sideloadly build.
+
+Background audio: after `cap add ios`, add UIBackgroundModes = audio in Info.plist
+so a locked phone can keep a cut playing.

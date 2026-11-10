@@ -45,6 +45,8 @@ export function SpotifyMark({ className }: { className?: string }) {
 
 /** "Listening to Spotify" card with cover, track, artists, album and a live progress bar */
 export function NowPlayingCard({ np, className }: { np: NowPlaying; className?: string }) {
+  const acetate = np.source === "acetate";
+  const tone = acetate ? "#e4a15a" : GREEN;
   const timed = !!np.duration_ms;
   useTick(timed);
   const elapsed = timed ? Math.min(np.duration_ms!, (np.progress_ms ?? 0) + (Date.now() - new Date(np.at).getTime())) : 0;
@@ -53,16 +55,16 @@ export function NowPlayingCard({ np, className }: { np: NowPlaying; className?: 
   const year = np.release?.slice(0, 4);
   const kind = np.album_type === "single" ? "Single" : np.album_type === "compilation" ? "Compilation" : np.album_type === "podcast" ? "Podcast" : "Album";
   return (
-    <div className={cn("overflow-hidden rounded-xl p-3 ring-1", className)} style={{ background: `linear-gradient(135deg, ${GREEN}26, ${GREEN}0d)`, borderColor: `${GREEN}40` }}>
-      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold tracking-wide uppercase" style={{ color: GREEN }}>
-        <SpotifyMark className="size-4" /> Listening to Spotify
+    <div className={cn("overflow-hidden rounded-xl p-3 ring-1", className)} style={{ background: `linear-gradient(135deg, ${tone}26, ${tone}0d)`, borderColor: `${tone}40` }}>
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold tracking-wide uppercase" style={{ color: tone }}>
+        {acetate ? <span className="size-2.5 rounded-full" style={{ background: tone }} /> : <SpotifyMark className="size-4" />} {acetate ? "Listening to Acetate" : "Listening to Spotify"}
       </div>
       <div className="flex gap-3">
         <a href={np.album_url ?? np.url ?? undefined} target="_blank" rel="noreferrer" className="relative shrink-0" title={np.album ?? undefined}>
           {np.image ? (
             <img src={np.image} alt={np.album ? `${np.album} cover` : "Album cover"} className="size-[72px] rounded-lg object-cover shadow-lg" />
           ) : (
-            <span className="grid size-[72px] place-items-center rounded-lg text-2xl text-black" style={{ background: GREEN }}>
+            <span className="grid size-[72px] place-items-center rounded-lg text-2xl text-black" style={{ background: tone }}>
               ♫
             </span>
           )}
@@ -102,14 +104,14 @@ export function NowPlayingCard({ np, className }: { np: NowPlaying; className?: 
         <div className="mt-2.5 flex items-center gap-2 text-[11px] text-sub tabular-nums">
           <span>{mmss(elapsed)}</span>
           <div className="h-1 flex-1 overflow-hidden rounded-full bg-black/30">
-            <div className="h-full rounded-full transition-[width] duration-1000 ease-linear" style={{ width: `${pct}%`, background: GREEN }} />
+            <div className="h-full rounded-full transition-[width] duration-1000 ease-linear" style={{ width: `${pct}%`, background: tone }} />
           </div>
           <span>{mmss(np.duration_ms!)}</span>
         </div>
       )}
       {np.url && (
-        <a href={np.url} target="_blank" rel="noreferrer" className="mt-2.5 block rounded-full py-1.5 text-center text-sm font-bold text-black transition hover:brightness-110" style={{ background: GREEN }}>
-          Play on Spotify
+        <a href={np.url} target="_blank" rel="noreferrer" className="mt-2.5 block rounded-full py-1.5 text-center text-sm font-bold text-black transition hover:brightness-110" style={{ background: tone }}>
+          {acetate ? "Open in Acetate" : "Play on Spotify"}
         </a>
       )}
     </div>
@@ -122,9 +124,10 @@ export function useListening(userId: string) {
   return liveNow(np);
 }
 export function ListeningLine({ np, className }: { np: NowPlaying; className?: string }) {
+  const acetate = np.source === "acetate";
   return (
     <span className={cn("flex min-w-0 items-center gap-1", className)}>
-      <SpotifyMark className="size-3 shrink-0" />
+      {acetate ? <span className="size-2 shrink-0 rounded-full bg-[#e4a15a]" /> : <SpotifyMark className="size-3 shrink-0" />}
       <span className="truncate">
         Listening to <b className="font-semibold text-txt/90">{np.title}</b>
         {np.artist ? ` · ${np.artist}` : ""}
