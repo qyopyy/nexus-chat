@@ -29,6 +29,7 @@ import ButtonFxBoot from "./ButtonFxBoot";
 import WelcomeSplash from "./WelcomeSplash";
 import ErrorBoundary from "./ErrorBoundary";
 import { useIsMobile } from "@/lib/useMobile";
+import { useHandsetReporter } from "@/lib/handset";
 import { startSpotifySync } from "@/lib/spotifyUser";
 import { startMediaAudio } from "@/lib/mediaAudio";
 import "@/lib/prefs";
@@ -83,6 +84,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
   }, [userId]);
 
   useRealtime(bootstrapped ? userId : null);
+  useHandsetReporter(bootstrapped ? userId : null);
 
   useEffect(() => {
     if (!bootstrapped || !userId) return;

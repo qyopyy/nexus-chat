@@ -53,6 +53,8 @@ import {
   type AcetateTrack,
   type AcetateVersion,
 } from "@/lib/acetate";
+import { useHandsetReporter } from "@/lib/handset";
+import PhoneLink from "@/components/layout/PhoneLink";
 import { useAcetateLive } from "@/lib/acetateLive";
 import { dropOffline, isOffline, keepOffline, offlineUrl } from "@/lib/acetateOffline";
 import { AcetateMark, ArtTile, Waveform } from "./AcetateBits";
@@ -214,6 +216,7 @@ export default function AcetateApp() {
     if (screen.name === "track") setDetail(await loadTrackDetail(screen.id));
   }
 
+  useHandsetReporter(userId && !needsMfa ? userId : null);
   useAcetateLive(userId && !needsMfa ? userId : null, () => {
     void reload().catch(() => undefined);
   });
@@ -334,6 +337,7 @@ export default function AcetateApp() {
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#070709] text-[#f4f1ea]">
       <Toasts />
+      <PhoneLink />
       <header className="flex items-center gap-3 border-b border-[#3c342c] px-4 py-3">
         <Link href="/acetate" className="flex items-center gap-2">
           <AcetateMark size={30} />
