@@ -125,6 +125,10 @@ export default function AcetatePlayerBar() {
         player.seek(player.current + 5);
       } else if (event.code === "ArrowLeft") {
         player.seek(Math.max(0, player.current - 5));
+      } else if (event.key === "j" || event.key === "J") {
+        player.next();
+      } else if (event.key === "k" || event.key === "K") {
+        player.prev();
       } else if (event.key === "m" || event.key === "M") {
         player.setVolume(player.volume > 0 ? 0 : 1);
       }
@@ -249,6 +253,7 @@ export default function AcetatePlayerBar() {
           <div className="truncate text-xs text-[#a3988c]">
             {item.versionLabel}
             {item.album ? ` · ${item.album}` : ""} · {fmtTime(current)} / {fmtTime(duration || item.duration)}
+            {duration > current ? ` · −${fmtTime(duration - current)}` : ""}
           </div>
         </div>
         <button type="button" aria-label="Previous" onClick={() => useAcetatePlayer.getState().prev()} className="grid size-9 place-items-center rounded-full hover:bg-white/5">

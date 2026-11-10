@@ -57,6 +57,7 @@ import { useAcetateLive } from "@/lib/acetateLive";
 import { dropOffline, isOffline, keepOffline, offlineUrl } from "@/lib/acetateOffline";
 import { AcetateMark, ArtTile, Waveform } from "./AcetateBits";
 import { Collaborators, LikeButton, NotifyBell } from "./AcetateSocial";
+import AcetateShelves from "./AcetateShelves";
 import AcetatePlayerBar from "./AcetatePlayerBar";
 import AcetatePwa from "./AcetatePwa";
 
@@ -103,6 +104,8 @@ export default function AcetateApp() {
   const [folderFilter, setFolderFilter] = useState<string | "all">("all");
   const [uploadNote, setUploadNote] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
+  const [shelves, setShelves] = useState(true);
+  const [unheard, setUnheard] = useState(false);
   const premiumWas = useRef<boolean | null>(null);
   const [shareFor, setShareFor] = useState<{ kind: "track" | "project"; id: string; title: string } | null>(null);
   const [nexusFor, setNexusFor] = useState<{ title: string; url: string } | null>(null);
@@ -316,6 +319,7 @@ export default function AcetateApp() {
       if (starredOnly && !track.starred) return false;
       if (statusFilter !== "all" && (track.status ?? "demo") !== statusFilter) return false;
       if (folderFilter !== "all" && (track.folder ?? "") !== folderFilter) return false;
+      if (unheard && listens.some((row) => row.track_id === track.id)) return false;
       if (!query) return true;
       return track.title.toLowerCase().includes(query) || (track.folder ?? "").toLowerCase().includes(query) || (track.musical_key ?? "").toLowerCase().includes(query);
     })
@@ -328,7 +332,7 @@ export default function AcetateApp() {
   const visibleProjects = library.projects.filter((project) => kindFilter === "all" || project.kind === kindFilter);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#100e0c] text-[#f3eadf]">
+    <div className="flex h-full min-h-0 flex-col bg-[#070709] text-[#f4f1ea]">
       <Toasts />
       <header className="flex items-center gap-3 border-b border-[#3c342c] px-4 py-3">
         <Link href="/acetate" className="flex items-center gap-2">
@@ -351,6 +355,7 @@ export default function AcetateApp() {
               Admin
             </Link>
           )}
+          <Link href="/defend" className="text-xs text-[#7ee0c6]">Defender</Link>
           <button type="button" onClick={() => void supabase.auth.signOut()} className="text-xs text-[#a3988c]">
             Sign out
           </button>
@@ -388,6 +393,21 @@ export default function AcetateApp() {
             }}
             className={dropping ? "rounded-3xl ring-2 ring-[#e4a15a]" : ""}
           >
+            {shelves && (
+              <AcetateShelves
+                tracks={library.tracks}
+                art={art}
+                listenIds={listens.map((row) => row.track_id || "")}
+                onOpen={(id) => setScreen({ name: "track", id })}
+                onPlay={(track) => void run(() => playIds([track.id], null, track.id))}
+              />
+            )}
+            <div className="mb-3 flex flex-wrap gap-2">
+              <button type="button" onClick={() => setShelves((on) => !on)} className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">{shelves ? "List" : "Shelves"}</button>
+              <button type="button" onClick={() => setUnheard((on) => !on)} className={`rounded-full px-3 py-1 text-xs font-semibold ${unheard ? "bg-[#7ee0c6] text-[#070709]" : "bg-white/10"}`}>Unheard</button>
+              <button type="button" onClick={() => void run(() => playIds(visibleTracks.map((track) => track.id), null))} className="rounded-full bg-[#f4f1ea] px-3 py-1 text-xs font-semibold text-[#070709]">Play all</button>
+              {filter && <button type="button" onClick={() => setFilter("")} className="text-xs text-[#8d8880]">Clear search</button>}
+            </div>
             <div className="mb-3 grid grid-cols-3 gap-2 text-center text-xs">
               <Stat label="Cuts" value={String(library.tracks.length)} />
               <Stat label="Starred" value={String(library.tracks.filter((track) => track.starred).length)} />
@@ -576,6 +596,7 @@ export default function AcetateApp() {
               <li>Space — play or pause</li>
               <li>Left / right — skip 5 seconds</li>
               <li>M — mute</li>
+              <li>J / K — next and previous</li>
             </ul>
             <button type="button" className="mt-4 rounded-full bg-[#e4a15a] px-4 py-2 text-sm font-semibold text-[#100e0c]" onClick={() => setHelp(false)}>
               Close
