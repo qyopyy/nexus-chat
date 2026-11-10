@@ -19,6 +19,7 @@ import { ComposerPlus } from "./Extras";
 import { DictateButton, ScheduledBar } from "./ScheduleMessage";
 import AttachEditor, { shouldOpenAttachEditor } from "./AttachEditor";
 import { FORMAT_COLORS, VANISH_PICKS, wrapSelection } from "@/lib/chatFormat";
+import { charCountLabel, composerPlaceholder, editingEscape, extraFilesNote, firstDroppedFile, limitTone, overLimit, safeDraft, trimDraft } from "@/lib/hundred";
 
 /** Supabase Pro — everyone gets 1 GB per file; premium up to 5 GB (bucket cap). */
 const MAX_FREE = 1024 * 1024 * 1024;
@@ -79,6 +80,14 @@ export default function Composer({
   const area = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const rec = useRef<Rec | null>(null);
+  useEffect(() => {
+    return () => {
+      const r = rec.current;
+      if (!r) return;
+      r.stream.getTracks().forEach((t) => t.stop());
+      void r.ctx.close().catch(() => {});
+    };
+  }, []);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = useRef(false);
   const skipAutoEdit = useRef(false);
@@ -108,7 +117,7 @@ export default function Composer({
   useEffect(() => {
     try {
       const draft = localStorage.getItem(`nexus.draft.${conversationId}`) || "";
-      setText(draft);
+      setText(safeDraft(draft));
     } catch {
       setText("");
     }
@@ -118,8 +127,8 @@ export default function Composer({
   useEffect(() => {
     try {
       const key = `nexus.draft.${conversationId}`;
-      if (!text.trim()) localStorage.removeItem(key);
-      else localStorage.setItem(key, text.slice(0, 8000));
+      if (!trimDraft(text)) localStorage.removeItem(key);
+      else localStorage.setItem(key, safeDraft(text));
     } catch {
       /* private mode */
     }
@@ -298,8 +307,8 @@ export default function Composer({
   }
 
   // ---------------------------------------------------------------- render
-  const placeholder = kind === "text" ? `Message #${title}` : kind === "dm" ? `Message ${title}` : "Message";
-  const canSend = !!text.trim() || !!file;
+  const placeholder = editingId || replyTo ? composerPlaceholder(!!editingId, !!replyTo) : kind === "text" ? `Message #${title}` : kind === "dm" ? `Message ${title}` : "Message";
+  const canSend = (!!text.trim() || !!file) && !overLimit(text.length, limit);
   const chosen = EFFECTS.find((e) => e.id === effect);
   const mm = `${Math.floor(recSecs / 60)}:${String(recSecs % 60).padStart(2, "0")}`;
 
@@ -465,10 +474,12 @@ export default function Composer({
                     if (me) sendLive(me, e.target.value);
                   }}
                   onPaste={(e) => {
-                    const f = e.clipboardData.files?.[0];
-                    if (f) {
+                    const picked = firstDroppedFile(e.clipboardData.files);
+                    if (picked.file) {
                       e.preventDefault();
-                      setFile(f);
+                      setFile(picked.file);
+                      const note = extraFilesNote(picked.extra);
+                      if (note) toast(note, "info");
                     }
                   }}
                   onKeyDown={(e) => {
@@ -495,7 +506,9 @@ export default function Composer({
                         useChat.setState({ editingId: mine.id });
                       }
                     } else if (e.key === "Escape") {
-                      useChat.setState({ replyTo: null });
+                      const target = editingEscape(useChat.getState().editingId, useChat.getState().replyTo);
+                      if (target === "edit") useChat.setState({ editingId: null });
+                      else if (target === "reply") useChat.setState({ replyTo: null });
                     }
                   }}
                   className="max-h-[180px] min-h-11 min-w-0 flex-1 resize-none bg-transparent py-[11px] pl-4 text-[16px] leading-[22px] outline-none placeholder:text-sub md:text-[15px]"
@@ -506,6 +519,11 @@ export default function Composer({
                     area.current?.focus();
                   }}
                 />
+                {limitTone(text.length, limit) !== "ok" && (
+                  <span className={cn("mb-2 shrink-0 text-[10px] font-semibold tabular-nums", limitTone(text.length, limit) === "over" ? "text-dnd" : "text-sub")} aria-live="polite">
+                    {charCountLabel(text.length, limit)}
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => setFmtOpen((v) => !v)}

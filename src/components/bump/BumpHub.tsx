@@ -86,6 +86,7 @@ import WumpGroups from "./WumpGroups";
 import { WUMP, WUMP_TAGLINE } from "@/lib/wumpBrand";
 import { pauseBumpMusic, playBumpTrack, useBumpMusic } from "@/lib/bumpMusic";
 import { fetchWumpPrivacy, loadWumpPrivacyLocal, saveWumpPrivacy, type WumpPrivacy } from "@/lib/wumpPrivacy";
+import { heartbeatArgs, privacyEventName } from "@/lib/hundred";
 import WumpOnboarding from "./WumpOnboarding";
 import WumpTogetherPanel from "./WumpTogetherPanel";
 import {
@@ -183,6 +184,8 @@ export default function BumpHub({
   const privacyRef = useRef<WumpPrivacy | null>(null);
   const privacySave = useRef(Promise.resolve());
   privacyRef.current = privacy;
+  const liveShareRef = useRef({ visible, liveLabel });
+  liveShareRef.current = { visible, liveLabel };
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [nudgeBurst, setNudgeBurst] = useState<{ id: number; emoji: string } | null>(null);
   const bumpOnly = standalone || isBumpApp();
@@ -215,6 +218,19 @@ export default function BumpHub({
         setAlerts(p.wump_allow_nearby_alerts);
       });
   }, [me]);
+
+  useEffect(() => {
+    const onPrivacy = (ev: Event) => {
+      const patch = (ev as CustomEvent<Partial<WumpPrivacy>>).detail;
+      if (!patch) return;
+      setPrivacy((cur) => (cur ? { ...cur, ...patch } : cur));
+      if (patch.wump_default_visible) setVisible(patch.wump_default_visible);
+      if (typeof patch.wump_allow_background === "boolean") setBgShare(patch.wump_allow_background);
+      if (typeof patch.wump_allow_nearby_alerts === "boolean") setAlerts(patch.wump_allow_nearby_alerts);
+    };
+    window.addEventListener(privacyEventName(), onPrivacy);
+    return () => window.removeEventListener(privacyEventName(), onPrivacy);
+  }, []);
 
   useEffect(() => {
     if (!nudgeBurst) return;
@@ -354,11 +370,13 @@ export default function BumpHub({
       void stopBumpBackground({ clearServer: false });
       // 5-minute scheduled refresh when background share is off (foreground poll still moves pins)
       const t = setInterval(() => {
-        void bumpHeartbeat(visible, liveLabel.trim() || undefined).then((ok) => {
+        const share = heartbeatArgs(liveShareRef.current);
+        void bumpHeartbeat(share.visible as BumpVisible, share.label).then((ok) => {
           if (ok) void refresh();
         });
       }, WUMP_REFRESH_MS);
-      void bumpHeartbeat(visible, liveLabel.trim() || undefined);
+      const first = heartbeatArgs(liveShareRef.current);
+      void bumpHeartbeat(first.visible as BumpVisible, first.label);
       return () => clearInterval(t);
     }
     void startBumpBackground({

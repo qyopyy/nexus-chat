@@ -1,7 +1,8 @@
 "use client";
 
 import { memo, useEffect, useRef, useState } from "react";
-import { Bookmark, Check, Clock, Copy, Download, FileText, Flag, Forward, Lock, Pencil, Pin, Reply, SmilePlus, Sparkles, Trash2 } from "lucide-react";
+import { Bookmark, Check, CheckCheck, Clock, Copy, Download, FileText, Flag, Forward, Lock, Pencil, Pin, Reply, SmilePlus, Sparkles, Trash2 } from "lucide-react";
+import { copyFailedMessage } from "@/lib/hundred";
 import { openReport } from "@/lib/adminTools";
 import { usePrefs } from "@/lib/prefs";
 import { useApp, openProfileCard, toast } from "@/store/app";
@@ -169,6 +170,9 @@ function MessageBubbleImpl({
   showNames,
   replied,
   linkEmbeds = false,
+  seen = 0,
+  seenText = null,
+  seenTitle,
 }: {
   message: Message;
   mine: boolean;
@@ -178,6 +182,10 @@ function MessageBubbleImpl({
   replied: Message | null;
   /** rich OG/SEO link cards — enabled for private DMs & groups */
   linkEmbeds?: boolean;
+  /** how many other people have read up to this message */
+  seen?: number;
+  seenText?: string | null;
+  seenTitle?: string;
 }) {
   const author = useApp((s) => s.profiles[m.author_id]);
   const repliedAuthor = useApp((s) => (replied ? s.profiles[replied.author_id] : undefined));
@@ -415,8 +423,13 @@ function MessageBubbleImpl({
             >
               {m.edited_at && !deleted && "edited"}
               {formatTime(m.created_at)}
-              {mine && (m.pending ? <Clock className="size-3" /> : <Check className="size-3.5" />)}
+              {mine && (m.pending ? <Clock className="size-3" /> : seen > 0 ? <CheckCheck className="size-3.5" aria-label={seenTitle || "Seen"} /> : <Check className="size-3.5" aria-label="Sent" />)}
             </span>
+          )}
+          {last && seenText && (
+            <div className={cn("mt-0.5 px-1 text-[10px] font-semibold", mine ? "text-right text-white/70" : "text-sub")} title={seenTitle}>
+              {seenText}
+            </div>
           )}
 
           {burst > 0 && (
@@ -558,9 +571,13 @@ function MessageBubbleImpl({
               icon={<Copy className="size-5" />}
               label="Copy text"
               onClick={() => {
-                void navigator.clipboard?.writeText(m.content);
-                haptic.success();
-                toast("Copied", "success");
+                void navigator.clipboard?.writeText(m.content).then(
+                  () => {
+                    haptic.success();
+                    toast("Copied", "success");
+                  },
+                  () => toast(copyFailedMessage(), "error"),
+                );
                 setSheet(false);
               }}
             />

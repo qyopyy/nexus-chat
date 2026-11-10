@@ -15,6 +15,7 @@ import HiddenMessage from "./HiddenMessage";
 import { usePrefs } from "@/lib/prefs";
 import { loadBlocks } from "@/lib/blocks";
 import type { Message } from "@/lib/types";
+import { dmSeenTitle, groupSeenTitle, latestOwnId, prefersReducedMotion, seenCount, seenLabel, srNewMessage } from "@/lib/hundred";
 
 const GROUP_GAP = 5 * 60 * 1000;
 
@@ -38,6 +39,10 @@ export default function MessageList({ conversationId, initialUnread }: { convers
   const jumpTo = useChat((s) => s.jumpTo);
   const me = useApp((s) => s.userId);
   const kind = useApp((s) => s.convKinds[conversationId]);
+  const reads = useChat((s) => s.reads);
+  const lastOwn = latestOwnId(messages, me);
+  const lastMsg = messages[messages.length - 1];
+  const liveText = lastMsg && lastMsg.author_id !== me ? srNewMessage(profiles[lastMsg.author_id]?.display_name, lastMsg.deleted_at ? "deleted a message" : lastMsg.content || "sent a message") : "";
   const showNames = kind !== "dm";
   const previewsOn = usePrefs((s) => s.linkPreviews);
   const linkEmbeds = (kind === "dm" || kind === "group") && previewsOn;
@@ -90,7 +95,7 @@ export default function MessageList({ conversationId, initialUnread }: { convers
     if (!jumpTo) return;
     const node = ref.current?.querySelector<HTMLElement>(`[data-mid="${jumpTo}"]`);
     if (node) {
-      node.scrollIntoView({ block: "center", behavior: "smooth" });
+      node.scrollIntoView({ block: "center", behavior: prefersReducedMotion() ? "auto" : "smooth" });
       node.classList.remove("flash");
       void node.offsetWidth;
       node.classList.add("flash");
@@ -143,6 +148,9 @@ export default function MessageList({ conversationId, initialUnread }: { convers
           }}
         />
       )}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {liveText}
+      </div>
       <div
         ref={ref}
         onScroll={onScroll}
@@ -208,6 +216,9 @@ export default function MessageList({ conversationId, initialUnread }: { convers
                   showNames={showNames}
                   replied={m.reply_to_id ? byId[m.reply_to_id] ?? null : null}
                   linkEmbeds={linkEmbeds}
+                  seen={m.id === lastOwn ? seenCount(m.created_at, reads, me, m.pending, m.deleted_at) : 0}
+                  seenText={m.id === lastOwn ? seenLabel(seenCount(m.created_at, reads, me, m.pending, m.deleted_at), kind) : null}
+                  seenTitle={kind === "dm" ? dmSeenTitle() : groupSeenTitle(seenCount(m.created_at, reads, me, m.pending, m.deleted_at))}
                 />
                 </HiddenMessage>
                 )}

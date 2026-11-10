@@ -7,6 +7,7 @@ import type { LMap, LeafletNS } from "@/lib/geo";
 import { externalMapsUrl, fmtDistance } from "@/lib/wumpMapApi";
 import { useApp } from "@/store/app";
 import { wumpPresenceBits, type WumpNudgeKind } from "@/lib/wumpTogether";
+import { batteryLow, compassFromHeading, freshPin, shortPlace, speedKmh } from "@/lib/hundred";
 import WumpNudgeBar from "./WumpNudgeBar";
 import Avatar from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils";
@@ -28,8 +29,6 @@ function ageText(sec: number) {
   if (sec < 3600) return `${Math.round(sec / 60)}m ago`;
   return `${Math.round(sec / 3600)}h ago`;
 }
-
-const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 
 /**
  * "Live with" a friend: their pin is tracked in realtime, a live line joins you, the camera keeps you both
@@ -132,11 +131,12 @@ export default function WumpLiveWith({
   const name = friend?.display_name || p?.display_name || friend?.username || p?.username || "Friend";
   const username = friend?.username || p?.username || null;
   const age = friend ? Math.max(0, (now - new Date(friend.updated_at).getTime()) / 1000) : null;
-  const liveNow = age != null && age < 90;
+  const liveNow = freshPin(age);
   const dist = friend ? (me ? metersBetween(me, [friend.lat, friend.lng]) : friend.meters) : null;
-  const kmh = friend?.speed_mps != null && friend.speed_mps > 0.5 ? Math.round(friend.speed_mps * 3.6) : null;
-  const dir = friend?.heading != null && Number.isFinite(friend.heading) ? COMPASS[Math.round((((friend.heading % 360) + 360) % 360) / 45) % 8] : null;
-  const place = friend?.place_name || friend?.place_locality || null;
+  const kmh = speedKmh(friend?.speed_mps);
+  const dir = compassFromHeading(friend?.heading);
+  const place = shortPlace(friend?.place_name || friend?.place_locality);
+  const lowBattery = batteryLow(friend?.battery_pct);
   const bits = wumpPresenceBits(friend);
 
   return (
@@ -185,7 +185,7 @@ export default function WumpLiveWith({
             <div className="flex items-center justify-center gap-1 text-sm font-black text-slate-900">
               {friend.battery_pct != null ? (
                 <>
-                  <span className="text-xs">🔋</span> {Math.round(friend.battery_pct)}%
+                  <span className="text-xs">🔋</span> <span className={lowBattery ? "text-red-600" : undefined}>{Math.round(friend.battery_pct)}%</span>
                 </>
               ) : (
                 <>

@@ -12,6 +12,7 @@ import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import NotificationPanel, { NotificationBellButton } from "@/components/chat/NotificationPanel";
 import type { ChatListItem } from "@/lib/types";
+import { emptySearchCopy, listPreviewAuthor } from "@/lib/hundred";
 
 const FILTERS = [
   { id: "all", label: "All" },
@@ -159,14 +160,14 @@ export default function HomeSidebar() {
 
         {visible.length === 0 && newContacts.length === 0 && (
           <p className="px-3 py-8 text-center text-sm text-sub">
-            {q ? "No chats found" : filter === "unread" ? "You're all caught up ✨" : "No chats yet — add a friend and say hi!"}
+            {q ? emptySearchCopy(true, false) : filter === "unread" ? `${emptySearchCopy(false, true)} ✨` : `${emptySearchCopy(false, false)} — add a friend and say hi!`}
           </p>
         )}
 
         {visible.map((c, idx) => {
           const n = unread[c.id] ?? 0;
           const active = conversationId === c.id;
-          const lastAuthor = c.last_author_id === me ? "You" : c.kind === "group" ? profiles[c.last_author_id ?? ""]?.display_name : null;
+          const lastAuthor = listPreviewAuthor(me, c.last_author_id, profiles[c.last_author_id ?? ""]?.display_name, c.kind);
           return (
             <div key={c.id} className="flex items-stretch gap-0.5">
               {reorderChats && (

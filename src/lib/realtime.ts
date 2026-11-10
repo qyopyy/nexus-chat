@@ -35,6 +35,25 @@ import { syncAppBadge, totalUnread } from "./badge";
 import { useMessageBanner } from "./messageBanner";
 import { isNativeApp } from "./useMobile";
 import type { Message, PresenceState, Profile, Reaction } from "./types";
+import {
+  channelStillOpen,
+  connectionLabel,
+  inboxShouldToast,
+  inboxToast,
+  isLatestPreview,
+  quietBaseline,
+  sameRead,
+  offlineKind,
+  pinEventName,
+  placesEventName,
+  privacyEventName,
+  privacyFromRow,
+  rememberMessage,
+  removedChannel,
+  shouldPingTrail,
+  toastPlace,
+  trailEventName,
+} from "./hundred";
 
 type CallEvent = { id: string; conversation_id: string; caller_id: string; kind: "ring" | "cancel" | "decline"; created_at: string };
 
@@ -80,7 +99,10 @@ function notify(m: Message, opts?: { skipSound?: boolean }) {
   }
 }
 
+const recentMessageIds = new Set<string>();
+
 async function onMessageInsert(m: Message) {
+  if (!m?.id || !rememberMessage(recentMessageIds, m.id)) return;
   const app = useApp.getState();
   const me = app.userId;
   await loadProfiles([m.author_id]);
@@ -133,7 +155,9 @@ async function onMessageInsert(m: Message) {
 
 function onMessageUpdate(m: Message) {
   useChat.setState((s) => ({ messages: s.messages.map((x) => (x.id === m.id ? { ...x, ...m, pending: false } : x)) }));
-  void refreshChatListDebounced();
+  const row = useApp.getState().chatList.find((c) => c.id === m.conversation_id);
+  if (row && isLatestPreview(row.last_message_at, m.created_at)) bumpChatList(m);
+  else refreshChatListDebounced();
 }
 
 let chatListTimer: ReturnType<typeof setTimeout> | null = null;
@@ -253,6 +277,46 @@ export function useRealtime(userId: string | null) {
         const p = row as Profile;
         if (useApp.getState().profiles[p.id]) mergeProfiles([p]);
       })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "conversations" }, ({ old }) => {
+        const id = (old as { id?: string }).id;
+        if (!id) return;
+        useApp.setState((s) => ({
+          chatList: s.chatList.filter((c) => c.id !== id),
+          channels: removedChannel(s.channels, id) as typeof s.channels,
+        }));
+        if (channelStillOpen(useChat.getState().conversationId, id)) {
+          useChat.setState({ conversationId: null, messages: [], reads: {} });
+        }
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "read_states" }, ({ new: row }) => {
+        const r = row as { user_id?: string; conversation_id?: string; last_read_at?: string };
+        if (!r.user_id || !r.conversation_id || !r.last_read_at) return;
+        if (useChat.getState().conversationId !== r.conversation_id) return;
+        if (sameRead(useChat.getState().reads[r.user_id], r.last_read_at)) return;
+        useChat.setState((s) => ({ reads: { ...s.reads, [r.user_id!]: r.last_read_at! } }));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "message_pins" }, ({ new: row, old }) => {
+        const conv = (row as { conversation_id?: string })?.conversation_id || (old as { conversation_id?: string })?.conversation_id;
+        if (conv && useChat.getState().conversationId === conv) window.dispatchEvent(new Event(pinEventName()));
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notification_inbox", filter: `user_id=eq.${userId}` }, ({ new: row }) => {
+        const n = row as { kind?: string; title?: string; body?: string };
+        if (!inboxShouldToast(n.kind) || document.hidden) return;
+        toast(inboxToast(n.title, n.body), "info");
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_privacy", filter: `user_id=eq.${userId}` }, ({ new: row }) => {
+        const patch = privacyFromRow(row as Record<string, unknown>);
+        if (patch) window.dispatchEvent(new CustomEvent(privacyEventName(), { detail: patch }));
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "wump_place_events", filter: `user_id=eq.${userId}` }, ({ new: row }) => {
+        const ev = row as { kind?: string; place_name?: string };
+        if (quietBaseline(ev.kind || "")) toast(toastPlace(ev.kind || "arrive", ev.place_name || ""), "info");
+        window.dispatchEvent(new Event(placesEventName()));
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "wump_trail_points", filter: `user_id=eq.${userId}` }, ({ new: row }) => {
+        const pt = row as { user_id?: string };
+        if (shouldPingTrail(userId, pt.user_id)) window.dispatchEvent(new Event(trailEventName()));
+      })
       .subscribe((status) => {
         if (status === "SUBSCRIBED") void loadPendingInvites();
       });
@@ -304,6 +368,17 @@ export function useRealtime(userId: string | null) {
       void refreshChatList();
       void refreshUnread().then(() => syncAppBadge());
     };
+    const onNet = () => {
+      const online = navigator.onLine;
+      toast(connectionLabel(online), offlineKind(online));
+      if (online) {
+        void refreshChatList();
+        void refreshUnread();
+      }
+    };
+    window.addEventListener("online", onNet);
+    window.addEventListener("offline", onNet);
+
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
 
@@ -313,6 +388,8 @@ export function useRealtime(userId: string | null) {
       unsubApp();
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
+      window.removeEventListener("online", onNet);
+      window.removeEventListener("offline", onNet);
       if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
         heartbeatTimer = null;

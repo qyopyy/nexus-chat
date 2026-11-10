@@ -18,6 +18,7 @@ import { formatMeters } from "@/lib/location";
 import type { BumpNearby } from "@/lib/bump";
 import { WUMP } from "@/lib/wumpBrand";
 import { wumpPresenceBits } from "@/lib/wumpTogether";
+import { batteryLow } from "@/lib/hundred";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
@@ -270,7 +271,7 @@ export default function WumpFriendsPanel({
                               </span>
                             )}
                           </div>
-                          <div className="truncate text-[11px] text-sub">
+                          <div className={cn("truncate text-[11px]", n && batteryLow(n.battery_pct) ? "text-dnd" : "text-sub")}>
                             {n
                               ? ["Nearby", ...wumpPresenceBits(n)].join(" · ")
                               : online

@@ -16,6 +16,8 @@ export type ChatState = {
   live: Record<string, { text: string; exp: number }>;
   /** someone asked me for a high five */
   five: { from: string; at: number } | null;
+  /** other members' last_read_at for the open conversation */
+  reads: Record<string, string>;
   /** message id to scroll to + flash */
   jumpTo: string | null;
 };
@@ -31,5 +33,6 @@ export const useChat = create<ChatState>(() => ({
   typing: {},
   live: {},
   five: null,
+  reads: {},
   jumpTo: null,
 }));

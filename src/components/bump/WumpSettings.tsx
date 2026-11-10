@@ -19,6 +19,7 @@ import { WUMP } from "@/lib/wumpBrand";
 import { WumpProfilePrivacy } from "./WumpProfileBits";
 import WumpLookPanel from "./WumpLookPanel";
 import { cn } from "@/lib/utils";
+import { privacyEventName, privacyFromRow } from "@/lib/hundred";
 
 export default function WumpSettings({ userId }: { userId: string }) {
   const [p, setP] = useState<WumpPrivacy | null>(null);
@@ -26,6 +27,13 @@ export default function WumpSettings({ userId }: { userId: string }) {
 
   useEffect(() => {
     void fetchWumpPrivacy(userId).then(setP).catch(() => setP({ ...WUMP_PRIVACY_DEF }));
+    const onPrivacy = (ev: Event) => {
+      const patch = privacyFromRow((ev as CustomEvent).detail as Record<string, unknown>);
+      if (!patch) return;
+      setP((cur) => ({ ...(cur ?? WUMP_PRIVACY_DEF), ...(patch as Partial<WumpPrivacy>) }));
+    };
+    window.addEventListener(privacyEventName(), onPrivacy);
+    return () => window.removeEventListener(privacyEventName(), onPrivacy);
   }, [userId]);
 
   const save = async (patch: Partial<WumpPrivacy>) => {
@@ -108,7 +116,10 @@ export default function WumpSettings({ userId }: { userId: string }) {
         {p.wump_record_trail && (
           <button
             type="button"
-            onClick={() => void import("@/lib/wumpTogether").then((m) => m.wumpClearTrail())}
+            onClick={() => {
+              if (!window.confirm("Delete your saved trail? Friends will stop seeing it.")) return;
+              void import("@/lib/wumpTogether").then((m) => m.wumpClearTrail());
+            }}
             className="mb-4 text-[11px] font-semibold text-sub underline-offset-2 hover:text-txt hover:underline"
           >
             Clear trail now
