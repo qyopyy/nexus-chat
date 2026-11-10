@@ -396,8 +396,27 @@ html.big-targets [role="button"] {
   min-height: 36px;
   min-width: 36px;
 }
-html.desat body {
-  filter: saturate(var(--sat, 1));
+html.iphone-look {
+  font-size: var(--iphone-text, 100%);
+}
+html.iphone-bold body {
+  font-weight: 600;
+}
+html.iphone-reader body {
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+}
+html.iphone-open body {
+  font-family: ui-rounded, "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  word-spacing: 0.12em;
+}
+html.iphone-reach body {
+  padding-top: 22vh;
+}
+html.desat body,
+html.iphone-filter body {
+  filter: saturate(var(--sat, 1)) grayscale(var(--iphone-gray, 0)) invert(var(--iphone-invert, 0)) brightness(var(--iphone-dim, 1));
 }
 
 /* Discord-style welcome splash */

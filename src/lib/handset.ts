@@ -43,7 +43,21 @@ type BatteryManager = {
   removeEventListener: (type: string, fn: () => void) => void;
 };
 
+async function nativeBattery(): Promise<{ battery: number | null; charging: boolean } | null> {
+  const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; Plugins?: { Device?: { getBatteryInfo: () => Promise<{ batteryLevel?: number; isCharging?: boolean }> } } } }).Capacitor;
+  if (!cap?.isNativePlatform?.() || !cap.Plugins?.Device?.getBatteryInfo) return null;
+  try {
+    const info = await cap.Plugins.Device.getBatteryInfo();
+    const level = typeof info.batteryLevel === "number" ? Math.round(info.batteryLevel * 100) : null;
+    return { battery: level != null && level >= 0 && level <= 100 ? level : null, charging: !!info.isCharging };
+  } catch {
+    return null;
+  }
+}
+
 async function readBattery(): Promise<{ battery: number | null; charging: boolean; full_in_sec: number | null; manager: BatteryManager | null }> {
+  const native = await nativeBattery();
+  if (native) return { ...native, full_in_sec: null, manager: null };
   const nav = navigator as Navigator & { getBattery?: () => Promise<BatteryManager> };
   if (typeof nav.getBattery !== "function") return { battery: null, charging: false, full_in_sec: null, manager: null };
   try {
@@ -113,6 +127,24 @@ export function useHandsetReporter(userId: string | null) {
       manager?.removeEventListener("chargingtimechange", onBat);
     };
   }, [userId]);
+}
+
+/** Read battery again and write this device's row. iPhone Safari leaves the level empty; the installed app can fill it. */
+export async function refreshHandset() {
+  const userId = useApp.getState().userId;
+  if (!userId) return null;
+  const row = await readBattery();
+  await supabase.from("nexus_handsets").upsert({
+    user_id: userId,
+    device_id: thisDeviceId(),
+    label: isPhoneDevice() ? "Phone" : "This browser",
+    kind: isPhoneDevice() ? "phone" : "computer",
+    battery: row.battery,
+    charging: row.charging,
+    full_in_sec: row.full_in_sec,
+    last_seen: new Date().toISOString(),
+  });
+  return row;
 }
 
 export async function sendHandsetNote(note: string) {

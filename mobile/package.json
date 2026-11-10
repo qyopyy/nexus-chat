@@ -1,6 +1,6 @@
 {
   "name": "nexus-mobile",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": true,
   "description": "Native iOS + Android shells for Nexus (Capacitor). The apps load the live web app, so web deploys update them instantly.",
   "scripts": {
@@ -13,6 +13,7 @@
   "dependencies": {
     "@capacitor/android": "^8.6.0",
     "@capacitor/core": "^8.6.0",
+    "@capacitor/device": "^8.0.3",
     "@capacitor/geolocation": "^8.2.4",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.6.0",
