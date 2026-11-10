@@ -169,5 +169,6 @@ jobs:
           For App Store / Transporter: Actions → “iOS App Store apps (signed)” → app=wump
           → Wump-AppStore.ipa (tag wump-appstore-N).
 
-          Friends, chat, live map, groups — same Nexus login & backend.
+          Friends, chat, live map, groups, trails, place alerts, meetups, nudges — same Nexus login & backend.
+          Web features ship with the site this shell opens; apply supabase/migrations/20261110183000_wump_together.sql.
           Nexus chat app stays separate — Wump is also available inside Nexus."

@@ -195,5 +195,6 @@ jobs:
 
           Opens: ${NEXUS_URL}
           Live UI: Vercel web deploy (server.url) — no IPA rebuild needed for chat/features.
+          Wump on this account: trails, arrive/leave alerts, meetups + ETA, map nudges (web deploy + migration 20261110183000).
           Capgo: production channel OTA for the offline Capacitor shell (https://console.capgo.app/app/${BUNDLE_ID}).
           Website downloads: https://nexusproject.cc → Apps → iOS apps (.ipa)"

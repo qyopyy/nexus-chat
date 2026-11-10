@@ -64,7 +64,7 @@ import { fmtClock } from "@/lib/prefs";
 import { haptic } from "@/lib/haptics";
 import { isBumpApp, isNativeApp } from "@/lib/useMobile";
 import { cn } from "@/lib/utils";
-import { updateMyProfile, uploadAvatar } from "@/lib/data";
+import { loadProfiles, updateMyProfile, uploadAvatar } from "@/lib/data";
 import { changeUsername } from "@/lib/gram";
 import { connectSpotify, startSpotifySync, useSpotifyUser } from "@/lib/spotifyUser";
 import { NowPlayingCard, liveNow } from "@/components/profile/NowPlaying";
@@ -85,7 +85,19 @@ import { WumpLockedProfile, WumpProfileViews, WumpSongSearch, WumpTrackPlayer } 
 import WumpGroups from "./WumpGroups";
 import { WUMP, WUMP_TAGLINE } from "@/lib/wumpBrand";
 import { pauseBumpMusic, playBumpTrack, useBumpMusic } from "@/lib/bumpMusic";
-import { fetchWumpPrivacy, loadWumpPrivacyLocal } from "@/lib/wumpPrivacy";
+import { fetchWumpPrivacy, loadWumpPrivacyLocal, saveWumpPrivacy, type WumpPrivacy } from "@/lib/wumpPrivacy";
+import WumpOnboarding from "./WumpOnboarding";
+import WumpTogetherPanel from "./WumpTogetherPanel";
+import {
+  NUDGE_EMOJI,
+  subscribeWumpNudges,
+  wumpNudge,
+  wumpNudgesSeen,
+  wumpSetPlaceWatch,
+  wumpUnseenNudges,
+  wumpPresenceBits,
+  type WumpNudgeKind,
+} from "@/lib/wumpTogether";
 import {
   WUMP_EXPLORE_EMPTY,
   wumpDeleteSavedPlace,
@@ -167,6 +179,12 @@ export default function BumpHub({
   const [savedPlaces, setSavedPlaces] = useState<WumpSavedPlace[]>([]);
   const [explore, setExplore] = useState<WumpExploreStats>(WUMP_EXPLORE_EMPTY);
   const [placesPanel, setPlacesPanel] = useState(true);
+  const [privacy, setPrivacy] = useState<WumpPrivacy | null>(null);
+  const privacyRef = useRef<WumpPrivacy | null>(null);
+  const privacySave = useRef(Promise.resolve());
+  privacyRef.current = privacy;
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [nudgeBurst, setNudgeBurst] = useState<{ id: number; emoji: string } | null>(null);
   const bumpOnly = standalone || isBumpApp();
   const myUsername = me ? profiles[me]?.username || null : null;
   const musicPlaying = useBumpMusic((s) => s.playing);
@@ -177,16 +195,49 @@ export default function BumpHub({
     if (!me) return;
     void fetchWumpPrivacy(me)
       .then((p) => {
+        setPrivacy(p);
         setVisible(p.wump_default_visible);
         setBgShare(p.wump_allow_background);
         setAlerts(p.wump_allow_nearby_alerts);
+        let done = false;
+        try {
+          done = localStorage.getItem("wump.onboarded.v1") === "1";
+        } catch {
+          done = false;
+        }
+        if (!p.wump_onboarded_at && !done) setShowOnboarding(true);
       })
       .catch(() => {
         const p = loadWumpPrivacyLocal();
+        setPrivacy(p);
         setVisible(p.wump_default_visible);
         setBgShare(p.wump_allow_background);
         setAlerts(p.wump_allow_nearby_alerts);
       });
+  }, [me]);
+
+  useEffect(() => {
+    if (!nudgeBurst) return;
+    const t = setTimeout(() => setNudgeBurst(null), 2600);
+    return () => clearTimeout(t);
+  }, [nudgeBurst]);
+
+  useEffect(() => {
+    if (!me) return;
+    void wumpUnseenNudges().then((rows) => {
+      const latest = rows[0];
+      if (!latest) return;
+      setNudgeBurst({ id: latest.id, emoji: NUDGE_EMOJI[latest.kind] ?? "👋" });
+      toast(`${NUDGE_EMOJI[latest.kind] ?? "👋"} Nudge while you were away`, "info");
+      void wumpNudgesSeen(rows.map((r) => r.id));
+      void loadProfiles(rows.map((r) => r.from_id));
+    });
+    return subscribeWumpNudges((n) => {
+      setNudgeBurst({ id: n.id, emoji: NUDGE_EMOJI[n.kind] ?? "👋" });
+      toast(`${NUDGE_EMOJI[n.kind] ?? "👋"} New nudge`, "info");
+      void wumpNudgesSeen([n.id]);
+      void loadProfiles([n.from_id]);
+    });
   }, [me]);
 
   const friendIds = useMemo(() => {
@@ -493,6 +544,61 @@ export default function BumpHub({
     setTab("messages");
   }
 
+  function sendNudge(id: string, kind: WumpNudgeKind, openChat = false) {
+    void (async () => {
+      const r = await wumpNudge(id, kind);
+      if (r === "missing") {
+        if (kind !== "wave") return;
+        const row = await bumpWave(id);
+        if (row && openChat) openMessages(id);
+        return;
+      }
+      if (r === "ok") {
+        haptic.light();
+        if (openChat && kind === "wave") openMessages(id);
+      }
+    })();
+  }
+
+  function patchOnboardingPrivacy(patch: Partial<WumpPrivacy>) {
+    if (!me) return;
+    privacySave.current = privacySave.current.then(async () => {
+      const cur = privacyRef.current;
+      if (!cur) return;
+      const saved = await saveWumpPrivacy(me, patch, cur);
+      privacyRef.current = saved;
+      setPrivacy(saved);
+    }).catch((e) => toast(e instanceof Error ? e.message : "Couldn't save", "error"));
+  }
+
+  async function finishOnboarding() {
+    setShowOnboarding(false);
+    try {
+      localStorage.setItem("wump.onboarded.v1", "1");
+    } catch {
+      /* private mode */
+    }
+    if (!me) return;
+    const current = privacy ?? (await fetchWumpPrivacy(me));
+    try {
+      setPrivacy(await saveWumpPrivacy(me, { wump_onboarded_at: new Date().toISOString() }, current));
+    } catch {
+      /* column may not be migrated yet — local flag still hides the sheet */
+    }
+  }
+
+  async function saveHomeFromOnboarding() {
+    if (myLat == null || myLng == null) return;
+    const row = await wumpSavePlace({ name: "Home", lat: myLat, lng: myLng, locality: myPlaceName, source: "live" });
+    if (!row) return;
+    const watched = await wumpSetPlaceWatch({ placeId: row.id, role: "home", arrive: true, leave: true, share: false });
+    setSavedPlaces((prev) => {
+      const next = [watched ? { ...row, ...watched } : row, ...prev.filter((p) => p.id !== row.id)];
+      return watched?.role ? next.map((p) => (p.id !== row.id && p.role === watched.role ? { ...p, role: null } : p)) : next;
+    });
+    setPlacesPanel(true);
+  }
+
   const tabs: { id: Tab; label: string }[] = [
     { id: "nearby", label: "Nearby" },
     { id: "friends", label: "Friends" },
@@ -728,6 +834,8 @@ export default function BumpHub({
               onMessagePerson={(id) => openMessages(id)}
               onFocusChange={setFocusFriend}
               onUpgradePlus={() => setTab("plus")}
+              onNudge={(id, kind) => sendNudge(id, kind, false)}
+              nudgeBurst={nudgeBurst}
               onPlaces={() => {
                 setPlacesPanel((v) => !v);
                 if (!live) void goLive();
@@ -757,6 +865,7 @@ export default function BumpHub({
                     const username = n.username || profiles[n.user_id]?.username || null;
                     const name = n.display_name || profiles[n.user_id]?.display_name || username || "Friend";
                     const place = n.place_name || n.place_locality || n.profile_place_name;
+                const status = wumpPresenceBits(n).slice(0, 2).join(" · ");
                     return (
                       <button
                         key={n.user_id}
@@ -765,7 +874,8 @@ export default function BumpHub({
                         className="shrink-0 rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-txt ring-1 ring-white/10 transition hover:bg-white/10"
                       >
                         <span className="text-sky-200/90">{wumpUsernameHandle(username) || name}</span>
-                        {place ? <span className="text-sub"> · {place}</span> : null}
+                        {status ? <span className="text-sub"> · {status}</span> : null}
+                        {place && !status.includes(place) ? <span className="text-sub"> · {place}</span> : null}
                       </button>
                     );
                   })}
@@ -782,6 +892,27 @@ export default function BumpHub({
               }}
               onChanged={(id, patch) => setSavedPlaces((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)))}
             />
+            {me && (
+              <WumpTogetherPanel me={me} myLat={myLat} myLng={myLng} placeName={myPlaceName} friendIds={friendIds} />
+            )}
+            {showOnboarding && privacy && (
+              <WumpOnboarding
+                precision={privacy.wump_precision}
+                audience={privacy.wump_default_visible}
+                live={live}
+                canSaveHome={myLat != null && myLng != null}
+                friendCount={friendIds.length}
+                busy={busy}
+                onPrecision={(v) => patchOnboardingPrivacy({ wump_precision: v })}
+                onAudience={(v) => {
+                  setVisible(v);
+                  patchOnboardingPrivacy({ wump_default_visible: v });
+                }}
+                onGoLive={() => void goLive()}
+                onSaveHome={() => void saveHomeFromOnboarding()}
+                onDone={() => void finishOnboarding()}
+              />
+            )}
             {!bumpOnly && (
               <a
                 href={bumpIpaReleasesUrl()}
@@ -940,18 +1071,12 @@ export default function BumpHub({
                 if (!n) return "";
                 const walkMin = Math.max(1, Math.round(n.meters / 84)); // ~1.4 m/s walking
                 const eta = walkMin < 60 ? `~${walkMin} min walk` : `~${(walkMin / 60).toFixed(1)} h walk`;
-                return `${formatMeters(n.meters)} · ${eta} · ${n.visible}${n.label ? ` · ${n.label}` : ""}`;
+                const presence = wumpPresenceBits(n).slice(0, 2).join(" · ");
+                return `${formatMeters(n.meters)} · ${eta}${presence ? ` · ${presence}` : ""} · ${n.visible}${n.label ? ` · ${n.label}` : ""}`;
               }}
               onOpen={openPerson}
               onMessage={openMessages}
-              onWave={(id) => {
-                void bumpWave(id).then((row) => {
-                  if (row) {
-                    toast("Wave sent", "success");
-                    openMessages(id);
-                  }
-                });
-              }}
+              onWave={(id) => sendNudge(id, "wave", true)}
               onRefresh={() => void refresh()}
             />
 
@@ -1080,14 +1205,7 @@ export default function BumpHub({
             nearbyById={nearbyById}
             onOpen={openPerson}
             onMessage={openMessages}
-            onWave={(id) => {
-              void bumpWave(id).then((row) => {
-                if (row) {
-                  toast("Wave sent", "success");
-                  openMessages(id);
-                }
-              });
-            }}
+            onWave={(id) => sendNudge(id, "wave", true)}
             onSharePin={(id) => {
               setShareBusy(true);
               void bumpShareLocationWithFriend(id, liveLabel.trim() || undefined).finally(() => setShareBusy(false));
@@ -1124,11 +1242,7 @@ export default function BumpHub({
               setShareBusy(true);
               void bumpShareLocationWithFriend(id, liveLabel.trim() || undefined).finally(() => setShareBusy(false));
             }}
-            onWave={(id) => {
-              void bumpWave(id).then((row) => {
-                if (row) toast("Wave sent", "success");
-              });
-            }}
+            onWave={(id) => sendNudge(id, "wave", false)}
           />
         )}
       </div>

@@ -6,6 +6,8 @@ import type { BumpNearby } from "@/lib/bump";
 import type { LMap, LeafletNS } from "@/lib/geo";
 import { externalMapsUrl, fmtDistance } from "@/lib/wumpMapApi";
 import { useApp } from "@/store/app";
+import { wumpPresenceBits, type WumpNudgeKind } from "@/lib/wumpTogether";
+import WumpNudgeBar from "./WumpNudgeBar";
 import Avatar from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +45,7 @@ export default function WumpLiveWith({
   onClose,
   onMessage,
   onProfile,
+  onNudge,
 }: {
   mapRef: React.RefObject<LMap | null>;
   LRef: React.RefObject<LeafletNS | null>;
@@ -53,6 +56,7 @@ export default function WumpLiveWith({
   onClose: () => void;
   onMessage?: (id: string) => void;
   onProfile: (id: string) => void;
+  onNudge?: (id: string, kind: WumpNudgeKind) => void;
 }) {
   const p = useApp((s) => s.profiles[friendId]);
   const [now, setNow] = useState(() => Date.now());
@@ -133,6 +137,7 @@ export default function WumpLiveWith({
   const kmh = friend?.speed_mps != null && friend.speed_mps > 0.5 ? Math.round(friend.speed_mps * 3.6) : null;
   const dir = friend?.heading != null && Number.isFinite(friend.heading) ? COMPASS[Math.round((((friend.heading % 360) + 360) % 360) / 45) % 8] : null;
   const place = friend?.place_name || friend?.place_locality || null;
+  const bits = wumpPresenceBits(friend);
 
   return (
     <div className="absolute inset-x-3 bottom-[7.75rem] z-30 overflow-hidden rounded-2xl bg-white/97 shadow-2xl ring-1 ring-amber-300/60 backdrop-blur-md">
@@ -150,7 +155,7 @@ export default function WumpLiveWith({
             {friend ? (
               <>
                 <span className={liveNow ? "font-semibold text-emerald-600" : ""}>{liveNow ? "● Live" : "Last seen"}</span> · updated {ageText(age ?? 0)}
-                {place ? ` · ${place}` : ""}
+                {bits.length ? ` · ${bits.join(" · ")}` : place ? ` · ${place}` : ""}
               </>
             ) : (
               "Not sharing their location with you right now"
@@ -161,6 +166,8 @@ export default function WumpLiveWith({
           <X className="size-4" />
         </button>
       </div>
+
+      {onNudge && <WumpNudgeBar onNudge={(kind) => onNudge(friendId, kind)} />}
 
       {friend && (
         <div className="grid grid-cols-3 gap-px border-t border-slate-100 bg-slate-100 text-center">
