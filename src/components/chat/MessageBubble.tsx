@@ -25,6 +25,7 @@ import GameInvite from "@/components/games/GameInvite";
 import { ScoreChallengeCard } from "@/components/games/ScoreChallenge";
 import ServerInvite from "@/components/space/ServerInvite";
 import LinkEmbed from "./LinkEmbed";
+import AcetateEmbed from "@/components/acetate/AcetateEmbed";
 import MessageVeil from "./MessageVeil";
 import { PollCard } from "./Poll";
 import { POLL_RE } from "@/lib/polls";
@@ -392,8 +393,10 @@ function MessageBubbleImpl({
                 !POLL_RE.test(displayContent) &&
                 !JAM_RE.test(displayContent) &&
                 !CAPSULE_RE.test(displayContent) &&
-                !BUMP_PIN_RE.test(displayContent) && <LinkEmbed text={displayContent} mine={mine} />}
+                !BUMP_PIN_RE.test(displayContent) &&
+                !displayContent.includes("/acetate/s/") && <LinkEmbed text={displayContent} mine={mine} />}
               {displayContent.includes("/v/") && !deleted && <VideoEmbed text={displayContent} />}
+              {displayContent.includes("/acetate/s/") && !deleted && <AcetateEmbed text={displayContent} />}
               {displayContent.includes("play=") && !deleted && <GameInvite text={displayContent} />}
               {m.content.includes("🎯") && /Beat my score/i.test(m.content) && !deleted && <ScoreChallengeCard text={m.content} fromId={m.author_id} />}
               {(displayContent.includes("/i/") || /[?&]join=/.test(displayContent)) && !deleted && <ServerInvite text={displayContent} />}

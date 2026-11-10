@@ -47,7 +47,7 @@ export type NowPlaying = {
   url?: string | null;
   image?: string | null;
   at: string;
-  source?: "spotify";
+  source?: "spotify" | "acetate";
   id?: string;
   artists?: { name: string; url: string | null }[];
   album?: string | null;

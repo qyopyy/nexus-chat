@@ -1,0 +1,15 @@
+{
+  "name": "Acetate",
+  "short_name": "Acetate",
+  "description": "A private library for works in progress. Upload demos, keep every version, and pass a link when a cut is ready to hear.",
+  "start_url": "/acetate/app",
+  "scope": "/acetate/",
+  "display": "standalone",
+  "background_color": "#100e0c",
+  "theme_color": "#100e0c",
+  "icons": [
+    { "src": "/acetate-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/acetate-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/acetate-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
