@@ -366,6 +366,10 @@ begin
     into prec, record_trail
   from public.user_privacy up
   where up.user_id = new.user_id;
+  if not found then
+    prec := 'approx';
+    record_trail := false;
+  end if;
 
   if record_trail then
     select t.lat, t.lng, t.recorded_at
