@@ -40,6 +40,8 @@ export type AcetateTrack = {
   bpm?: number | null;
   musical_key?: string | null;
   folder?: string | null;
+  lyrics?: string | null;
+  lyrics_on_share?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -144,6 +146,7 @@ export type SharedTrack = {
   note: string | null;
   position?: number;
   art: string | null;
+  lyrics?: string | null;
   versions: SharedVersion[];
   comments: SharedComment[];
 };
@@ -259,6 +262,8 @@ export async function updateTrack(
     bpm?: number | null;
     musical_key?: string | null;
     folder?: string | null;
+    lyrics?: string | null;
+    lyrics_on_share?: boolean;
   },
 ) {
   const { error } = await supabase.from("acetate_tracks").update(patch).eq("id", id);
@@ -546,6 +551,58 @@ export async function sendToNexusChat(conversationId: string, title: string, url
     content,
   });
   if (error) throw new Error(errorText(error));
+}
+
+export async function toggleLike(trackId: string) {
+  return rpc<{ liked: boolean; count: number }>("acetate_toggle_like", { p_track: trackId });
+}
+
+export async function setFollow(userId: string, on: boolean) {
+  await rpc<void>("acetate_set_follow", { p_user: userId, p_on: on });
+}
+
+export async function inviteCollaborator(projectId: string, username: string, role: "listener" | "editor") {
+  await rpc<void>("acetate_invite_collaborator", { p_project: projectId, p_username: username, p_role: role });
+}
+
+export async function removeCollaborator(projectId: string, userId: string) {
+  await rpc<void>("acetate_remove_collaborator", { p_project: projectId, p_user: userId });
+}
+
+export type AcetateCollaborator = { project_id: string; user_id: string; role: "listener" | "editor"; created_at: string };
+export type AcetateNotice = { id: number; user_id: string; kind: "comment" | "collab"; track_id: string | null; project_id: string | null; body: string; read_at: string | null; created_at: string };
+
+export async function loadCollaborators(projectId: string) {
+  const { data, error } = await supabase.from("acetate_collaborators").select("project_id, user_id, role, created_at").eq("project_id", projectId);
+  if (error) return [] as AcetateCollaborator[];
+  return (data ?? []) as AcetateCollaborator[];
+}
+
+export async function loadNotices() {
+  const { data, error } = await supabase.from("acetate_notifications").select("id, user_id, kind, track_id, project_id, body, read_at, created_at").order("created_at", { ascending: false }).limit(30);
+  if (error) return [] as AcetateNotice[];
+  return (data ?? []) as AcetateNotice[];
+}
+
+export async function markNotices(id?: number) {
+  await rpc<void>("acetate_mark_notifications", { p_id: id ?? null });
+}
+
+export type AcetatePublicProfile = {
+  ok: boolean;
+  id?: string;
+  username?: string;
+  display_name?: string;
+  followers?: number;
+  following?: number;
+  is_following?: boolean;
+  tracks?: { id: string; title: string; status: string | null; likes: number; liked: boolean }[];
+};
+
+export async function loadPublicProfile(username: string) {
+  const { data, error } = await supabase.rpc("acetate_public_profile", { p_username: username });
+  if (error) throw new Error(errorText(error));
+  return data as AcetatePublicProfile;
 }
 
 export function reportAcetateError(e: unknown) {
