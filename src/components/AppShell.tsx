@@ -85,6 +85,10 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
 
   useRealtime(bootstrapped ? userId : null);
   useHandsetReporter(bootstrapped ? userId : null);
+  useEffect(() => {
+    if (!bootstrapped) return;
+    void import("@/lib/nexusCloud").then(({ syncCloudIfDue }) => syncCloudIfDue().catch(() => undefined));
+  }, [bootstrapped]);
 
   useEffect(() => {
     if (!bootstrapped || !userId) return;

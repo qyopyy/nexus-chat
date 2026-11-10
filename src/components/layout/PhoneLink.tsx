@@ -14,6 +14,7 @@ import {
   thisDeviceId,
   type Handset,
 } from "@/lib/handset";
+import { incomingDrops, openDrop, sendDrop, type NexusDrop } from "@/lib/nexusDrop";
 
 function fresh(row: Handset) {
   return Date.now() - new Date(row.last_seen).getTime() < 3 * 60_000;
@@ -33,6 +34,8 @@ export default function PhoneLink() {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const [link, setLink] = useState("");
+  const [drops, setDrops] = useState<NexusDrop[]>([]);
+  const [dropUser, setDropUser] = useState("");
   const mine = thisDeviceId();
   const seenPing = useRef<string | null>(null);
 
@@ -44,9 +47,11 @@ export default function PhoneLink() {
       if (live) setRows((data ?? []) as Handset[]);
     };
     void load();
+    void incomingDrops().then(setDrops);
     const channel = supabase
       .channel(`handset:${userId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "nexus_handsets", filter: `user_id=eq.${userId}` }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "nexus_drops" }, () => void incomingDrops().then(setDrops))
       .subscribe();
     return () => {
       live = false;
@@ -69,25 +74,40 @@ export default function PhoneLink() {
 
   const phones = rows.filter((row) => row.kind === "phone" && row.device_id !== mine);
   const livePhone = phones.find(fresh) ?? phones[0];
-  if (!userId || !livePhone) return null;
-  const ago = Math.max(0, Math.round((Date.now() - new Date(livePhone.last_seen).getTime()) / 1000));
-  const until = mins(livePhone.full_in_sec);
+  if (!userId) return null;
+  const ago = livePhone ? Math.max(0, Math.round((Date.now() - new Date(livePhone.last_seen).getTime()) / 1000)) : 0;
+  const until = livePhone ? mins(livePhone.full_in_sec) : null;
+  if (!livePhone && drops.length === 0 && !open) {
+    return (
+      <div className="border-t border-line px-2 py-1.5">
+        <button type="button" onClick={() => setOpen(true)} className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-xs text-sub hover:bg-hover">
+          <MonitorSmartphone className="size-4" /> Drop a file to another screen
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="border-t border-line px-2 py-1.5">
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-hover">
-        {livePhone.charging ? <BatteryCharging className="size-4 text-ok" /> : <BatteryMedium className="size-4 text-sub" />}
+        {livePhone?.charging ? <BatteryCharging className="size-4 text-ok" /> : <BatteryMedium className="size-4 text-sub" />}
         <span className="min-w-0 flex-1 truncate text-xs">
-          {livePhone.label}
-          {livePhone.battery == null ? " · battery hidden by this phone's browser" : ` · ${livePhone.battery}%`}
-          {livePhone.charging ? " · charging" : ""}
-          {livePhone.charging && until ? ` · ${until}` : ""}
+          {livePhone ? (
+            <>
+              {livePhone.label}
+              {livePhone.battery == null ? " · battery hidden by this phone's browser" : ` · ${livePhone.battery}%`}
+              {livePhone.charging ? " · charging" : ""}
+              {livePhone.charging && until ? ` · ${until}` : ""}
+            </>
+          ) : (
+            "Drop"
+          )}
         </span>
         <MonitorSmartphone className="size-3.5 text-sub" />
       </button>
       {open && (
         <div className="mt-1 space-y-2 rounded-md bg-hover/60 p-2 text-xs">
-          <p className="text-sub">{fresh(livePhone) ? `Seen ${ago}s ago` : "The phone tab looks asleep. Keep Nexus open on the phone."}</p>
+          {livePhone && <p className="text-sub">{fresh(livePhone) ? `Seen ${ago}s ago` : "The phone tab looks asleep. Keep Nexus open on the phone."}</p>}
           {livePhone.note && <p>{livePhone.note}</p>}
           {livePhone.link_url && (
             <a href={livePhone.link_url} target="_blank" rel="noreferrer" className="block truncate text-accent" onClick={() => void clearHandsetLink()}>
@@ -121,10 +141,41 @@ export default function PhoneLink() {
               </button>
             </>
           )}
-          <button type="button" className="text-dnd" onClick={() => void forgetHandset(livePhone.device_id)}>
-            Forget this phone
-          </button>
+          {livePhone && (
+            <button type="button" className="text-dnd" onClick={() => void forgetHandset(livePhone.device_id)}>
+              Forget this phone
+            </button>
+          )}
+          <form
+            className="space-y-1"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const input = (e.currentTarget.elements.namedItem("drop") as HTMLInputElement).files?.[0];
+              if (!input) return;
+              void sendDrop(input, dropUser).then(() => incomingDrops().then(setDrops)).catch((err: Error) => toast(err.message, "error"));
+              e.currentTarget.reset();
+            }}
+          >
+            <input name="drop" type="file" className="w-full" />
+            <input value={dropUser} onChange={(e) => setDropUser(e.target.value)} placeholder="Friend username, or blank for your other screens" className="w-full rounded bg-panel px-2 py-1 outline-none" />
+            <button type="submit" className="rounded bg-accent px-2 py-1 text-white">Drop</button>
+          </form>
         </div>
+      )}
+      {drops.length > 0 && (
+        <ul className="mt-1 space-y-1">
+          {drops.map((drop) => (
+            <li key={drop.id}>
+              <button
+                type="button"
+                className="w-full truncate rounded bg-accent/15 px-2 py-1 text-left text-xs"
+                onClick={() => void openDrop(drop).then((url) => window.open(url, "_blank", "noopener")).then(() => incomingDrops().then(setDrops)).catch((err: Error) => toast(err.message, "error"))}
+              >
+                Drop · {drop.name}
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
