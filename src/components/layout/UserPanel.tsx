@@ -13,12 +13,14 @@ import Avatar, { statusLabel } from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import { NexusCredit, copyNexusAppLink } from "@/components/ui/NexusCredit";
 import MenuMusic from "./MenuMusic";
+import PhoneLink from "./PhoneLink";
 import type { UserStatus } from "@/lib/types";
 
 export default function UserPanel() {
   return (
     <div className="bg-panel">
       <VoicePanel />
+      <PhoneLink />
       <MeRow />
     </div>
   );
