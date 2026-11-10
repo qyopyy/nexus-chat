@@ -2,6 +2,7 @@
 
 import { primeSignedUrl, storageRef } from "./storage";
 import { supabase, errorText } from "./supabase";
+import { previewLine, readsFromRows, reactionSame, restoreContent } from "./hundred";
 import { useApp, toast } from "@/store/app";
 import { useChat } from "@/store/chat";
 import { effectForText, playEffect, type EffectKind } from "./effects";
@@ -353,6 +354,7 @@ export async function loadMessages(convId: string) {
     conversationId: convId,
     messages: [],
     reactions: {},
+    reads: {},
     loading: true,
     hasMore: true,
     replyTo: null,
@@ -369,7 +371,13 @@ export async function loadMessages(convId: string) {
   const msgs = ((data ?? []) as Message[]).reverse();
   useChat.setState({ messages: msgs, loading: false, hasMore: msgs.length === PAGE });
   void loadTtl(convId);
-  await Promise.all([loadReactions(msgs.map((m) => m.id)), loadProfiles(msgs.map((m) => m.author_id)), markRead(convId)]);
+  await Promise.all([loadReactions(msgs.map((m) => m.id)), loadProfiles(msgs.map((m) => m.author_id)), markRead(convId), loadReadStates(convId)]);
+}
+
+export async function loadReadStates(convId: string) {
+  const { data } = await supabase.from("read_states").select("user_id,last_read_at").eq("conversation_id", convId);
+  if (useChat.getState().conversationId !== convId) return;
+  useChat.setState({ reads: readsFromRows((data ?? []) as { user_id: string; last_read_at: string }[]) });
 }
 
 export async function loadOlder() {
@@ -711,34 +719,56 @@ export async function editMessage(id: string, content: string) {
     else toast(`Messages can be up to ${msgLimit(tier).toLocaleString()} characters.`, "error");
     return;
   }
+  const prev = useChat.getState().messages.find((m) => m.id === id);
+  const prevText = prev?.content ?? text;
+  const prevEdited = prev?.edited_at ?? null;
   useChat.setState((s) => ({
     messages: s.messages.map((m) => (m.id === id ? { ...m, content: text, edited_at: new Date().toISOString() } : m)),
     editingId: null,
   }));
   const { error } = await supabase.from("messages").update({ content: text, edited_at: new Date().toISOString() }).eq("id", id);
-  if (error) toast(errorText(error), "error");
+  if (error) {
+    const back = restoreContent(prevText, true);
+    if (back != null) {
+      useChat.setState((s) => ({
+        messages: s.messages.map((m) => (m.id === id ? { ...m, content: back, edited_at: prevEdited } : m)),
+      }));
+    }
+    toast(errorText(error), "error");
+  }
 }
 
 export async function deleteMessage(id: string) {
+  const prev = useChat.getState().messages.find((m) => m.id === id)?.deleted_at ?? null;
   useChat.setState((s) => ({ messages: s.messages.map((m) => (m.id === id ? { ...m, deleted_at: new Date().toISOString() } : m)) }));
   // RPC lets moderators remove other people's messages too (and logs it)
   const { error } = await supabase.rpc("mod_delete_message", { p_id: id });
-  if (error) toast(errorText(error), "error");
+  if (error) {
+    useChat.setState((s) => ({ messages: s.messages.map((m) => (m.id === id ? { ...m, deleted_at: prev } : m)) }));
+    toast(errorText(error), "error");
+  }
 }
 
 export async function toggleReaction(msg: Message, emoji: string) {
   const me = get().userId;
   if (!me) return;
-  const mine = (useChat.getState().reactions[msg.id] ?? []).some((r) => r.user_id === me && r.emoji === emoji);
+  const mine = (useChat.getState().reactions[msg.id] ?? []).some((r) => reactionSame(r, { user_id: me, emoji }));
   if (mine) {
     removeReactionLocal({ message_id: msg.id, user_id: me, emoji });
-    await supabase.from("message_reactions").delete().match({ message_id: msg.id, user_id: me, emoji });
+    const { error } = await supabase.from("message_reactions").delete().match({ message_id: msg.id, user_id: me, emoji });
+    if (error) {
+      addReactionLocal({ message_id: msg.id, user_id: me, emoji, conversation_id: msg.conversation_id });
+      toast(errorText(error), "error");
+    }
   } else {
     addReactionLocal({ message_id: msg.id, user_id: me, emoji, conversation_id: msg.conversation_id });
     const { error } = await supabase
       .from("message_reactions")
       .insert({ message_id: msg.id, user_id: me, emoji, conversation_id: msg.conversation_id });
-    if (error && !error.message.includes("duplicate")) toast(errorText(error), "error");
+    if (error && !error.message.includes("duplicate")) {
+      removeReactionLocal({ message_id: msg.id, user_id: me, emoji });
+      toast(errorText(error), "error");
+    }
   }
 }
 
@@ -767,7 +797,7 @@ export function bumpChatList(m: Message) {
     if (idx === -1) return s;
     const item: ChatListItem = {
       ...s.chatList[idx],
-      last_message: m.hidden ? "🙈 Hidden message" : m.spoiler ? "⚠️ Spoiler" : m.content || (m.attachment_name ? `📎 ${m.attachment_name}` : ""),
+      last_message: previewLine(m),
       last_author_id: m.author_id,
       last_message_at: m.created_at,
     };

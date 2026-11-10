@@ -16,6 +16,7 @@ import {
   type WumpMeetup,
   type WumpPlaceEvent,
 } from "@/lib/wumpTogether";
+import { clampEta, inviteCountLabel, meetupsEventName, minutesLabel, placesEventName, pollMs, rsvpWord, validMeetup } from "@/lib/hundred";
 
 function whenLabel(iso: string) {
   const d = new Date(iso);
@@ -58,18 +59,20 @@ export default function WumpTogetherPanel({
   useEffect(() => {
     void refresh();
     const onPing = () => void refresh();
-    window.addEventListener("wump-meetups", onPing);
+    window.addEventListener(meetupsEventName(), onPing);
+    window.addEventListener(placesEventName(), onPing);
     const unsub = subscribeWumpMeetups(() => void refresh());
-    const t = setInterval(() => void refresh(), 30_000);
+    const t = setInterval(() => void refresh(), pollMs(false));
     return () => {
-      window.removeEventListener("wump-meetups", onPing);
+      window.removeEventListener(meetupsEventName(), onPing);
+      window.removeEventListener(placesEventName(), onPing);
       unsub();
       clearInterval(t);
     };
   }, [refresh]);
 
   async function create() {
-    if (myLat == null || myLng == null) return;
+    if (myLat == null || myLng == null || !validMeetup(title || "Meet up", myLat, myLng)) return;
     setBusy(true);
     const row = await wumpCreateMeetup({
       title: title || "Meet up",
@@ -157,7 +160,7 @@ export default function WumpTogetherPanel({
             className="inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-3 py-1.5 text-xs font-bold text-amber-950 disabled:opacity-50"
           >
             <MapPinned className="size-3.5" />
-            {busy ? "Sending…" : picked.length ? `Invite ${picked.length}` : "Save meetup"}
+            {busy ? "Sending…" : inviteCountLabel(picked.length)}
           </button>
         </div>
       )}
@@ -176,7 +179,7 @@ export default function WumpTogetherPanel({
                     <div className="truncate text-[11px] text-sub">
                       {mine ? "You" : host}
                       {m.place_name ? ` · ${m.place_name}` : ""} · {whenLabel(m.starts_at)}
-                      {m.my_eta_min != null ? ` · your ETA ${m.my_eta_min} min` : ""}
+                      {m.my_eta_min != null ? ` · your ETA ${minutesLabel(clampEta(m.my_eta_min))}` : ""}
                     </div>
                   </div>
                   {mine && (
@@ -210,7 +213,7 @@ export default function WumpTogetherPanel({
                         m.my_status === st ? "bg-white text-black" : "bg-white/5 text-sub hover:bg-white/10",
                       )}
                     >
-                      {st === "no" ? "Can't" : st}
+                      {rsvpWord(st)}
                     </button>
                   ))}
                   <button

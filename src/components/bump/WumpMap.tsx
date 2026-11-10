@@ -37,6 +37,7 @@ import { wumpGeocode, wumpPlaceShort } from "@/lib/wumpGeocode";
 import type { WumpSavedPlace } from "@/lib/wumpPlaces";
 import { wumpProfileUrl } from "@/lib/wumpPlaces";
 import { wumpFriendTrail, wumpListMeetups, wumpMyTrail, type WumpNudgeKind } from "@/lib/wumpTogether";
+import { freshPin, motionClass, prefersReducedMotion, shortPlace, trailEventName } from "@/lib/hundred";
 import { useApp } from "@/store/app";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
@@ -274,7 +275,7 @@ export default function WumpMap({
     const onMeet = () => void pullMeetups();
     const onTrail = () => void pullMine();
     window.addEventListener("wump-meetups", onMeet);
-    window.addEventListener("wump-trail", onTrail);
+    window.addEventListener(trailEventName(), onTrail);
     const t = setInterval(() => {
       void pullMine();
       void pullFriend();
@@ -284,7 +285,7 @@ export default function WumpMap({
       off = true;
       clearInterval(t);
       window.removeEventListener("wump-meetups", onMeet);
-      window.removeEventListener("wump-trail", onTrail);
+      window.removeEventListener(trailEventName(), onTrail);
       histRef.current?.remove();
       histRef.current = null;
       friendTrailRef.current?.remove();
@@ -682,7 +683,7 @@ export default function WumpMap({
   };
 
   const liveFriends = nearby.filter((n) => (n.age_seconds ?? 0) < 90).length;
-  const shownPlace = myPlaceName || resolvedMine;
+  const shownPlace = shortPlace(myPlaceName || resolvedMine, 48);
   const profileHref = myUsername ? wumpProfileUrl(myUsername) : null;
   const pct = Math.max(0, Math.min(100, explorePercent || 0));
   const exploreTitle =
@@ -824,7 +825,7 @@ export default function WumpMap({
             .sort((a, b) => (a.age_seconds ?? 1e9) - (b.age_seconds ?? 1e9))
             .slice(0, 5)
             .map((n) => {
-              const fresh = (n.age_seconds ?? 1e9) < 90;
+              const fresh = freshPin(n.age_seconds);
               const ps = plusStyles[n.user_id];
               return (
                 <button
@@ -859,7 +860,7 @@ export default function WumpMap({
       )}
 
       {nudgeBurst && (
-        <div key={nudgeBurst.id} className="pointer-events-none absolute top-[28%] left-1/2 z-40 -translate-x-1/2 animate-bounce text-6xl drop-shadow-lg">
+        <div key={nudgeBurst.id} className={motionClass(prefersReducedMotion(), "pointer-events-none absolute top-[28%] left-1/2 z-40 -translate-x-1/2 animate-bounce text-6xl drop-shadow-lg")}>
           {nudgeBurst.emoji}
         </div>
       )}

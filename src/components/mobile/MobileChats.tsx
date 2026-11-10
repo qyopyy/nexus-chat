@@ -10,6 +10,7 @@ import { cn, formatListTime } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import Sheet, { SheetGroup, SheetItem } from "@/components/ui/Sheet";
+import { listPreviewAuthor } from "@/lib/hundred";
 import StoriesStrip from "./StoriesStrip";
 import PushPrompt from "./PushPrompt";
 import SwipeRow from "./SwipeRow";
@@ -179,8 +180,8 @@ export default function MobileChats() {
             const n = unread[c.id] ?? 0;
             const isPinned = pinned.includes(c.id);
             const isMuted = muted.includes(c.id);
-            const lastAuthor = c.last_author_id === me ? "You" : c.kind === "group" ? profiles[c.last_author_id ?? ""]?.display_name?.split(" ")[0] : null;
-            const voice = c.last_message?.startsWith("📎 voice-");
+            const lastAuthor = listPreviewAuthor(me, c.last_author_id, profiles[c.last_author_id ?? ""]?.display_name?.split(" ")[0], c.kind);
+            const voice = c.last_message === "Voice message" || c.last_message?.startsWith("📎 voice-");
             return (
               <SwipeRow
                 key={c.id}

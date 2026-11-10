@@ -6,6 +6,7 @@ import { appleMapsLink } from "@/lib/appleMaps";
 import { timeAgo } from "@/lib/videos";
 import { wumpPlaceSubtitle, type WumpPlaceRole, type WumpSavedPlace } from "@/lib/wumpPlaces";
 import { wumpRoleEmoji, wumpSetPlaceWatch } from "@/lib/wumpTogether";
+import { alertSummary, roleChip } from "@/lib/hundred";
 import { createPlaceFolder, deletePlaceFolder, listPlaceFolders, renamePlaceFolder, setPlaceFolder, type WumpPlaceFolder } from "@/lib/wumpShare";
 import { cn } from "@/lib/utils";
 
@@ -200,7 +201,7 @@ export default function WumpSavedPlacesPanel({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 truncate text-sm font-semibold text-txt">
                           <span className="truncate">{p.name}</span>
-                          {p.role && <span className="shrink-0 text-[10px] font-bold text-amber-200">{wumpRoleEmoji(p.role)} {p.role}</span>}
+                          {roleChip(p.role) && <span className="shrink-0 text-[10px] font-bold text-amber-200">{wumpRoleEmoji(p.role)} {roleChip(p.role)}</span>}
                           {(p.alert_arrive || p.alert_leave) && <Bell className="size-3 shrink-0 text-sky-300" />}
                         </div>
                         <div className="truncate text-[11px] text-sub">
@@ -254,7 +255,7 @@ export default function WumpSavedPlacesPanel({
                           </button>
                         </div>
                         <p className="text-[10px] leading-relaxed text-sub">
-                          Alerts use your fuzzed Live pin (about {p.alert_radius_m ?? 150} m). City precision is too coarse, so alerts wait until you use Exact or ~100 m. “Tell friends” only messages people who can already see your pin, and it names the place — no coordinates.
+                          {alertSummary(p.alert_arrive, p.alert_leave, p.share_moves)}. Alerts use your fuzzed Live pin (about {p.alert_radius_m ?? 150} m). City precision is too coarse, so alerts wait until you use Exact or ~100 m. “Tell friends” only messages people who can already see your pin, and it names the place — no coordinates.
                         </p>
                       </div>
                     )}
