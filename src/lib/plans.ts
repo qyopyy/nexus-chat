@@ -31,7 +31,7 @@ export const PLANS: Plan[] = [
     price: 5.99,
     color: "#00e5ff",
     emoji: "💎",
-    perks: ["Everything in Lighting", "Shield 360 content protection — up to 10 songs", "Spotify & Apple Music takedown notices", "Nexus Drive — unlimited private cloud & share links", "Priority support from qyopy"],
+    perks: ["Everything in Lighting", "Shield 360 content protection — up to 10 songs", "Spotify & Apple Music takedown notices", "Nexus Drive — unlimited private cloud & share links", "Nexus Cloud — photos, files, and voice memos, synced at least once a day", "Priority support from qyopy"],
   },
   {
     id: "dist",

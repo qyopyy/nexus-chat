@@ -164,6 +164,9 @@ function MeRow() {
             >
               <Link2 className="size-4" /> Share Nexus app link
             </button>
+            <a href="/cloud" className="flex w-full items-center gap-3 rounded px-2 py-1.5 hover:bg-accent hover:text-white">
+              Cloud
+            </a>
             <button
               onClick={() => setPref("buttonFx", !buttonFx)}
               className="flex w-full items-center gap-3 rounded px-2 py-1.5 hover:bg-accent hover:text-white"
