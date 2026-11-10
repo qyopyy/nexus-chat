@@ -86,7 +86,7 @@ export default function UntitledHub({ mobile }: { mobile?: boolean }) {
   const [queueTracks, setQueueTracks] = useState<UntitledTrack[]>([]);
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col text-[#f3efe6]" style={{ background: "linear-gradient(180deg,#12100e 0%,#1a1714 45%,#0f0e0c 100%)" }}>
+    <div className="relative flex h-full min-h-0 flex-col text-[#f4f1ea]" style={{ background: "#070709" }}>
       <div className="pointer-events-none absolute inset-0 opacity-40" style={{ background: "radial-gradient(ellipse at 30% 0%,rgba(196,165,116,0.18),transparent 50%)" }} />
 
       <header className={cn("relative z-10 flex shrink-0 items-center gap-2 border-b border-white/5 px-3", mobile ? "pt-safe-3 pb-2" : "h-12")}>
@@ -149,7 +149,7 @@ function Home() {
     <div className="mx-auto max-w-2xl py-6">
       <div className="mb-8">
         <div className="text-[10px] font-semibold tracking-[0.22em] text-[#c4a574]/80 uppercase">Private cutting room</div>
-        <h1 className="mt-2 text-4xl font-semibold tracking-tight text-[#f3efe6]">{CUTROOM}</h1>
+        <h1 className="mt-2 font-serif text-5xl tracking-tight text-[#f4f1ea]">{CUTROOM}</h1>
         <p className="mt-2 max-w-md text-sm text-[#8a8478]">
           Upload unfinished demos (mp3, wav, m4a, mp4…), version them, share listen or download links, and grow a public profile when you&apos;re ready.
         </p>
@@ -185,6 +185,18 @@ function Home() {
           <p className="mt-3 text-sm text-[#8a8478]">No projects yet. Create one and drop in a sketch.</p>
         </div>
       ) : (
+        <div>
+          <div className="mb-6 flex gap-3 overflow-x-auto pb-2">
+            {projects.map((p) => (
+              <button key={`cover-${p.id}`} onClick={() => untitledGo({ view: "project", id: p.id })} className="w-36 shrink-0 text-left sm:w-40">
+                <span className="grid aspect-square w-full place-items-center rounded-xl shadow-lg" style={{ background: `linear-gradient(160deg,${p.color},#101614)` }}>
+                  <Disc3 className="size-8 text-white/80" />
+                </span>
+                <span className="mt-2 block truncate text-sm font-semibold">{p.title}</span>
+                <span className="block text-xs text-[#8d8880]">{p.track_count} tracks</span>
+              </button>
+            ))}
+          </div>
         <div className="space-y-2">
           {projects.map((p) => (
             <button key={p.id} onClick={() => untitledGo({ view: "project", id: p.id })} className="flex w-full items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.03] p-3 text-left hover:bg-white/[0.05]">
@@ -199,6 +211,7 @@ function Home() {
               </span>
             </button>
           ))}
+        </div>
         </div>
       )}
     </div>

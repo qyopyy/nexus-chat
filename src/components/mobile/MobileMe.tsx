@@ -236,6 +236,12 @@ export default function MobileMe() {
       )}
 
       <div className="mx-4 mt-4 overflow-hidden rounded-2xl bg-side">
+        <a href="/iphone" className="flex w-full items-center px-4 py-3.5 text-[16px] font-semibold active:bg-white/[.06]">
+          iPhone tools
+        </a>
+      </div>
+
+      <div className="mx-4 mt-4 overflow-hidden rounded-2xl bg-side">
         <button
           onClick={async () => {
             await leaveCall();

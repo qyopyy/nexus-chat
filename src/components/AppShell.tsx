@@ -29,9 +29,11 @@ import ButtonFxBoot from "./ButtonFxBoot";
 import WelcomeSplash from "./WelcomeSplash";
 import ErrorBoundary from "./ErrorBoundary";
 import { useIsMobile } from "@/lib/useMobile";
+import { useHandsetReporter } from "@/lib/handset";
 import { startSpotifySync } from "@/lib/spotifyUser";
 import { startMediaAudio } from "@/lib/mediaAudio";
 import "@/lib/prefs";
+import "@/lib/iphoneKit";
 import { startPush } from "@/lib/push";
 import { joinGame } from "@/store/games";
 import GamesHub from "@/components/games/GamesHub";
@@ -83,6 +85,24 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
   }, [userId]);
 
   useRealtime(bootstrapped ? userId : null);
+  useHandsetReporter(bootstrapped ? userId : null);
+  useEffect(() => {
+    if (!bootstrapped) return;
+    void import("@/lib/nexusCloud").then(({ syncCloudIfDue }) => syncCloudIfDue().catch(() => undefined));
+    try {
+      if (sessionStorage.getItem("nexus:open-settings") === "1") {
+        sessionStorage.removeItem("nexus:open-settings");
+        openModal("settings");
+      }
+      const tab = sessionStorage.getItem("nexus:open-tab");
+      if (tab === "friends" || tab === "chats" || tab === "me") {
+        sessionStorage.removeItem("nexus:open-tab");
+        useApp.setState({ mobileTab: tab });
+      }
+    } catch {
+      /* private mode */
+    }
+  }, [bootstrapped]);
 
   useEffect(() => {
     if (!bootstrapped || !userId) return;

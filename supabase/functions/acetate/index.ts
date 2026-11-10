@@ -110,7 +110,8 @@ Deno.serve(async (req: Request) => {
       signedTracks.push({
         id: track.id,
         title: track.title,
-        note: track.note,
+        note: null,
+        lyrics: (track as { lyrics?: string | null }).lyrics ?? null,
         position: track.position,
         art: await sign(track.artwork_path),
         versions,

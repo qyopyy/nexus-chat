@@ -13,12 +13,14 @@ import Avatar, { statusLabel } from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import { NexusCredit, copyNexusAppLink } from "@/components/ui/NexusCredit";
 import MenuMusic from "./MenuMusic";
+import PhoneLink from "./PhoneLink";
 import type { UserStatus } from "@/lib/types";
 
 export default function UserPanel() {
   return (
     <div className="bg-panel">
       <VoicePanel />
+      <PhoneLink />
       <MeRow />
     </div>
   );
@@ -162,6 +164,9 @@ function MeRow() {
             >
               <Link2 className="size-4" /> Share Nexus app link
             </button>
+            <a href="/cloud" className="flex w-full items-center gap-3 rounded px-2 py-1.5 hover:bg-accent hover:text-white">
+              Cloud
+            </a>
             <button
               onClick={() => setPref("buttonFx", !buttonFx)}
               className="flex w-full items-center gap-3 rounded px-2 py-1.5 hover:bg-accent hover:text-white"

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { asPeaks, fmtTime } from "@/lib/acetateAudio";
-import { commentOnShare, downloadShare, openShare, shareInfo, type SharedOpen, type SharedTrack } from "@/lib/acetate";
+import { commentOnShare, downloadShare, openShare, recordListen, shareInfo, type SharedOpen, type SharedTrack } from "@/lib/acetate";
 import { updateMyProfile } from "@/lib/data";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/store/app";
@@ -20,6 +20,7 @@ export default function AcetateListen({ token }: { token: string }) {
   const [index, setIndex] = useState(0);
   const [versionId, setVersionId] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [volume, setVolume] = useState(1);
   const [current, setCurrent] = useState(0);
   const [comment, setComment] = useState("");
   const [guest, setGuest] = useState("");
@@ -91,9 +92,15 @@ export default function AcetateListen({ token }: { token: string }) {
       audio.setAttribute("data-key", version.id);
       setCurrent(0);
     }
+    audio.volume = volume;
     if (playing) void audio.play().catch(() => setPlaying(false));
     else audio.pause();
-  }, [version, playing]);
+  }, [version, playing, volume]);
+
+  useEffect(() => {
+    if (!playing || !track) return;
+    void recordListen(track.id, clean, password).catch(() => undefined);
+  }, [playing, track, clean, password]);
 
   useEffect(() => {
     if (!playing || !track || !signedIn) return;
@@ -212,9 +219,12 @@ export default function AcetateListen({ token }: { token: string }) {
               {(track.art || opened.art) && <img src={track.art || opened.art || ""} alt="" className="size-16 rounded-xl object-cover" />}
               <div className="min-w-0">
                 <div className="truncate text-lg font-semibold">{track.title}</div>
-                <div className="text-sm text-[#a3988c]">
-                  {version?.label || (version ? `Version ${version.version}` : "No audio yet")} · {fmtTime(current)} / {fmtTime(duration)}
-                </div>
+            <div className="text-sm text-[#a3988c]">
+              {version?.label || (version ? `Version ${version.version}` : "No audio yet")} · {fmtTime(current)} / {fmtTime(duration)}
+            </div>
+            {track && "lyrics" in track && (track as { lyrics?: string | null }).lyrics && (
+              <pre className="mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap text-sm text-[#f3eadf]">{(track as { lyrics?: string | null }).lyrics}</pre>
+            )}
               </div>
             </div>
             <div className="mt-4">
@@ -241,6 +251,10 @@ export default function AcetateListen({ token }: { token: string }) {
               <button type="button" aria-label="Next" onClick={() => goto(index + 1)} className="grid size-10 place-items-center rounded-full hover:bg-white/5">
                 <SkipForward className="size-4" />
               </button>
+              <label className="ml-auto flex w-28 items-center gap-2 text-[11px] text-[#a3988c]">
+                <span className="sr-only">Volume</span>
+                <input type="range" min={0} max={1} step={0.01} value={volume} aria-label="Volume" onChange={(e) => setVolume(Number(e.target.value))} className="w-full accent-[#e4a15a]" />
+              </label>
               {track.versions.length > 1 && (
                 <select
                   value={version?.id ?? ""}
