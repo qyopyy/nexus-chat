@@ -32,16 +32,22 @@ jobs:
 
       - name: Check signing secrets
         run: |
-          for k in APPLE_TEAM_ID APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_PROVISION_PROFILE_BASE64; do
-            echo "Need secret: $k"
-          done
-          if [ -z "${{ secrets.APPLE_TEAM_ID }}" ] || [ -z "${{ secrets.APPLE_CERTIFICATE_BASE64 }}" ] || [ -z "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" ] || [ -z "${{ secrets.APPLE_PROVISION_PROFILE_BASE64 }}" ]; then
-            echo "::error::Missing Apple signing secrets. Follow mobile/APP_STORE_CI_SETUP.txt (no Xcode required)."
+          missing=""
+          [ -z "${{ secrets.APPLE_TEAM_ID }}" ] && missing="$missing APPLE_TEAM_ID"
+          [ -z "${{ secrets.APPLE_CERTIFICATE_BASE64 }}" ] && missing="$missing APPLE_CERTIFICATE_BASE64"
+          [ -z "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" ] && missing="$missing APPLE_CERTIFICATE_PASSWORD"
+          [ -z "${{ secrets.APPLE_PROVISION_PROFILE_BASE64 }}" ] && missing="$missing APPLE_PROVISION_PROFILE_BASE64"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing Apple signing secrets:$missing. Add each one in repo Settings → Secrets (see mobile/APP_STORE_CI_SETUP.txt). Names only — values are not printed."
             exit 1
           fi
           if [ "${{ github.event.inputs.upload }}" = "true" ]; then
-            if [ -z "${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}" ] || [ -z "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}" ] || [ -z "${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}" ]; then
-              echo "::error::Upload requested but App Store Connect API key secrets are missing. See mobile/APP_STORE_CI_SETUP.txt"
+            asc=""
+            [ -z "${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}" ] && asc="$asc APP_STORE_CONNECT_API_KEY_ID"
+            [ -z "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}" ] && asc="$asc APP_STORE_CONNECT_ISSUER_ID"
+            [ -z "${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}" ] && asc="$asc APP_STORE_CONNECT_API_KEY_BASE64"
+            if [ -n "$asc" ]; then
+              echo "::error::Upload requested but these App Store Connect secrets are empty:$asc. See mobile/APP_STORE_CI_SETUP.txt"
               exit 1
             fi
           fi

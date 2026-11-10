@@ -36,6 +36,7 @@ import { formatMeters } from "@/lib/location";
 import { wumpGeocode, wumpPlaceShort } from "@/lib/wumpGeocode";
 import type { WumpSavedPlace } from "@/lib/wumpPlaces";
 import { wumpProfileUrl } from "@/lib/wumpPlaces";
+import { wumpFriendTrail, wumpListMeetups, wumpMyTrail, type WumpNudgeKind } from "@/lib/wumpTogether";
 import { useApp } from "@/store/app";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
@@ -94,6 +95,8 @@ export default function WumpMap({
   onMessagePerson,
   onFocusChange,
   onUpgradePlus,
+  onNudge,
+  nudgeBurst,
 }: {
   me: string | null;
   myLat: number | null;
@@ -125,6 +128,9 @@ export default function WumpMap({
   /** "Live with" a friend started / stopped — lets the hub poll faster */
   onFocusChange?: (id: string | null) => void;
   onUpgradePlus?: () => void;
+  onNudge?: (id: string, kind: WumpNudgeKind) => void;
+  /** Latest incoming nudge, shown as a floating emoji. */
+  nudgeBurst?: { id: number; emoji: string } | null;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LMap | null>(null);
@@ -136,6 +142,9 @@ export default function WumpMap({
   const accuracyRef = useRef<LCircle | null>(null);
   const trailRef = useRef<{ remove: () => void; setLatLngs?: (c: [number, number][]) => void } | null>(null);
   const trailPts = useRef<[number, number][]>([]);
+  const histRef = useRef<{ remove: () => void; setLatLngs?: (c: [number, number][]) => void } | null>(null);
+  const friendTrailRef = useRef<{ remove: () => void; setLatLngs?: (c: [number, number][]) => void } | null>(null);
+  const meetupMarks = useRef<MarkerHandle[]>([]);
   const followRef = useRef(true);
   const userPannedRef = useRef(false);
   const [ready, setReady] = useState(false);
@@ -189,6 +198,101 @@ export default function WumpMap({
       off = true;
     };
   }, [nearbyKey]);
+
+  // Opt-in server trail (fuzzed pin history) + friend trail while Live-with + meetup pins.
+  useEffect(() => {
+    if (!ready) return;
+    const L = LRef.current;
+    const map = mapRef.current;
+    if (!L || !map) return;
+    let off = false;
+    const drawLine = (
+      ref: typeof histRef,
+      pts: [number, number][],
+      style: Record<string, unknown>,
+    ) => {
+      if (pts.length < 2) {
+        ref.current?.remove();
+        ref.current = null;
+        return;
+      }
+      if (ref.current?.setLatLngs) {
+        ref.current.setLatLngs(pts);
+        return;
+      }
+      ref.current?.remove();
+      ref.current = L.polyline(pts, style).addTo(map);
+    };
+    const pullMine = async () => {
+      if (!live) {
+        histRef.current?.remove();
+        histRef.current = null;
+        return;
+      }
+      const rows = await wumpMyTrail(24);
+      if (off) return;
+      drawLine(
+        histRef,
+        rows.map((p) => [p.lat, p.lng] as [number, number]),
+        { color: "#0284c7", weight: 3, opacity: 0.45, dashArray: "6 8", lineCap: "round" },
+      );
+    };
+    const pullFriend = async () => {
+      if (!withId) {
+        friendTrailRef.current?.remove();
+        friendTrailRef.current = null;
+        return;
+      }
+      const rows = await wumpFriendTrail(withId, 6);
+      if (off) return;
+      drawLine(
+        friendTrailRef,
+        rows.map((p) => [p.lat, p.lng] as [number, number]),
+        { color: "#facc15", weight: 3, opacity: 0.8, lineCap: "round" },
+      );
+    };
+    const pullMeetups = async () => {
+      const rows = await wumpListMeetups();
+      if (off) return;
+      meetupMarks.current.forEach((m) => m.remove());
+      meetupMarks.current = rows.map((m) => {
+        const marker = L.marker([m.lat, m.lng], {
+          icon: L.divIcon({
+            className: "",
+            iconSize: [28, 28],
+            iconAnchor: [14, 28],
+            html: `<div style="font-size:18px;line-height:28px;text-align:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))" title="${m.title.replace(/[&<>"']/g, "")}">📍</div>`,
+          }),
+          interactive: false,
+        }).addTo(map);
+        return marker;
+      });
+    };
+    void pullMine();
+    void pullFriend();
+    void pullMeetups();
+    const onMeet = () => void pullMeetups();
+    const onTrail = () => void pullMine();
+    window.addEventListener("wump-meetups", onMeet);
+    window.addEventListener("wump-trail", onTrail);
+    const t = setInterval(() => {
+      void pullMine();
+      void pullFriend();
+      void pullMeetups();
+    }, 45_000);
+    return () => {
+      off = true;
+      clearInterval(t);
+      window.removeEventListener("wump-meetups", onMeet);
+      window.removeEventListener("wump-trail", onTrail);
+      histRef.current?.remove();
+      histRef.current = null;
+      friendTrailRef.current?.remove();
+      friendTrailRef.current = null;
+      meetupMarks.current.forEach((m) => m.remove());
+      meetupMarks.current = [];
+    };
+  }, [ready, live, withId, LRef, mapRef]);
 
   // Plus-only map styles fall back when Plus isn't active
   useEffect(() => {
@@ -750,7 +854,14 @@ export default function WumpMap({
           onClose={() => focusFriend(null)}
           onMessage={onMessagePerson}
           onProfile={onOpenPerson}
+          onNudge={onNudge}
         />
+      )}
+
+      {nudgeBurst && (
+        <div key={nudgeBurst.id} className="pointer-events-none absolute top-[28%] left-1/2 z-40 -translate-x-1/2 animate-bounce text-6xl drop-shadow-lg">
+          {nudgeBurst.emoji}
+        </div>
       )}
 
       {styleMenu && (
