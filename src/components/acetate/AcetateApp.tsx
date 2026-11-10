@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import Link from "next/link";
 import { Disc3, Library, Plus, Sparkles } from "lucide-react";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { mfaNeedsChallenge } from "@/lib/mfa";
-import { useApp } from "@/store/app";
+import { toast, useApp } from "@/store/app";
 import { roleRank } from "@/lib/theme";
 import { refreshChatList } from "@/lib/data";
 import AuthScreen, { ResetPasswordScreen } from "@/components/AuthScreen";
@@ -28,6 +28,7 @@ import {
   deleteVersion,
   loadLibrary,
   loadListens,
+  loadNotices,
   loadTrackDetail,
   moveInProject,
   removeTrackFromProject,
@@ -43,6 +44,7 @@ import {
   type AcetateComment,
   type AcetateKind,
   type AcetateListen,
+  type AcetateNotice,
   type AcetateMembership,
   type AcetateStatus,
   type AcetateProject,
@@ -51,7 +53,10 @@ import {
   type AcetateTrack,
   type AcetateVersion,
 } from "@/lib/acetate";
+import { useAcetateLive } from "@/lib/acetateLive";
+import { dropOffline, isOffline, keepOffline, offlineUrl } from "@/lib/acetateOffline";
 import { AcetateMark, ArtTile, Waveform } from "./AcetateBits";
+import { Collaborators, LikeButton, NotifyBell } from "./AcetateSocial";
 import AcetatePlayerBar from "./AcetatePlayerBar";
 import AcetatePwa from "./AcetatePwa";
 
@@ -94,6 +99,11 @@ export default function AcetateApp() {
   const [sortBy, setSortBy] = useState<"new" | "title" | "bpm">("new");
   const [dropping, setDropping] = useState(false);
   const [listens, setListens] = useState<AcetateListen[]>([]);
+  const [notices, setNotices] = useState<AcetateNotice[]>([]);
+  const [folderFilter, setFolderFilter] = useState<string | "all">("all");
+  const [uploadNote, setUploadNote] = useState<string | null>(null);
+  const [help, setHelp] = useState(false);
+  const premiumWas = useRef<boolean | null>(null);
   const [shareFor, setShareFor] = useState<{ kind: "track" | "project"; id: string; title: string } | null>(null);
   const [nexusFor, setNexusFor] = useState<{ title: string; url: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -141,9 +151,12 @@ export default function AcetateApp() {
       try {
         const next = await loadLibrary();
         const recent = await loadListens();
+        const inbox = await loadNotices();
         if (live) {
+          premiumWas.current = next.storage.premium;
           setLibrary(next);
           setListens(recent);
+          setNotices(inbox);
         }
       } catch (e) {
         if (live) setBootError(e instanceof Error ? e.message : "Couldn't load your library");
@@ -188,17 +201,28 @@ export default function AcetateApp() {
 
   async function reload() {
     const next = await loadLibrary();
+    if (premiumWas.current != null && premiumWas.current !== next.storage.premium) {
+      toast(next.storage.premium ? "Acetate Premium is on — unlimited storage" : "Acetate Premium was removed", "info");
+    }
+    premiumWas.current = next.storage.premium;
     setLibrary(next);
     setListens(await loadListens());
+    setNotices(await loadNotices());
     if (screen.name === "track") setDetail(await loadTrackDetail(screen.id));
   }
+
+  useAcetateLive(userId && !needsMfa ? userId : null, () => {
+    void reload().catch(() => undefined);
+  });
 
   async function uploadFiles(files: File[], projectId?: string) {
     const audio = files.filter((file) => audioExt(file.name));
     if (!audio.length) throw new Error("Drop audio files — mp3, wav, flac, aac, m4a, ogg, opus, or webm.");
-    for (const file of audio) {
-      await uploadAudio(file, { title: file.name.replace(/\.[^.]+$/, ""), projectId });
+    for (let i = 0; i < audio.length; i += 1) {
+      setUploadNote(`Uploading ${i + 1} of ${audio.length}`);
+      await uploadAudio(audio[i], { title: audio[i].name.replace(/\.[^.]+$/, ""), projectId });
     }
+    setUploadNote(null);
   }
 
   async function run(task: () => Promise<void>) {
@@ -236,7 +260,8 @@ export default function AcetateApp() {
       const track = library.tracks.find((item) => item.id === id);
       const version = latest.get(id);
       if (!track || !version) continue;
-      const url = await acetateSigned(version.path);
+      const cached = await isOffline(version.id);
+      const url = cached ? offlineUrl(version.id) : await acetateSigned(version.path);
       if (!url) continue;
       queue.push({
         key: `${track.id}:${version.id}`,
@@ -290,6 +315,7 @@ export default function AcetateApp() {
     .filter((track) => {
       if (starredOnly && !track.starred) return false;
       if (statusFilter !== "all" && (track.status ?? "demo") !== statusFilter) return false;
+      if (folderFilter !== "all" && (track.folder ?? "") !== folderFilter) return false;
       if (!query) return true;
       return track.title.toLowerCase().includes(query) || (track.folder ?? "").toLowerCase().includes(query) || (track.musical_key ?? "").toLowerCase().includes(query);
     })
@@ -311,6 +337,15 @@ export default function AcetateApp() {
         </Link>
         <div className="ml-auto flex items-center gap-2">
           <AcetatePwa />
+          {me?.username && (
+            <Link href={`/acetate/u/${me.username}`} className="text-xs text-[#a3988c]">
+              Profile
+            </Link>
+          )}
+          <NotifyBell notices={notices} onChanged={() => void reload().catch(reportAcetateError)} />
+          <button type="button" onClick={() => setHelp(true)} className="text-xs text-[#a3988c]" aria-label="Keyboard help">
+            ?
+          </button>
           {admin && (
             <Link href="/acetate/admin" className="rounded-full border border-[#3c342c] px-3 py-1 text-xs font-semibold text-[#e4a15a]">
               Admin
@@ -332,7 +367,7 @@ export default function AcetateApp() {
           <div className="h-full rounded-full bg-[#e4a15a]" style={{ width: `${storage.premium ? 100 : ratio * 100}%` }} />
         </div>
       </div>
-      <nav className="flex gap-2 px-4 py-3">
+      <nav className="grid grid-cols-3 gap-2 px-4 py-3 sm:flex">
         <NavButton active={screen.name === "library"} onClick={() => setScreen({ name: "library" })} icon={<Library className="size-4" />} label="Library" />
         <NavButton active={screen.name === "projects" || screen.name === "project"} onClick={() => setScreen({ name: "projects" })} icon={<Disc3 className="size-4" />} label="Projects" />
         <NavButton active={screen.name === "premium"} onClick={() => setScreen({ name: "premium" })} icon={<Sparkles className="size-4" />} label="Premium" />
@@ -379,7 +414,15 @@ export default function AcetateApp() {
                 <FilterChip key={status.id} active={statusFilter === status.id} onClick={() => setStatusFilter(status.id)} label={status.label} />
               ))}
             </div>
-            {folders.length > 0 && <p className="mb-3 text-xs text-[#a3988c]">Folders · {folders.join(" · ")}</p>}
+            {folders.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                <FilterChip active={folderFilter === "all"} onClick={() => setFolderFilter("all")} label="All folders" />
+                {folders.map((folder) => (
+                  <FilterChip key={folder} active={folderFilter === folder} onClick={() => setFolderFilter(folder)} label={folder} />
+                ))}
+              </div>
+            )}
+            {uploadNote && <p className="mb-2 text-sm text-[#e4a15a]">{uploadNote}</p>}
             {visibleTracks.length === 0 && <Empty text={dropping ? "Drop audio to add it to your private library." : "Your library is private. Upload a demo, a bounce, or a voice note."} />}
             <ul className="space-y-2">
               {visibleTracks.map((track) => (
@@ -493,7 +536,7 @@ export default function AcetateApp() {
                     artUrl: art[track.id] ?? null,
                     peaks: asPeaks(version.peaks),
                     duration: version.duration ?? 0,
-                    url,
+                    url: (await isOffline(version.id)) ? offlineUrl(version.id) : url,
                     shareUrl: null,
                   },
                 ]);
@@ -525,6 +568,21 @@ export default function AcetateApp() {
           })} />
         )}
       </div>
+      {help && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setHelp(false)}>
+          <div className="max-w-sm rounded-3xl bg-[#1a1612] p-5" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-serif text-2xl">Transport</h2>
+            <ul className="mt-2 space-y-1 text-sm text-[#a3988c]">
+              <li>Space — play or pause</li>
+              <li>Left / right — skip 5 seconds</li>
+              <li>M — mute</li>
+            </ul>
+            <button type="button" className="mt-4 rounded-full bg-[#e4a15a] px-4 py-2 text-sm font-semibold text-[#100e0c]" onClick={() => setHelp(false)}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
       <AcetatePlayerBar />
       {shareFor && (
         <ShareSheet
@@ -739,6 +797,7 @@ function ProjectView(props: {
           </li>
         ))}
       </ul>
+      <Collaborators projectId={project.id} />
       {available.length > 0 && (
         <label className="mt-4 block text-sm text-[#a3988c]">
           Add from library
@@ -772,7 +831,7 @@ function TrackView(props: {
   onUpload: (file: File, label: string) => void;
   onArt: (file: File) => void;
   onRename: (title: string) => void;
-  onMeta: (patch: { note?: string | null; status?: AcetateStatus; bpm?: number | null; musical_key?: string | null; folder?: string | null; starred?: boolean }) => void;
+  onMeta: (patch: { note?: string | null; status?: AcetateStatus; bpm?: number | null; musical_key?: string | null; folder?: string | null; starred?: boolean; lyrics?: string | null; lyrics_on_share?: boolean }) => void;
   onDeleteVersion: (version: AcetateVersion) => void;
   onDelete: () => void;
   onComment: (at: number, body: string, versionId: string | null) => void;
@@ -786,6 +845,8 @@ function TrackView(props: {
   const [note, setNote] = useState(track?.note ?? "");
   const [folder, setFolder] = useState(track?.folder ?? "");
   const [bpm, setBpm] = useState(track?.bpm ? String(track.bpm) : "");
+  const [lyrics, setLyrics] = useState(track?.lyrics ?? "");
+  const [lyricsOnShare, setLyricsOnShare] = useState(!!track?.lyrics_on_share);
   const playing = useAcetatePlayer((s) => s.queue[s.index]);
   const current = useAcetatePlayer((s) => s.current);
   useEffect(() => setTitle(track?.title ?? ""), [track?.title]);
@@ -793,7 +854,9 @@ function TrackView(props: {
     setNote(track?.note ?? "");
     setFolder(track?.folder ?? "");
     setBpm(track?.bpm ? String(track.bpm) : "");
-  }, [track?.id, track?.note, track?.folder, track?.bpm]);
+    setLyrics(track?.lyrics ?? "");
+    setLyricsOnShare(!!track?.lyrics_on_share);
+  }, [track?.id, track?.note, track?.folder, track?.bpm, track?.lyrics, track?.lyrics_on_share]);
   if (!track) return <Empty text="That track is gone." />;
   const active = detail?.versions.find((version) => playing?.versionId === version.id) ?? detail?.versions[0] ?? null;
   const duration = playing?.trackId === track.id ? playing.duration || current : active?.duration ?? 0;
@@ -833,6 +896,11 @@ function TrackView(props: {
         )}
         <FileButton label="Artwork" accept="image/jpeg,image/png,image/webp" disabled={props.busy} onFile={props.onArt} />
         <button type="button" onClick={props.onShare} className="rounded-full border border-[#3c342c] px-4 py-2 text-sm">Share</button>
+        <LikeButton trackId={track.id} />
+        <button type="button" onClick={() => useAcetatePlayer.getState().setLoop("a")} className="rounded-full border border-[#3c342c] px-3 py-2 text-sm">A</button>
+        <button type="button" onClick={() => useAcetatePlayer.getState().setLoop("b")} className="rounded-full border border-[#3c342c] px-3 py-2 text-sm">B</button>
+        <button type="button" onClick={() => useAcetatePlayer.getState().setLoop("off")} className="rounded-full border border-[#3c342c] px-3 py-2 text-sm">Clear loop</button>
+        <button type="button" onClick={() => useAcetatePlayer.getState().setSleep(20)} className="rounded-full border border-[#3c342c] px-3 py-2 text-sm">Sleep 20m</button>
         <button type="button" onClick={() => props.onMeta({ starred: !track.starred })} className={`rounded-full border border-[#3c342c] px-4 py-2 text-sm ${track.starred ? "text-[#e4a15a]" : ""}`}>
           {track.starred ? "Starred" : "Star"}
         </button>
@@ -849,6 +917,8 @@ function TrackView(props: {
             bpm: parsed && parsed >= 20 && parsed <= 400 ? Math.round(parsed) : null,
             status: (e.currentTarget.elements.namedItem("status") as HTMLSelectElement).value as AcetateStatus,
             musical_key: (e.currentTarget.elements.namedItem("key") as HTMLSelectElement).value || null,
+            lyrics: lyrics.trim() || null,
+            lyrics_on_share: lyricsOnShare,
           });
         }}
       >
@@ -878,6 +948,14 @@ function TrackView(props: {
           <input value={folder} onChange={(e) => setFolder(e.target.value)} maxLength={40} placeholder="Vocals, refs, clients" className="mt-1 w-full rounded-xl border border-[#3c342c] bg-transparent px-3 py-2 text-sm outline-none" />
         </label>
         <label className="text-xs text-[#a3988c] sm:col-span-2">
+          Lyrics
+          <textarea value={lyrics} onChange={(e) => setLyrics(e.target.value)} maxLength={8000} className="mt-1 min-h-24 w-full rounded-xl border border-[#3c342c] bg-transparent px-3 py-2 text-sm outline-none" />
+        </label>
+        <label className="flex items-center gap-2 text-sm sm:col-span-2">
+          <input type="checkbox" checked={lyricsOnShare} onChange={(e) => setLyricsOnShare(e.target.checked)} />
+          Show lyrics on share links
+        </label>
+        <label className="text-xs text-[#a3988c] sm:col-span-2">
           Private note
           <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} className="mt-1 min-h-16 w-full rounded-xl border border-[#3c342c] bg-transparent px-3 py-2 text-sm outline-none" />
         </label>
@@ -904,6 +982,22 @@ function TrackView(props: {
             <button type="button" onClick={() => props.onPlayVersion(version)} className="min-w-0 flex-1 text-left">
               <span className="block font-medium">{version.label || `Version ${version.version}`}</span>
               <span className="text-xs text-[#a3988c]">{fmtTime(version.duration)} · {fmtBytes(Number(version.bytes))}</span>
+            </button>
+            <button
+              type="button"
+              className="text-xs text-[#a3988c]"
+              onClick={() => {
+                void (async () => {
+                  const url = await acetateSigned(version.path);
+                  if (!url) throw new Error("Couldn't prepare that file");
+                  await keepOffline(version.id, url, track.title);
+                })().catch(reportAcetateError);
+              }}
+            >
+              Offline
+            </button>
+            <button type="button" className="text-xs text-[#a3988c]" onClick={() => void dropOffline(version.id).catch(reportAcetateError)}>
+              Forget
             </button>
             <button type="button" onClick={() => props.onDeleteVersion(version)} className="text-xs text-[#a3988c]">Delete</button>
           </li>
@@ -1026,7 +1120,7 @@ function ShareSheet({
                 <div className="text-[#a3988c]">{share.listing} · {share.allow_download ? "download on" : "listen only"} · {share.views} views</div>
                 <div className="mt-1 truncate">{url}</div>
                 <div className="mt-2 flex gap-2">
-                  <button type="button" className="rounded-full bg-[#f3eadf] px-3 py-1 text-xs font-semibold text-[#100e0c]" onClick={() => void navigator.clipboard.writeText(url)}>Copy</button>
+                  <button type="button" className="rounded-full bg-[#f3eadf] px-3 py-1 text-xs font-semibold text-[#100e0c]" onClick={() => void navigator.clipboard.writeText(url).then(() => toast("Link copied", "success")).catch(() => toast("Couldn't copy", "error"))}>Copy</button>
                   <button type="button" className="rounded-full border border-[#3c342c] px-3 py-1 text-xs" onClick={() => onNexus(target.title, url)}>Send to Nexus</button>
                   <button type="button" className="rounded-full px-3 py-1 text-xs text-[#d4653a]" onClick={() => onRevoke(share.id)}>Revoke</button>
                 </div>

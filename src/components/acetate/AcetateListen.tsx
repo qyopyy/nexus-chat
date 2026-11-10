@@ -219,9 +219,12 @@ export default function AcetateListen({ token }: { token: string }) {
               {(track.art || opened.art) && <img src={track.art || opened.art || ""} alt="" className="size-16 rounded-xl object-cover" />}
               <div className="min-w-0">
                 <div className="truncate text-lg font-semibold">{track.title}</div>
-                <div className="text-sm text-[#a3988c]">
-                  {version?.label || (version ? `Version ${version.version}` : "No audio yet")} · {fmtTime(current)} / {fmtTime(duration)}
-                </div>
+            <div className="text-sm text-[#a3988c]">
+              {version?.label || (version ? `Version ${version.version}` : "No audio yet")} · {fmtTime(current)} / {fmtTime(duration)}
+            </div>
+            {track && "lyrics" in track && (track as { lyrics?: string | null }).lyrics && (
+              <pre className="mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap text-sm text-[#f3eadf]">{(track as { lyrics?: string | null }).lyrics}</pre>
+            )}
               </div>
             </div>
             <div className="mt-4">
