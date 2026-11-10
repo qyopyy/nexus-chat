@@ -5,6 +5,8 @@ import { toast } from "@/store/app";
 
 export type WumpPlaceSource = "map" | "live" | "tap" | "profile";
 
+export type WumpPlaceRole = "home" | "work" | "school";
+
 export type WumpSavedPlace = {
   id: string;
   user_id: string;
@@ -16,6 +18,11 @@ export type WumpSavedPlace = {
   source: WumpPlaceSource;
   created_at: string;
   folder_id?: string | null;
+  role?: WumpPlaceRole | null;
+  alert_arrive?: boolean;
+  alert_leave?: boolean;
+  share_moves?: boolean;
+  alert_radius_m?: number;
 };
 
 export type WumpExploreStats = {

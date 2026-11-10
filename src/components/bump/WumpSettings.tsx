@@ -87,9 +87,33 @@ export default function WumpSettings({ userId }: { userId: string }) {
             ]}
           />
           <p className="mt-1.5 text-[11px] text-sub">
-            {precisionLabel(p.wump_precision)}. Friends see this fuzzed radius — not a raw GPS trail.
+            {precisionLabel(p.wump_precision)}. Friends see this fuzzed pin. A trail is off until you turn it on, and it uses this same precision.
           </p>
         </Field>
+
+        <Toggle
+          label="Record my trail"
+          hint="Keep the last 48 hours of your fuzzed pin. Changing precision or turning this off deletes it. Only you can see it until you share."
+          checked={p.wump_record_trail}
+          disabled={busy}
+          onChange={(v) => void save(v ? { wump_record_trail: true } : { wump_record_trail: false, wump_share_trail: false })}
+        />
+        <Toggle
+          label="Share trail with friends"
+          hint="People who can already see your Live pin can see the recent trail. Off while you're not Live."
+          checked={p.wump_share_trail}
+          disabled={busy}
+          onChange={(v) => void save(v ? { wump_share_trail: true, wump_record_trail: true } : { wump_share_trail: false })}
+        />
+        {p.wump_record_trail && (
+          <button
+            type="button"
+            onClick={() => void import("@/lib/wumpTogether").then((m) => m.wumpClearTrail())}
+            className="mb-4 text-[11px] font-semibold text-sub underline-offset-2 hover:text-txt hover:underline"
+          >
+            Clear trail now
+          </button>
+        )}
 
         <Toggle
           label="Background Live"

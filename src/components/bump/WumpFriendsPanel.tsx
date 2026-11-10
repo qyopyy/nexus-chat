@@ -17,6 +17,7 @@ import { respondFriendRequest, sendFriendRequest } from "@/lib/data";
 import { formatMeters } from "@/lib/location";
 import type { BumpNearby } from "@/lib/bump";
 import { WUMP } from "@/lib/wumpBrand";
+import { wumpPresenceBits } from "@/lib/wumpTogether";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
@@ -271,7 +272,7 @@ export default function WumpFriendsPanel({
                           </div>
                           <div className="truncate text-[11px] text-sub">
                             {n
-                              ? `Nearby · ${n.label || n.place_name || n.place_locality || "sharing location"}`
+                              ? ["Nearby", ...wumpPresenceBits(n)].join(" · ")
                               : online
                                 ? "Online on Nexus · not sharing location"
                                 : "Not sharing location right now"}

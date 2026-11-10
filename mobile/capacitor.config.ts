@@ -2,6 +2,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 // The iOS/Android apps are native shells around the live site, so every web deploy
 // updates the apps automatically — no rebuild needed for UI / bots / server features.
+// Wump (trails, place alerts, meetups, nudges) ships in that web bundle at /wump/app.
 // Prefer the production domain; NEXUS_URL overrides for staging builds.
 const url = process.env.NEXUS_URL || "https://nexusproject.cc";
 

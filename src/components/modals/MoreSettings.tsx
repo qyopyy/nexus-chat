@@ -209,8 +209,9 @@ export function PrivacySection() {
       toast(error.message, "error");
     } else {
       try {
-        const { saveWumpPrivacyLocal } = await import("@/lib/wumpPrivacy");
+        const { loadWumpPrivacyLocal, saveWumpPrivacyLocal } = await import("@/lib/wumpPrivacy");
         saveWumpPrivacyLocal({
+          ...loadWumpPrivacyLocal(),
           wump_default_visible: next.wump_default_visible,
           wump_precision: next.wump_precision,
           wump_allow_background: next.wump_allow_background,

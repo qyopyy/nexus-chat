@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Bookmark, ExternalLink, Folder, FolderPlus, MapPin, Pencil, Trash2, X } from "lucide-react";
+import { Bell, Bookmark, ExternalLink, Folder, FolderPlus, MapPin, Pencil, Trash2, X } from "lucide-react";
 import { appleMapsLink } from "@/lib/appleMaps";
 import { timeAgo } from "@/lib/videos";
-import { wumpPlaceSubtitle, type WumpSavedPlace } from "@/lib/wumpPlaces";
+import { wumpPlaceSubtitle, type WumpPlaceRole, type WumpSavedPlace } from "@/lib/wumpPlaces";
+import { wumpRoleEmoji, wumpSetPlaceWatch } from "@/lib/wumpTogether";
 import { createPlaceFolder, deletePlaceFolder, listPlaceFolders, renamePlaceFolder, setPlaceFolder, type WumpPlaceFolder } from "@/lib/wumpShare";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,7 @@ export default function WumpSavedPlacesPanel({
   const [emoji, setEmoji] = useState("📁");
   const [editing, setEditing] = useState<string | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
+  const [watching, setWatching] = useState<string | null>(null);
 
   useEffect(() => {
     void listPlaceFolders().then(setFolders);
@@ -63,6 +65,26 @@ export default function WumpSavedPlacesPanel({
   async function move(placeId: string, folderId: string | null) {
     if (await setPlaceFolder(placeId, folderId)) onChanged?.(placeId, { folder_id: folderId });
     setMoving(null);
+  }
+
+  async function watch(place: WumpSavedPlace, patch: { role?: WumpPlaceRole | null; arrive?: boolean; leave?: boolean; share?: boolean }) {
+    const role = patch.role === undefined ? place.role ?? null : patch.role;
+    const arrive = patch.arrive ?? !!place.alert_arrive;
+    const leave = patch.leave ?? !!place.alert_leave;
+    const share = patch.share ?? !!place.share_moves;
+    const row = await wumpSetPlaceWatch({ placeId: place.id, role, arrive, leave, share, radiusM: place.alert_radius_m ?? 150 });
+    if (!row) return;
+    onChanged?.(place.id, {
+      role: row.role,
+      alert_arrive: row.alert_arrive,
+      alert_leave: row.alert_leave,
+      share_moves: row.share_moves,
+      alert_radius_m: row.alert_radius_m,
+    });
+    if (row.role) {
+      // only one home / work / school — clear the role on the others locally
+      places.filter((x) => x.id !== place.id && x.role === row.role).forEach((x) => onChanged?.(x.id, { role: null }));
+    }
   }
 
   return (
@@ -176,7 +198,11 @@ export default function WumpSavedPlacesPanel({
                     <div className="flex items-center gap-2.5">
                       <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/5 text-sky-300">{f?.emoji ? <span className="text-base">{f.emoji}</span> : <MapPin className="size-3.5" />}</div>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-semibold text-txt">{p.name}</div>
+                        <div className="flex items-center gap-1.5 truncate text-sm font-semibold text-txt">
+                          <span className="truncate">{p.name}</span>
+                          {p.role && <span className="shrink-0 text-[10px] font-bold text-amber-200">{wumpRoleEmoji(p.role)} {p.role}</span>}
+                          {(p.alert_arrive || p.alert_leave) && <Bell className="size-3 shrink-0 text-sky-300" />}
+                        </div>
                         <div className="truncate text-[11px] text-sub">
                           {wumpPlaceSubtitle(p)}
                           {p.created_at ? ` · ${timeAgo(p.created_at)}` : ""}
@@ -192,6 +218,9 @@ export default function WumpSavedPlacesPanel({
                         Maps
                         <ExternalLink className="size-2.5 opacity-70" />
                       </a>
+                      <button type="button" onClick={() => setWatching(watching === p.id ? null : p.id)} className="grid size-8 place-items-center rounded-full text-sub transition hover:bg-white/10 hover:text-txt" aria-label={`Alerts for ${p.name}`} title="Home, work, alerts">
+                        <Bell className="size-3.5" />
+                      </button>
                       <button type="button" onClick={() => setMoving(moving === p.id ? null : p.id)} className="grid size-8 place-items-center rounded-full text-sub transition hover:bg-white/10 hover:text-txt" aria-label={`Move ${p.name} to a folder`} title="Folder">
                         <Folder className="size-3.5" />
                       </button>
@@ -199,6 +228,36 @@ export default function WumpSavedPlacesPanel({
                         <Trash2 className="size-3.5" />
                       </button>
                     </div>
+                    {watching === p.id && (
+                      <div className="mt-2 space-y-2 pl-11">
+                        <div className="flex flex-wrap gap-1.5">
+                          {([null, "home", "work", "school"] as const).map((role) => (
+                            <button
+                              key={role ?? "none"}
+                              type="button"
+                              onClick={() => void watch(p, { role })}
+                              className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", (p.role ?? null) === role ? "bg-amber-400 text-amber-950" : "bg-white/5 text-sub")}
+                            >
+                              {role ? `${wumpRoleEmoji(role)} ${role}` : "No role"}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button type="button" onClick={() => void watch(p, { arrive: !p.alert_arrive })} className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", p.alert_arrive ? "bg-sky-500 text-white" : "bg-white/5 text-sub")}>
+                            Arrive
+                          </button>
+                          <button type="button" onClick={() => void watch(p, { leave: !p.alert_leave })} className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", p.alert_leave ? "bg-sky-500 text-white" : "bg-white/5 text-sub")}>
+                            Leave
+                          </button>
+                          <button type="button" onClick={() => void watch(p, { share: !p.share_moves, arrive: p.alert_arrive || !p.share_moves, leave: p.alert_leave || !p.share_moves })} className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", p.share_moves ? "bg-emerald-500 text-white" : "bg-white/5 text-sub")}>
+                            Tell friends
+                          </button>
+                        </div>
+                        <p className="text-[10px] leading-relaxed text-sub">
+                          Alerts use your fuzzed Live pin (about {p.alert_radius_m ?? 150} m). City precision is too coarse, so alerts wait until you use Exact or ~100 m. “Tell friends” only messages people who can already see your pin, and it names the place — no coordinates.
+                        </p>
+                      </div>
+                    )}
                     {moving === p.id && (
                       <div className="mt-2 flex flex-wrap gap-1.5 pl-11">
                         <button type="button" onClick={() => void move(p.id, null)} className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", !p.folder_id ? "bg-sky-500 text-white" : "bg-white/5 text-sub")}>

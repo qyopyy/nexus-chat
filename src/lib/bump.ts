@@ -22,6 +22,11 @@ export type BumpNearby = {
   speed_mps?: number | null;
   expires_at?: string | null;
   age_seconds?: number | null;
+  battery_pct?: number | null;
+  /** still / walk / bike / drive — derived on the server from speed */
+  activity?: "still" | "walk" | "bike" | "drive" | null;
+  /** home / work / school when the fuzzed pin is inside that saved place */
+  place_status?: "home" | "work" | "school" | null;
   place_name?: string | null;
   place_locality?: string | null;
   profile_place_name?: string | null;
@@ -218,6 +223,20 @@ export function bumpSpotifyTrackOk(url: string) {
   return !!bumpSpotifyTrackEmbed(url);
 }
 
+/** Battery Status API when the browser exposes it (often missing on iOS). */
+export async function readBatteryPct(): Promise<number | null> {
+  if (typeof navigator === "undefined") return null;
+  const nav = navigator as Navigator & { getBattery?: () => Promise<{ level: number }> };
+  if (typeof nav.getBattery !== "function") return null;
+  try {
+    const bat = await nav.getBattery();
+    if (!bat || !Number.isFinite(bat.level)) return null;
+    return Math.max(0, Math.min(100, Math.round(bat.level * 100)));
+  } catch {
+    return null;
+  }
+}
+
 export async function bumpPublish(visible: BumpVisible = "friends", label?: string) {
   const perm = await requestLocationPermission();
   if (perm === "denied") {
@@ -233,6 +252,7 @@ export async function bumpPublish(visible: BumpVisible = "friends", label?: stri
     }
     const loc = await getDeviceLocation({ highAccuracy: priv.wump_precision === "exact" });
     const place = await import("./wumpGeocode").then((m) => m.wumpGeocode(loc.lat, loc.lng)).catch(() => null);
+    const battery = await readBatteryPct();
     const { data, error } = await supabase.rpc("bump_publish", {
       p_lat: loc.lat,
       p_lng: loc.lng,
@@ -242,6 +262,7 @@ export async function bumpPublish(visible: BumpVisible = "friends", label?: stri
       p_precision: priv.wump_precision,
       p_heading: loc.heading,
       p_speed: loc.speed,
+      p_battery: battery,
       p_place_name: place?.name ?? place?.display ?? null,
       p_place_locality: place?.locality ?? place?.city ?? null,
     });
@@ -530,6 +551,7 @@ export async function bumpShareLocationWithFriend(friendId: string, note?: strin
   }
   try {
     const loc = await getDeviceLocation({ highAccuracy: true });
+    const battery = await readBatteryPct();
     // Keep them visible on Bump for friends while sharing into chat
     await supabase.rpc("bump_publish", {
       p_lat: loc.lat,
@@ -537,6 +559,7 @@ export async function bumpShareLocationWithFriend(friendId: string, note?: strin
       p_accuracy: loc.accuracy,
       p_visible: "friends",
       p_label: note?.trim() || null,
+      p_battery: battery,
     });
     const { data: conv, error: dmErr } = await supabase.rpc("get_or_create_dm", { p_user: friendId });
     if (dmErr || !conv) {
@@ -572,6 +595,7 @@ export async function bumpHeartbeat(visible: BumpVisible = "friends", label?: st
     if (!priv.wump_share_enabled) return false;
     const loc = await getDeviceLocation({ highAccuracy: false });
     const place = await import("./wumpGeocode").then((m) => m.wumpGeocode(loc.lat, loc.lng)).catch(() => null);
+    const battery = await readBatteryPct();
     const placeArgs = {
       p_place_name: place?.name ?? place?.display ?? null,
       p_place_locality: place?.locality ?? place?.city ?? null,
@@ -582,6 +606,7 @@ export async function bumpHeartbeat(visible: BumpVisible = "friends", label?: st
       p_accuracy: loc.accuracy,
       p_heading: loc.heading,
       p_speed: loc.speed,
+      p_battery: battery,
       ...placeArgs,
     });
     if (!error) return true;
@@ -595,6 +620,7 @@ export async function bumpHeartbeat(visible: BumpVisible = "friends", label?: st
       p_precision: priv.wump_precision,
       p_heading: loc.heading,
       p_speed: loc.speed,
+      p_battery: battery,
       ...placeArgs,
     });
     return !e2;
@@ -628,12 +654,14 @@ export async function bumpPublishSample(
       });
     }
   }
+  const battery = await readBatteryPct();
   const { error } = await supabase.rpc("bump_heartbeat", {
     p_lat: loc.lat,
     p_lng: loc.lng,
     p_accuracy: loc.accuracy,
     p_heading: loc.heading ?? null,
     p_speed: loc.speed ?? null,
+    p_battery: battery,
     ...placeArgs,
   });
   if (!error) return true;
@@ -646,6 +674,7 @@ export async function bumpPublishSample(
     p_precision: priv.wump_precision,
     p_heading: loc.heading ?? null,
     p_speed: loc.speed ?? null,
+    p_battery: battery,
     ...placeArgs,
   });
   return !e2;

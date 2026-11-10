@@ -95,8 +95,12 @@ jobs:
           PROFILE_LINK: ${{ secrets.APPLE_PROVISION_PROFILE_BASE64_LINK }}
         run: |
           set -euo pipefail
-          if [ -z "${{ secrets.APPLE_TEAM_ID }}" ] || [ -z "${{ secrets.APPLE_CERTIFICATE_BASE64 }}" ] || [ -z "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" ]; then
-            echo "::error::Missing Apple Distribution secrets (APPLE_TEAM_ID / CERTIFICATE). See mobile/APP_STORE_CI_SETUP.txt"
+          missing=""
+          [ -z "${{ secrets.APPLE_TEAM_ID }}" ] && missing="$missing APPLE_TEAM_ID"
+          [ -z "${{ secrets.APPLE_CERTIFICATE_BASE64 }}" ] && missing="$missing APPLE_CERTIFICATE_BASE64"
+          [ -z "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" ] && missing="$missing APPLE_CERTIFICATE_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing Apple Distribution secrets:$missing. See mobile/APP_STORE_CI_SETUP.txt (names only, values are not printed)."
             exit 1
           fi
           case "${{ steps.app.outputs.profile_secret }}" in
@@ -115,8 +119,12 @@ jobs:
             exit 1
           fi
           if [ "${{ github.event.inputs.upload }}" = "true" ]; then
-            if [ -z "${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}" ] || [ -z "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}" ] || [ -z "${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}" ]; then
-              echo "::error::Upload requested but App Store Connect API key secrets are missing."
+            asc=""
+            [ -z "${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}" ] && asc="$asc APP_STORE_CONNECT_API_KEY_ID"
+            [ -z "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}" ] && asc="$asc APP_STORE_CONNECT_ISSUER_ID"
+            [ -z "${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}" ] && asc="$asc APP_STORE_CONNECT_API_KEY_BASE64"
+            if [ -n "$asc" ]; then
+              echo "::error::Upload requested but these App Store Connect secrets are empty:$asc."
               exit 1
             fi
           fi
