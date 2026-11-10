@@ -16,6 +16,8 @@ import { ACETATE, ACETATE_FREE_BYTES, acetateShareUrl } from "@/lib/acetateBrand
 import { asPeaks, audioExt, fmtBytes, fmtTime } from "@/lib/acetateAudio";
 import { useAcetatePlayer } from "@/lib/acetatePlayer";
 import {
+  ACETATE_KEYS,
+  ACETATE_STATUSES,
   addComment,
   addTrackToProject,
   createProject,
@@ -25,7 +27,9 @@ import {
   deleteTrack,
   deleteVersion,
   loadLibrary,
+  loadListens,
   loadTrackDetail,
+  moveInProject,
   removeTrackFromProject,
   reportAcetateError,
   revokeShare,
@@ -38,7 +42,9 @@ import {
   acetateSigned,
   type AcetateComment,
   type AcetateKind,
+  type AcetateListen,
   type AcetateMembership,
+  type AcetateStatus,
   type AcetateProject,
   type AcetateShare,
   type AcetateStorage,
@@ -83,6 +89,11 @@ export default function AcetateApp() {
   const [art, setArt] = useState<Record<string, string | null>>({});
   const [filter, setFilter] = useState("");
   const [kindFilter, setKindFilter] = useState<AcetateKind | "all">("all");
+  const [starredOnly, setStarredOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<AcetateStatus | "all">("all");
+  const [sortBy, setSortBy] = useState<"new" | "title" | "bpm">("new");
+  const [dropping, setDropping] = useState(false);
+  const [listens, setListens] = useState<AcetateListen[]>([]);
   const [shareFor, setShareFor] = useState<{ kind: "track" | "project"; id: string; title: string } | null>(null);
   const [nexusFor, setNexusFor] = useState<{ title: string; url: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -129,7 +140,11 @@ export default function AcetateApp() {
       if (data) useApp.setState((s) => ({ profiles: { ...s.profiles, [userId]: data } }));
       try {
         const next = await loadLibrary();
-        if (live) setLibrary(next);
+        const recent = await loadListens();
+        if (live) {
+          setLibrary(next);
+          setListens(recent);
+        }
       } catch (e) {
         if (live) setBootError(e instanceof Error ? e.message : "Couldn't load your library");
       }
@@ -174,7 +189,16 @@ export default function AcetateApp() {
   async function reload() {
     const next = await loadLibrary();
     setLibrary(next);
+    setListens(await loadListens());
     if (screen.name === "track") setDetail(await loadTrackDetail(screen.id));
+  }
+
+  async function uploadFiles(files: File[], projectId?: string) {
+    const audio = files.filter((file) => audioExt(file.name));
+    if (!audio.length) throw new Error("Drop audio files — mp3, wav, flac, aac, m4a, ogg, opus, or webm.");
+    for (const file of audio) {
+      await uploadAudio(file, { title: file.name.replace(/\.[^.]+$/, ""), projectId });
+    }
   }
 
   async function run(task: () => Promise<void>) {
@@ -261,7 +285,20 @@ export default function AcetateApp() {
   const storage = library.storage;
   const limit = storage.limit ?? ACETATE_FREE_BYTES;
   const ratio = storage.premium ? 1 : Math.min(1, Number(storage.bytes) / limit);
-  const visibleTracks = library.tracks.filter((track) => track.title.toLowerCase().includes(filter.trim().toLowerCase()));
+  const query = filter.trim().toLowerCase();
+  const visibleTracks = library.tracks
+    .filter((track) => {
+      if (starredOnly && !track.starred) return false;
+      if (statusFilter !== "all" && (track.status ?? "demo") !== statusFilter) return false;
+      if (!query) return true;
+      return track.title.toLowerCase().includes(query) || (track.folder ?? "").toLowerCase().includes(query) || (track.musical_key ?? "").toLowerCase().includes(query);
+    })
+    .sort((a, b) => {
+      if (sortBy === "title") return a.title.localeCompare(b.title);
+      if (sortBy === "bpm") return (a.bpm ?? 999) - (b.bpm ?? 999);
+      return a.updated_at < b.updated_at ? 1 : -1;
+    });
+  const folders = [...new Set(library.tracks.map((track) => track.folder).filter((folder): folder is string => !!folder))];
   const visibleProjects = library.projects.filter((project) => kindFilter === "all" || project.kind === kindFilter);
 
   return (
@@ -302,35 +339,90 @@ export default function AcetateApp() {
       </nav>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
         {screen.name === "library" && (
-          <section>
-            <div className="mb-3 flex items-center gap-2">
+          <section
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDropping(true);
+            }}
+            onDragLeave={() => setDropping(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDropping(false);
+              const files = [...e.dataTransfer.files];
+              if (files.length) void run(() => uploadFiles(files));
+            }}
+            className={dropping ? "rounded-3xl ring-2 ring-[#e4a15a]" : ""}
+          >
+            <div className="mb-3 grid grid-cols-3 gap-2 text-center text-xs">
+              <Stat label="Cuts" value={String(library.tracks.length)} />
+              <Stat label="Starred" value={String(library.tracks.filter((track) => track.starred).length)} />
+              <Stat label="Plays" value={String(listens.length)} />
+            </div>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
               <input
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
-                placeholder="Search your cuts"
-                className="flex-1 rounded-2xl border border-[#3c342c] bg-[#1a1612] px-4 py-2.5 text-sm outline-none focus:border-[#e4a15a]"
+                placeholder="Search title, folder, or key"
+                className="min-w-40 flex-1 rounded-2xl border border-[#3c342c] bg-[#1a1612] px-4 py-2.5 text-sm outline-none focus:border-[#e4a15a]"
               />
-              <FileButton
-                label="Upload"
-                accept="audio/*"
-                disabled={busy}
-                onFile={(file) => void run(() => uploadAudio(file, { title: file.name.replace(/\.[^.]+$/, "") }).then(() => undefined))}
-              />
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as "new" | "title" | "bpm")} className="rounded-2xl border border-[#3c342c] bg-[#1a1612] px-3 py-2 text-sm">
+                <option value="new">Recent</option>
+                <option value="title">Title</option>
+                <option value="bpm">BPM</option>
+              </select>
+              <FileButton label="Upload" accept="audio/*" multiple disabled={busy} onFiles={(files) => void run(() => uploadFiles(files))} />
             </div>
-            {visibleTracks.length === 0 && <Empty text="Your library is private. Upload a demo, a bounce, or a voice note." />}
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              <FilterChip active={starredOnly} onClick={() => setStarredOnly((on) => !on)} label="Starred" />
+              <FilterChip active={statusFilter === "all"} onClick={() => setStatusFilter("all")} label="All stages" />
+              {ACETATE_STATUSES.map((status) => (
+                <FilterChip key={status.id} active={statusFilter === status.id} onClick={() => setStatusFilter(status.id)} label={status.label} />
+              ))}
+            </div>
+            {folders.length > 0 && <p className="mb-3 text-xs text-[#a3988c]">Folders · {folders.join(" · ")}</p>}
+            {visibleTracks.length === 0 && <Empty text={dropping ? "Drop audio to add it to your private library." : "Your library is private. Upload a demo, a bounce, or a voice note."} />}
             <ul className="space-y-2">
               {visibleTracks.map((track) => (
-                <li key={track.id}>
-                  <button type="button" onClick={() => setScreen({ name: "track", id: track.id })} className="flex w-full items-center gap-3 rounded-2xl border border-[#3c342c] bg-[#1a1612] p-3 text-left hover:border-[#e4a15a]/40">
+                <li key={track.id} className="flex items-center gap-2 rounded-2xl border border-[#3c342c] bg-[#1a1612] p-2 hover:border-[#e4a15a]/40">
+                  <button type="button" onClick={() => setScreen({ name: "track", id: track.id })} className="flex min-w-0 flex-1 items-center gap-3 text-left">
                     <ArtTile url={art[track.id]} title={track.title} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-semibold">{track.title}</span>
-                      <span className="block truncate text-xs text-[#a3988c]">{track.note || "No notes"}</span>
+                      <span className="block truncate text-xs text-[#a3988c]">
+                        {ACETATE_STATUSES.find((status) => status.id === (track.status ?? "demo"))?.label}
+                        {track.folder ? ` · ${track.folder}` : ""}
+                        {track.bpm ? ` · ${track.bpm} BPM` : ""}
+                        {track.musical_key ? ` · ${track.musical_key}` : ""}
+                      </span>
                     </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={track.starred ? "Unstar" : "Star"}
+                    onClick={() => void run(() => updateTrack(track.id, { starred: !track.starred }))}
+                    className={`px-2 text-lg ${track.starred ? "text-[#e4a15a]" : "text-[#3c342c]"}`}
+                  >
+                    ★
                   </button>
                 </li>
               ))}
             </ul>
+            {listens.length > 0 && (
+              <section className="mt-6">
+                <h2 className="font-serif text-2xl">Recent plays</h2>
+                <ul className="mt-2 space-y-1">
+                  {listens.map((listen) => {
+                    const track = library.tracks.find((item) => item.id === listen.track_id);
+                    return (
+                      <li key={listen.id} className="flex items-center justify-between gap-3 text-sm text-[#a3988c]">
+                        <span className="truncate">{track?.title || "Removed cut"}</span>
+                        <span className="shrink-0">{new Date(listen.created_at).toLocaleString()}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
           </section>
         )}
 
@@ -361,7 +453,9 @@ export default function AcetateApp() {
             onArt={(file) => void run(() => uploadArtwork(file, "project", screen.id).then(() => undefined))}
             onAdd={(trackId) => void run(() => addTrackToProject(screen.id, trackId))}
             onRemove={(trackId) => void run(() => removeTrackFromProject(screen.id, trackId))}
+            onMove={(trackId, dir) => void run(() => moveInProject(screen.id, trackId, dir, library.memberships))}
             onRename={(title) => void run(() => updateProject(screen.id, { title }))}
+            onNote={(note) => void run(() => updateProject(screen.id, { note }))}
             onDelete={() => {
               if (window.confirm("Delete this collection? Tracks stay in your library.")) void run(() => deleteProject(screen.id).then(() => setScreen({ name: "projects" })));
             }}
@@ -408,6 +502,7 @@ export default function AcetateApp() {
             onUpload={(file, label) => void run(() => uploadAudio(file, { trackId: screen.id, label }).then(() => undefined))}
             onArt={(file) => void run(() => uploadArtwork(file, "track", screen.id).then(() => undefined))}
             onRename={(title) => void run(() => updateTrack(screen.id, { title }))}
+            onMeta={(patch) => void run(() => updateTrack(screen.id, patch))}
             onDeleteVersion={(version) => {
               if (window.confirm("Delete this version and its audio?")) void run(() => deleteVersion(version));
             }}
@@ -465,22 +560,41 @@ function NavButton({ active, onClick, icon, label }: { active: boolean; onClick:
   );
 }
 
-function FileButton({ label, accept, onFile, disabled }: { label: string; accept: string; onFile: (file: File) => void; disabled?: boolean }) {
+function FileButton({ label, accept, onFile, onFiles, multiple, disabled }: { label: string; accept: string; onFile?: (file: File) => void; onFiles?: (files: File[]) => void; multiple?: boolean; disabled?: boolean }) {
   return (
     <label className={`rounded-full bg-[#e4a15a] px-4 py-2 text-sm font-semibold text-[#100e0c] ${disabled ? "opacity-50" : "cursor-pointer"}`}>
       {label}
       <input
         type="file"
         accept={accept}
+        multiple={multiple}
         className="hidden"
         disabled={disabled}
         onChange={(e) => {
-          const file = e.target.files?.[0];
+          const files = [...(e.target.files ?? [])];
           e.target.value = "";
-          if (file) onFile(file);
+          if (onFiles && files.length) onFiles(files);
+          else if (files[0] && onFile) onFile(files[0]);
         }}
       />
     </label>
+  );
+}
+
+function FilterChip({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button type="button" onClick={onClick} className={`rounded-full px-3 py-1 text-xs font-semibold ${active ? "bg-[#f3eadf] text-[#100e0c]" : "bg-[#1a1612] text-[#a3988c]"}`}>
+      {label}
+    </button>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-[#3c342c] bg-[#1a1612] px-3 py-2">
+      <div className="font-serif text-xl text-[#f3eadf]">{value}</div>
+      <div className="text-[#a3988c]">{label}</div>
+    </div>
   );
 }
 
@@ -568,14 +682,18 @@ function ProjectView(props: {
   onArt: (file: File) => void;
   onAdd: (trackId: string) => void;
   onRemove: (trackId: string) => void;
+  onMove: (trackId: string, dir: -1 | 1) => void;
   onRename: (title: string) => void;
+  onNote: (note: string) => void;
   onDelete: () => void;
   onOpenTrack: (id: string) => void;
   onShare: () => void;
 }) {
   const { project } = props;
   const [title, setTitle] = useState(project?.title ?? "");
+  const [note, setNote] = useState(project?.note ?? "");
   useEffect(() => setTitle(project?.title ?? ""), [project?.title]);
+  useEffect(() => setNote(project?.note ?? ""), [project?.note]);
   if (!project) return <Empty text="That collection is gone." />;
   const available = props.libraryTracks.filter((track) => !props.memberIds.has(track.id));
   return (
@@ -593,6 +711,14 @@ function ProjectView(props: {
           >
             <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-transparent font-serif text-3xl outline-none" />
           </form>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              props.onNote(note.trim());
+            }}
+          >
+            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Session notes" className="mt-1 w-full bg-transparent text-sm text-[#a3988c] outline-none" />
+          </form>
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -607,6 +733,8 @@ function ProjectView(props: {
           <li key={track.id} className="flex items-center gap-2 rounded-2xl bg-[#1a1612] p-2">
             <button type="button" onClick={() => props.onPlay(track.id)} className="w-6 text-sm text-[#a3988c]">{index + 1}</button>
             <button type="button" onClick={() => props.onOpenTrack(track.id)} className="min-w-0 flex-1 truncate text-left font-medium">{track.title}</button>
+            <button type="button" aria-label="Move up" onClick={() => props.onMove(track.id, -1)} className="text-xs text-[#a3988c]">Up</button>
+            <button type="button" aria-label="Move down" onClick={() => props.onMove(track.id, 1)} className="text-xs text-[#a3988c]">Down</button>
             <button type="button" onClick={() => props.onRemove(track.id)} className="text-xs text-[#a3988c]">Remove</button>
           </li>
         ))}
@@ -644,6 +772,7 @@ function TrackView(props: {
   onUpload: (file: File, label: string) => void;
   onArt: (file: File) => void;
   onRename: (title: string) => void;
+  onMeta: (patch: { note?: string | null; status?: AcetateStatus; bpm?: number | null; musical_key?: string | null; folder?: string | null; starred?: boolean }) => void;
   onDeleteVersion: (version: AcetateVersion) => void;
   onDelete: () => void;
   onComment: (at: number, body: string, versionId: string | null) => void;
@@ -654,9 +783,17 @@ function TrackView(props: {
   const [title, setTitle] = useState(track?.title ?? "");
   const [label, setLabel] = useState("");
   const [body, setBody] = useState("");
+  const [note, setNote] = useState(track?.note ?? "");
+  const [folder, setFolder] = useState(track?.folder ?? "");
+  const [bpm, setBpm] = useState(track?.bpm ? String(track.bpm) : "");
   const playing = useAcetatePlayer((s) => s.queue[s.index]);
   const current = useAcetatePlayer((s) => s.current);
   useEffect(() => setTitle(track?.title ?? ""), [track?.title]);
+  useEffect(() => {
+    setNote(track?.note ?? "");
+    setFolder(track?.folder ?? "");
+    setBpm(track?.bpm ? String(track.bpm) : "");
+  }, [track?.id, track?.note, track?.folder, track?.bpm]);
   if (!track) return <Empty text="That track is gone." />;
   const active = detail?.versions.find((version) => playing?.versionId === version.id) ?? detail?.versions[0] ?? null;
   const duration = playing?.trackId === track.id ? playing.duration || current : active?.duration ?? 0;
@@ -696,8 +833,56 @@ function TrackView(props: {
         )}
         <FileButton label="Artwork" accept="image/jpeg,image/png,image/webp" disabled={props.busy} onFile={props.onArt} />
         <button type="button" onClick={props.onShare} className="rounded-full border border-[#3c342c] px-4 py-2 text-sm">Share</button>
+        <button type="button" onClick={() => props.onMeta({ starred: !track.starred })} className={`rounded-full border border-[#3c342c] px-4 py-2 text-sm ${track.starred ? "text-[#e4a15a]" : ""}`}>
+          {track.starred ? "Starred" : "Star"}
+        </button>
         <button type="button" onClick={props.onDelete} className="rounded-full px-3 py-2 text-sm text-[#d4653a]">Delete track</button>
       </div>
+      <form
+        className="mt-4 grid gap-2 rounded-3xl border border-[#3c342c] p-3 sm:grid-cols-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const parsed = bpm.trim() ? Number(bpm) : null;
+          props.onMeta({
+            note: note.trim() || null,
+            folder: folder.trim() || null,
+            bpm: parsed && parsed >= 20 && parsed <= 400 ? Math.round(parsed) : null,
+            status: (e.currentTarget.elements.namedItem("status") as HTMLSelectElement).value as AcetateStatus,
+            musical_key: (e.currentTarget.elements.namedItem("key") as HTMLSelectElement).value || null,
+          });
+        }}
+      >
+        <label className="text-xs text-[#a3988c]">
+          Stage
+          <select name="status" defaultValue={track.status ?? "demo"} className="mt-1 w-full rounded-xl border border-[#3c342c] bg-[#1a1612] px-3 py-2 text-sm text-[#f3eadf]">
+            {ACETATE_STATUSES.map((status) => (
+              <option key={status.id} value={status.id}>{status.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-[#a3988c]">
+          Key
+          <select name="key" defaultValue={track.musical_key ?? ""} className="mt-1 w-full rounded-xl border border-[#3c342c] bg-[#1a1612] px-3 py-2 text-sm text-[#f3eadf]">
+            <option value="">Unset</option>
+            {ACETATE_KEYS.map((key) => (
+              <option key={key} value={key}>{key}</option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-[#a3988c]">
+          BPM
+          <input value={bpm} onChange={(e) => setBpm(e.target.value.replace(/[^\d]/g, "").slice(0, 3))} inputMode="numeric" className="mt-1 w-full rounded-xl border border-[#3c342c] bg-transparent px-3 py-2 text-sm outline-none" />
+        </label>
+        <label className="text-xs text-[#a3988c]">
+          Folder
+          <input value={folder} onChange={(e) => setFolder(e.target.value)} maxLength={40} placeholder="Vocals, refs, clients" className="mt-1 w-full rounded-xl border border-[#3c342c] bg-transparent px-3 py-2 text-sm outline-none" />
+        </label>
+        <label className="text-xs text-[#a3988c] sm:col-span-2">
+          Private note
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} className="mt-1 min-h-16 w-full rounded-xl border border-[#3c342c] bg-transparent px-3 py-2 text-sm outline-none" />
+        </label>
+        <button type="submit" disabled={props.busy} className="rounded-full bg-[#f3eadf] px-4 py-2 text-sm font-semibold text-[#100e0c] sm:col-span-2 disabled:opacity-50">Save studio details</button>
+      </form>
       <form
         className="mt-4 flex flex-wrap gap-2"
         onSubmit={(e) => {

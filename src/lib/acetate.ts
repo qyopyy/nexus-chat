@@ -7,6 +7,16 @@ import { toast, useApp } from "@/store/app";
 import { artExt, asPeaks, audioExt, describeAudio, mimeForExt } from "./acetateAudio";
 
 export type AcetateKind = "project" | "album" | "playlist";
+export type AcetateStatus = "idea" | "demo" | "mix" | "master";
+
+export const ACETATE_STATUSES: { id: AcetateStatus; label: string }[] = [
+  { id: "idea", label: "Idea" },
+  { id: "demo", label: "Demo" },
+  { id: "mix", label: "Mix" },
+  { id: "master", label: "Master" },
+];
+
+export const ACETATE_KEYS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", "Cm", "C#m", "Dm", "D#m", "Em", "Fm", "F#m", "Gm", "G#m", "Am", "A#m", "Bm"];
 
 export type AcetateProject = {
   id: string;
@@ -25,8 +35,22 @@ export type AcetateTrack = {
   title: string;
   note: string | null;
   artwork_path: string | null;
+  starred?: boolean;
+  status?: AcetateStatus;
+  bpm?: number | null;
+  musical_key?: string | null;
+  folder?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type AcetateListen = {
+  id: number;
+  owner_id: string;
+  track_id: string | null;
+  share_id: string | null;
+  listener_id: string | null;
+  created_at: string;
 };
 
 export type AcetateMembership = {
@@ -225,8 +249,46 @@ export async function deleteProject(id: string) {
   if (data?.artwork_path) await supabase.storage.from("acetate").remove([data.artwork_path]);
 }
 
-export async function updateTrack(id: string, patch: { title?: string; note?: string | null }) {
+export async function updateTrack(
+  id: string,
+  patch: {
+    title?: string;
+    note?: string | null;
+    starred?: boolean;
+    status?: AcetateStatus;
+    bpm?: number | null;
+    musical_key?: string | null;
+    folder?: string | null;
+  },
+) {
   const { error } = await supabase.from("acetate_tracks").update(patch).eq("id", id);
+  if (error) throw new Error(errorText(error));
+}
+
+export async function moveInProject(projectId: string, trackId: string, dir: -1 | 1, memberships: AcetateMembership[]) {
+  const rows = memberships.filter((row) => row.project_id === projectId).sort((a, b) => a.position - b.position || a.track_id.localeCompare(b.track_id));
+  const index = rows.findIndex((row) => row.track_id === trackId);
+  const swap = rows[index + dir];
+  const current = rows[index];
+  if (!current || !swap) return;
+  const first = await supabase.from("acetate_memberships").update({ position: swap.position }).eq("project_id", projectId).eq("track_id", current.track_id);
+  if (first.error) throw new Error(errorText(first.error));
+  const second = await supabase.from("acetate_memberships").update({ position: current.position }).eq("project_id", projectId).eq("track_id", swap.track_id);
+  if (second.error) throw new Error(errorText(second.error));
+}
+
+export async function loadListens() {
+  const { data, error } = await supabase.from("acetate_listens").select("id, owner_id, track_id, share_id, listener_id, created_at").order("created_at", { ascending: false }).limit(20);
+  if (error) return [] as AcetateListen[];
+  return (data ?? []) as AcetateListen[];
+}
+
+export async function recordListen(trackId: string, token?: string | null, password?: string | null) {
+  const { error } = await supabase.rpc("acetate_record_listen", {
+    p_track: trackId,
+    p_token: token || null,
+    p_password: password || null,
+  });
   if (error) throw new Error(errorText(error));
 }
 

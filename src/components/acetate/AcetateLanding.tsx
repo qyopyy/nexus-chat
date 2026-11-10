@@ -9,6 +9,7 @@ const POINTS = [
   { title: "Private by default", body: "Demos, alternate mixes, and half-finished songs stay in your library until you make a link." },
   { title: "Every version", body: "Keep the rough, the vocal pass, and the mix that finally sat right — on the same track." },
   { title: "A link, not an account", body: "Public or unlisted. Optional password, expiry, and download. Revoke it when the cut moves on." },
+  { title: "A working studio", body: "Stage a cut from idea to master, file it in a folder, mark BPM and key, and keep a private log of every play." },
 ];
 
 export default function AcetateLanding() {
@@ -38,7 +39,7 @@ export default function AcetateLanding() {
             How a cut is shared
           </a>
         </div>
-        <div className="mt-16 grid gap-4 sm:grid-cols-3" id="how">
+        <div className="mt-16 grid gap-4 sm:grid-cols-2" id="how">
           {POINTS.map((point) => (
             <article key={point.title} className="rounded-3xl border border-[#3c342c] bg-[#1a1612] p-5">
               <h2 className="font-serif text-2xl">{point.title}</h2>

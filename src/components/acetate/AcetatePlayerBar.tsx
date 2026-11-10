@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { ListMusic, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward } from "lucide-react";
 import { updateMyProfile } from "@/lib/data";
+import { recordListen } from "@/lib/acetate";
 import { fmtTime } from "@/lib/acetateAudio";
 import { useAcetatePlayer } from "@/lib/acetatePlayer";
 import { useApp } from "@/store/app";
@@ -16,6 +17,11 @@ export default function AcetatePlayerBar() {
   const playing = useAcetatePlayer((s) => s.playing);
   const current = useAcetatePlayer((s) => s.current);
   const seekTo = useAcetatePlayer((s) => s.seekTo);
+  const repeat = useAcetatePlayer((s) => s.repeat);
+  const shuffle = useAcetatePlayer((s) => s.shuffle);
+  const volume = useAcetatePlayer((s) => s.volume);
+  const rate = useAcetatePlayer((s) => s.rate);
+  const queueOpen = useAcetatePlayer((s) => s.queueOpen);
   const item = queue[index] ?? null;
   const duration = item ? item.duration || audioRef.current?.duration || 0 : 0;
 
@@ -44,6 +50,37 @@ export default function AcetatePlayerBar() {
     audio.currentTime = seekTo;
     useAcetatePlayer.getState().clearSeek();
   }, [seekTo]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = volume;
+    audio.playbackRate = rate;
+  }, [volume, rate, item]);
+
+  useEffect(() => {
+    if (!playing || !item) return;
+    void recordListen(item.trackId).catch(() => undefined);
+  }, [playing, item]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const tag = (event.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (event.target as HTMLElement | null)?.isContentEditable) return;
+      const player = useAcetatePlayer.getState();
+      if (!player.queue.length) return;
+      if (event.code === "Space") {
+        event.preventDefault();
+        player.toggle();
+      } else if (event.code === "ArrowRight") {
+        player.seek(player.current + 5);
+      } else if (event.code === "ArrowLeft") {
+        player.seek(Math.max(0, player.current - 5));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     const userId = useApp.getState().userId;
@@ -81,6 +118,23 @@ export default function AcetatePlayerBar() {
 
   return (
     <div className="border-t border-[#3c342c] bg-[#1a1612]/95 px-3 pt-2 pb-safe-3 backdrop-blur">
+      {queueOpen && (
+        <ol className="mb-2 max-h-36 space-y-1 overflow-y-auto">
+          {queue.map((row, i) => (
+            <li key={row.key}>
+              <button
+                type="button"
+                onClick={() => useAcetatePlayer.getState().playAt(i)}
+                className={`flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-sm ${i === index ? "bg-[#2a241c] text-[#e4a15a]" : "hover:bg-white/5"}`}
+              >
+                <span className="w-5 text-xs text-[#a3988c]">{i + 1}</span>
+                <span className="truncate">{row.title}</span>
+                <span className="ml-auto shrink-0 text-xs text-[#a3988c]">{row.versionLabel}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
       <audio
         ref={audioRef}
         preload="metadata"
@@ -118,6 +172,33 @@ export default function AcetatePlayerBar() {
         </button>
         <button type="button" aria-label="Next" onClick={() => useAcetatePlayer.getState().next()} className="grid size-9 place-items-center rounded-full hover:bg-white/5">
           <SkipForward className="size-4" />
+        </button>
+      </div>
+      <div className="mt-1 flex items-center gap-1 text-[#a3988c]">
+        <button type="button" aria-label={shuffle ? "Shuffle on" : "Shuffle off"} aria-pressed={shuffle} onClick={() => useAcetatePlayer.getState().toggleShuffle()} className={`grid size-8 place-items-center rounded-full ${shuffle ? "text-[#e4a15a]" : "hover:bg-white/5"}`}>
+          <Shuffle className="size-3.5" />
+        </button>
+        <button type="button" aria-label={`Repeat ${repeat}`} onClick={() => useAcetatePlayer.getState().cycleRepeat()} className={`grid size-8 place-items-center rounded-full ${repeat === "off" ? "hover:bg-white/5" : "text-[#e4a15a]"}`}>
+          {repeat === "one" ? <Repeat1 className="size-3.5" /> : <Repeat className="size-3.5" />}
+        </button>
+        <button type="button" onClick={() => useAcetatePlayer.getState().cycleRate()} className="rounded-full px-2 py-1 text-[11px] font-semibold hover:bg-white/5">
+          {rate}×
+        </button>
+        <label className="ml-1 flex min-w-0 flex-1 items-center gap-2 text-[11px]">
+          <span className="sr-only">Volume</span>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={volume}
+            aria-label="Volume"
+            onChange={(e) => useAcetatePlayer.getState().setVolume(Number(e.target.value))}
+            className="w-full accent-[#e4a15a]"
+          />
+        </label>
+        <button type="button" aria-label="Queue" aria-pressed={queueOpen} onClick={() => useAcetatePlayer.getState().toggleQueue()} className={`grid size-8 place-items-center rounded-full ${queueOpen ? "text-[#e4a15a]" : "hover:bg-white/5"}`}>
+          <ListMusic className="size-3.5" />
         </button>
       </div>
     </div>
