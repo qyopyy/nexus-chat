@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useApp, openModal, toast } from "@/store/app";
 import { initCallEngine } from "@/lib/call";
 import { useRealtime } from "@/lib/realtime";
-import { joinSpace, loadProfiles, refreshChatList, refreshFriends, refreshSpaces, refreshUnread } from "@/lib/data";
+import { joinSpace, loadProfiles, openConversation, refreshChatList, refreshFriends, refreshSpaces, refreshUnread } from "@/lib/data";
 import ChannelLockGate from "@/components/space/ChannelLockGate";
 import { isBanned, refreshBadges } from "@/lib/admin";
 import BannedScreen from "./BannedScreen";
@@ -30,6 +30,7 @@ import WelcomeSplash from "./WelcomeSplash";
 import ErrorBoundary from "./ErrorBoundary";
 import { useIsMobile } from "@/lib/useMobile";
 import { useHandsetReporter } from "@/lib/handset";
+import PhoneCommandHost from "@/components/phone/PhoneCommandHost";
 import { startSpotifySync } from "@/lib/spotifyUser";
 import { startMediaAudio } from "@/lib/mediaAudio";
 import "@/lib/prefs";
@@ -98,6 +99,11 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       if (tab === "friends" || tab === "chats" || tab === "me") {
         sessionStorage.removeItem("nexus:open-tab");
         useApp.setState({ mobileTab: tab });
+      }
+      const conv = sessionStorage.getItem("nexus:open-conv");
+      if (conv) {
+        sessionStorage.removeItem("nexus:open-conv");
+        openConversation(conv, null);
       }
     } catch {
       /* private mode */
@@ -375,6 +381,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       <Modals />
       <MessageBanner />
       <Toasts />
+      <PhoneCommandHost />
       <EffectsLayer />
       <ButtonFxBoot />
       <WelcomeSplash name={welcomeName} />

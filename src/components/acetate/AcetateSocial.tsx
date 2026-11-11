@@ -3,16 +3,19 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  addComment,
   inviteCollaborator,
   loadCollaborators,
   loadNotices,
   loadPublicProfile,
+  loadTrackDetail,
   markNotices,
   removeCollaborator,
   reportAcetateError,
   setFollow,
   toggleLike,
   type AcetateCollaborator,
+  type AcetateComment,
   type AcetateNotice,
   type AcetatePublicProfile,
 } from "@/lib/acetate";
@@ -119,6 +122,50 @@ export function Collaborators({ projectId }: { projectId: string }) {
   );
 }
 
+function TrackComments({ trackId }: { trackId: string }) {
+  const [rows, setRows] = useState<AcetateComment[]>([]);
+  const [open, setOpen] = useState(false);
+  const [body, setBody] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    void loadTrackDetail(trackId).then((detail) => setRows(detail.comments)).catch(() => setRows([]));
+  }, [open, trackId]);
+
+  if (!open) {
+    return (
+      <button type="button" className="mt-2 text-xs text-[#a3988c]" onClick={() => setOpen(true)}>
+        Comments
+      </button>
+    );
+  }
+  return (
+    <div className="mt-2">
+      <ul className="space-y-1 text-sm">
+        {rows.map((row) => (
+          <li key={row.id}>{row.body}</li>
+        ))}
+      </ul>
+      <form
+        className="mt-2 flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void addComment(trackId, 0, body)
+            .then(() => {
+              setBody("");
+              return loadTrackDetail(trackId);
+            })
+            .then((detail) => setRows(detail.comments))
+            .catch(reportAcetateError);
+        }}
+      >
+        <input value={body} onChange={(e) => setBody(e.target.value)} maxLength={500} placeholder="Add a comment" className="min-w-0 flex-1 rounded-xl border border-[#3c342c] bg-transparent px-2 py-1 text-sm outline-none" />
+        <button type="submit" className="text-sm text-[#e4a15a]">Post</button>
+      </form>
+    </div>
+  );
+}
+
 export function LikeButton({ trackId, onDone }: { trackId: string; onDone?: () => void }) {
   return (
     <button
@@ -180,14 +227,18 @@ export default function AcetateProfile({ username }: { username: string }) {
             <ul className="mt-6 space-y-2">
               {(page.tracks ?? []).length === 0 && <li className="text-sm text-[#a3988c]">No public cuts yet. Private work stays in the library.</li>}
               {(page.tracks ?? []).map((track) => (
-                <li key={track.id} className="flex items-center gap-3 rounded-2xl border border-[#3c342c] px-3 py-3">
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold">{track.title}</span>
-                    <span className="text-xs text-[#a3988c]">{track.status || "demo"} · {track.likes} likes</span>
-                  </span>
-                  <button type="button" className="text-sm text-[#e4a15a]" onClick={() => void toggleLike(track.id).then(load).catch(reportAcetateError)}>
-                    {track.liked ? "Liked" : "Like"}
-                  </button>
+                <li key={track.id} className="rounded-2xl border border-[#3c342c] px-3 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-semibold">{track.title}</span>
+                      <span className="text-xs text-[#a3988c]">{track.status || "demo"} · {track.likes} likes · {track.comments ?? 0} comments</span>
+                    </span>
+                    <button type="button" className="text-sm text-[#e4a15a]" onClick={() => void toggleLike(track.id).then(load).catch(reportAcetateError)}>
+                      {track.liked ? "Liked" : "Like"}
+                    </button>
+                  </div>
+                  {track.lyrics && <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap text-sm">{track.lyrics}</pre>}
+                  <TrackComments trackId={track.id} />
                 </li>
               ))}
             </ul>

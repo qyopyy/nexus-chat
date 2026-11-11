@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Accessibility, Bell, Camera, ChevronLeft, ChevronRight, Construction, Crown, Database, Keyboard, Link2, ShieldCheck, LogOut, Mic, Palette, Shield, Smile, Sparkles, Upload, User, Wifi, X } from "lucide-react";
+import { Accessibility, Bell, Camera, ChevronLeft, ChevronRight, Construction, Crown, Database, Keyboard, Link2, MapPin, MonitorSmartphone, ShieldCheck, LogOut, Mic, Palette, Shield, Smile, Sparkles, Upload, User, Wifi, X } from "lucide-react";
 import { LIVE_STYLES, TYPING_STYLES, setChatFx, useChatFx } from "@/lib/chatFx";
 import { LiveText, TypingAnim } from "@/components/chat/TypingBubbles";
 import { useApp, closeModal, openModal, toast } from "@/store/app";
@@ -84,7 +84,13 @@ function MobileSettingsHome({ isStaff, isAdmin, onPick }: { isStaff: boolean; is
           </div>
         </div>
       ))}
-      <div className="mt-4 px-4">
+      <div className="mt-4 px-4 space-y-2">
+        <a href="/locator" className="flex min-h-[52px] w-full items-center gap-3 rounded-2xl bg-side px-3.5 text-left font-semibold active:bg-white/[.06]">
+          <MapPin className="size-5" /> Locator
+        </a>
+        <a href="/phone" className="flex min-h-[52px] w-full items-center gap-3 rounded-2xl bg-side px-3.5 text-left font-semibold active:bg-white/[.06]">
+          <MonitorSmartphone className="size-5" /> Phone Link
+        </a>
         <button onClick={() => openModal("premium")} className="flex min-h-[52px] w-full items-center gap-3 rounded-2xl bg-side px-3.5 text-left font-semibold text-[#f0b232] active:bg-white/[.06]">
           <Crown className="size-5" /> Nexus Premium
         </button>
@@ -154,6 +160,12 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
           {nav("vavatar", "V-Avatar", <Sparkles className="size-4" />)}
           {nav("notifications", "Notifications", <Bell className="size-4" />)}
           {nav("advanced", "Data & Advanced", <Database className="size-4" />)}
+          <a href="/locator" className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sub transition hover:bg-hover hover:text-txt">
+            <MapPin className="size-4" /> Locator
+          </a>
+          <a href="/phone" className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sub transition hover:bg-hover hover:text-txt">
+            <MonitorSmartphone className="size-4" /> Phone Link
+          </a>
           <button onClick={() => openModal("premium")} className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left font-semibold text-[#f0b232] transition hover:bg-hover">
             <Crown className="size-4" />
             Nexus Premium

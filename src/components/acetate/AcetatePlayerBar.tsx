@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ListMusic, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward } from "lucide-react";
 import { updateMyProfile } from "@/lib/data";
 import { recordListen } from "@/lib/acetate";
@@ -8,6 +8,8 @@ import { fmtTime } from "@/lib/acetateAudio";
 import { useAcetatePlayer } from "@/lib/acetatePlayer";
 import { useApp } from "@/store/app";
 import { Waveform } from "./AcetateBits";
+import ListenTogetherButton from "./ListenTogether";
+import { useAcetateAccountSync } from "@/lib/acetateQueueSync";
 
 /** Persistent player for the signed-in Acetate library. Also publishes Nexus "listening to". */
 export default function AcetatePlayerBar() {
@@ -27,6 +29,8 @@ export default function AcetatePlayerBar() {
   const crossfadeOn = useAcetatePlayer((s) => s.crossfade > 0);
   const filters = useRef<BiquadFilterNode[] | null>(null);
   const item = queue[index] ?? null;
+  const [lyricsOpen, setLyricsOpen] = useState(false);
+  useAcetateAccountSync(!!useApp((s) => s.userId));
   const duration = item ? item.duration || audioRef.current?.duration || 0 : 0;
 
   useEffect(() => {
@@ -300,10 +304,17 @@ export default function AcetatePlayerBar() {
             className="w-full accent-[#e4a15a]"
           />
         </label>
+        {item?.lyrics && (
+          <button type="button" className={`rounded-full px-2 py-1 text-[11px] font-semibold ${lyricsOpen ? "text-[#e4a15a]" : "hover:bg-white/5"}`} onClick={() => setLyricsOpen((v) => !v)}>
+            Lyrics
+          </button>
+        )}
+        <ListenTogetherButton />
         <button type="button" aria-label="Queue" aria-pressed={queueOpen} onClick={() => useAcetatePlayer.getState().toggleQueue()} className={`grid size-8 place-items-center rounded-full ${queueOpen ? "text-[#e4a15a]" : "hover:bg-white/5"}`}>
           <ListMusic className="size-3.5" />
         </button>
       </div>
+      {lyricsOpen && item?.lyrics && <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap text-xs text-[#f3eadf]">{item.lyrics}</pre>}
     </div>
   );
 }

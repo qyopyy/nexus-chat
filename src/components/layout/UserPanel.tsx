@@ -167,6 +167,12 @@ function MeRow() {
             <a href="/cloud" className="flex w-full items-center gap-3 rounded px-2 py-1.5 hover:bg-accent hover:text-white">
               Cloud
             </a>
+            <a href="/locator" className="flex w-full items-center gap-3 rounded px-2 py-1.5 hover:bg-accent hover:text-white">
+              Locator
+            </a>
+            <a href="/phone" className="flex w-full items-center gap-3 rounded px-2 py-1.5 hover:bg-accent hover:text-white">
+              Phone Link
+            </a>
             <button
               onClick={() => setPref("buttonFx", !buttonFx)}
               className="flex w-full items-center gap-3 rounded px-2 py-1.5 hover:bg-accent hover:text-white"

@@ -94,6 +94,8 @@ function signedIn() {
 async function note(text: string) {
   signedIn();
   await sendHandsetNote(text);
+  const { sendToComputers } = await import("@/lib/phoneLink");
+  await sendToComputers("note", text).catch(() => undefined);
   toast("Sent to your computer", "success");
 }
 
@@ -232,6 +234,8 @@ export function iphoneTools(): IphoneTool[] {
       signedIn();
       const text = (await navigator.clipboard.readText()).trim();
       await sendHandsetLink(text);
+      const { sendToComputers } = await import("@/lib/phoneLink");
+      await sendToComputers("link", text).catch(() => undefined);
       toast("Link sent", "success");
     }),
     tool(48, "link-clear", HANDOFF, "Clear the sent link", async () => {

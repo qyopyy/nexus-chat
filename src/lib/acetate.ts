@@ -27,6 +27,7 @@ export type AcetateProject = {
   artwork_path: string | null;
   created_at: string;
   updated_at: string;
+  shared_role?: "listener" | "editor" | null;
 };
 
 export type AcetateTrack = {
@@ -198,18 +199,42 @@ export async function acetateSigned(path: string | null | undefined, downloadNam
 
 export async function loadLibrary() {
   const owner = me();
-  const [projects, tracks, memberships, storage, shares] = await Promise.all([
+  const [projects, tracks, memberships, storage, shares, collabs] = await Promise.all([
     supabase.from("acetate_projects").select("*").eq("owner_id", owner).order("updated_at", { ascending: false }),
     supabase.from("acetate_tracks").select("*").eq("owner_id", owner).order("updated_at", { ascending: false }),
     supabase.from("acetate_memberships").select("*").order("position", { ascending: true }),
     supabase.rpc("acetate_my_storage"),
     supabase.from("acetate_shares").select(SHARE_COLUMNS).eq("owner_id", owner).eq("revoked", false).order("created_at", { ascending: false }),
+    supabase.from("acetate_collaborators").select("project_id, user_id, role").eq("user_id", owner),
   ]);
-  const err = projects.error || tracks.error || memberships.error || storage.error || shares.error;
+  const err = projects.error || tracks.error || memberships.error || storage.error || shares.error || collabs.error;
   if (err) throw new Error(errorText(err));
+  const ownedProjects = (projects.data ?? []) as AcetateProject[];
+  const ownedIds = new Set(ownedProjects.map((project) => project.id));
+  const invites = (collabs.data ?? []) as { project_id: string; role: "listener" | "editor" }[];
+  const sharedIds = [...new Set(invites.map((row) => row.project_id).filter((id) => !ownedIds.has(id)))];
+  let sharedProjects: AcetateProject[] = [];
+  if (sharedIds.length) {
+    const extra = await supabase.from("acetate_projects").select("*").in("id", sharedIds);
+    if (extra.error) throw new Error(errorText(extra.error));
+    sharedProjects = (extra.data ?? []) as AcetateProject[];
+  }
+  const roleOf = new Map(invites.map((row) => [row.project_id, row.role]));
+  const ownedTracks = (tracks.data ?? []) as AcetateTrack[];
+  const trackIds = new Set(ownedTracks.map((track) => track.id));
+  const missing = [...new Set(((memberships.data ?? []) as AcetateMembership[]).map((row) => row.track_id).filter((id) => !trackIds.has(id)))];
+  let sharedTracks: AcetateTrack[] = [];
+  if (missing.length) {
+    const extra = await supabase.from("acetate_tracks").select("*").in("id", missing);
+    if (extra.error) throw new Error(errorText(extra.error));
+    sharedTracks = (extra.data ?? []) as AcetateTrack[];
+  }
   return {
-    projects: (projects.data ?? []) as AcetateProject[],
-    tracks: (tracks.data ?? []) as AcetateTrack[],
+    projects: [...ownedProjects, ...sharedProjects].map((project) => ({
+      ...project,
+      shared_role: project.owner_id === owner ? null : roleOf.get(project.id) ?? "listener",
+    })),
+    tracks: [...ownedTracks, ...sharedTracks],
     memberships: (memberships.data ?? []) as AcetateMembership[],
     storage: (storage.data ?? { bytes: 0, limit: 5368709120, premium: false, lifetime: false, source: "none", tier: "free" }) as AcetateStorage,
     shares: (shares.data ?? []) as AcetateShare[],
@@ -596,7 +621,7 @@ export type AcetatePublicProfile = {
   followers?: number;
   following?: number;
   is_following?: boolean;
-  tracks?: { id: string; title: string; status: string | null; likes: number; liked: boolean }[];
+  tracks?: { id: string; title: string; status: string | null; likes: number; liked: boolean; lyrics?: string | null; comments?: number }[];
 };
 
 export async function loadPublicProfile(username: string) {

@@ -235,9 +235,15 @@ export default function MobileMe() {
         </div>
       )}
 
-      <div className="mx-4 mt-4 overflow-hidden rounded-2xl bg-side">
+      <div className="mx-4 mt-4 overflow-hidden rounded-2xl bg-side [&>a+a]:border-t [&>a+a]:border-white/[.05]">
         <a href="/iphone" className="flex w-full items-center px-4 py-3.5 text-[16px] font-semibold active:bg-white/[.06]">
           iPhone tools
+        </a>
+        <a href="/locator" className="flex w-full items-center px-4 py-3.5 text-[16px] font-semibold active:bg-white/[.06]">
+          Locator
+        </a>
+        <a href="/phone" className="flex w-full items-center px-4 py-3.5 text-[16px] font-semibold active:bg-white/[.06]">
+          Phone Link
         </a>
       </div>
 

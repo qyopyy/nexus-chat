@@ -138,3 +138,66 @@ export async function deleteCloud(row: CloudFile) {
   const { error } = await supabase.from("nexus_cloud_files").delete().eq("id", row.id);
   if (error) throw new Error(errorText(error));
 }
+
+export type CloudAlbum = { id: string; owner_id: string; title: string; created_at: string };
+export type CloudMember = { album_id: string; user_id: string; created_at: string };
+
+export async function listAlbums() {
+  const me = useApp.getState().userId;
+  if (!me) return [] as CloudAlbum[];
+  const { data, error } = await supabase.from("nexus_cloud_albums").select("*").order("created_at", { ascending: false });
+  if (error) throw new Error(errorText(error));
+  return (data ?? []) as CloudAlbum[];
+}
+
+export async function createAlbum(title: string) {
+  const me = useApp.getState().userId;
+  if (!me) throw new Error("Sign in required");
+  if (!cloudUnlocked()) throw new Error("Nexus Cloud is part of Premium");
+  const { data, error } = await supabase
+    .from("nexus_cloud_albums")
+    .insert({ owner_id: me, title: title.trim().slice(0, 80) || "Shared album" })
+    .select("*")
+    .single();
+  if (error) throw new Error(errorText(error));
+  return data as CloudAlbum;
+}
+
+export async function deleteAlbum(id: string) {
+  const { error } = await supabase.from("nexus_cloud_albums").delete().eq("id", id);
+  if (error) throw new Error(errorText(error));
+}
+
+export async function inviteToAlbum(albumId: string, username: string) {
+  const { error } = await supabase.rpc("nexus_cloud_album_invite", { p_album: albumId, p_username: username.trim().replace(/^@/, "") });
+  if (error) throw new Error(errorText(error));
+}
+
+export async function leaveAlbum(albumId: string) {
+  const me = useApp.getState().userId;
+  if (!me) return;
+  const { error } = await supabase.from("nexus_cloud_album_members").delete().eq("album_id", albumId).eq("user_id", me);
+  if (error) throw new Error(errorText(error));
+}
+
+export async function albumFiles(albumId: string) {
+  const { data: items, error } = await supabase.from("nexus_cloud_album_items").select("file_id, position").eq("album_id", albumId).order("position");
+  if (error) throw new Error(errorText(error));
+  const ids = (items ?? []).map((row) => row.file_id as string);
+  if (!ids.length) return [] as CloudFile[];
+  const { data: files, error: fileError } = await supabase.from("nexus_cloud_files").select("*").in("id", ids);
+  if (fileError) throw new Error(errorText(fileError));
+  const map = new Map(((files ?? []) as CloudFile[]).map((file) => [file.id, file]));
+  return ids.map((id) => map.get(id)).filter((file): file is CloudFile => !!file);
+}
+
+export async function addFileToAlbum(albumId: string, fileId: string) {
+  const { count } = await supabase.from("nexus_cloud_album_items").select("file_id", { count: "exact", head: true }).eq("album_id", albumId);
+  const { error } = await supabase.from("nexus_cloud_album_items").insert({ album_id: albumId, file_id: fileId, position: (count ?? 0) + 1 });
+  if (error && !/duplicate|unique/i.test(error.message)) throw new Error(errorText(error));
+}
+
+export async function removeFileFromAlbum(albumId: string, fileId: string) {
+  const { error } = await supabase.from("nexus_cloud_album_items").delete().eq("album_id", albumId).eq("file_id", fileId);
+  if (error) throw new Error(errorText(error));
+}

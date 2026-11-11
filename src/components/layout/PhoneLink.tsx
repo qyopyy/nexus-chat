@@ -80,9 +80,9 @@ export default function PhoneLink() {
   if (!livePhone && drops.length === 0 && !open) {
     return (
       <div className="border-t border-line px-2 py-1.5">
-        <button type="button" onClick={() => setOpen(true)} className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-xs text-sub hover:bg-hover">
-          <MonitorSmartphone className="size-4" /> Drop a file to another screen
-        </button>
+        <a href="/phone" className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-xs text-sub hover:bg-hover">
+          <MonitorSmartphone className="size-4" /> Phone Link
+        </a>
       </div>
     );
   }

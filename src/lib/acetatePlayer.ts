@@ -15,6 +15,7 @@ export type AcetateQueueItem = {
   duration: number;
   url: string;
   shareUrl: string | null;
+  lyrics?: string | null;
 };
 
 export type AcetateRepeat = "off" | "all" | "one";
@@ -58,6 +59,7 @@ type PlayerState = {
   toggleEq: () => void;
   removeAt: (index: number) => void;
   clearQueue: () => void;
+  applyRemote: (queue: AcetateQueueItem[], index: number, position: number, playing: boolean) => void;
 };
 
 const RATES = [0.75, 1, 1.25, 1.5];
@@ -193,5 +195,12 @@ export const useAcetatePlayer = create<PlayerState>((set, get) => {
     return { queue, index: next, playing: queue.length > 0 && s.playing };
   }),
   clearQueue: () => set({ queue: [], index: 0, playing: false, current: 0 }),
+  applyRemote: (queue, index, position, playing) => set({
+    queue,
+    index: queue[index] ? index : 0,
+    current: position,
+    seekTo: position,
+    playing: queue.length > 0 && playing,
+  }),
 });
 });
