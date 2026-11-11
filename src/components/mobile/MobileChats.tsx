@@ -12,6 +12,7 @@ import NameTag from "@/components/ui/NameTag";
 import Sheet, { SheetGroup, SheetItem } from "@/components/ui/Sheet";
 import { listPreviewAuthor } from "@/lib/hundred";
 import StoriesStrip from "./StoriesStrip";
+import StatusTray from "@/components/chat/StatusTray";
 import PushPrompt from "./PushPrompt";
 import SwipeRow from "./SwipeRow";
 import LargeTitle from "./LargeTitle";
@@ -143,6 +144,7 @@ export default function MobileChats() {
 
         {!searching && <PushPrompt />}
         {!searching && <StoriesStrip />}
+        {!searching && <StatusTray />}
 
         {/* folders */}
         {!searching && (

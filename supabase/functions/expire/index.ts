@@ -35,5 +35,17 @@ Deno.serve(async (req: Request) => {
     }
     if (rows.length < 1000) break;
   }
+  const queued = await admin.from("message_file_gc").select("id, bucket, path").limit(500);
+  if (!queued.error && queued.data?.length) {
+    const byBucket = new Map<string, string[]>();
+    for (const row of queued.data) {
+      byBucket.set(row.bucket, [...(byBucket.get(row.bucket) ?? []), row.path]);
+    }
+    for (const [bucket, paths] of byBucket) {
+      const { data } = await admin.storage.from(bucket).remove(paths);
+      files += data?.length ?? 0;
+    }
+    await admin.from("message_file_gc").delete().in("id", queued.data.map((row) => row.id));
+  }
   return Response.json({ removed, files });
 });

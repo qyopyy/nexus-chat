@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import Link from "next/link";
-import { Disc3, Library, Plus, Radio, Sparkles } from "lucide-react";
+import { Disc3, History, Library, Plus, Radio, Sparkles } from "lucide-react";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { mfaNeedsChallenge } from "@/lib/mfa";
 import { toast, useApp } from "@/store/app";
@@ -63,6 +63,8 @@ import AcetateShelves from "./AcetateShelves";
 import AcetatePlayerBar from "./AcetatePlayerBar";
 import AcetatePwa from "./AcetatePwa";
 import AcetateRadio from "./AcetateRadio";
+import AcetateRecap from "./AcetateRecap";
+import { asLyricCues, formatLyricCues, parseLyricCues } from "@/lib/acetateLyrics";
 import PhoneCommandHost from "@/components/phone/PhoneCommandHost";
 
 type Screen =
@@ -71,7 +73,8 @@ type Screen =
   | { name: "project"; id: string }
   | { name: "track"; id: string }
   | { name: "premium" }
-  | { name: "radio" };
+  | { name: "radio" }
+  | { name: "recap" };
 
 type LibraryState = {
   projects: AcetateProject[];
@@ -292,6 +295,7 @@ export default function AcetateApp() {
         url,
         shareUrl: null,
         lyrics: track.lyrics,
+        lyricCues: asLyricCues(track.lyric_cues),
       });
     }
     if (!queue.length) throw new Error("Upload a version before playing");
@@ -387,10 +391,11 @@ export default function AcetateApp() {
           <div className="h-full rounded-full bg-[#e4a15a]" style={{ width: `${storage.premium ? 100 : ratio * 100}%` }} />
         </div>
       </div>
-      <nav className="grid grid-cols-4 gap-2 px-4 py-3 sm:flex">
+      <nav className="flex flex-wrap gap-2 px-4 py-3">
         <NavButton active={screen.name === "library"} onClick={() => setScreen({ name: "library" })} icon={<Library className="size-4" />} label="Library" />
         <NavButton active={screen.name === "projects" || screen.name === "project"} onClick={() => setScreen({ name: "projects" })} icon={<Disc3 className="size-4" />} label="Projects" />
         <NavButton active={screen.name === "radio"} onClick={() => setScreen({ name: "radio" })} icon={<Radio className="size-4" />} label="Radio" />
+        <NavButton active={screen.name === "recap"} onClick={() => setScreen({ name: "recap" })} icon={<History className="size-4" />} label="Recap" />
         <NavButton active={screen.name === "premium"} onClick={() => setScreen({ name: "premium" })} icon={<Sparkles className="size-4" />} label="Premium" />
       </nav>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
@@ -506,6 +511,7 @@ export default function AcetateApp() {
         )}
 
         {screen.name === "radio" && <AcetateRadio />}
+        {screen.name === "recap" && <AcetateRecap />}
 
         {screen.name === "projects" && (
           <Projects
@@ -576,6 +582,8 @@ export default function AcetateApp() {
                     duration: version.duration ?? 0,
                     url: (await isOffline(version.id)) ? offlineUrl(version.id) : url,
                     shareUrl: null,
+                    lyrics: track.lyrics,
+                    lyricCues: asLyricCues(track.lyric_cues),
                   },
                 ]);
               });
@@ -583,7 +591,16 @@ export default function AcetateApp() {
             onUpload={(file, label) => void run(() => uploadAudio(file, { trackId: screen.id, label }).then(() => undefined))}
             onArt={(file) => void run(() => uploadArtwork(file, "track", screen.id).then(() => undefined))}
             onRename={(title) => void run(() => updateTrack(screen.id, { title }))}
-            onMeta={(patch) => void run(() => updateTrack(screen.id, patch))}
+            onMeta={(patch) => void run(async () => {
+              await updateTrack(screen.id, patch);
+              if ("lyric_cues" in patch || "lyrics" in patch) {
+                useAcetatePlayer.setState((state) => ({
+                  queue: state.queue.map((item) => item.trackId === screen.id
+                    ? { ...item, lyrics: patch.lyrics ?? item.lyrics, lyricCues: "lyric_cues" in patch ? patch.lyric_cues ?? null : item.lyricCues }
+                    : item),
+                }));
+              }
+            })}
             onDeleteVersion={(version) => {
               if (window.confirm("Delete this version and its audio?")) void run(() => deleteVersion(version));
             }}
@@ -874,7 +891,7 @@ function TrackView(props: {
   onUpload: (file: File, label: string) => void;
   onArt: (file: File) => void;
   onRename: (title: string) => void;
-  onMeta: (patch: { note?: string | null; status?: AcetateStatus; bpm?: number | null; musical_key?: string | null; folder?: string | null; starred?: boolean; lyrics?: string | null; lyrics_on_share?: boolean }) => void;
+  onMeta: (patch: { note?: string | null; status?: AcetateStatus; bpm?: number | null; musical_key?: string | null; folder?: string | null; starred?: boolean; lyrics?: string | null; lyrics_on_share?: boolean; lyric_cues?: { t: number; line: string }[] | null }) => void;
   onDeleteVersion: (version: AcetateVersion) => void;
   onDelete: () => void;
   onComment: (at: number, body: string, versionId: string | null) => void;
@@ -890,6 +907,8 @@ function TrackView(props: {
   const [bpm, setBpm] = useState(track?.bpm ? String(track.bpm) : "");
   const [lyrics, setLyrics] = useState(track?.lyrics ?? "");
   const [lyricsOnShare, setLyricsOnShare] = useState(!!track?.lyrics_on_share);
+  const [cuesText, setCuesText] = useState(formatLyricCues(asLyricCues(track?.lyric_cues)));
+  const [cueLine, setCueLine] = useState("");
   const playing = useAcetatePlayer((s) => s.queue[s.index]);
   const current = useAcetatePlayer((s) => s.current);
   useEffect(() => setTitle(track?.title ?? ""), [track?.title]);
@@ -899,7 +918,8 @@ function TrackView(props: {
     setBpm(track?.bpm ? String(track.bpm) : "");
     setLyrics(track?.lyrics ?? "");
     setLyricsOnShare(!!track?.lyrics_on_share);
-  }, [track?.id, track?.note, track?.folder, track?.bpm, track?.lyrics, track?.lyrics_on_share]);
+    setCuesText(formatLyricCues(asLyricCues(track?.lyric_cues)));
+  }, [track?.id, track?.note, track?.folder, track?.bpm, track?.lyrics, track?.lyrics_on_share, track?.lyric_cues]);
   if (!track) return <Empty text="That track is gone." />;
   const active = detail?.versions.find((version) => playing?.versionId === version.id) ?? detail?.versions[0] ?? null;
   const duration = playing?.trackId === track.id ? playing.duration || current : active?.duration ?? 0;
@@ -962,6 +982,7 @@ function TrackView(props: {
             musical_key: (e.currentTarget.elements.namedItem("key") as HTMLSelectElement).value || null,
             lyrics: lyrics.trim() || null,
             lyrics_on_share: lyricsOnShare,
+            lyric_cues: parseLyricCues(cuesText),
           });
         }}
       >
@@ -998,6 +1019,26 @@ function TrackView(props: {
           <input type="checkbox" checked={lyricsOnShare} onChange={(e) => setLyricsOnShare(e.target.checked)} />
           Show lyrics on share links
         </label>
+        <label className="text-xs text-[#a3988c] sm:col-span-2">
+          Timed lyrics
+          <textarea value={cuesText} onChange={(e) => setCuesText(e.target.value)} placeholder={"[00:12.00] First line\n[00:18.40] Next line"} className="mt-1 min-h-24 w-full rounded-xl border border-[#3c342c] bg-transparent px-3 py-2 font-mono text-sm outline-none" />
+        </label>
+        <div className="flex gap-2 sm:col-span-2">
+          <input value={cueLine} onChange={(e) => setCueLine(e.target.value)} maxLength={200} placeholder="Line to stamp at the playhead" className="min-w-0 flex-1 rounded-xl border border-[#3c342c] bg-transparent px-3 py-2 text-sm outline-none" />
+          <button
+            type="button"
+            className="rounded-full border border-[#3c342c] px-3 py-2 text-sm"
+            onClick={() => {
+              const line = cueLine.trim();
+              if (!line || playing?.trackId !== track.id) return;
+              const next = [...(parseLyricCues(cuesText) ?? []), { t: Math.round(current * 1000), line: line.slice(0, 200) }].sort((a, b) => a.t - b.t);
+              setCuesText(formatLyricCues(next));
+              setCueLine("");
+            }}
+          >
+            Stamp
+          </button>
+        </div>
         <label className="text-xs text-[#a3988c] sm:col-span-2">
           Private note
           <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} className="mt-1 min-h-16 w-full rounded-xl border border-[#3c342c] bg-transparent px-3 py-2 text-sm outline-none" />

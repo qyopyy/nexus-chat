@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import { acetateSigned } from "./acetate";
 import { asPeaks } from "./acetateAudio";
+import { asLyricCues } from "./acetateLyrics";
 import { useAcetatePlayer, type AcetateQueueItem } from "./acetatePlayer";
 import { thisDeviceId } from "./handset";
 import { useApp } from "@/store/app";
@@ -47,6 +48,7 @@ async function resolveItem(item: SavedItem): Promise<AcetateQueueItem | null> {
   if (!path) return null;
   const url = await acetateSigned(path);
   if (!url) return null;
+  const meta = await supabase.from("acetate_tracks").select("lyric_cues").eq("id", item.trackId).maybeSingle();
   const row = data as { label?: string | null; version?: number; peaks?: unknown; duration?: number | null };
   return {
     key: `${item.trackId}:${item.versionId}`,
@@ -62,6 +64,7 @@ async function resolveItem(item: SavedItem): Promise<AcetateQueueItem | null> {
     url,
     shareUrl: null,
     lyrics: item.lyrics,
+    lyricCues: asLyricCues(meta.data?.lyric_cues),
   };
 }
 

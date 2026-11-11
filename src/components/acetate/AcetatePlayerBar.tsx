@@ -6,6 +6,8 @@ import { updateMyProfile } from "@/lib/data";
 import { recordListen } from "@/lib/acetate";
 import { fmtTime } from "@/lib/acetateAudio";
 import { useAcetatePlayer } from "@/lib/acetatePlayer";
+import { activeLyricIndex } from "@/lib/acetateLyrics";
+import { useRecapRecorder } from "@/lib/acetateRecap";
 import { useApp } from "@/store/app";
 import { Waveform } from "./AcetateBits";
 import ListenTogetherButton from "./ListenTogether";
@@ -14,6 +16,8 @@ import { useAcetateAccountSync } from "@/lib/acetateQueueSync";
 /** Persistent player for the signed-in Acetate library. Also publishes Nexus "listening to". */
 export default function AcetatePlayerBar() {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const outgoingRef = useRef<HTMLAudioElement>(null);
+  const holdVolume = useRef(false);
   const queue = useAcetatePlayer((s) => s.queue);
   const index = useAcetatePlayer((s) => s.index);
   const playing = useAcetatePlayer((s) => s.playing);
@@ -30,6 +34,14 @@ export default function AcetatePlayerBar() {
   const filters = useRef<BiquadFilterNode[] | null>(null);
   const item = queue[index] ?? null;
   const [lyricsOpen, setLyricsOpen] = useState(false);
+  const [sleepOpen, setSleepOpen] = useState(false);
+  const sleepUntil = useAcetatePlayer((s) => s.sleepUntil);
+  const sleepEnd = useAcetatePlayer((s) => s.sleepEnd);
+  const lyricLine = useRef<HTMLButtonElement>(null);
+  useRecapRecorder(item, playing, current);
+  useEffect(() => {
+    lyricLine.current?.scrollIntoView({ block: "nearest" });
+  }, [current, lyricsOpen, item?.key]);
   useAcetateAccountSync(!!useApp((s) => s.userId));
   const duration = item ? item.duration || audioRef.current?.duration || 0 : 0;
 
@@ -44,20 +56,42 @@ export default function AcetatePlayerBar() {
     if (audio.getAttribute("data-key") !== item.key) {
       const fade = useAcetatePlayer.getState().crossfade;
       const target = useAcetatePlayer.getState().volume;
-      const resume = Number(localStorage.getItem(`acetate:pos:${item.versionId}`) || 0);
-      audio.src = item.url;
-      audio.setAttribute("data-key", item.key);
-      if (resume > 1) audio.currentTime = resume;
-      if (fade > 0) {
-        audio.volume = 0;
+      const outgoing = outgoingRef.current;
+      const canFade = fade > 0 && outgoing && !!audio.src && !audio.paused;
+      if (canFade && outgoing) {
+        holdVolume.current = true;
+        outgoing.src = audio.currentSrc || audio.src;
+        outgoing.playbackRate = audio.playbackRate;
+        try {
+          outgoing.currentTime = audio.currentTime;
+        } catch {
+          /* the outgoing element may not have metadata yet */
+        }
+        outgoing.volume = target;
+        void outgoing.play().catch(() => undefined);
         const started = performance.now();
         const step = () => {
           const p = Math.min(1, (performance.now() - started) / fade);
           audio.volume = target * p;
-          if (p < 1) requestAnimationFrame(step);
+          outgoing.volume = target * (1 - p);
+          if (p < 1) {
+            requestAnimationFrame(step);
+            return;
+          }
+          outgoing.pause();
+          outgoing.removeAttribute("src");
+          holdVolume.current = false;
+          audio.volume = useAcetatePlayer.getState().volume;
         };
         requestAnimationFrame(step);
+      } else {
+        holdVolume.current = false;
       }
+      const resume = Number(localStorage.getItem(`acetate:pos:${item.versionId}`) || 0);
+      audio.src = item.url;
+      audio.volume = canFade ? 0 : target;
+      audio.setAttribute("data-key", item.key);
+      if (resume > 1) audio.currentTime = resume;
     }
     if (playing) {
       void audio.play().catch(() => useAcetatePlayer.getState().setPlaying(false));
@@ -76,7 +110,7 @@ export default function AcetatePlayerBar() {
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || holdVolume.current) return;
     audio.volume = volume;
     audio.playbackRate = rate;
   }, [volume, rate, item]);
@@ -198,6 +232,7 @@ export default function AcetatePlayerBar() {
         </ol>
         </div>
       )}
+      <audio ref={outgoingRef} preload="auto" className="hidden" />
       <audio
         ref={audioRef}
         preload="metadata"
@@ -220,7 +255,15 @@ export default function AcetatePlayerBar() {
             }
           }
         }}
-        onEnded={() => useAcetatePlayer.getState().next()}
+        onEnded={() => {
+          const player = useAcetatePlayer.getState();
+          if (player.sleepEnd) {
+            player.setSleepEnd(false);
+            player.setPlaying(false);
+            return;
+          }
+          player.next();
+        }}
       />
       {eqOn && (
         <div className="mb-1 grid grid-cols-5 gap-2">
@@ -288,6 +331,9 @@ export default function AcetatePlayerBar() {
         <button type="button" onClick={() => useAcetatePlayer.getState().setCrossfade(useAcetatePlayer.getState().crossfade ? 0 : 800)} className={`rounded-full px-2 py-1 text-[11px] font-semibold ${crossfadeOn ? "text-[#e4a15a]" : "hover:bg-white/5"}`}>
           Fade
         </button>
+        <button type="button" onClick={() => setSleepOpen((open) => !open)} className={`rounded-full px-2 py-1 text-[11px] font-semibold ${sleepUntil || sleepEnd ? "text-[#e4a15a]" : "hover:bg-white/5"}`}>
+          {sleepEnd ? "End" : sleepUntil ? `${Math.max(1, Math.ceil((sleepUntil - Date.now()) / 60_000))}m` : "Sleep"}
+        </button>
         <button type="button" onClick={() => useAcetatePlayer.getState().toggleEq()} className={`rounded-full px-2 py-1 text-[11px] font-semibold ${eqOn ? "text-[#e4a15a]" : "hover:bg-white/5"}`}>
           EQ
         </button>
@@ -304,17 +350,44 @@ export default function AcetatePlayerBar() {
             className="w-full accent-[#e4a15a]"
           />
         </label>
-        {item?.lyrics && (
+        {(item?.lyrics || item?.lyricCues?.length) ? (
           <button type="button" className={`rounded-full px-2 py-1 text-[11px] font-semibold ${lyricsOpen ? "text-[#e4a15a]" : "hover:bg-white/5"}`} onClick={() => setLyricsOpen((v) => !v)}>
             Lyrics
           </button>
-        )}
+        ) : null}
         <ListenTogetherButton />
         <button type="button" aria-label="Queue" aria-pressed={queueOpen} onClick={() => useAcetatePlayer.getState().toggleQueue()} className={`grid size-8 place-items-center rounded-full ${queueOpen ? "text-[#e4a15a]" : "hover:bg-white/5"}`}>
           <ListMusic className="size-3.5" />
         </button>
       </div>
-      {lyricsOpen && item?.lyrics && <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap text-xs text-[#f3eadf]">{item.lyrics}</pre>}
+      {sleepOpen && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          <button type="button" className="rounded-full bg-white/10 px-2 py-1 text-[11px]" onClick={() => useAcetatePlayer.getState().setSleep(0)}>Off</button>
+          {[15, 30, 45, 60].map((minutes) => (
+            <button key={minutes} type="button" className="rounded-full bg-white/10 px-2 py-1 text-[11px]" onClick={() => { useAcetatePlayer.getState().setSleep(minutes); setSleepOpen(false); }}>{minutes}m</button>
+          ))}
+          <button type="button" className="rounded-full bg-white/10 px-2 py-1 text-[11px]" onClick={() => { useAcetatePlayer.getState().setSleepEnd(true); setSleepOpen(false); }}>End of cut</button>
+        </div>
+      )}
+      {lyricsOpen && item?.lyricCues && item.lyricCues.length > 0 && (
+        <div className="mt-2 max-h-40 space-y-1 overflow-y-auto text-xs">
+          {item.lyricCues.map((cue, index) => {
+            const active = activeLyricIndex(item.lyricCues ?? [], current) === index;
+            return (
+              <button
+                key={`${cue.t}-${index}`}
+                ref={active ? lyricLine : undefined}
+                type="button"
+                className={`block w-full text-left ${active ? "text-[#e4a15a]" : "text-[#a3988c]"}`}
+                onClick={() => useAcetatePlayer.getState().seek(cue.t / 1000)}
+              >
+                {cue.line}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {lyricsOpen && !item?.lyricCues?.length && item?.lyrics && <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap text-xs text-[#f3eadf]">{item.lyrics}</pre>}
     </div>
   );
 }

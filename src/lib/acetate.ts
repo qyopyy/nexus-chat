@@ -43,6 +43,7 @@ export type AcetateTrack = {
   folder?: string | null;
   lyrics?: string | null;
   lyrics_on_share?: boolean;
+  lyric_cues?: { t: number; line: string }[] | null;
   created_at: string;
   updated_at: string;
 };
@@ -289,6 +290,7 @@ export async function updateTrack(
     folder?: string | null;
     lyrics?: string | null;
     lyrics_on_share?: boolean;
+    lyric_cues?: { t: number; line: string }[] | null;
   },
 ) {
   const { error } = await supabase.from("acetate_tracks").update(patch).eq("id", id);

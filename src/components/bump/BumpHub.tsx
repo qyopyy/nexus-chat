@@ -90,6 +90,8 @@ import { heartbeatArgs, privacyEventName } from "@/lib/hundred";
 import WumpOnboarding from "./WumpOnboarding";
 import WumpTogetherPanel from "./WumpTogetherPanel";
 import WumpLiveSharePanel from "./WumpLiveSharePanel";
+import WumpSafetyPanel from "./WumpSafetyPanel";
+import WumpRoutesPanel from "./WumpRoutesPanel";
 import {
   NUDGE_EMOJI,
   subscribeWumpNudges,
@@ -173,6 +175,7 @@ export default function BumpHub({
   const [flashUntil, setFlashUntil] = useState<number | null>(null);
   const [shareFriendOpen, setShareFriendOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
+  const [headingPath, setHeadingPath] = useState<{ lat: number; lng: number }[]>([]);
   const [myLat, setMyLat] = useState<number | null>(null);
   const [myLng, setMyLng] = useState<number | null>(null);
   const [myHeading, setMyHeading] = useState<number | null>(null);
@@ -914,7 +917,9 @@ export default function BumpHub({
             {me && (
               <WumpTogetherPanel me={me} myLat={myLat} myLng={myLng} placeName={myPlaceName} friendIds={friendIds} />
             )}
-            <WumpLiveSharePanel lat={myLat} lng={myLng} places={savedPlaces} />
+            {me && <WumpSafetyPanel me={me} friendIds={friendIds} />}
+            <WumpLiveSharePanel lat={myLat} lng={myLng} places={savedPlaces} onHeadingPath={setHeadingPath} />
+            <WumpRoutesPanel headingPoints={headingPath} />
             {showOnboarding && privacy && (
               <WumpOnboarding
                 precision={privacy.wump_precision}

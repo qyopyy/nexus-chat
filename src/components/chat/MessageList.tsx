@@ -8,7 +8,7 @@ import { ChevronDown, Timer } from "lucide-react";
 import { useApp } from "@/store/app";
 import { useChat } from "@/store/chat";
 import { getChatWallpaper, subscribeChatWallpapers } from "@/lib/chatWallpaper";
-import { TTL_OPTIONS, expired, isTimerNotice, loadOlder } from "@/lib/data";
+import { TTL_OPTIONS, expired, isTimerNotice, loadOlder, purgeExpired } from "@/lib/data";
 import { formatDay, sameDay } from "@/lib/utils";
 import MessageBubble from "./MessageBubble";
 import HiddenMessage from "./HiddenMessage";
@@ -29,9 +29,14 @@ export default function MessageList({ conversationId, initialUnread }: { convers
   }, []);
   useEffect(() => {
     if (!ttl) return;
-    const t = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(t);
-  }, [ttl]);
+    const every = ttl <= 300 ? 1000 : 30_000;
+    const t = setInterval(() => setNow(Date.now()), every);
+    const purge = setInterval(() => purgeExpired(conversationId), ttl <= 3600 ? 15_000 : 60_000);
+    return () => {
+      clearInterval(t);
+      clearInterval(purge);
+    };
+  }, [ttl, conversationId]);
   // disappearing messages: hide anything past the timer right away (the server deletes it within ~15 min)
   const messages = useMemo(() => (ttl ? allMessages.filter((m) => !expired(m, ttl, now)) : allMessages), [allMessages, ttl, now]);
   const loading = useChat((s) => s.loading);

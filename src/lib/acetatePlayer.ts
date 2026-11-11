@@ -16,6 +16,7 @@ export type AcetateQueueItem = {
   url: string;
   shareUrl: string | null;
   lyrics?: string | null;
+  lyricCues?: { t: number; line: string }[] | null;
 };
 
 export type AcetateRepeat = "off" | "all" | "one";
@@ -36,6 +37,7 @@ type PlayerState = {
   loopB: number | null;
   loopOn: boolean;
   sleepUntil: number | null;
+  sleepEnd: boolean;
   eq: number[];
   eqOn: boolean;
   setQueue: (queue: AcetateQueueItem[], index?: number) => void;
@@ -55,6 +57,7 @@ type PlayerState = {
   setCrossfade: (ms: number) => void;
   setLoop: (which: "a" | "b" | "off") => void;
   setSleep: (minutes: number) => void;
+  setSleepEnd: (on: boolean) => void;
   setEqBand: (index: number, gain: number) => void;
   toggleEq: () => void;
   removeAt: (index: number) => void;
@@ -98,6 +101,7 @@ export const useAcetatePlayer = create<PlayerState>((set, get) => {
   loopB: null,
   loopOn: false,
   sleepUntil: null,
+  sleepEnd: false,
   eq,
   eqOn: prefs.eqOn === true,
   setQueue: (queue, index = 0) => set({ queue, index, current: 0, playing: queue.length > 0, seekTo: 0 }),
@@ -176,7 +180,8 @@ export const useAcetatePlayer = create<PlayerState>((set, get) => {
     if (which === "a") return { loopA: s.current, loopOn: s.loopB != null };
     return { loopB: s.current, loopOn: true };
   }),
-  setSleep: (minutes) => set({ sleepUntil: minutes > 0 ? Date.now() + minutes * 60_000 : null }),
+  setSleep: (minutes) => set({ sleepUntil: minutes > 0 ? Date.now() + minutes * 60_000 : null, sleepEnd: false }),
+  setSleepEnd: (on) => set({ sleepEnd: on, sleepUntil: null }),
   setEqBand: (index, gain) => set((s) => {
     const eq = s.eq.slice();
     eq[index] = Math.max(-12, Math.min(12, gain));
