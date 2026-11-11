@@ -89,6 +89,7 @@ import { fetchWumpPrivacy, loadWumpPrivacyLocal, saveWumpPrivacy, type WumpPriva
 import { heartbeatArgs, privacyEventName } from "@/lib/hundred";
 import WumpOnboarding from "./WumpOnboarding";
 import WumpTogetherPanel from "./WumpTogetherPanel";
+import WumpLiveSharePanel from "./WumpLiveSharePanel";
 import {
   NUDGE_EMOJI,
   subscribeWumpNudges,
@@ -913,6 +914,7 @@ export default function BumpHub({
             {me && (
               <WumpTogetherPanel me={me} myLat={myLat} myLng={myLng} placeName={myPlaceName} friendIds={friendIds} />
             )}
+            <WumpLiveSharePanel lat={myLat} lng={myLng} places={savedPlaces} />
             {showOnboarding && privacy && (
               <WumpOnboarding
                 precision={privacy.wump_precision}

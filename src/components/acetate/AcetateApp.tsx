@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import Link from "next/link";
-import { Disc3, Library, Plus, Sparkles } from "lucide-react";
+import { Disc3, Library, Plus, Radio, Sparkles } from "lucide-react";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { mfaNeedsChallenge } from "@/lib/mfa";
 import { toast, useApp } from "@/store/app";
@@ -62,13 +62,16 @@ import { Collaborators, LikeButton, NotifyBell } from "./AcetateSocial";
 import AcetateShelves from "./AcetateShelves";
 import AcetatePlayerBar from "./AcetatePlayerBar";
 import AcetatePwa from "./AcetatePwa";
+import AcetateRadio from "./AcetateRadio";
+import PhoneCommandHost from "@/components/phone/PhoneCommandHost";
 
 type Screen =
   | { name: "library" }
   | { name: "projects" }
   | { name: "project"; id: string }
   | { name: "track"; id: string }
-  | { name: "premium" };
+  | { name: "premium" }
+  | { name: "radio" };
 
 type LibraryState = {
   projects: AcetateProject[];
@@ -261,6 +264,12 @@ export default function AcetateApp() {
       const prev = latest.get(row.track_id);
       if (!prev || row.version > prev.version) latest.set(row.track_id, { ...row, peaks: asPeaks(row.peaks) });
     }
+    const missing = ids.filter((id) => !latest.has(id));
+    if (missing.length) {
+      const extra = await supabase.rpc("acetate_collab_versions", { p_tracks: missing });
+      const rows = Array.isArray(extra.data) ? (extra.data as AcetateVersion[]) : [];
+      for (const row of rows) latest.set(row.track_id, { ...row, peaks: asPeaks(row.peaks) });
+    }
     const queue = [];
     for (const id of ids) {
       const track = library.tracks.find((item) => item.id === id);
@@ -282,6 +291,7 @@ export default function AcetateApp() {
         duration: version.duration ?? 0,
         url,
         shareUrl: null,
+        lyrics: track.lyrics,
       });
     }
     if (!queue.length) throw new Error("Upload a version before playing");
@@ -317,7 +327,8 @@ export default function AcetateApp() {
   const limit = storage.limit ?? ACETATE_FREE_BYTES;
   const ratio = storage.premium ? 1 : Math.min(1, Number(storage.bytes) / limit);
   const query = filter.trim().toLowerCase();
-  const visibleTracks = library.tracks
+  const ownTracks = library.tracks.filter((track) => track.owner_id === userId);
+  const visibleTracks = ownTracks
     .filter((track) => {
       if (starredOnly && !track.starred) return false;
       if (statusFilter !== "all" && (track.status ?? "demo") !== statusFilter) return false;
@@ -331,7 +342,7 @@ export default function AcetateApp() {
       if (sortBy === "bpm") return (a.bpm ?? 999) - (b.bpm ?? 999);
       return a.updated_at < b.updated_at ? 1 : -1;
     });
-  const folders = [...new Set(library.tracks.map((track) => track.folder).filter((folder): folder is string => !!folder))];
+  const folders = [...new Set(ownTracks.map((track) => track.folder).filter((folder): folder is string => !!folder))];
   const visibleProjects = library.projects.filter((project) => kindFilter === "all" || project.kind === kindFilter);
 
   return (
@@ -376,9 +387,10 @@ export default function AcetateApp() {
           <div className="h-full rounded-full bg-[#e4a15a]" style={{ width: `${storage.premium ? 100 : ratio * 100}%` }} />
         </div>
       </div>
-      <nav className="grid grid-cols-3 gap-2 px-4 py-3 sm:flex">
+      <nav className="grid grid-cols-4 gap-2 px-4 py-3 sm:flex">
         <NavButton active={screen.name === "library"} onClick={() => setScreen({ name: "library" })} icon={<Library className="size-4" />} label="Library" />
         <NavButton active={screen.name === "projects" || screen.name === "project"} onClick={() => setScreen({ name: "projects" })} icon={<Disc3 className="size-4" />} label="Projects" />
+        <NavButton active={screen.name === "radio"} onClick={() => setScreen({ name: "radio" })} icon={<Radio className="size-4" />} label="Radio" />
         <NavButton active={screen.name === "premium"} onClick={() => setScreen({ name: "premium" })} icon={<Sparkles className="size-4" />} label="Premium" />
       </nav>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
@@ -399,7 +411,7 @@ export default function AcetateApp() {
           >
             {shelves && (
               <AcetateShelves
-                tracks={library.tracks}
+                tracks={ownTracks}
                 art={art}
                 listenIds={listens.map((row) => row.track_id || "")}
                 onOpen={(id) => setScreen({ name: "track", id })}
@@ -413,8 +425,8 @@ export default function AcetateApp() {
               {filter && <button type="button" onClick={() => setFilter("")} className="text-xs text-[#8d8880]">Clear search</button>}
             </div>
             <div className="mb-3 grid grid-cols-3 gap-2 text-center text-xs">
-              <Stat label="Cuts" value={String(library.tracks.length)} />
-              <Stat label="Starred" value={String(library.tracks.filter((track) => track.starred).length)} />
+              <Stat label="Cuts" value={String(ownTracks.length)} />
+              <Stat label="Starred" value={String(ownTracks.filter((track) => track.starred).length)} />
               <Stat label="Plays" value={String(listens.length)} />
             </div>
             <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -492,6 +504,8 @@ export default function AcetateApp() {
             )}
           </section>
         )}
+
+        {screen.name === "radio" && <AcetateRadio />}
 
         {screen.name === "projects" && (
           <Projects
@@ -608,6 +622,7 @@ export default function AcetateApp() {
           </div>
         </div>
       )}
+      <PhoneCommandHost />
       <AcetatePlayerBar />
       {shareFor && (
         <ShareSheet
@@ -742,7 +757,7 @@ function Projects({
               <ArtTile url={art[project.id]} title={project.title} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-semibold">{project.title}</span>
-                <span className="text-xs text-[#a3988c]">{KIND_LABEL[project.kind]} · {counts.filter((row) => row.project_id === project.id).length} tracks</span>
+                <span className="text-xs text-[#a3988c]">{KIND_LABEL[project.kind]} · {counts.filter((row) => row.project_id === project.id).length} tracks{project.shared_role ? ` · shared ${project.shared_role}` : ""}</span>
               </span>
             </button>
           </li>
@@ -775,10 +790,13 @@ function ProjectView(props: {
   const { project } = props;
   const [title, setTitle] = useState(project?.title ?? "");
   const [note, setNote] = useState(project?.note ?? "");
+  const meId = useApp((s) => s.userId);
   useEffect(() => setTitle(project?.title ?? ""), [project?.title]);
   useEffect(() => setNote(project?.note ?? ""), [project?.note]);
   if (!project) return <Empty text="That collection is gone." />;
-  const available = props.libraryTracks.filter((track) => !props.memberIds.has(track.id));
+  const owner = project.owner_id === meId;
+  const canEdit = owner || project.shared_role === "editor";
+  const available = props.libraryTracks.filter((track) => track.owner_id === meId && !props.memberIds.has(track.id));
   return (
     <section>
       <button type="button" onClick={props.onBack} className="text-sm text-[#a3988c]">Back</button>
@@ -792,7 +810,7 @@ function ProjectView(props: {
               if (title.trim() && title.trim() !== project.title) props.onRename(title.trim());
             }}
           >
-            <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-transparent font-serif text-3xl outline-none" />
+            <input value={title} readOnly={!owner} onChange={(e) => setTitle(e.target.value)} className="w-full bg-transparent font-serif text-3xl outline-none" />
           </form>
           <form
             onSubmit={(e) => {
@@ -800,30 +818,30 @@ function ProjectView(props: {
               props.onNote(note.trim());
             }}
           >
-            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Session notes" className="mt-1 w-full bg-transparent text-sm text-[#a3988c] outline-none" />
+            <input value={note} readOnly={!owner} onChange={(e) => setNote(e.target.value)} placeholder="Session notes" className="mt-1 w-full bg-transparent text-sm text-[#a3988c] outline-none" />
           </form>
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" onClick={() => props.onPlay()} className="rounded-full bg-[#e4a15a] px-4 py-2 text-sm font-semibold text-[#100e0c]">Play</button>
-        <FileButton label="Add audio" accept="audio/*" disabled={props.busy} onFile={props.onUpload} />
-        <FileButton label="Artwork" accept="image/jpeg,image/png,image/webp" disabled={props.busy} onFile={props.onArt} />
-        <button type="button" onClick={props.onShare} className="rounded-full border border-[#3c342c] px-4 py-2 text-sm">Share</button>
-        <button type="button" onClick={props.onDelete} className="rounded-full px-3 py-2 text-sm text-[#d4653a]">Delete</button>
+        {canEdit && <FileButton label="Add audio" accept="audio/*" disabled={props.busy} onFile={props.onUpload} />}
+        {owner && <FileButton label="Artwork" accept="image/jpeg,image/png,image/webp" disabled={props.busy} onFile={props.onArt} />}
+        {owner && <button type="button" onClick={props.onShare} className="rounded-full border border-[#3c342c] px-4 py-2 text-sm">Share</button>}
+        {owner && <button type="button" onClick={props.onDelete} className="rounded-full px-3 py-2 text-sm text-[#d4653a]">Delete</button>}
       </div>
       <ul className="mt-4 space-y-2">
         {props.tracks.map((track, index) => (
           <li key={track.id} className="flex items-center gap-2 rounded-2xl bg-[#1a1612] p-2">
             <button type="button" onClick={() => props.onPlay(track.id)} className="w-6 text-sm text-[#a3988c]">{index + 1}</button>
             <button type="button" onClick={() => props.onOpenTrack(track.id)} className="min-w-0 flex-1 truncate text-left font-medium">{track.title}</button>
-            <button type="button" aria-label="Move up" onClick={() => props.onMove(track.id, -1)} className="text-xs text-[#a3988c]">Up</button>
-            <button type="button" aria-label="Move down" onClick={() => props.onMove(track.id, 1)} className="text-xs text-[#a3988c]">Down</button>
-            <button type="button" onClick={() => props.onRemove(track.id)} className="text-xs text-[#a3988c]">Remove</button>
+            {canEdit && <button type="button" aria-label="Move up" onClick={() => props.onMove(track.id, -1)} className="text-xs text-[#a3988c]">Up</button>}
+            {canEdit && <button type="button" aria-label="Move down" onClick={() => props.onMove(track.id, 1)} className="text-xs text-[#a3988c]">Down</button>}
+            {canEdit && <button type="button" onClick={() => props.onRemove(track.id)} className="text-xs text-[#a3988c]">Remove</button>}
           </li>
         ))}
       </ul>
-      <Collaborators projectId={project.id} />
-      {available.length > 0 && (
+      {owner && <Collaborators projectId={project.id} />}
+      {canEdit && available.length > 0 && (
         <label className="mt-4 block text-sm text-[#a3988c]">
           Add from library
           <select

@@ -8,6 +8,8 @@ import { wumpPlaceSubtitle, type WumpPlaceRole, type WumpSavedPlace } from "@/li
 import { wumpRoleEmoji, wumpSetPlaceWatch } from "@/lib/wumpTogether";
 import { alertSummary, roleChip } from "@/lib/hundred";
 import { createPlaceFolder, deletePlaceFolder, listPlaceFolders, renamePlaceFolder, setPlaceFolder, type WumpPlaceFolder } from "@/lib/wumpShare";
+import { addCheckin, deleteCheckin, myCheckins, type CheckIn } from "@/lib/wumpLive";
+import { toast } from "@/store/app";
 import { cn } from "@/lib/utils";
 
 const FOLDER_EMOJI = ["📁", "🏠", "🍔", "☕", "🎉", "🏋️", "🛍️", "🌳", "🎵", "❤️", "✈️", "🏖️"];
@@ -282,8 +284,58 @@ export default function WumpSavedPlacesPanel({
               <Pencil className="size-2.5" /> Double-tap a folder to rename or delete it
             </p>
           )}
+          <Checkins places={places} />
         </>
       )}
     </section>
+  );
+}
+
+function Checkins({ places }: { places: WumpSavedPlace[] }) {
+  const [rows, setRows] = useState<CheckIn[]>([]);
+  const [placeId, setPlaceId] = useState("");
+  const [note, setNote] = useState("");
+
+  useEffect(() => {
+    void myCheckins().then(setRows);
+  }, [places.length]);
+
+  return (
+    <div className="border-t border-white/5 px-4 py-3">
+      <div className="text-[10px] font-bold tracking-wide text-sub uppercase">Private check-ins</div>
+      <p className="mt-1 text-[11px] text-sub">Only you can see this visit history.</p>
+      <form
+        className="mt-2 flex flex-wrap gap-1.5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const place = places.find((row) => row.id === placeId) ?? places[0];
+          if (!place) return;
+          void addCheckin({ placeId: place.id, name: place.name, lat: place.lat, lng: place.lng, note })
+            .then(() => myCheckins())
+            .then((next) => {
+              setRows(next);
+              setNote("");
+              toast("Checked in", "success");
+            })
+            .catch((err: Error) => toast(err.message, "error"));
+        }}
+      >
+        <select value={placeId} onChange={(e) => setPlaceId(e.target.value)} className="min-w-0 flex-1 rounded-full bg-black/30 px-2 py-1 text-[11px]">
+          {places.map((place) => (
+            <option key={place.id} value={place.id}>{place.name}</option>
+          ))}
+        </select>
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note" maxLength={280} className="min-w-0 flex-1 rounded-full bg-black/30 px-2 py-1 text-[11px] outline-none" />
+        <button type="submit" className="rounded-full bg-sky-400 px-2.5 py-1 text-[11px] font-bold text-sky-950">Check in</button>
+      </form>
+      <ul className="mt-2 space-y-1">
+        {rows.slice(0, 8).map((row) => (
+          <li key={row.id} className="flex items-center justify-between gap-2 text-[11px]">
+            <span className="truncate">{row.name}{row.note ? ` · ${row.note}` : ""} · {new Date(row.created_at).toLocaleString()}</span>
+            <button type="button" className="text-sub" onClick={() => void deleteCheckin(row.id).then(() => myCheckins()).then(setRows)}>Delete</button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

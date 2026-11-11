@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import { supabase } from "./supabase";
 import { useApp } from "@/store/app";
 
+export type HandsetPlatform = "ios" | "ipados" | "macos" | "android" | "web" | "desktop";
+
 export type Handset = {
   user_id: string;
   device_id: string;
@@ -16,6 +18,20 @@ export type Handset = {
   link_url: string | null;
   ping_at: string | null;
   last_seen: string;
+  platform?: HandsetPlatform | null;
+  model?: string | null;
+  os_name?: string | null;
+  storage_bytes?: number | null;
+  share_location?: boolean;
+  lat?: number | null;
+  lng?: number | null;
+  accuracy_m?: number | null;
+  loc_at?: string | null;
+  lost?: boolean;
+  trusted?: boolean;
+  lost_message?: string | null;
+  control_enabled?: boolean;
+  place_alerts?: boolean;
 };
 
 const KEY = "nexus:device";
@@ -33,6 +49,79 @@ export function thisDeviceId() {
 export function isPhoneDevice() {
   if (typeof navigator === "undefined") return false;
   return /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
+}
+
+export function detectPlatform(): HandsetPlatform {
+  if (typeof navigator === "undefined") return "web";
+  const ua = navigator.userAgent;
+  const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string } }).Capacitor;
+  if (/Electron|NexusDesktop/i.test(ua)) return "desktop";
+  if (cap?.isNativePlatform?.() && cap.getPlatform?.() === "ios") return /iPad/i.test(ua) ? "ipados" : "ios";
+  if (cap?.isNativePlatform?.() && cap.getPlatform?.() === "android") return "android";
+  if (/iPad/i.test(ua)) return "ipados";
+  if (/iPhone|iPod/i.test(ua)) return "ios";
+  if (/Android/i.test(ua)) return "android";
+  return "web";
+}
+
+export function platformLabel(platform?: string | null) {
+  if (platform === "ios") return "iPhone app";
+  if (platform === "ipados") return "iPad app";
+  if (platform === "macos") return "Mac app";
+  if (platform === "android") return "Android app";
+  if (platform === "desktop") return "Desktop app";
+  return "Web";
+}
+
+type DeviceInfo = { model?: string; name?: string; operatingSystem?: string; osVersion?: string };
+
+async function deviceFacts() {
+  const platform = detectPlatform();
+  const cap = (window as unknown as { Capacitor?: { Plugins?: { Device?: { getInfo?: () => Promise<DeviceInfo> } } } }).Capacitor;
+  try {
+    const info = await cap?.Plugins?.Device?.getInfo?.();
+    if (!info) return { platform, model: null as string | null, os_name: null as string | null };
+    const os = [info.operatingSystem, info.osVersion].filter(Boolean).join(" ");
+    return { platform, model: info.model || info.name || null, os_name: os || null };
+  } catch {
+    return { platform, model: null as string | null, os_name: null as string | null };
+  }
+}
+
+async function storageBytes() {
+  try {
+    const est = await navigator.storage?.estimate?.();
+    return typeof est?.usage === "number" ? Math.round(est.usage) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeHandset(battery: number | null, charging: boolean, full_in_sec: number | null) {
+  const userId = useApp.getState().userId;
+  if (!userId) return;
+  const facts = await deviceFacts();
+  const patch = {
+    kind: isPhoneDevice() ? "phone" as const : "computer" as const,
+    battery,
+    charging,
+    full_in_sec,
+    platform: facts.platform,
+    model: facts.model,
+    os_name: facts.os_name,
+    storage_bytes: await storageBytes(),
+    last_seen: new Date().toISOString(),
+  };
+  const device_id = thisDeviceId();
+  const updated = await supabase.from("nexus_handsets").update(patch).eq("user_id", userId).eq("device_id", device_id).select("device_id");
+  if (updated.error) return;
+  if ((updated.data ?? []).length > 0) return;
+  await supabase.from("nexus_handsets").insert({
+    ...patch,
+    user_id: userId,
+    device_id,
+    label: facts.model || (patch.kind === "phone" ? "Phone" : "This browser"),
+  });
 }
 
 type BatteryManager = {
@@ -73,9 +162,6 @@ async function readBattery(): Promise<{ battery: number | null; charging: boolea
 export function useHandsetReporter(userId: string | null) {
   useEffect(() => {
     if (!userId || typeof window === "undefined") return;
-    const device_id = thisDeviceId();
-    const kind = isPhoneDevice() ? "phone" : "computer";
-    const label = kind === "phone" ? "Phone" : "This browser";
     let dead = false;
     let manager: BatteryManager | null = null;
     let battery: number | null = null;
@@ -84,16 +170,7 @@ export function useHandsetReporter(userId: string | null) {
 
     const push = async () => {
       if (dead) return;
-      await supabase.from("nexus_handsets").upsert({
-        user_id: userId,
-        device_id,
-        label,
-        kind,
-        battery,
-        charging,
-        full_in_sec,
-        last_seen: new Date().toISOString(),
-      });
+      await writeHandset(battery, charging, full_in_sec);
     };
 
     const onBat = () => {
@@ -134,16 +211,7 @@ export async function refreshHandset() {
   const userId = useApp.getState().userId;
   if (!userId) return null;
   const row = await readBattery();
-  await supabase.from("nexus_handsets").upsert({
-    user_id: userId,
-    device_id: thisDeviceId(),
-    label: isPhoneDevice() ? "Phone" : "This browser",
-    kind: isPhoneDevice() ? "phone" : "computer",
-    battery: row.battery,
-    charging: row.charging,
-    full_in_sec: row.full_in_sec,
-    last_seen: new Date().toISOString(),
-  });
+  await writeHandset(row.battery, row.charging, row.full_in_sec);
   return row;
 }
 

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/store/app";
 import { addCloudFiles, addVoiceMemo, cloudUrl, deleteCloud, listCloud, syncCloudIfDue, type CloudFile } from "@/lib/nexusCloud";
+import CloudAlbums from "@/components/cloud/CloudAlbums";
 import { fmtBytes } from "@/lib/acetateAudio";
 
 export default function NexusCloudPage() {
@@ -118,6 +119,7 @@ export default function NexusCloudPage() {
             </button>
           </div>
         )}
+        {open && <CloudAlbums files={rows} />}
         <ul className="mt-6 space-y-2">
           {rows.map((row) => (
             <li key={row.id} className="flex items-center gap-3 rounded-2xl border border-white/10 px-3 py-2">

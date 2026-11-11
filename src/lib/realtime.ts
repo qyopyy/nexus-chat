@@ -34,6 +34,7 @@ import { nativeLocalNotify, usePush } from "./push";
 import { syncAppBadge, totalUnread } from "./badge";
 import { useMessageBanner } from "./messageBanner";
 import { isNativeApp } from "./useMobile";
+import { isPhoneDevice } from "./handset";
 import type { Message, PresenceState, Profile, Reaction } from "./types";
 import {
   channelStillOpen,
@@ -136,6 +137,12 @@ async function onMessageInsert(m: Message) {
     } else {
       useApp.setState((s) => ({ unread: { ...s.unread, [m.conversation_id]: (s.unread[m.conversation_id] ?? 0) + 1 } }));
       notify(m, { skipSound: true }); // sound already played above
+      if (isPhoneDevice()) {
+        const name = useApp.getState().profiles[m.author_id]?.display_name || useApp.getState().profiles[m.author_id]?.username || "Nexus";
+        void import("@/lib/phoneLink").then(({ recordDeviceNotice }) =>
+          recordDeviceNotice({ title: name, body: (m.content || "New message").slice(0, 180), href: `/?conv=${m.conversation_id}` }),
+        );
+      }
       void syncAppBadge();
     }
     // schema-free arcade score duels arrive as DMs with a parseable 🎯 line
