@@ -16,6 +16,7 @@ import { NEED, gate as premiumGate, myTier } from "./premium";
 import type { RoomGame } from "@/store/games";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { toast } from "@/store/app";
 import { loadJSON, saveJSON } from "./utils";
 import { sfx, startRing, stopRing } from "./sounds";
 import { builtinMeta, isSoundUrl, renderBuiltin, type Sound } from "./soundboard";
@@ -113,6 +114,8 @@ type CallState = {
   startedAt: number | null;
   error: string | null;
   muted: boolean;
+  /** Live Stage listener: the mic stays off until they step on stage */
+  stageListener: boolean;
   deafened: boolean;
   speaking: boolean;
   pttActive: boolean;
@@ -184,6 +187,7 @@ export const useCall = create<CallState>(() => ({
   startedAt: null,
   error: null,
   muted: false,
+  stageListener: false,
   deafened: false,
   speaking: false,
   pttActive: false,
@@ -1398,7 +1402,27 @@ export function initCallEngine(userId: string) {
   });
 }
 
-export async function joinCall(conversationId: string, opts: { video?: boolean } = {}) {
+export function speakerCount() {
+  const state = get();
+  return Object.values(state.participants).filter((peer) => !peer.muted).length + (state.muted ? 0 : 1);
+}
+
+export function stepOnStage() {
+  const others = Object.values(get().participants).filter((peer) => !peer.muted).length;
+  if (others >= 4) return false;
+  set({ stageListener: false, muted: false });
+  applyMuteState();
+  broadcastState();
+  return true;
+}
+
+export function stepDown() {
+  set({ stageListener: true, muted: true });
+  applyMuteState();
+  broadcastState();
+}
+
+export async function joinCall(conversationId: string, opts: { video?: boolean; listenOnly?: boolean } = {}) {
   if (!me) return;
   const st = get();
   if (st.conversationId === conversationId && st.status !== "idle") return;
@@ -1415,6 +1439,8 @@ export async function joinCall(conversationId: string, opts: { video?: boolean }
     startedAt: Date.now(),
     incoming: null,
     focused: null,
+    stageListener: !!opts.listenOnly,
+    muted: opts.listenOnly ? true : loadJSON("nexus.selfmute", { muted: false }).muted,
   });
 
   ensureAudio();
@@ -1565,6 +1591,8 @@ export async function leaveCall() {
     speaking: false,
     pttActive: false,
     error: null,
+    stageListener: false,
+    muted: loadJSON("nexus.selfmute", { muted: false }).muted,
     clearActive: null,
     recording: false,
     recordingStartedAt: null,
@@ -1632,7 +1660,11 @@ export function dismissIncoming(sendDecline = false) {
 }
 
 export function toggleMute() {
-  const { muted, deafened } = get();
+  const { muted, deafened, stageListener } = get();
+  if (stageListener && muted) {
+    toast("You're listening. Step on stage when you want to speak.", "info");
+    return;
+  }
   if (deafened) {
     set({ deafened: false, muted: false });
   } else {

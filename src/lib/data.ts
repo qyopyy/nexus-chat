@@ -3,7 +3,7 @@
 import { primeSignedUrl, storageRef } from "./storage";
 import { supabase, errorText } from "./supabase";
 import { previewLine, readsFromRows, reactionSame, restoreContent } from "./hundred";
-import { useApp, toast } from "@/store/app";
+import { findChannel, useApp, toast } from "@/store/app";
 import { useChat } from "@/store/chat";
 import { effectForText, playEffect, type EffectKind } from "./effects";
 import { MSG_LIMIT_FREE, NEED, gate, msgLimit, myTier } from "./premium";
@@ -257,7 +257,7 @@ export async function createChannel(
   spaceId: string,
   name: string,
   kind: "text" | "voice",
-  opts: { isPrivate?: boolean; password?: string; topic?: string; nsfw?: boolean } = {},
+  opts: { isPrivate?: boolean; password?: string; topic?: string; nsfw?: boolean; stage?: boolean } = {},
 ) {
   const { data, error } = await supabase.rpc("create_channel", {
     p_space: spaceId,
@@ -269,8 +269,20 @@ export async function createChannel(
     p_nsfw: !!opts.nsfw,
   });
   if (error) return toast(errorText(error), "error");
+  if (opts.stage && kind === "voice" && data) {
+    const stage = await supabase.rpc("set_channel_stage", { p_conv: data, p_on: true });
+    if (stage.error) toast(errorText(stage.error), "error");
+  }
   await loadSpace(spaceId);
   if (kind === "text") openConversation(data as string, spaceId);
+}
+
+export async function setChannelStage(convId: string, on: boolean) {
+  const { error } = await supabase.rpc("set_channel_stage", { p_conv: convId, p_on: on });
+  if (error) return toast(errorText(error), "error");
+  const channel = findChannel(get(), convId);
+  if (channel?.space_id) await loadSpace(channel.space_id);
+  toast(on ? "Live Stage is on" : "Live Stage is off", "success");
 }
 
 export function selectHome() {
@@ -336,6 +348,9 @@ export const TTL_OPTIONS: { secs: number | null; label: string; short: string }[
   { secs: 2592000, label: "1 month", short: "1mo" },
   { secs: 31536000, label: "1 year", short: "1y" },
 ];
+export function purgeExpired(convId: string) {
+  void supabase.rpc("purge_expired_messages", { p_conv: convId });
+}
 export async function loadTtl(convId: string) {
   const { data } = await supabase.from("conversations").select("message_ttl").eq("id", convId).maybeSingle();
   set((s) => ({ convTtl: { ...s.convTtl, [convId]: (data?.message_ttl as number | null | undefined) ?? null } }));
@@ -371,6 +386,7 @@ export async function loadMessages(convId: string) {
   const msgs = ((data ?? []) as Message[]).reverse();
   useChat.setState({ messages: msgs, loading: false, hasMore: msgs.length === PAGE });
   void loadTtl(convId);
+  purgeExpired(convId);
   await Promise.all([loadReactions(msgs.map((m) => m.id)), loadProfiles(msgs.map((m) => m.author_id)), markRead(convId), loadReadStates(convId)]);
 }
 

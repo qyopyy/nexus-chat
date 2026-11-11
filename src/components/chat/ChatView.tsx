@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Phone, Volume2 } from "lucide-react";
-import { useApp, conversationTitle } from "@/store/app";
-import { useCall, joinCall, unlockCallAudio } from "@/lib/call";
-import { loadMessages } from "@/lib/data";
+import { useApp, conversationTitle, findChannel, toast } from "@/store/app";
+import { useCall, joinCall, stepDown, stepOnStage, unlockCallAudio } from "@/lib/call";
+import { loadMessages, setChannelStage } from "@/lib/data";
 import { useTypingChannel } from "@/lib/realtime";
 import ChatHeader from "./ChatHeader";
 import MessageList from "./MessageList";
@@ -45,6 +45,7 @@ export default function ChatView({ conversationId }: { conversationId: string })
 
   useTypingChannel(conversationId, me);
 
+  const stage = useApp((s) => !!findChannel(s, conversationId)?.stage);
   const showLobby = kind === "voice" && !inThisCall;
   const showChat = mobile ? !showLobby : !showLobby && !(inThisCall && expanded);
 
@@ -79,6 +80,7 @@ export default function ChatView({ conversationId }: { conversationId: string })
       {inThisCall && mobile && !callMinimized && <MobileCallScreen conversationId={conversationId} />}
       {inThisCall && mobile && callMinimized && <MobileCallBar className="absolute inset-x-0 top-14 z-30 pt-2" />}
 
+      {stage && inThisCall && <StageBar />}
       {showLobby && <VoiceLobby conversationId={conversationId} />}
 
       {showChat && (
@@ -143,39 +145,115 @@ function OngoingCallBanner({ conversationId }: { conversationId: string }) {
   );
 }
 
+function StageBar() {
+  const listening = useCall((s) => s.stageListener);
+  return (
+    <div className="flex items-center gap-3 border-b border-black/20 bg-accent/10 px-4 py-2 text-sm">
+      <span>{listening ? "Listening. Your microphone is off, and you can hear anyone whose mic is on." : "You're on stage. People in this room can hear you while your mic is on."}</span>
+      {listening ? (
+        <button
+          type="button"
+          className="ml-auto shrink-0 rounded-full bg-accent px-3 py-1 text-xs font-bold text-white"
+          onClick={() => {
+            if (!stepOnStage()) toast("Four people are already speaking. You can keep listening.", "info");
+          }}
+        >
+          Step on stage
+        </button>
+      ) : (
+        <button type="button" className="ml-auto shrink-0 rounded-full bg-side px-3 py-1 text-xs font-semibold" onClick={() => stepDown()}>
+          Step down
+        </button>
+      )}
+    </div>
+  );
+}
+
 function VoiceLobby({ conversationId }: { conversationId: string }) {
   const title = useApp((s) => conversationTitle(s, conversationId));
   const presence = useApp((s) => s.presence);
   const profiles = useApp((s) => s.profiles);
+  const channel = useApp((s) => findChannel(s, conversationId));
+  const me = useApp((s) => s.userId);
+  const role = useApp((s) => (channel?.space_id ? s.spaceMembers[channel.space_id]?.find((member) => member.user_id === me)?.role : undefined));
   const users = Object.values(presence).filter((p) => p.voice === conversationId);
+  const stage = !!channel?.stage;
+  const full = users.length >= 8;
+  const speakers = users.filter((user) => !user.muted);
+  const listeners = users.filter((user) => user.muted);
+  const staff = role === "owner" || role === "admin";
+
+  function enter(listenOnly: boolean) {
+    if (stage && full) return;
+    unlockCallAudio();
+    void joinCall(conversationId, { listenOnly });
+  }
+
   return (
     <div className="grid flex-1 place-items-center bg-black p-6">
-      <div className="flex flex-col items-center text-center">
+      <div className="flex max-w-lg flex-col items-center text-center">
         <div className="mb-4 grid size-20 place-items-center rounded-full bg-side">
           <Volume2 className="size-10 text-sub" />
         </div>
         <h2 className="text-2xl font-bold">{title}</h2>
-        <p className="mt-1 text-sub">{users.length ? `${users.length} in voice` : "No one is currently in voice"}</p>
+        {stage ? (
+          <>
+            <p className="mt-1 text-sub">Live Stage uses the voice room. You hear people only after you join. Up to 8 people, and up to 4 speaking.</p>
+            <p className="mt-2 text-sm">{speakers.length ? `${speakers.length} speaking` : "Nobody is speaking"} · {listeners.length} listening</p>
+            {full && <p className="mt-2 text-sm text-idle">The room is full. You can see who is inside, but you are not connected and you cannot hear them.</p>}
+          </>
+        ) : (
+          <p className="mt-1 text-sub">{users.length ? `${users.length} in voice` : "No one is currently in voice"}</p>
+        )}
         {users.length > 0 && (
           <div className="mt-4 flex flex-wrap justify-center gap-3">
             {users.map((u) => (
               <div key={u.user_id} className="flex flex-col items-center gap-1">
                 <Avatar userId={u.user_id} size={48} />
-                <span className="text-xs text-sub">{profiles[u.user_id]?.display_name}</span>
+                <span className="text-xs text-sub">{profiles[u.user_id]?.display_name}{stage ? (u.muted ? " · listening" : " · speaking") : ""}</span>
               </div>
             ))}
           </div>
         )}
-        <button
-          onClick={() => {
-            unlockCallAudio();
-            void joinCall(conversationId);
-          }}
-          className="mt-6 rounded-full bg-ok px-8 py-3 font-semibold text-white transition hover:bg-ok/85"
-        >
-          Join Voice
-        </button>
+        {stage ? (
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            <button disabled={full} onClick={() => enter(true)} className="rounded-full bg-ok px-6 py-3 font-semibold text-white transition hover:bg-ok/85 disabled:opacity-40">
+              Join listening
+            </button>
+            <button
+              disabled={full || speakers.length >= 4}
+              onClick={() => enter(false)}
+              className="rounded-full bg-accent px-6 py-3 font-semibold text-white transition hover:bg-accent/85 disabled:opacity-40"
+            >
+              Join speaking
+            </button>
+            {staff && (
+              <button type="button" className="rounded-full px-4 py-3 text-sm text-sub" onClick={() => void setChannelStage(conversationId, false)}>
+                Turn stage off
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <button
+              onClick={() => enter(false)}
+              className="mt-6 rounded-full bg-ok px-8 py-3 font-semibold text-white transition hover:bg-ok/85"
+            >
+              Join Voice
+            </button>
+            {staff && kindIsVoice(channel) && (
+              <button type="button" className="mt-3 text-sm text-sub" onClick={() => void setChannelStage(conversationId, true)}>
+                Make this a Live Stage
+              </button>
+            )}
+          </>
+        )}
+        {stage && <p className="mt-3 text-xs text-faint">A person listed as speaking has their mic on inside the call. The lobby itself is not playing audio.</p>}
       </div>
     </div>
   );
+}
+
+function kindIsVoice(channel: ReturnType<typeof findChannel>) {
+  return channel?.kind === "voice";
 }

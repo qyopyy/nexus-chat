@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { etaMinutes, metersBetween } from "@/lib/syncMath";
 import { getDeviceLocation } from "@/lib/location";
 import {
@@ -23,15 +23,18 @@ export default function WumpLiveSharePanel({
   lat,
   lng,
   places,
+  onHeadingPath,
 }: {
   lat: number | null;
   lng: number | null;
   places: WumpSavedPlace[];
+  onHeadingPath?: (points: { lat: number; lng: number }[]) => void;
 }) {
   const [shares, setShares] = useState<LiveShare[]>([]);
   const [minutes, setMinutes] = useState(60);
   const [heading, setHeading] = useState<HeadingState | null>(null);
   const [placeId, setPlaceId] = useState("");
+  const pathRef = useRef<{ lat: number; lng: number }[]>([]);
 
   async function refreshShares() {
     setShares(await myLiveShares());
@@ -42,7 +45,17 @@ export default function WumpLiveSharePanel({
   }, []);
 
   useEffect(() => {
+    pathRef.current = [];
+    onHeadingPath?.([]);
+  }, [heading?.id, onHeadingPath]);
+
+  useEffect(() => {
     if (!heading?.id || lat == null || lng == null) return;
+    const last = pathRef.current[pathRef.current.length - 1];
+    if (!last || metersBetween(last.lat, last.lng, lat, lng) > 25) {
+      pathRef.current = [...pathRef.current, { lat, lng }].slice(-300);
+      onHeadingPath?.(pathRef.current);
+    }
     const destLat = heading.dest_lat ?? lat;
     const destLng = heading.dest_lng ?? lng;
     const eta = etaMinutes(metersBetween(lat, lng, destLat, destLng), null);

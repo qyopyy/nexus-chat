@@ -11,6 +11,7 @@ import { moveChatInList, sortChats, useSpacePrefs } from "@/lib/spacePrefs";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
 import NotificationPanel, { NotificationBellButton } from "@/components/chat/NotificationPanel";
+import StatusTray from "@/components/chat/StatusTray";
 import type { ChatListItem } from "@/lib/types";
 import { emptySearchCopy, listPreviewAuthor } from "@/lib/hundred";
 
@@ -144,6 +145,7 @@ export default function HomeSidebar() {
         ))}
       </div>
 
+      <StatusTray />
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         {/* Discord friends entry */}
         <button

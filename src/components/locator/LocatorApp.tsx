@@ -20,6 +20,7 @@ import {
 } from "@/lib/locator";
 import { freshIso } from "@/lib/syncMath";
 import PinMap from "@/components/maps/PinMap";
+import CirclePanel from "./CirclePanel";
 
 export default function LocatorApp() {
   const [rows, setRows] = useState<Handset[]>([]);
@@ -157,6 +158,7 @@ export default function LocatorApp() {
             </ul>
           </section>
         )}
+        <CirclePanel devices={rows} />
         <p className="mt-6 text-sm"><Link href="/phone" className="text-[#7ee0c6]">Open Phone Link</Link></p>
       </main>
     </div>

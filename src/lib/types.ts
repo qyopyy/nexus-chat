@@ -241,6 +241,8 @@ export type Conversation = {
   nsfw?: boolean;
   /** Staff-only announcements channel (read-mostly UX) */
   is_announcement?: boolean;
+  /** Voice room with speakers and listeners on the existing call mesh */
+  stage?: boolean;
 };
 
 export type ChatListItem = {

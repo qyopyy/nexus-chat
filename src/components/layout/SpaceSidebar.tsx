@@ -249,6 +249,7 @@ export default function SpaceSidebar({ spaceId }: { spaceId: string }) {
               >
                 {locked ? <Lock className={cn("size-4 shrink-0", connected ? "text-ok" : "opacity-70")} /> : <Volume2 className={cn("size-5 shrink-0", connected ? "text-ok" : "opacity-70")} />}
                 <span className="truncate">{c.name}</span>
+                {c.stage && <span className="rounded bg-accent/20 px-1 text-[9px] font-black text-accent">STAGE</span>}
                 {c.nsfw && <span className="rounded bg-dnd/80 px-1 text-[9px] font-black text-white">18+</span>}
                 {users.length > 0 && <span className="ml-auto text-xs text-sub">{users.length}</span>}
               </button>

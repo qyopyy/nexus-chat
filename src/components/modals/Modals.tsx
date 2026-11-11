@@ -223,6 +223,7 @@ function CreateChannelModal({ spaceId }: { spaceId: string }) {
   const [isPrivate, setPrivate] = useState(false);
   const [password, setPassword] = useState("");
   const [nsfw, setNsfw] = useState(false);
+  const [stage, setStage] = useState(false);
   return (
     <Modal
       open
@@ -241,6 +242,7 @@ function CreateChannelModal({ spaceId }: { spaceId: string }) {
                 password: isPrivate ? password.trim() : undefined,
                 topic: topic.trim() || undefined,
                 nsfw,
+                stage: kind === "voice" && stage,
               });
               closeModal();
             }}
@@ -284,6 +286,12 @@ function CreateChannelModal({ spaceId }: { spaceId: string }) {
           placeholder="Room password"
           className="mb-3 w-full rounded-md bg-rail px-3 py-2 text-sm outline-none"
         />
+      )}
+      {kind === "voice" && (
+        <label className="mb-2 flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={stage} onChange={(e) => setStage(e.target.checked)} />
+          Live Stage — speakers and listeners share this voice room (up to 8 people)
+        </label>
       )}
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={nsfw} onChange={(e) => setNsfw(e.target.checked)} />
