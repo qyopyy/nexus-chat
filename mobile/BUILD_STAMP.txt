@@ -1,4 +1,4 @@
-Nexus IPA shell 2026-11-12 nexus-1.9.0
+Nexus IPA shell 2026-11-12 nexus-1.9.0 wilds
 Live UI: https://nexusproject.cc
 Map tiles: OpenFreeMap, Esri, CARTO, OpenTopoMap (allowNavigation)
 Acetate is a separate app (hu.qyopy.acetate), not this bundle.

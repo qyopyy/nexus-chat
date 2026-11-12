@@ -12,6 +12,10 @@
 - Chat place cards open in Wump. The iOS shell allows the map tile hosts used by the MapLibre basemap.
 - In-app What's new for 1.9.0.
 - Patch and minor dependency updates: Next 16.4.6, lucide-react 1.72, Tailwind 4.3.5, Zustand 5.1, Supabase CLI 3.1. MapLibre stays on 5.x.
+- Wump Wilds: catch original creatures on a street block and invite friends with a code.
+- Phone voice memos record as M4A when the phone supports it, instead of an empty or unplayable WebM.
+
+Migration (not applied): `supabase/migrations/20261112170000_wump_wilds.sql`.
 
 Migration (not applied to the live database): `supabase/migrations/20261112153000_chat_scratch.sql`.
 

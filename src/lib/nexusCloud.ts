@@ -5,6 +5,7 @@ import { xhrStorageUpload } from "./storageUpload";
 import { scanUpload } from "./malwareGuard";
 import { toast, useApp } from "@/store/app";
 import { myTier } from "./premium";
+import { voiceMemoFile } from "./voiceMemo";
 
 export type CloudKind = "photo" | "file" | "voice";
 export type CloudFile = {
@@ -103,8 +104,8 @@ export async function addCloudFiles(files: File[], kind: CloudKind) {
 }
 
 export async function addVoiceMemo(blob: Blob) {
-  const name = `memo-${new Date().toISOString().slice(0, 16)}.webm`;
-  await queueCloudFile(blob, name, "voice");
+  const file = blob instanceof File && blob.name ? blob : voiceMemoFile(blob);
+  await queueCloudFile(file, file.name, "voice");
   await syncCloudNow();
 }
 

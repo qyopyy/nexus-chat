@@ -6,6 +6,7 @@ import { useApp, toast } from "@/store/app";
 import { thisDeviceId, type Handset } from "./handset";
 import { useAcetatePlayer } from "./acetatePlayer";
 import { addCloudFiles, addVoiceMemo, cloudUnlocked } from "./nexusCloud";
+import { recordVoiceBlob } from "./voiceMemo";
 import { sendDrop } from "./nexusDrop";
 import { openConversation } from "./data";
 import { setPhoneFocusUntil } from "./phoneFocus";
@@ -422,22 +423,9 @@ async function finishSensitive(command: PhoneCommand, allow: boolean) {
     toast("Clipboard sent to your computer", "success");
   }
   if (command.kind === "voice") {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const recorder = new MediaRecorder(stream);
-    const chunks: Blob[] = [];
-    recorder.ondataavailable = (event) => {
-      if (event.data.size) chunks.push(event.data);
-    };
-    const blob = await new Promise<Blob>((resolve) => {
-      recorder.onstop = () => {
-        stream.getTracks().forEach((track) => track.stop());
-        resolve(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }));
-      };
-      recorder.start();
-      window.setTimeout(() => recorder.stop(), 8000);
-    });
-    if (cloudUnlocked()) await addVoiceMemo(blob);
-    else await sendDrop(new File([blob], "memo.webm", { type: blob.type }));
+    const file = await recordVoiceBlob(8000);
+    if (cloudUnlocked()) await addVoiceMemo(file);
+    else await sendDrop(file);
     toast("Voice memo saved", "success");
   }
   await resolveCommand(command.id, "done");

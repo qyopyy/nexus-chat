@@ -29,6 +29,14 @@ export const NEXUS_RELEASE: ReleaseNote = {
       body: "Leaving Locator stops the web watch. If you turn sharing off on another device, this one picks that up within a minute and stops publishing.",
     },
     {
+      title: "Wilds on the map",
+      body: "Catch original Wump creatures on your block. Invite friends with a room code. They see the same street block, not your exact pin.",
+    },
+    {
+      title: "Voice memos on iPhone",
+      body: "Memos record in a format the phone can play, and an empty recording is refused instead of saved.",
+    },
+    {
       title: "Cloud and polls",
       body: "One Cloud file that fails no longer blocks the rest of the queue. A poll vote snaps back if it did not save, and a poll that never posts is removed.",
     },
