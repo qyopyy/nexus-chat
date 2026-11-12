@@ -23,6 +23,7 @@ export type WumpSavedPlace = {
   alert_leave?: boolean;
   share_moves?: boolean;
   alert_radius_m?: number;
+  favorite?: boolean;
 };
 
 export type WumpExploreStats = {
@@ -199,6 +200,37 @@ export function wumpProfileUrl(username: string | null | undefined) {
   if (!clean) return null;
   if (typeof window === "undefined") return `https://nexusproject.cc/u/${encodeURIComponent(clean)}`;
   return `${window.location.origin}/u/${encodeURIComponent(clean)}`;
+}
+
+const FAV_KEY = "wump-local-favorites";
+
+export function localFavoriteIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = JSON.parse(localStorage.getItem(FAV_KEY) || "[]") as unknown;
+    return Array.isArray(raw) ? raw.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Star a saved place. Writes locally immediately and to Supabase when the migration is applied. */
+export async function wumpSetFavorite(id: string, on: boolean) {
+  if (!id) return false;
+  const ids = new Set(localFavoriteIds());
+  if (on) ids.add(id);
+  else ids.delete(id);
+  try {
+    localStorage.setItem(FAV_KEY, JSON.stringify([...ids].slice(0, 200)));
+  } catch {
+    /* private mode */
+  }
+  const { error } = await supabase.rpc("wump_set_place_favorite", { p_place: id, p_on: on });
+  if (error && !/could not find|schema cache|does not exist|PGRST202|42883/i.test(`${error.message} ${error.code ?? ""}`)) {
+    toast(errorText(error) || "Couldn't update favorite", "error");
+    return false;
+  }
+  return true;
 }
 
 export function wumpUsernameHandle(username: string | null | undefined) {

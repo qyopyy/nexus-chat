@@ -15,6 +15,10 @@ import Avatar from "@/components/ui/Avatar";
 import { PollCreator } from "./Poll";
 import { bumpShareLocationWithFriend } from "@/lib/bump";
 import { MapPin } from "lucide-react";
+import { sendMessage } from "@/lib/data";
+import { wumpCardMessage } from "@/lib/wumpCard";
+import { wumpCreateMeetup } from "@/lib/wumpTogether";
+import LocationPicker from "@/components/maps/LocationPicker";
 
 // ------------------------------------------------------------------ composer "+" menu
 export function ComposerPlus({ conversationId }: { conversationId: string }) {
@@ -22,7 +26,7 @@ export function ComposerPlus({ conversationId }: { conversationId: string }) {
   const friendships = useApp((s) => s.friendships);
   const profiles = useApp((s) => s.profiles);
   const [open, setOpen] = useState(false);
-  const [sheet, setSheet] = useState<null | "poll" | "capsule" | "bump" | "schedule">(null);
+  const [sheet, setSheet] = useState<null | "poll" | "capsule" | "bump" | "schedule" | "place">(null);
   const item = (emoji: string, label: string, sub: string, fn: () => void) => (
     <button
       onClick={() => {
@@ -64,6 +68,7 @@ export function ComposerPlus({ conversationId }: { conversationId: string }) {
             {item("📊", "Poll", "Ask the chat a question", () => setSheet("poll"))}
             {item("⏳", "Time capsule", "A message that stays sealed until a date", () => setSheet("capsule"))}
             {item("📍", "Share Wump location", "Send your live pin to a friend in Nexus", () => setSheet("bump"))}
+            {item("📌", "Send a place", "Drop a pin or search, then post it in this chat", () => setSheet("place"))}
             {item("✋", "High five", "Ask for a high five — they tap back, you both celebrate", () => {
               if (me && sendFive(me)) toast("✋ High five sent — waiting for them to slap back", "info");
             })}
@@ -83,6 +88,31 @@ export function ComposerPlus({ conversationId }: { conversationId: string }) {
             void bumpShareLocationWithFriend(id);
           }}
         />
+      )}
+      {sheet === "place" && (
+        <div className="fixed inset-0 z-50 grid place-items-end bg-black/50 p-3 sm:place-items-center" onClick={() => setSheet(null)}>
+          <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <LocationPicker
+              onCancel={() => setSheet(null)}
+              confirmLabel="Send to this chat"
+              onPick={async (place) => {
+                await sendMessage(conversationId, wumpCardMessage({ kind: "place", lat: place.lat, lng: place.lng, name: place.name }));
+                toast("Place sent", "success");
+                setSheet(null);
+              }}
+              extra={{
+                label: "Meetup",
+                onPress: async (place) => {
+                  const { data } = await supabase.from("conversation_members").select("user_id").eq("conversation_id", conversationId);
+                  const invite = (data ?? []).map((row) => (row as { user_id: string }).user_id).filter((id) => id && id !== me);
+                  await wumpCreateMeetup({ title: place.name, lat: place.lat, lng: place.lng, placeName: place.address || place.name, invite });
+                  await sendMessage(conversationId, wumpCardMessage({ kind: "place", lat: place.lat, lng: place.lng, name: place.name }));
+                  setSheet(null);
+                },
+              }}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

@@ -166,6 +166,8 @@ export type LMap = {
   removeLayer?: (layer: unknown) => void;
   flyTo?: (c: [number, number], z?: number, o?: Record<string, unknown>) => LMap;
   getCenter?: () => { lat: number; lng: number };
+  getBearing?: () => number;
+  resetNorth?: () => void;
 };
 export type LTileLayer = { addTo: (m: LMap) => LTileLayer; remove?: () => void };
 export type LCircle = {

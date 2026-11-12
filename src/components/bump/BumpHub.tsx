@@ -102,6 +102,7 @@ import {
   wumpPresenceBits,
   type WumpNudgeKind,
 } from "@/lib/wumpTogether";
+import { consumeWumpPin, type WumpOpenPin } from "@/lib/wumpOpen";
 import {
   WUMP_EXPLORE_EMPTY,
   wumpDeleteSavedPlace,
@@ -182,6 +183,7 @@ export default function BumpHub({
   const [myAccuracy, setMyAccuracy] = useState<number | null>(null);
   const [myPlaceName, setMyPlaceName] = useState<string | null>(null);
   const [savedPlaces, setSavedPlaces] = useState<WumpSavedPlace[]>([]);
+  const [mapPin, setMapPin] = useState<WumpOpenPin | null>(null);
   const [explore, setExplore] = useState<WumpExploreStats>(WUMP_EXPLORE_EMPTY);
   const [placesPanel, setPlacesPanel] = useState(true);
   const [privacy, setPrivacy] = useState<WumpPrivacy | null>(null);
@@ -472,6 +474,18 @@ export default function BumpHub({
       });
     }
   }, [refresh, bumpOnly]);
+
+  useEffect(() => {
+    const apply = (pin: WumpOpenPin | null) => {
+      if (!pin) return;
+      setMapPin(pin);
+      setTab("nearby");
+    };
+    apply(consumeWumpPin());
+    const onPin = (ev: Event) => apply((ev as CustomEvent<WumpOpenPin>).detail);
+    window.addEventListener("wump-open-pin", onPin);
+    return () => window.removeEventListener("wump-open-pin", onPin);
+  }, [setTab]);
 
   async function goLive() {
     setBusy(true);
@@ -858,6 +872,7 @@ export default function BumpHub({
               onUpgradePlus={() => setTab("plus")}
               onNudge={(id, kind) => sendNudge(id, kind, false)}
               nudgeBurst={nudgeBurst}
+              openPin={mapPin}
               onPlaces={() => {
                 setPlacesPanel((v) => !v);
                 if (!live) void goLive();

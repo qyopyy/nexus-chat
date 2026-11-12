@@ -20,6 +20,28 @@ export async function GET(req: NextRequest) {
   const hit = cacheGet<WumpSearchResult[]>("wump-search", key, 30 * 60_000);
   if (hit) return wumpJson({ results: hit });
 
+  const maptiler = process.env.MAPTILER_API_KEY || process.env.NEXT_PUBLIC_MAPTILER_KEY || "";
+  if (maptiler) {
+    try {
+      const mu = new URL(`https://api.maptiler.com/geocoding/${encodeURIComponent(q)}.json`);
+      mu.searchParams.set("key", maptiler);
+      mu.searchParams.set("limit", "8");
+      mu.searchParams.set("language", lang);
+      if (near) mu.searchParams.set("proximity", `${near[1]},${near[0]}`);
+      type Mt = { features?: { id?: string; text?: string; place_name?: string; center?: [number, number]; properties?: { category?: string } }[] };
+      const j = await getJson<Mt>(mu.toString());
+      const results: WumpSearchResult[] = (j.features ?? []).flatMap((f) => {
+        const [lng, lat] = f.center ?? [];
+        if (lat == null || lng == null) return [];
+        return [{ id: String(f.id ?? `${lat},${lng}`), name: f.text || q, address: f.place_name || null, kind: f.properties?.category ?? null, lat, lng }];
+      });
+      cacheSet("wump-search", key, results);
+      return wumpJson({ results });
+    } catch {
+      /* Photon below */
+    }
+  }
+
   const u = new URL("https://photon.komoot.io/api/");
   u.searchParams.set("q", q);
   u.searchParams.set("limit", "8");

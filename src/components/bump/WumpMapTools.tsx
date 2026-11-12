@@ -4,6 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Bike, Bookmark, Car, ChevronDown, Footprints, Loader2, MapPin, Music2, Navigation, Search, User, X } from "lucide-react";
 import type { LMap, LeafletNS } from "@/lib/geo";
 import { NEARBY_CATS, externalMapsUrl, fmtDistance, fmtDuration, getRoute, nearbyPlaces, searchPlaces, type NearbyCat, type WumpPoi, type WumpRoute, type WumpSearchResult } from "@/lib/wumpMapApi";
+import { wumpGeocode, wumpPlaceShort } from "@/lib/wumpGeocode";
+import { loadRecents, rememberSearch, type RecentSearch } from "@/lib/wumpRecent";
+import { wumpCardMessage, type WumpCard } from "@/lib/wumpCard";
+import { sendMessage } from "@/lib/data";
+import { supabase } from "@/lib/supabase";
+import { startHeading, pingHeading, addCheckin } from "@/lib/wumpLive";
+import { wumpCreateMeetup, wumpRsvp } from "@/lib/wumpTogether";
+import { useApp, toast } from "@/store/app";
 import { cn } from "@/lib/utils";
 import { bumpSearchPeople, bumpSearchSongs, bumpSetSong, type BumpPerson, type BumpSong } from "@/lib/bump";
 import Avatar from "@/components/ui/Avatar";
@@ -73,6 +81,17 @@ export default function WumpMapTools({
   const [steps, setSteps] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [stops, setStops] = useState<MapPlace[]>([]);
+  const [recent, setRecent] = useState<RecentSearch[]>([]);
+  const [shareOpen, setShareOpen] = useState<"chat" | "meetup" | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [shareBusy, setShareBusy] = useState(false);
+  const meId = useApp((s) => s.userId);
+  const friendships = useApp((s) => s.friendships);
+  const profiles = useApp((s) => s.profiles);
+  const friends = friendships
+    .filter((f) => f.status === "accepted" && meId && (f.requester_id === meId || f.addressee_id === meId))
+    .map((f) => (f.requester_id === meId ? f.addressee_id : f.requester_id));
   const poiMarkers = useRef<Removable[]>([]);
   const selMarker = useRef<Removable | null>(null);
   const routeLine = useRef<Removable[]>([]);
@@ -103,7 +122,7 @@ export default function WumpMapTools({
             ? bumpSearchSongs(v).then(setSongs)
             : searchPlaces(v, center()).then(setResults);
       void job.catch((e: Error) => setErr(e.message)).finally(() => setSearching(false));
-    }, 320);
+    }, 420);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, scope]);
 
@@ -113,6 +132,10 @@ export default function WumpMapTools({
     setSongBusy(null);
   };
   const hasResults = scope === "places" ? results.length > 0 : scope === "people" ? people.length > 0 : songs.length > 0;
+
+  useEffect(() => {
+    void loadRecents().then(setRecent);
+  }, []);
 
   // tap on the map → becomes the selected place
   useEffect(() => {
@@ -142,11 +165,21 @@ export default function WumpMapTools({
     selMarker.current?.remove();
     selMarker.current = null;
     if (!L || !map) return;
-    if (!p.id.startsWith("tap-")) selMarker.current = L.marker([p.lat, p.lng], { icon: dot(L, "📍", true), zIndexOffset: 900 }).addTo(map);
+    const marker = L.marker([p.lat, p.lng], { icon: dot(L, "📍", true), zIndexOffset: 900, draggable: true }).addTo(map);
+    marker.on("dragend", () => {
+      const ll = marker.getLatLng();
+      void wumpGeocode(ll.lat, ll.lng).then((geo) => {
+        const name = wumpPlaceShort(geo) || geo?.display || p.name;
+        setSel((cur) => (cur ? { ...cur, lat: ll.lat, lng: ll.lng, name, address: geo?.display || cur.address } : cur));
+      });
+    });
+    selMarker.current = marker;
     if (fly) (map.flyTo ? map.flyTo([p.lat, p.lng], Math.max(map.getZoom?.() ?? 15, 16), { duration: 0.6 }) : map.setView([p.lat, p.lng], 16));
+    if (!p.id.startsWith("tap-")) void rememberSearch({ query: p.name, name: p.name, lat: p.lat, lng: p.lng }).then(setRecent);
   }
   const close = () => {
     setSel(null);
+    setStops([]);
     clearRoute();
     selMarker.current?.remove();
     selMarker.current = null;
@@ -186,15 +219,16 @@ export default function WumpMapTools({
     setCatBusy(false);
   };
 
-  const directions = async (m: Mode = mode) => {
+  const directions = async (m: Mode = mode, origin = me ?? center()) => {
     if (!sel) return;
-    const from = me ?? center();
+    const from = origin;
     if (!from) return setErr("Turn on Live (or allow location) for directions");
     setMode(m);
     setRouteBusy(true);
     setErr(null);
     try {
-      const r = await getRoute(from, [sel.lat, sel.lng], m);
+      const via = stops.map((s) => [s.lat, s.lng] as [number, number]);
+      const r = await getRoute(from, [sel.lat, sel.lng], m, via);
       const L = LRef.current;
       const map = mapRef.current;
       routeLine.current.forEach((l) => l.remove());
@@ -212,6 +246,16 @@ export default function WumpMapTools({
     setRouteBusy(false);
   };
 
+  useEffect(() => {
+    const onRecenter = () => {
+      if (route) void directions(mode, me ?? center());
+    };
+    window.addEventListener("wump-recenter", onRecenter);
+    return () => window.removeEventListener("wump-recenter", onRecenter);
+    // reroute from the latest selection when the user recenters
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route, mode, sel, me, stops]);
+
   useEffect(
     () => () => {
       poiMarkers.current.forEach((m) => m.remove());
@@ -227,6 +271,68 @@ export default function WumpMapTools({
     await onSavePlace({ name: sel.name, lat: sel.lat, lng: sel.lng, locality: sel.address, source: sel.id.startsWith("tap-") ? "tap" : "map" });
     setSaving(false);
   };
+
+  const cardOf = (): WumpCard | null => {
+    if (!sel) return null;
+    if (route) {
+      const points: [number, number][] = [];
+      const from = me ?? center();
+      if (from) points.push(from);
+      for (const stop of stops) points.push([stop.lat, stop.lng]);
+      points.push([sel.lat, sel.lng]);
+      if (points.length > 1) return { kind: "route", mode: route.mode, name: sel.name, points };
+    }
+    return { kind: "place", lat: sel.lat, lng: sel.lng, name: sel.name };
+  };
+
+  async function shareHeading() {
+    if (!sel || !route) return;
+    const from = me ?? center();
+    if (!from) return setErr("Turn on Live (or allow location) for directions");
+    try {
+      const row = await startHeading({ title: `Heading to ${sel.name}`, lat: sel.lat, lng: sel.lng, name: sel.name });
+      await pingHeading(row.id, from[0], from[1], null, Math.max(1, Math.round(route.duration / 60)));
+      await navigator.clipboard.writeText(`${window.location.origin}/wump/go/${row.token}`);
+      toast("Heading link copied with your ETA", "success");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't start heading", "error");
+    }
+  }
+
+  async function sendCard() {
+    const card = cardOf();
+    if (!card) return;
+    setShareBusy(true);
+    let n = 0;
+    for (const id of picked) {
+      const { data: conv, error } = await supabase.rpc("get_or_create_dm", { p_user: id });
+      if (error || !conv) continue;
+      try {
+        await sendMessage(conv as string, wumpCardMessage(card));
+        n += 1;
+      } catch {
+        /* this friend is skipped */
+      }
+    }
+    setShareBusy(false);
+    setShareOpen(null);
+    toast(n ? `Sent to ${n} chat${n === 1 ? "" : "s"}` : "Couldn't send", n ? "success" : "error");
+  }
+
+  async function makeMeetup() {
+    if (!sel) return;
+    setShareBusy(true);
+    const row = await wumpCreateMeetup({
+      title: sel.name,
+      lat: sel.lat,
+      lng: sel.lng,
+      placeName: sel.address || sel.name,
+      invite: [...picked],
+    });
+    if (row && route) await wumpRsvp(row.id, "going", Math.max(1, Math.round(route.duration / 60)));
+    setShareBusy(false);
+    setShareOpen(null);
+  }
 
   if (!ready) return null;
   return (
@@ -272,9 +378,35 @@ export default function WumpMapTools({
                 </button>
               </div>
               {!hasResults ? (
-                <p className="px-3 py-2.5 text-[11px] text-slate-400">
-                  {q.trim().length < 2 ? (scope === "songs" ? "Type a song or artist — tap Set to put it on your profile" : scope === "people" ? "Type a name or @username" : "Type a place, address or category") : searching ? "Searching…" : "No results"}
-                </p>
+                <div className="px-3 py-2.5 text-[11px] text-slate-400">
+                  {q.trim().length < 2 ? (
+                    recent.length && scope === "places" ? (
+                      <ul className="-mx-3">
+                        <li className="px-3 pb-1 text-[10px] font-bold tracking-wide uppercase">Recent</li>
+                        {recent.map((r) => (
+                          <li key={`${r.query}-${r.at}`}>
+                            <button
+                              type="button"
+                              className="block w-full truncate px-3 py-1.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                              onClick={() => {
+                                if (r.lat != null && r.lng != null) select({ id: `recent-${r.at}`, name: r.name || r.query, address: null, kind: null, lat: r.lat, lng: r.lng });
+                                else setQ(r.query);
+                              }}
+                            >
+                              {r.name || r.query}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>{scope === "songs" ? "Type a song or artist — tap Set to put it on your profile" : scope === "people" ? "Type a name or @username" : "Type a place, address or category"}</p>
+                    )
+                  ) : searching ? (
+                    "Searching…"
+                  ) : (
+                    "No results"
+                  )}
+                </div>
               ) : (
                 <ul className="max-h-72 overflow-y-auto py-1">
                   {scope === "places" &&
@@ -367,6 +499,7 @@ export default function WumpMapTools({
               <div className="flex items-baseline gap-2">
                 <span className="text-lg font-black text-slate-900">{fmtDuration(route.duration)}</span>
                 <span className="text-xs font-semibold text-slate-500">{fmtDistance(route.distance)}</span>
+                {route.provider && <span className="text-[10px] font-bold tracking-wide text-slate-400 uppercase">{route.provider}</span>}
                 <button onClick={() => setSteps((s) => !s)} className="ml-auto flex items-center gap-0.5 text-[11px] font-bold text-sky-600">
                   Steps <ChevronDown className={cn("size-3.5 transition", steps && "rotate-180")} />
                 </button>
@@ -407,10 +540,80 @@ export default function WumpMapTools({
                 {saving ? <Loader2 className="size-4 animate-spin" /> : <Bookmark className="size-4" />}
               </button>
             )}
-            <a href={externalMapsUrl([sel.lat, sel.lng], sel.name, route?.mode ?? mode)} target="_blank" rel="noreferrer" className="grid size-10 place-items-center rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200" aria-label="Open in Maps" title="Open in Maps">
+            <a href={externalMapsUrl([sel.lat, sel.lng], sel.name, route?.mode ?? mode, me, stops.map((s) => [s.lat, s.lng] as [number, number]))} target="_blank" rel="noreferrer" className="grid size-10 place-items-center rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200" aria-label="Open in Apple Maps or Google Maps" title="Open in Maps">
               <ArrowUpRight className="size-4" />
             </a>
           </div>
+          <div className="flex flex-wrap gap-1.5 border-t border-slate-100 px-3 py-2">
+            <button
+              type="button"
+              onClick={() => setStops((cur) => (cur.some((s) => s.id === sel.id) ? cur : [...cur, sel].slice(0, 6)))}
+              className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-700"
+            >
+              Add stop{stops.length ? ` · ${stops.length}` : ""}
+            </button>
+            {stops.length > 0 && (
+              <button type="button" onClick={() => setStops([])} className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500">
+                Clear stops
+              </button>
+            )}
+            <button type="button" disabled={!route} onClick={() => void shareHeading()} className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800 disabled:opacity-40">
+              Heading link
+            </button>
+            <button type="button" onClick={() => setShareOpen(shareOpen === "chat" ? null : "chat")} className="rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-sky-700">
+              Send to chat
+            </button>
+            <button type="button" onClick={() => setShareOpen(shareOpen === "meetup" ? null : "meetup")} className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+              Meetup
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void addCheckin({ name: sel.name, lat: sel.lat, lng: sel.lng, note: sel.address })
+                  .then(() => {
+                    toast("Checked in", "success");
+                    window.dispatchEvent(new Event("wump-checkins"));
+                  })
+                  .catch((e: Error) => toast(e.message, "error"));
+              }}
+              className="rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-700"
+            >
+              Check in
+            </button>
+          </div>
+          {shareOpen && (
+            <div className="border-t border-slate-100 px-3 py-2">
+              <div className="mb-1 text-[10px] font-bold tracking-wide text-slate-400 uppercase">{shareOpen === "chat" ? "Send this card to a friend" : "Invite friends to this meetup"}</div>
+              {!friends.length ? (
+                <p className="text-[11px] text-slate-500">Add friends first. Only people you already share with can be invited.</p>
+              ) : (
+                <ul className="max-h-28 space-y-1 overflow-y-auto">
+                  {friends.map((id) => (
+                    <li key={id}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPicked((cur) => {
+                            const next = new Set(cur);
+                            if (next.has(id)) next.delete(id);
+                            else next.add(id);
+                            return next;
+                          })
+                        }
+                        className="flex w-full items-center justify-between rounded-lg px-1 py-1 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        <span className="truncate">{profiles[id]?.display_name || profiles[id]?.username || "Friend"}</span>
+                        <span>{picked.has(id) ? "✓" : ""}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button type="button" disabled={shareBusy || !picked.size} onClick={() => void (shareOpen === "chat" ? sendCard() : makeMeetup())} className="mt-2 w-full rounded-xl bg-slate-900 py-2 text-xs font-bold text-white disabled:opacity-40">
+                {shareBusy ? "Sending…" : shareOpen === "chat" ? "Send card" : "Create meetup"}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </>

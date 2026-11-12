@@ -236,8 +236,9 @@ export async function wumpCreateMeetup(input: {
   return row;
 }
 
-export async function wumpRsvp(meetupId: string, status: "going" | "maybe" | "no") {
-  const { error } = await supabase.rpc("wump_rsvp_meetup", { p_meetup: meetupId, p_status: status, p_eta: null });
+export async function wumpRsvp(meetupId: string, status: "going" | "maybe" | "no", etaMin?: number | null) {
+  const eta = etaMin == null || !Number.isFinite(etaMin) ? null : Math.max(0, Math.min(1440, Math.round(etaMin)));
+  const { error } = await supabase.rpc("wump_rsvp_meetup", { p_meetup: meetupId, p_status: status, p_eta: eta });
   if (error) {
     toast(errorText(error) || "Couldn't update RSVP", "error");
     return false;

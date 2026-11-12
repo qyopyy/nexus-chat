@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { etaMinutes, metersBetween } from "@/lib/syncMath";
+import { routedEtaMinutes } from "@/lib/wumpMapApi";
 import { getDeviceLocation } from "@/lib/location";
 import {
   endHeading,
@@ -35,6 +36,7 @@ export default function WumpLiveSharePanel({
   const [heading, setHeading] = useState<HeadingState | null>(null);
   const [placeId, setPlaceId] = useState("");
   const pathRef = useRef<{ lat: number; lng: number }[]>([]);
+  const etaRef = useRef<{ lat: number; lng: number; min: number } | null>(null);
 
   async function refreshShares() {
     setShares(await myLiveShares());
@@ -46,6 +48,7 @@ export default function WumpLiveSharePanel({
 
   useEffect(() => {
     pathRef.current = [];
+    etaRef.current = null;
     onHeadingPath?.([]);
   }, [heading?.id, onHeadingPath]);
 
@@ -58,12 +61,29 @@ export default function WumpLiveSharePanel({
     }
     const destLat = heading.dest_lat ?? lat;
     const destLng = heading.dest_lng ?? lng;
-    const eta = etaMinutes(metersBetween(lat, lng, destLat, destLng), null);
-    void pingHeading(heading.id, lat, lng, null, eta).catch(() => undefined);
+    let dead = false;
+    const straight = etaMinutes(metersBetween(lat, lng, destLat, destLng), null);
+    const lastEta = etaRef.current;
+    const moved = !lastEta || metersBetween(lastEta.lat, lastEta.lng, lat, lng) > 120;
+    if (!moved && lastEta) {
+      void pingHeading(heading.id, lat, lng, null, lastEta.min).catch(() => undefined);
+    } else {
+      void routedEtaMinutes([lat, lng], [destLat, destLng], straight > 20 ? "drive" : "walk")
+        .then((mins) => {
+          etaRef.current = { lat, lng, min: mins };
+          if (!dead) return pingHeading(heading.id!, lat, lng, null, mins);
+        })
+        .catch(() => {
+          if (!dead) return pingHeading(heading.id!, lat, lng, null, straight);
+        });
+    }
     const stop = subscribeHeading(heading.id, () => {
       void headingState(heading.id!).then(setHeading).catch(() => undefined);
     });
-    return stop;
+    return () => {
+      dead = true;
+      stop();
+    };
   }, [heading?.id, lat, lng, heading?.dest_lat, heading?.dest_lng]);
 
   const link = (token: string, path: string) => `${window.location.origin}${path}/${token}`;
@@ -118,7 +138,7 @@ export default function WumpLiveSharePanel({
         </ul>
         <div className="border-t border-white/5 pt-3">
           <div className="text-sm font-bold">Heading there</div>
-          <p className="text-[11px] text-sub">Up to 8 people. Each pin updates while this page is open, with a walking ETA.</p>
+          <p className="text-[11px] text-sub">Up to 8 people. Each pin updates while this page is open, with a road ETA when directions are available.</p>
           <select value={placeId} onChange={(e) => setPlaceId(e.target.value)} className="mt-2 w-full rounded-xl bg-black/30 px-2 py-1.5 text-xs">
             <option value="">Current location</option>
             {places.map((place) => (
@@ -163,10 +183,14 @@ export default function WumpLiveSharePanel({
             type="button"
             className="mt-2 text-[11px] text-sub"
             onClick={() => {
-              void getDeviceLocation({ highAccuracy: false }).then((loc) => {
+              void getDeviceLocation({ highAccuracy: false }).then(async (loc) => {
                 if (heading?.id) {
                   const eta = heading.dest_lat != null && heading.dest_lng != null ? etaMinutes(metersBetween(loc.lat, loc.lng, heading.dest_lat, heading.dest_lng), loc.speed) : 1;
-                  return pingHeading(heading.id, loc.lat, loc.lng, loc.accuracy, eta);
+                  const mode = eta > 20 ? "drive" : "walk";
+                  const routed = heading.dest_lat != null && heading.dest_lng != null
+                    ? await routedEtaMinutes([loc.lat, loc.lng], [heading.dest_lat, heading.dest_lng], mode).catch(() => eta)
+                    : eta;
+                  return pingHeading(heading.id, loc.lat, loc.lng, loc.accuracy, routed);
                 }
               }).catch((e: Error) => toast(e.message, "error"));
             }}
