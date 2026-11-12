@@ -244,8 +244,9 @@ export async function bumpPublish(visible: BumpVisible = "friends", label?: stri
     return null;
   }
   try {
-    const { loadWumpPrivacyLocal } = await import("./wumpPrivacy");
-    const priv = loadWumpPrivacyLocal();
+    const { refreshWumpPrivacyThrottled } = await import("./wumpPrivacy");
+    const me = useApp.getState().userId;
+    const priv = me ? await refreshWumpPrivacyThrottled(me) : { wump_share_enabled: false as const };
     if (!priv.wump_share_enabled) {
       toast("Location sharing is off in Wump privacy settings", "error");
       return null;
@@ -590,8 +591,9 @@ export async function bumpShareLocationWithFriend(friendId: string, note?: strin
 /** Quiet Live heartbeat via dedicated RPC (no toast). Falls back to bump_publish. */
 export async function bumpHeartbeat(visible: BumpVisible = "friends", label?: string | null) {
   try {
-    const { loadWumpPrivacyLocal } = await import("./wumpPrivacy");
-    const priv = loadWumpPrivacyLocal();
+    const { refreshWumpPrivacyThrottled } = await import("./wumpPrivacy");
+    const me = useApp.getState().userId;
+    const priv = me ? await refreshWumpPrivacyThrottled(me) : { wump_share_enabled: false as const };
     if (!priv.wump_share_enabled) return false;
     const loc = await getDeviceLocation({ highAccuracy: false });
     const place = await import("./wumpGeocode").then((m) => m.wumpGeocode(loc.lat, loc.lng)).catch(() => null);
@@ -636,8 +638,9 @@ export async function bumpPublishSample(
   label?: string | null,
   opts?: { geocode?: boolean },
 ) {
-  const { loadWumpPrivacyLocal } = await import("./wumpPrivacy");
-  const priv = loadWumpPrivacyLocal();
+  const { refreshWumpPrivacyThrottled } = await import("./wumpPrivacy");
+  const me = useApp.getState().userId;
+  const priv = me ? await refreshWumpPrivacyThrottled(me) : { wump_share_enabled: false as const };
   if (!priv.wump_share_enabled) return false;
   let placeArgs: { p_place_name: string | null; p_place_locality: string | null } | Record<string, never> = {};
   if (opts?.geocode !== false) {

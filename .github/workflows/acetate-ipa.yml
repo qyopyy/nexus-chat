@@ -44,8 +44,9 @@ jobs:
       - name: Read app version
         run: echo "APP_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
 
-      - name: Icon and playback settings
+      - name: Icon, splash, and playback settings
         run: |
+          python3 scripts/patch-ios-info-plist.py ios/App/App/Info.plist
           PLIST=ios/App/App/Info.plist
           pb() { /usr/libexec/PlistBuddy -c "$1" "$PLIST" 2>/dev/null || true; }
           pb "Add :UIBackgroundModes array"
@@ -78,6 +79,17 @@ jobs:
               out = iconset / img["filename"]
               subprocess.check_call(["sips", "-z", str(px), str(px), str(src), "--out", str(out)], stdout=subprocess.DEVNULL)
           PY
+          # Launch splash is Acetate brown with the Acetate icon, not the Nexus splash.
+          sips -p 2732 2732 --padColor 100E0C resources/icon-1024.png --out /tmp/acetate-splash.png
+          SPLASH=$(find ios/App/App/Assets.xcassets -type d -name 'Splash.imageset' | head -1)
+          if [ -n "$SPLASH" ]; then
+            for f in "$SPLASH"/*.png; do
+              [ -f "$f" ] && cp /tmp/acetate-splash.png "$f"
+            done
+            if ! ls "$SPLASH"/*.png >/dev/null 2>&1; then
+              cp /tmp/acetate-splash.png "$SPLASH/splash-2732x2732.png"
+            fi
+          fi
 
       - name: Build (unsigned)
         run: |

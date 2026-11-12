@@ -51,6 +51,8 @@ import StaffDesk from "./staff/StaffDesk";
 import SiteNoticeBanner from "./staff/SiteNoticeBanner";
 import ReportDialog from "./ui/ReportDialog";
 import UpdateReadyPill from "./ui/UpdateReadyPill";
+import WhatsNew from "./ui/WhatsNew";
+import { NEXUS_RELEASE } from "@/lib/releaseNotes";
 import MaintenanceGate from "./MaintenanceGate";
 import { useStudio, videosGo } from "@/store/studio";
 import { releaseByCode } from "@/lib/protect";
@@ -378,6 +380,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       <ProfileCard />
       <ReportDialog />
       <UpdateReadyPill />
+      <WhatsNew release={NEXUS_RELEASE} storageKey="nexus.seenRelease" openEvent="nexus-whats-new" />
       <Modals />
       <MessageBanner />
       <Toasts />

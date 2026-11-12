@@ -123,6 +123,9 @@ export default function WumpMapTools({
             : searchPlaces(v, center()).then(setResults);
       void job.catch((e: Error) => setErr(e.message)).finally(() => setSearching(false));
     }, 420);
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, scope]);
 
@@ -137,9 +140,17 @@ export default function WumpMapTools({
     void loadRecents().then(setRecent);
   }, []);
 
-  // tap on the map → becomes the selected place
+  // tap on the map → becomes the selected place. A later name for the same point must not clear the route.
+  const lastTap = useRef("");
   useEffect(() => {
-    if (tap) select({ id: `tap-${tap.lat},${tap.lng}`, name: tap.name, address: tap.locality, kind: null, lat: tap.lat, lng: tap.lng }, false);
+    if (!tap) return;
+    const key = `${tap.lat.toFixed(5)},${tap.lng.toFixed(5)}`;
+    if (lastTap.current === key) {
+      setSel((cur) => (cur && cur.id.startsWith("tap-") ? { ...cur, name: tap.name, address: tap.locality ?? cur.address } : cur));
+      return;
+    }
+    lastTap.current = key;
+    select({ id: `tap-${tap.lat},${tap.lng}`, name: tap.name, address: tap.locality, kind: null, lat: tap.lat, lng: tap.lng }, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tap]);
 

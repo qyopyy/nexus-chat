@@ -70,6 +70,19 @@ export async function incomingDrops() {
 export async function openDrop(row: NexusDrop) {
   const { data, error } = await supabase.storage.from("nexus-drops").createSignedUrl(row.path, 120, { download: row.name });
   if (error || !data?.signedUrl) throw new Error(errorText(error) || "Couldn't open that drop");
-  await supabase.from("nexus_drops").update({ claimed_at: new Date().toISOString() }).eq("id", row.id);
   return data.signedUrl;
+}
+
+/** Mark a drop taken only after the browser actually opened it. */
+export async function claimDrop(id: string) {
+  const { error } = await supabase.from("nexus_drops").update({ claimed_at: new Date().toISOString() }).eq("id", id).is("claimed_at", null);
+  if (error) throw new Error(errorText(error));
+}
+
+export async function openAndClaimDrop(row: NexusDrop) {
+  const url = await openDrop(row);
+  const opened = window.open(url, "_blank", "noopener");
+  if (!opened) throw new Error("Allow pop-ups to open this drop. It is still in your inbox.");
+  await claimDrop(row.id);
+  return url;
 }

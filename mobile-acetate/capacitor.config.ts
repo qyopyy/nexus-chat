@@ -9,7 +9,7 @@ const config: CapacitorConfig = {
   appName: "Acetate",
   webDir: "www",
   backgroundColor: "#100e0c",
-  appendUserAgent: "AcetateApp NexusApp",
+  appendUserAgent: "AcetateApp",
   server: {
     url,
     cleartext: false,

@@ -61,6 +61,7 @@ type PlayerState = {
   setEqBand: (index: number, gain: number) => void;
   toggleEq: () => void;
   removeAt: (index: number) => void;
+  moveAt: (index: number, dir: -1 | 1) => void;
   clearQueue: () => void;
   applyRemote: (queue: AcetateQueueItem[], index: number, position: number, playing: boolean) => void;
 };
@@ -198,6 +199,18 @@ export const useAcetatePlayer = create<PlayerState>((set, get) => {
     if (index < s.index) next -= 1;
     if (next >= queue.length) next = Math.max(0, queue.length - 1);
     return { queue, index: next, playing: queue.length > 0 && s.playing };
+  }),
+  moveAt: (index, dir) => set((s) => {
+    const to = index + dir;
+    if (to < 0 || to >= s.queue.length) return s;
+    const queue = s.queue.slice();
+    const [row] = queue.splice(index, 1);
+    queue.splice(to, 0, row);
+    let next = s.index;
+    if (s.index === index) next = to;
+    else if (index < s.index && to >= s.index) next -= 1;
+    else if (index > s.index && to <= s.index) next += 1;
+    return { queue, index: next };
   }),
   clearQueue: () => set({ queue: [], index: 0, playing: false, current: 0 }),
   applyRemote: (queue, index, position, playing) => set({

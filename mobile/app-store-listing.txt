@@ -20,7 +20,7 @@ Subtitle (under 30 chars)
   Chat · friends · places
 
 Promotional text (optional, under 170 chars — editable anytime)
-  Stay close to friends with chat, voice, Live places on Wump, music, and more — one Nexus home on iPhone.
+  Nexus 1.9 — chat notes, a Wump map with directions, and files that stay until they open.
 
 ────────────────────────────────────
 Description (under 4000 chars)
@@ -36,7 +36,7 @@ CHAT & COMMUNITIES
 
 WUMP — LIVE PLACES
 • Share your Live pin with friends or family when you choose
-• OpenStreetMap-based map with privacy controls
+• Map with streets, satellite, and directions. Location stays under your privacy controls
 • Invite links for people you trust
 • Turn Live off anytime — location sharing stops
 

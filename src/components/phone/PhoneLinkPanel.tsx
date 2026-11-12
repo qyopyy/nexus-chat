@@ -7,7 +7,7 @@ import { useApp, toast } from "@/store/app";
 import { isPhoneDevice, platformLabel, thisDeviceId, type Handset } from "@/lib/handset";
 import { deviceHistory, myDevices, setDeviceFlags } from "@/lib/locator";
 import { freshIso } from "@/lib/syncMath";
-import { incomingDrops, openDrop, sendDrop, type NexusDrop } from "@/lib/nexusDrop";
+import { incomingDrops, openAndClaimDrop, sendDrop, type NexusDrop } from "@/lib/nexusDrop";
 import {
   DEFAULT_GRANT,
   listClipboard,
@@ -373,7 +373,7 @@ export default function PhoneLinkPanel() {
             <ul className="space-y-1 text-sm">
               {drops.map((drop) => (
                 <li key={drop.id}>
-                  <button type="button" className="text-[#7ee0c6]" onClick={() => void openDrop(drop).then((url) => window.open(url, "_blank", "noopener")).then(refresh)}>
+                  <button type="button" className="text-[#7ee0c6]" onClick={() => void openAndClaimDrop(drop).then(refresh).catch((error: Error) => toast(error.message, "error"))}>
                     {drop.name} · {fmtBytes(drop.bytes)}
                   </button>
                 </li>

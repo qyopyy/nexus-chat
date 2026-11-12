@@ -625,6 +625,7 @@ export async function sendMessage(convId: string, content: string, file?: File |
     };
   });
   bumpChatList(real);
+  return real;
 }
 
 function dropTemp(tempId: string) {

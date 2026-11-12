@@ -224,6 +224,8 @@ export default function AcetatePlayerBar() {
                 <span className="truncate">{row.title}</span>
                 <span className="ml-auto shrink-0 text-xs text-[#a3988c]">{row.versionLabel}</span>
               </button>
+              <button type="button" aria-label="Move up" disabled={i === 0} className="text-xs disabled:opacity-30" onClick={() => useAcetatePlayer.getState().moveAt(i, -1)}>Up</button>
+              <button type="button" aria-label="Move down" disabled={i === queue.length - 1} className="text-xs disabled:opacity-30" onClick={() => useAcetatePlayer.getState().moveAt(i, 1)}>Down</button>
               <button type="button" className="text-xs text-[#d4653a]" onClick={() => useAcetatePlayer.getState().removeAt(i)}>
                 Remove
               </button>

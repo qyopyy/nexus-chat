@@ -56,7 +56,7 @@ import {
 import { useHandsetReporter } from "@/lib/handset";
 import PhoneLink from "@/components/layout/PhoneLink";
 import { useAcetateLive } from "@/lib/acetateLive";
-import { dropOffline, isOffline, keepOffline, offlineUrl } from "@/lib/acetateOffline";
+import { dropOffline, isOffline, keepOffline, offlinePlaybackUrl } from "@/lib/acetateOffline";
 import { AcetateMark, ArtTile, Waveform } from "./AcetateBits";
 import { Collaborators, LikeButton, NotifyBell } from "./AcetateSocial";
 import AcetateShelves from "./AcetateShelves";
@@ -68,6 +68,8 @@ import { asLyricCues, formatLyricCues, parseLyricCues } from "@/lib/acetateLyric
 import PhoneCommandHost from "@/components/phone/PhoneCommandHost";
 import AcetateDash from "./AcetateDash";
 import AcetateBring from "./AcetateBring";
+import WhatsNew from "@/components/ui/WhatsNew";
+import { ACETATE_RELEASE } from "@/lib/releaseNotes";
 import AcetateConvert from "./AcetateConvert";
 import { useAcetateTheme } from "@/lib/acetateTheme";
 import { CONVERT_MAX_BYTES, convertLimitMessage } from "@/lib/acetateConvert";
@@ -305,8 +307,8 @@ export default function AcetateApp() {
       const track = library.tracks.find((item) => item.id === id);
       const version = latest.get(id);
       if (!track || !version) continue;
-      const cached = await isOffline(version.id);
-      const url = cached ? offlineUrl(version.id) : await acetateSigned(version.path);
+      const cached = await offlinePlaybackUrl(version.id);
+      const url = cached || (await acetateSigned(version.path));
       if (!url) continue;
       queue.push({
         key: `${track.id}:${version.id}`,
@@ -380,6 +382,7 @@ export default function AcetateApp() {
   return (
     <div className="flex h-full min-h-0 flex-col text-[#f4f1ea]" style={{ ...theme.style, background: theme.tokens.bg, color: theme.tokens.text }}>
       <Toasts />
+      <WhatsNew release={ACETATE_RELEASE} storageKey="acetate.seenRelease" openEvent="acetate-whats-new" />
       <PhoneLink />
       {showChrome && (
       <>
@@ -441,7 +444,7 @@ export default function AcetateApp() {
             email={session?.user.email ?? null}
             admin={admin}
             theme={theme}
-            screen={screen.name === "project" ? "project" : screen.name === "vault" ? "vault" : "home"}
+            screen={screen.name === "project" ? "project" : screen.name === "vault" ? "vault" : screen.name === "projects" ? "projects" : "home"}
             projectId={screen.name === "project" ? screen.id : undefined}
             onOpenProject={(id) => setScreen({ name: "project", id })}
             onOpenTrack={(id, from) => setScreen({ name: "track", id, from })}
@@ -482,7 +485,7 @@ export default function AcetateApp() {
               const track = library.tracks.find((item) => item.id === screen.id);
               if (!track) return;
               void run(async () => {
-                const url = await acetateSigned(version.path);
+                const url = (await offlinePlaybackUrl(version.id)) || (await acetateSigned(version.path));
                 if (!url) throw new Error("Couldn't sign that audio");
                 useAcetatePlayer.getState().setQueue([
                   {
@@ -496,7 +499,7 @@ export default function AcetateApp() {
                     artUrl: art[track.id] ?? null,
                     peaks: asPeaks(version.peaks),
                     duration: version.duration ?? 0,
-                    url: (await isOffline(version.id)) ? offlineUrl(version.id) : url,
+                    url,
                     shareUrl: null,
                     lyrics: track.lyrics,
                     lyricCues: asLyricCues(track.lyric_cues),
@@ -820,6 +823,8 @@ function TrackView(props: {
   onShare: () => void;
 }) {
   const { track, detail } = props;
+  const me = useApp((s) => s.userId);
+  const [offline, setOffline] = useState<Record<string, boolean>>({});
   const [title, setTitle] = useState(track?.title ?? "");
   const [label, setLabel] = useState("");
   const [body, setBody] = useState("");
@@ -843,6 +848,18 @@ function TrackView(props: {
     setLyricsOnShare(!!track?.lyrics_on_share);
     setCuesText(formatLyricCues(asLyricCues(track?.lyric_cues)));
   }, [track?.id, track?.note, track?.folder, track?.bpm, track?.lyrics, track?.lyrics_on_share, track?.lyric_cues]);
+  useEffect(() => {
+    let live = true;
+    const versions = detail?.versions ?? [];
+    void (async () => {
+      const next: Record<string, boolean> = {};
+      for (const version of versions) next[version.id] = await isOffline(version.id);
+      if (live) setOffline(next);
+    })();
+    return () => {
+      live = false;
+    };
+  }, [detail]);
   if (!track) return <Empty text="That track is gone." />;
   const active = detail?.versions.find((version) => playing?.versionId === version.id) ?? detail?.versions[0] ?? null;
   const duration = playing?.trackId === track.id ? playing.duration || current : active?.duration ?? 0;
@@ -1029,22 +1046,29 @@ function TrackView(props: {
               <span className="block font-medium">{version.label || `Version ${version.version}`}</span>
               <span className="text-xs text-[#a3988c]">{fmtTime(version.duration)} · {fmtBytes(Number(version.bytes))}</span>
             </button>
-            <button
-              type="button"
-              className="text-xs text-[#a3988c]"
-              onClick={() => {
-                void (async () => {
-                  const url = await acetateSigned(version.path);
-                  if (!url) throw new Error("Couldn't prepare that file");
-                  await keepOffline(version.id, url, track.title);
-                })().catch(reportAcetateError);
-              }}
-            >
-              Offline
-            </button>
-            <button type="button" className="text-xs text-[#a3988c]" onClick={() => void dropOffline(version.id).catch(reportAcetateError)}>
-              Forget
-            </button>
+            {track.library === "vault" && track.owner_id === me && (
+              offline[version.id] ? (
+                <button type="button" className="text-xs text-[#e4a15a]" onClick={() => void dropOffline(version.id).then(() => setOffline((cur) => ({ ...cur, [version.id]: false }))).catch(reportAcetateError)}>
+                  On this device
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="text-xs text-[#a3988c]"
+                  onClick={() => {
+                    void (async () => {
+                      const url = await acetateSigned(version.path);
+                      if (!url) throw new Error("Couldn't prepare that file");
+                      await keepOffline(version.id, url, track.title, { trackId: track.id, bytes: Number(version.bytes) || 0 });
+                      setOffline((cur) => ({ ...cur, [version.id]: true }));
+                      toast("Saved on this device", "success");
+                    })().catch(reportAcetateError);
+                  }}
+                >
+                  Keep
+                </button>
+              )
+            )}
             <button type="button" onClick={() => props.onDeleteVersion(version)} className="text-xs text-[#a3988c]">Delete</button>
           </li>
         ))}

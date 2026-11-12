@@ -10,6 +10,7 @@ import {
   createProject,
   deleteProject,
   markNotices,
+  moveInProject,
   updateProject,
   uploadAudio,
   type AcetateNotice,
@@ -19,7 +20,7 @@ import {
   type AcetateTrack,
 } from "@/lib/acetate";
 import { fmtBytes, fmtTime } from "@/lib/acetateAudio";
-import { isOffline, keepOffline } from "@/lib/acetateOffline";
+import { dropOffline, isOffline, keepOffline, offlineCuts, offlinePlaybackUrl } from "@/lib/acetateOffline";
 import { exportTheme, useAcetateTheme, ACETATE_THEMES } from "@/lib/acetateTheme";
 import { useAcetatePlayer } from "@/lib/acetatePlayer";
 import { loadProfiles } from "@/lib/data";
@@ -35,6 +36,31 @@ type Library = {
   shares: AcetateShare[];
 };
 
+async function saveOwnedVault(tracks: AcetateTrack[]) {
+  if (!tracks.length) {
+    toast("Vault is empty", "info");
+    return;
+  }
+  const { data, error } = await supabase.from("acetate_versions").select("id, track_id, version, path, bytes").in("track_id", tracks.map((track) => track.id));
+  if (error) throw new Error(error.message);
+  const latest = new Map<string, { id: string; path: string; version: number; bytes: number }>();
+  for (const row of data ?? []) {
+    const prev = latest.get(row.track_id as string);
+    if (!prev || (row.version as number) > prev.version) {
+      latest.set(row.track_id as string, { id: row.id as string, path: row.path as string, version: row.version as number, bytes: Number(row.bytes) || 0 });
+    }
+  }
+  let saved = 0;
+  for (const [trackId, row] of latest) {
+    const url = await acetateSigned(row.path);
+    if (!url) continue;
+    const title = tracks.find((track) => track.id === trackId)?.title || "Vault track";
+    await keepOffline(row.id, url, title, { trackId, bytes: row.bytes });
+    saved += 1;
+  }
+  toast(saved ? `Saved ${saved} on this device` : "Nothing to save yet", saved ? "success" : "info");
+}
+
 export default function AcetateDash(props: {
   library: Library;
   art: Record<string, string | null>;
@@ -44,7 +70,7 @@ export default function AcetateDash(props: {
   email: string | null;
   admin: boolean;
   theme: ReturnType<typeof useAcetateTheme>;
-  screen: "home" | "project" | "vault";
+  screen: "home" | "project" | "vault" | "projects";
   projectId?: string;
   onOpenProject: (id: string) => void;
   onOpenTrack: (id: string, from: "home" | "vault") => void;
@@ -56,8 +82,9 @@ export default function AcetateDash(props: {
   onNotices: () => void;
   onNavigate: (name: "radio" | "recap" | "premium" | "bring") => void;
 }) {
-  const [chip, setChip] = useState<Chip>("all");
+  const [chip, setChip] = useState<Chip>(props.screen === "projects" ? "projects" : "all");
   const [query, setQuery] = useState("");
+  const [uploadName, setUploadName] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [account, setAccount] = useState(false);
   const [bell, setBell] = useState(false);
@@ -74,21 +101,35 @@ export default function AcetateDash(props: {
   const showTracks = props.screen === "vault" || chip === "tracks" || (chip === "all" && projects.length === 0);
   const ownerName = props.me?.display_name || props.me?.username || "You";
   const unread = props.notices.filter((notice) => !notice.read_at).length;
+  useEffect(() => {
+    if (props.screen === "projects") setChip("projects");
+  }, [props.screen]);
 
   function upload(files: File[], library: "shelf" | "vault", projectId?: string, label?: string) {
     if (!files.length) return;
     props.run(async () => {
+      const failed: string[] = [];
+      let done = 0;
       for (const file of files) {
+        setUploadName(`${done + 1} of ${files.length} · ${file.name}`);
         setProgress(0);
-        await uploadAudio(file, {
-          library,
-          projectId,
-          title: file.name.replace(/\.[^.]+$/, ""),
-          label,
-          onProgress: setProgress,
-        });
+        try {
+          await uploadAudio(file, {
+            library,
+            projectId,
+            title: file.name.replace(/\.[^.]+$/, ""),
+            label,
+            onProgress: setProgress,
+          });
+          done += 1;
+        } catch {
+          failed.push(file.name);
+        }
       }
       setProgress(null);
+      setUploadName(null);
+      if (failed.length) toast(`Added ${done}. Couldn't add ${failed.slice(0, 2).join(", ")}`, "error");
+      else toast(library === "vault" ? (files.length === 1 ? "In Vault" : `Added ${files.length} to Vault`) : `Added ${files.length}`, "success");
     });
   }
 
@@ -161,7 +202,10 @@ export default function AcetateDash(props: {
           <p className="mt-1 max-w-xl text-sm" style={{ color: "var(--ac-muted)" }}>
             Vault storage is {props.library.storage.vault_limit == null ? "unlimited" : fmtBytes(props.library.storage.vault_limit)}. It does not use the free library quota. Files still have a per-file cap of {fmtBytes(props.library.storage.file_bytes ?? 5 * 1024 ** 3)}.
           </p>
-          <button type="button" className="mt-3 rounded-full px-4 py-2 text-sm font-bold" style={{ background: "var(--ac-accent)", color: "var(--ac-accent-text)" }} onClick={() => props.onNavigate("bring")}>Convert or import</button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" className="rounded-full px-4 py-2 text-sm font-bold" style={{ background: "var(--ac-accent)", color: "var(--ac-accent-text)" }} onClick={() => props.onNavigate("bring")}>Convert or import</button>
+            <button type="button" className="rounded-full px-4 py-2 text-sm font-bold" style={{ background: "var(--ac-card)" }} onClick={() => props.run(() => saveOwnedVault(vaultTracks))}>Keep Vault on this device</button>
+          </div>
         </div>
       )}
       {props.screen === "project" && project && (
@@ -174,6 +218,7 @@ export default function AcetateDash(props: {
           onShare={() => props.onShare("project", project.id, project.title)}
           onOpenTrack={(id) => props.onOpenTrack(id, project.library === "vault" ? "vault" : "home")}
           onUpload={(files, versionLabel) => upload(files, project.library === "vault" ? "vault" : "shelf", project.id, versionLabel)}
+          onMove={(trackId, dir) => props.run(() => moveInProject(project.id, trackId, dir, props.library.memberships))}
           menu={menu === "project"}
           onDelete={() => {
             if (window.confirm("Delete this project? Tracks stay in your library.")) props.run(() => deleteProject(project.id).then(props.onHome));
@@ -242,7 +287,7 @@ export default function AcetateDash(props: {
               {props.screen === "vault" ? "Drop a WAV, AIFF, FLAC, or MP3 to start a private version stack." : "Drop audio to start a project. Your library stays private."}
             </p>
           )}
-          {progress != null && <p className="mt-3 text-sm" style={{ color: "var(--ac-muted)" }}>Uploading {Math.round(progress * 100)}%</p>}
+          {progress != null && <p className="mt-3 text-sm" style={{ color: "var(--ac-muted)" }}>{uploadName || "Uploading"} · {Math.round(progress * 100)}%</p>}
         </div>
       )}
       {props.screen !== "project" && (
@@ -312,7 +357,7 @@ function StackIcon() {
 
 function ProjectDownload({ project, tracks }: { project: AcetateProject | null; tracks: AcetateTrack[] }) {
   const [busy, setBusy] = useState(false);
-  if (!project) return null;
+  if (!project || project.library !== "vault") return null;
   return (
     <button
       type="button"
@@ -323,19 +368,7 @@ function ProjectDownload({ project, tracks }: { project: AcetateProject | null; 
       onClick={() => {
         setBusy(true);
         void (async () => {
-          const ids = tracks.map((track) => track.id);
-          if (!ids.length) return;
-          const { data } = await supabase.from("acetate_versions").select("id, track_id, version, path").in("track_id", ids);
-          const latest = new Map<string, { id: string; path: string; version: number }>();
-          for (const row of data ?? []) {
-            const prev = latest.get(row.track_id as string);
-            if (!prev || (row.version as number) > prev.version) latest.set(row.track_id as string, { id: row.id as string, path: row.path as string, version: row.version as number });
-          }
-          for (const row of latest.values()) {
-            const url = await acetateSigned(row.path);
-            if (url) await keepOffline(row.id, url, project.title);
-          }
-          toast("Saved on this device", "success");
+          await saveOwnedVault(tracks);
         })().catch((error: Error) => toast(error.message, "error")).finally(() => setBusy(false));
       }}
     >
@@ -356,6 +389,7 @@ function ProjectStage(props: {
   menu: boolean;
   onDelete: () => void;
   onRename: (title: string) => void;
+  onMove?: (trackId: string, dir: -1 | 1) => void;
 }) {
   const [rows, setRows] = useState<{ id: string; duration: number | null; offline: boolean }[]>([]);
   const [top, setTop] = useState<{ name: string; plays: number } | null>(null);
@@ -447,7 +481,10 @@ function ProjectStage(props: {
       <ol className="mt-4">
         {props.tracks.map((track, index) => (
           <li key={track.id} className="flex items-center gap-3 border-b py-3" style={{ borderColor: "var(--ac-line)" }}>
-            <span className="w-6 text-sm" style={{ color: "var(--ac-muted)" }}>{index + 1}</span>
+            <span className="flex w-10 flex-col text-[10px]" style={{ color: "var(--ac-muted)" }}>
+              <button type="button" aria-label="Move up" disabled={index === 0} className="disabled:opacity-30" onClick={() => props.onMove?.(track.id, -1)}>↑</button>
+              <button type="button" aria-label="Move down" disabled={index === props.tracks.length - 1} className="disabled:opacity-30" onClick={() => props.onMove?.(track.id, 1)}>↓</button>
+            </span>
             <button type="button" className="min-w-0 flex-1 text-left" onClick={() => props.onOpenTrack(track.id)}>
               <span className="block truncate font-semibold">{track.title}</span>
               {offline.get(track.id) && <span className="mt-1 inline-block size-2 rounded-full" style={{ background: "var(--ac-accent)" }} aria-label="On this device" />}
@@ -475,7 +512,7 @@ function AccountSheet(props: {
   onNavigate: (name: "radio" | "recap" | "premium" | "bring") => void;
 }) {
   const crossfade = useAcetatePlayer((s) => s.crossfade);
-  const [saved, setSaved] = useState<string | null>(null);
+  const [saved, setSaved] = useState<ReturnType<typeof offlineCuts>>([]);
   const [importText, setImportText] = useState("");
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(props.me?.display_name || "");
@@ -489,11 +526,11 @@ function AccountSheet(props: {
   const exported = exportTheme(props.theme.tokens);
   useEffect(() => {
     let live = true;
-    void supabase.from("acetate_versions").select("id").limit(80).then(async ({ data }) => {
-      let n = 0;
-      for (const row of data ?? []) if (await isOffline(row.id as string)) n += 1;
-      if (live) setSaved(`${n} of ${data?.length ?? 0}`);
-    });
+    void (async () => {
+      const rows = [];
+      for (const cut of offlineCuts()) if (await isOffline(cut.id)) rows.push(cut);
+      if (live) setSaved(rows);
+    })();
     return () => {
       live = false;
     };
@@ -538,10 +575,40 @@ function AccountSheet(props: {
         </div>
         <ul className="mt-3 overflow-hidden rounded-2xl text-sm" style={{ background: "var(--ac-card)" }}>
           <Row label="Playback" value={crossfade > 0 ? `${Math.round(crossfade / 100) / 10}s crossfade` : "No crossfade"} onClick={() => useAcetatePlayer.getState().setCrossfade(crossfade > 0 ? 0 : 4000)} />
-          {saved && <Row label="Downloads" value={saved} />}
+          <Row label="What's new" value="1.2.0" onClick={() => window.dispatchEvent(new Event("acetate-whats-new"))} />
+          <Row label="On this device" value={saved.length ? String(saved.length) : "None"} />
           <Row label="Privacy" value={props.shares ? "Private · links on" : "Private"} />
           <Row label="Share links" value={String(props.shares)} />
         </ul>
+        {saved.length > 0 && (
+          <ul className="mt-3 space-y-2 text-sm">
+            {saved.map((cut) => (
+              <li key={cut.id} className="flex items-center gap-2 rounded-2xl px-3 py-2" style={{ background: "var(--ac-card)" }}>
+                <span className="min-w-0 flex-1 truncate">{cut.title}</span>
+                <button type="button" className="text-xs font-semibold" style={{ color: "var(--ac-accent)" }} onClick={() => void offlinePlaybackUrl(cut.id).then((url) => {
+                  if (!url) return;
+                  useAcetatePlayer.getState().setQueue([{
+                    key: cut.id,
+                    trackId: cut.trackId || cut.id,
+                    versionId: cut.id,
+                    title: cut.title,
+                    versionLabel: "On this device",
+                    artist: "",
+                    album: null,
+                    artUrl: null,
+                    peaks: [],
+                    duration: 0,
+                    url,
+                    shareUrl: null,
+                  }], 0);
+                  useAcetatePlayer.getState().setPlaying(true);
+                  props.onClose();
+                })}>Play</button>
+                <button type="button" className="text-xs" style={{ color: "var(--ac-muted)" }} onClick={() => void dropOffline(cut.id).then(() => setSaved((rows) => rows.filter((row) => row.id !== cut.id)))}>Remove</button>
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="mt-3 rounded-2xl p-3" style={{ background: "var(--ac-card)" }}>
           <p className="text-sm font-semibold">Theme</p>
           <div className="mt-2 grid grid-cols-4 gap-2">

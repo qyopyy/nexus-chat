@@ -4,7 +4,8 @@ import { useChatFx } from "@/lib/chatFx";
 import { TypingAnim } from "./TypingBubbles";
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Bell, BellOff, Bookmark, Bot, ChevronLeft, Clock, Hash, Image as ImageIcon, Maximize2, MessageSquare, Phone, Search, Users, Video, Volume2 } from "lucide-react";
+import { Bell, BellOff, Bookmark, Bot, ChevronLeft, Clock, Hash, Image as ImageIcon, Maximize2, MessageSquare, Phone, Search, StickyNote, Users, Video, Volume2 } from "lucide-react";
+import ChatScratch from "./ChatScratch";
 import { useApp, conversationTitle, findChannel, openProfileCard, toast } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { useChat } from "@/store/chat";
@@ -35,6 +36,7 @@ export default function ChatHeader({
   const [bots, setBots] = useState(false);
   const [search, setSearch] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [scratch, setScratch] = useState(false);
   const [wallpaperMenu, setWallpaperMenu] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const wallpaper = useSyncExternalStore(
@@ -181,6 +183,11 @@ export default function ChatHeader({
           </HeaderBtn>
         )}
         {kind !== "voice" && (
+          <HeaderBtn label="Scratch note" onClick={() => setScratch(true)}>
+            <StickyNote className="size-5" />
+          </HeaderBtn>
+        )}
+        {kind !== "voice" && (
           <HeaderBtn label="Saved messages" onClick={() => setSaved(true)}>
             <Bookmark className="size-5" />
           </HeaderBtn>
@@ -281,6 +288,7 @@ export default function ChatHeader({
       {bots && <BotsPanel conversationId={conversationId} spaceId={channel?.space_id} open onClose={() => setBots(false)} />}
       <ChatSearch conversationId={conversationId} open={search} onClose={() => setSearch(false)} />
       <SavedMessages open={saved} onClose={() => setSaved(false)} />
+      <ChatScratch conversationId={conversationId} open={scratch} onClose={() => setScratch(false)} />
     </header>
   );
 }

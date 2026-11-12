@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import { acetateSigned } from "./acetate";
+import { offlinePlaybackUrl } from "./acetateOffline";
 import { asPeaks } from "./acetateAudio";
 import { asLyricCues } from "./acetateLyrics";
 import { useAcetatePlayer, type AcetateQueueItem } from "./acetatePlayer";
@@ -46,7 +47,7 @@ async function resolveItem(item: SavedItem): Promise<AcetateQueueItem | null> {
   const { data } = await supabase.from("acetate_versions").select("id, path, label, version, peaks, duration").eq("id", item.versionId).maybeSingle();
   const path = (data as { path?: string; label?: string | null; version?: number; peaks?: unknown; duration?: number | null } | null)?.path;
   if (!path) return null;
-  const url = await acetateSigned(path);
+  const url = (await offlinePlaybackUrl(item.versionId)) || (await acetateSigned(path));
   if (!url) return null;
   const meta = await supabase.from("acetate_tracks").select("lyric_cues").eq("id", item.trackId).maybeSingle();
   const row = data as { label?: string | null; version?: number; peaks?: unknown; duration?: number | null };
@@ -86,19 +87,45 @@ export function useAcetateAccountSync(enabled: boolean) {
         if (!row?.device_id || row.device_id === mine || !Array.isArray(row.items)) return;
         applying.current = true;
         void (async () => {
+          if (!row.items.length) {
+            useAcetatePlayer.getState().applyRemote([], 0, 0, false);
+            return;
+          }
           const next: AcetateQueueItem[] = [];
           for (const item of row.items.slice(0, 40)) {
             const resolved = await resolveItem(item);
             if (resolved) next.push(resolved);
           }
           if (next.length) useAcetatePlayer.getState().applyRemote(next, row.index ?? 0, row.position_s ?? 0, !!row.playing);
+        })().finally(() => {
           window.setTimeout(() => {
             applying.current = false;
           }, 1600);
-        })();
+        });
       })
       .subscribe();
+    let live = true;
+    applying.current = true;
+    void (async () => {
+      const { data } = await supabase.from("acetate_now").select("*").eq("user_id", userId).maybeSingle();
+      if (!live) return;
+      const row = data as NowRow | null;
+      if (!row || !Array.isArray(row.items) || !row.items.length || useAcetatePlayer.getState().queue.length) return;
+      const next: AcetateQueueItem[] = [];
+      for (const item of row.items.slice(0, 40)) {
+        const resolved = await resolveItem(item);
+        if (resolved) next.push(resolved);
+      }
+      if (live && next.length && !useAcetatePlayer.getState().queue.length) {
+        useAcetatePlayer.getState().applyRemote(next, row.index ?? 0, row.position_s ?? 0, false);
+      }
+    })().finally(() => {
+      window.setTimeout(() => {
+        if (live) applying.current = false;
+      }, 400);
+    });
     return () => {
+      live = false;
       void supabase.removeChannel(channel);
     };
   }, [enabled, userId]);

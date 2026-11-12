@@ -58,6 +58,7 @@ export default function OwnerDesk({ userId }: { userId?: string }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>(userId ? "People" : "Overview");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [q, setQ] = useState("");
+  const [auditQ, setAuditQ] = useState("");
   const [people, setPeople] = useState<Person[]>([]);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [queue, setQueue] = useState<Queue | null>(null);
@@ -295,9 +296,16 @@ export default function OwnerDesk({ userId }: { userId?: string }) {
         {tab === "Audit" && (
           <section className="mt-4">
             <Panel title="Recent admin actions">
-              {audit.map((row) => (
-                <p key={row.id} className="border-b border-line py-2 text-sm">{new Date(row.created_at).toLocaleString()} · {row.action}</p>
-              ))}
+              <input value={auditQ} onChange={(e) => setAuditQ(e.target.value)} placeholder="Filter by action" className="mb-2 w-full rounded-xl bg-chat px-3 py-2 text-sm" />
+              {audit
+                .filter((row) => {
+                  const needle = auditQ.trim().toLowerCase();
+                  if (!needle) return true;
+                  return `${row.action} ${JSON.stringify(row.detail ?? "")}`.toLowerCase().includes(needle);
+                })
+                .map((row) => (
+                  <p key={row.id} className="border-b border-line py-2 text-sm">{new Date(row.created_at).toLocaleString()} · {row.action}</p>
+                ))}
               {audit.length === 0 && <Empty />}
             </Panel>
           </section>

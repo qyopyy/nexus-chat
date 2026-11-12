@@ -165,7 +165,10 @@ async function onMessageInsert(m: Message) {
 }
 
 function onMessageUpdate(m: Message) {
-  useChat.setState((s) => ({ messages: s.messages.map((x) => (x.id === m.id ? { ...x, ...m, pending: false } : x)) }));
+  const openId = useChat.getState().conversationId;
+  if (m.conversation_id === openId) {
+    useChat.setState((s) => ({ messages: s.messages.map((x) => (x.id === m.id ? { ...x, ...m, pending: false } : x)) }));
+  }
   const row = useApp.getState().chatList.find((c) => c.id === m.conversation_id);
   if (row && isLatestPreview(row.last_message_at, m.created_at)) bumpChatList(m);
   else refreshChatListDebounced();

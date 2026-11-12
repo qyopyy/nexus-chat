@@ -61,10 +61,17 @@ export function useLocatorReporter(userId: string | null) {
     if (!userId || !locatorOptIn()) return;
     let stop = () => {};
     let timer = 0;
+    let cancelled = false;
     const native = isNativeApp();
     void watchDeviceLocation((loc) => void writeLocation(loc), () => undefined, { highAccuracy: true }).then((handle) => {
-      stop = handle.stop;
+      if (cancelled) handle.stop();
+      else stop = handle.stop;
     });
+    const release = () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      stop();
+    };
     if (!native) {
       const tick = () => {
         if (document.hidden) return;
@@ -78,14 +85,10 @@ export function useLocatorReporter(userId: string | null) {
       document.addEventListener("visibilitychange", onHide);
       return () => {
         document.removeEventListener("visibilitychange", onHide);
-        window.clearInterval(timer);
-        stop();
+        release();
       };
     }
-    return () => {
-      window.clearInterval(timer);
-      stop();
-    };
+    return release;
   }, [userId]);
 }
 

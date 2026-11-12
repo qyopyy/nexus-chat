@@ -109,7 +109,32 @@ export async function sendCommand(deviceId: string, kind: PhoneCommandKind, payl
 }
 
 export async function resolveCommand(id: string, status: "done" | "denied") {
-  await supabase.from("nexus_handset_commands").update({ status }).eq("id", id);
+  const { error } = await supabase.from("nexus_handset_commands").update({ status }).eq("id", id).eq("status", "pending");
+  if (error) throw new Error(errorText(error));
+}
+
+function claimCommand(id: string) {
+  const key = `nexus.phone.cmd.${id}`;
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === "done") return "done" as const;
+    if (raw?.startsWith("run:")) {
+      const at = Number(raw.slice(4));
+      if (Number.isFinite(at) && Date.now() - at < 20_000) return "busy" as const;
+    }
+    localStorage.setItem(key, `run:${Date.now()}`);
+  } catch {
+    /* private mode: this tab still runs the command */
+  }
+  return "mine" as const;
+}
+
+function finishClaim(id: string) {
+  try {
+    localStorage.setItem(`nexus.phone.cmd.${id}`, "done");
+  } catch {
+    /* private mode */
+  }
 }
 
 export async function setControlEnabled(on: boolean) {
@@ -448,13 +473,24 @@ export function usePhoneAgent(userId: string | null) {
         .limit(8);
       for (const command of (data ?? []) as PhoneCommand[]) {
         if (seen.current.has(command.id)) continue;
-        if (Date.now() - Date.parse(command.created_at) > 10 * 60_000) {
+        const claim = claimCommand(command.id);
+        if (claim === "done") {
           seen.current.add(command.id);
-          await resolveCommand(command.id, "denied");
           continue;
         }
-        seen.current.add(command.id);
+        if (claim === "busy") continue;
+        if (Date.now() - Date.parse(command.created_at) > 10 * 60_000) {
+          try {
+            await resolveCommand(command.id, "denied");
+            finishClaim(command.id);
+            seen.current.add(command.id);
+          } catch {
+            /* leave it pending so the next poll can retry */
+          }
+          continue;
+        }
         if (SENSITIVE.has(command.kind)) {
+          seen.current.add(command.id);
           setPrompt(command);
           if (document.hidden && "Notification" in window && Notification.permission === "granted") {
             new Notification("Nexus Phone Link", { body: "Your computer asked this phone to confirm an action." });
@@ -464,9 +500,21 @@ export function usePhoneAgent(userId: string | null) {
         try {
           await runCommand(command);
           await resolveCommand(command.id, "done");
+          finishClaim(command.id);
+          seen.current.add(command.id);
         } catch (error) {
           toast(error instanceof Error ? error.message : "That phone action failed", "error");
-          await resolveCommand(command.id, "denied");
+          try {
+            await resolveCommand(command.id, "denied");
+            finishClaim(command.id);
+            seen.current.add(command.id);
+          } catch {
+            try {
+              localStorage.removeItem(`nexus.phone.cmd.${command.id}`);
+            } catch {
+              /* retry next poll */
+            }
+          }
         }
       }
     };
@@ -492,13 +540,25 @@ export function usePhoneAgent(userId: string | null) {
       if (!prompt) return;
       const current = prompt;
       setPrompt(null);
-      void finishSensitive(current, true).catch((error: Error) => toast(error.message, "error"));
+      void finishSensitive(current, true)
+        .then(() => finishClaim(current.id))
+        .catch((error: Error) => {
+          seen.current.delete(current.id);
+          try {
+            localStorage.removeItem(`nexus.phone.cmd.${current.id}`);
+          } catch {
+            /* retry */
+          }
+          toast(error.message, "error");
+        });
     },
     deny: () => {
       if (!prompt) return;
       const current = prompt;
       setPrompt(null);
-      void finishSensitive(current, false);
+      void finishSensitive(current, false)
+        .then(() => finishClaim(current.id))
+        .catch(() => seen.current.delete(current.id));
     },
   };
 }

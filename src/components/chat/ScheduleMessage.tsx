@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlarmClock, Mic, Square, Trash2, X } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase, errorText } from "@/lib/supabase";
 import { toast } from "@/store/app";
 import { msgLimit, useMyTier } from "@/lib/premium";
 import { cn } from "@/lib/utils";
@@ -117,7 +117,8 @@ export function ScheduledBar({ conversationId }: { conversationId: string }) {
               </div>
               <button
                 onClick={async () => {
-                  await supabase.from("scheduled_messages").delete().eq("id", r.id);
+                  const { error } = await supabase.from("scheduled_messages").delete().eq("id", r.id);
+                  if (error) toast(errorText(error), "error");
                   void load();
                 }}
                 className="grid size-7 place-items-center rounded-md text-sub hover:bg-hover hover:text-dnd"
