@@ -9,6 +9,10 @@ on:
       url:
         description: "Acetate web entry URL (leave empty for production /acetate/app)"
         required: false
+  pull_request:
+    paths:
+      - "mobile-acetate/**"
+      - ".github/workflows/acetate-ipa.yml"
 
 permissions:
   contents: write
