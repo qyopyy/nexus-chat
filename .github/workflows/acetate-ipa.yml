@@ -37,6 +37,9 @@ jobs:
           npx cap add ios
           npx cap sync ios
 
+      - name: Read app version
+        run: echo "APP_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+
       - name: Icon and playback settings
         run: |
           PLIST=ios/App/App/Info.plist
@@ -47,6 +50,10 @@ jobs:
           pb "Add :CFBundleDisplayName string Acetate"
           pb "Set :CFBundleName Acetate"
           pb "Add :CFBundleName string Acetate"
+          pb "Set :CFBundleShortVersionString ${APP_VERSION}"
+          pb "Add :CFBundleShortVersionString string ${APP_VERSION}"
+          pb "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}"
+          pb "Add :CFBundleVersion string ${GITHUB_RUN_NUMBER}"
           pb "Add :ITSAppUsesNonExemptEncryption bool false"
           pb "Set :UIUserInterfaceStyle Dark"
           pb "Add :UIUserInterfaceStyle string Dark"
@@ -76,6 +83,7 @@ jobs:
             -sdk iphoneos -destination 'generic/platform=iOS' \
             -archivePath "$PWD/build/App.xcarchive" archive \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            MARKETING_VERSION="${APP_VERSION}" CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
             | tail -40
           test -d build/App.xcarchive/Products/Applications/App.app
 

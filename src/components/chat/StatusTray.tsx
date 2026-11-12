@@ -120,8 +120,10 @@ export default function StatusTray() {
               <p className="mt-1 text-[11px] text-sub">
                 {row.audience === "friends" ? "Friends" : spaces.find((space) => space.id === row.space_id)?.name || "A space"} · until {new Date(row.expires_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
               </p>
-              {row.user_id === me && (
+              {row.user_id === me ? (
                 <button type="button" className="mt-1 text-xs text-dnd" onClick={() => void deleteStatus(row.id).then(refresh).catch((err: Error) => toast(err.message, "error"))}>Remove</button>
+              ) : (
+                <button type="button" className="mt-1 text-xs text-sub" onClick={() => void supabase.rpc("report_content", { p_kind: "status", p_target: row.id, p_reason: "other" }).then(({ error }) => toast(error ? error.message : "Reported", error ? "error" : "success"))}>Report</button>
               )}
             </article>
           ))}

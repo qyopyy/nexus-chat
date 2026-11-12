@@ -51,6 +51,9 @@ jobs:
           npx cap sync ios
           ls ios/App
 
+      - name: Read app version
+        run: echo "APP_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+
       - name: Permissions, icon and app settings
         run: |
           # Shared privacy purpose strings (ITMS-90683) — same script Capgo builds use
@@ -67,8 +70,8 @@ jobs:
           pb "Add :UIViewControllerBasedStatusBarAppearance bool false"
           pb "Set :UIUserInterfaceStyle Dark"
           pb "Add :UIUserInterfaceStyle string Dark"
-          pb "Set :CFBundleShortVersionString 1.${GITHUB_RUN_NUMBER}"
-          pb "Add :CFBundleShortVersionString string 1.${GITHUB_RUN_NUMBER}"
+          pb "Set :CFBundleShortVersionString ${APP_VERSION}"
+          pb "Add :CFBundleShortVersionString string ${APP_VERSION}"
           pb "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}"
           pb "Add :CFBundleVersion string ${GITHUB_RUN_NUMBER}"
           # Human-readable strings (not App Store listing — paste listing from app-store-listing.txt)
@@ -94,7 +97,7 @@ jobs:
             -sdk iphoneos -destination 'generic/platform=iOS' \
             -archivePath "$PWD/build/App.xcarchive" archive \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
-            MARKETING_VERSION="1.${GITHUB_RUN_NUMBER}" CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
+            MARKETING_VERSION="${APP_VERSION}" CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
             | tail -40
           test -d build/App.xcarchive/Products/Applications/App.app
 
@@ -183,7 +186,7 @@ jobs:
             TRANSPORTER_DO_NOT_USE.txt \
             resources/icon-1024-opaque.png \
             --repo "$GITHUB_REPOSITORY" \
-            --title "Nexus iOS build ${GITHUB_RUN_NUMBER}" \
+            --title "Nexus iOS ${APP_VERSION} (build ${GITHUB_RUN_NUMBER})" \
             --notes "Nexus iOS ${GITHUB_RUN_NUMBER} · bundle ${BUNDLE_ID}
 
           Icon: opaque 1024 App Store marketing icon embedded (see icon-1024-opaque.png).

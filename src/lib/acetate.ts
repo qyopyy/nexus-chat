@@ -1,12 +1,13 @@
 "use client";
 
 import { supabase, errorText, isConfigured } from "./supabase";
-import { xhrStorageUpload } from "./storageUpload";
+import { xhrStorageUpload, resumableStorageUpload } from "./storageUpload";
 import { scanUpload } from "./malwareGuard";
 import { toast, useApp } from "@/store/app";
 import { artExt, asPeaks, audioExt, describeAudio, mimeForExt } from "./acetateAudio";
 
 export type AcetateKind = "project" | "album" | "playlist";
+export type AcetateLibrary = "shelf" | "vault";
 export type AcetateStatus = "idea" | "demo" | "mix" | "master";
 
 export const ACETATE_STATUSES: { id: AcetateStatus; label: string }[] = [
@@ -25,6 +26,7 @@ export type AcetateProject = {
   title: string;
   note: string | null;
   artwork_path: string | null;
+  library?: AcetateLibrary;
   created_at: string;
   updated_at: string;
   shared_role?: "listener" | "editor" | null;
@@ -36,6 +38,7 @@ export type AcetateTrack = {
   title: string;
   note: string | null;
   artwork_path: string | null;
+  library?: AcetateLibrary;
   starred?: boolean;
   status?: AcetateStatus;
   bpm?: number | null;
@@ -111,6 +114,11 @@ export type AcetateStorage = {
   lifetime: boolean;
   source: "none" | "admin" | "checkout";
   tier: "free" | "premium";
+  vault_bytes?: number;
+  vault_limit?: number | null;
+  music_bytes?: number;
+  cover_bytes?: number;
+  file_bytes?: number;
 };
 
 export type AcetateAdminRow = {
@@ -255,11 +263,11 @@ export async function loadTrackDetail(trackId: string) {
   };
 }
 
-export async function createProject(kind: AcetateKind, title: string, note?: string) {
+export async function createProject(kind: AcetateKind, title: string, note?: string, library: AcetateLibrary = "shelf") {
   const owner = me();
   const { data, error } = await supabase
     .from("acetate_projects")
-    .insert({ owner_id: owner, kind, title: title.trim().slice(0, 140) || "Untitled cut", note: note?.trim() || null })
+    .insert({ owner_id: owner, kind, title: title.trim().slice(0, 140) || "Untitled cut", note: note?.trim() || null, library })
     .select("*")
     .single();
   if (error) throw new Error(errorText(error));
@@ -354,15 +362,17 @@ export async function deleteVersion(version: AcetateVersion) {
   if (error) throw new Error(errorText(error));
 }
 
-async function uploadReserved(file: File, kind: "audio" | "art", ext: string) {
-  const path = await rpc<string>("acetate_reserve_upload", { p_kind: kind, p_bytes: file.size, p_ext: ext });
+async function uploadReserved(file: File, kind: "audio" | "art", ext: string, library: AcetateLibrary, onProgress?: (ratio: number) => void) {
+  const path = await rpc<string>("acetate_reserve_upload", { p_kind: kind, p_bytes: file.size, p_ext: ext, p_library: library });
+  const upload = file.size > 6 * 1024 * 1024 ? resumableStorageUpload : xhrStorageUpload;
   try {
-    await xhrStorageUpload({
+    await upload({
       bucket: "acetate",
       path,
       blob: file,
       contentType: file.type || mimeForExt(ext),
-      timeoutMs: 10 * 60 * 1000,
+      timeoutMs: 20 * 60 * 1000,
+      onProgress,
     });
   } catch (e) {
     throw new Error((e as Error).message || "Upload failed");
@@ -372,23 +382,28 @@ async function uploadReserved(file: File, kind: "audio" | "art", ext: string) {
 
 export async function uploadAudio(
   file: File,
-  opts: { trackId?: string; title?: string; projectId?: string; label?: string },
+  opts: { trackId?: string; title?: string; projectId?: string; label?: string; library?: AcetateLibrary; onProgress?: (ratio: number) => void },
 ) {
   const scan = await scanUpload(file, { fileName: file.name, context: "audio" });
   if (!scan.ok) throw new Error(scan.reason);
   const ext = audioExt(file.name);
-  if (!ext) throw new Error("Use mp3, wav, flac, aac, m4a, ogg, opus, or webm");
+  if (!ext) throw new Error("Use mp3, wav, aiff, flac, aac, m4a, ogg, opus, or webm");
   if (!file.type.startsWith("audio/") && file.type && file.type !== "application/octet-stream") {
     throw new Error("That isn't an audio file");
   }
+  let library = opts.library ?? "shelf";
+  if (opts.trackId) {
+    const existing = await supabase.from("acetate_tracks").select("library").eq("id", opts.trackId).maybeSingle();
+    if (existing.data?.library === "vault") library = "vault";
+  }
   const meta = await describeAudio(file);
-  const path = await uploadReserved(file, "audio", ext);
+  const path = await uploadReserved(file, "audio", ext, library, opts.onProgress);
   let trackId = opts.trackId ?? null;
   let created = false;
   try {
     if (!trackId) {
       const title = (opts.title || file.name.replace(/\.[^.]+$/, "")).trim().slice(0, 200) || "Untitled cut";
-      const { data, error } = await supabase.from("acetate_tracks").insert({ owner_id: me(), title }).select("id").single();
+      const { data, error } = await supabase.from("acetate_tracks").insert({ owner_id: me(), title, library }).select("id").single();
       if (error || !data) throw new Error(errorText(error));
       trackId = data.id as string;
       created = true;
@@ -419,7 +434,10 @@ export async function uploadArtwork(file: File, target: "track" | "project", id:
   const ext = artExt(file.name);
   if (!ext) throw new Error("Artwork must be jpg, png, or webp");
   if (file.size > 8 * 1024 * 1024) throw new Error("Artwork must be under 8 MB");
-  const path = await uploadReserved(file, "art", ext);
+  const table = target === "track" ? "acetate_tracks" : "acetate_projects";
+  const existing = await supabase.from(table).select("library").eq("id", id).maybeSingle();
+  const library: AcetateLibrary = existing.data?.library === "vault" ? "vault" : "shelf";
+  const path = await uploadReserved(file, "art", ext, library);
   try {
     const oldPath = await rpc<string | null>("acetate_commit_art", { p_target: target, p_id: id, p_path: path });
     if (oldPath) await supabase.storage.from("acetate").remove([oldPath]);

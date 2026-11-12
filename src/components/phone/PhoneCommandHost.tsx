@@ -4,16 +4,21 @@ import { usePhoneAgent } from "@/lib/phoneLink";
 import { useLocatorReporter } from "@/lib/locator";
 import { useApp } from "@/store/app";
 import { stopFindEffects } from "@/lib/phoneLink";
+import { useReminderClock } from "@/lib/chatReminders";
 
 const COPY: Record<string, string> = {
   camera: "Your computer asked this phone to take a photo. The camera opens only if you allow it.",
   voice: "Your computer asked for an 8 second voice memo. The microphone starts only if you allow it.",
   sign_out: "Your computer asked this phone to sign out of Nexus.",
+  screenshot: "Your computer asked for a screenshot. Nothing is captured until you take one and choose the image.",
+  gallery: "Your computer asked for photos. The gallery opens only if you allow it, and you pick the pictures.",
+  clipboard_pull: "Your computer asked to read this phone's clipboard. It is read only if you allow it.",
 };
 
 export default function PhoneCommandHost() {
   const userId = useApp((s) => s.userId);
   useLocatorReporter(userId);
+  useReminderClock(userId);
   const agent = usePhoneAgent(userId);
 
   return (

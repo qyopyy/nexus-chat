@@ -11,6 +11,7 @@ import NameTag from "@/components/ui/NameTag";
 import { useChat } from "@/store/chat";
 import { deleteMessage, editMessage, parseForwarded, toggleReaction } from "@/lib/data";
 import { pinMessage, toggleSaveMessage } from "@/lib/chatDelight";
+import { remindAboutMessage } from "@/lib/chatReminders";
 import { refreshPins } from "./PinsBar";
 import { EFFECTS, isEffect, playEffect } from "@/lib/effects";
 import { haptic } from "@/lib/haptics";
@@ -556,6 +557,22 @@ function MessageBubbleImpl({
             onClick={() => {
               setSheet(false);
               void toggleSaveMessage(m.id);
+            }}
+          />
+          <SheetItem
+            icon={<Clock className="size-5" />}
+            label="Remind me in 1 hour"
+            onClick={() => {
+              setSheet(false);
+              void remindAboutMessage(m.id, m.conversation_id, 60).then(() => toast("Reminder set", "success"), (error: Error) => toast(error.message, "error"));
+            }}
+          />
+          <SheetItem
+            icon={<Clock className="size-5" />}
+            label="Remind me tomorrow"
+            onClick={() => {
+              setSheet(false);
+              void remindAboutMessage(m.id, m.conversation_id, 60 * 20).then(() => toast("Reminder set", "success"), (error: Error) => toast(error.message, "error"));
             }}
           />
           <SheetItem

@@ -66,15 +66,18 @@ import AcetateRadio from "./AcetateRadio";
 import AcetateRecap from "./AcetateRecap";
 import { asLyricCues, formatLyricCues, parseLyricCues } from "@/lib/acetateLyrics";
 import PhoneCommandHost from "@/components/phone/PhoneCommandHost";
+import AcetateDash from "./AcetateDash";
+import { useAcetateTheme } from "@/lib/acetateTheme";
 
 type Screen =
   | { name: "library" }
   | { name: "projects" }
   | { name: "project"; id: string }
-  | { name: "track"; id: string }
+  | { name: "track"; id: string; from?: "home" | "vault" }
   | { name: "premium" }
   | { name: "radio" }
-  | { name: "recap" };
+  | { name: "recap" }
+  | { name: "vault" };
 
 type LibraryState = {
   projects: AcetateProject[];
@@ -119,6 +122,7 @@ export default function AcetateApp() {
   const [nexusFor, setNexusFor] = useState<{ title: string; url: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const userId = session?.user.id ?? null;
+  const theme = useAcetateTheme(userId);
   const me = useApp((s) => (userId ? s.profiles[userId] : undefined));
   const chats = useApp((s) => s.chatList);
   const admin = roleRank(me?.site_role) >= 3;
@@ -348,11 +352,14 @@ export default function AcetateApp() {
     });
   const folders = [...new Set(ownTracks.map((track) => track.folder).filter((folder): folder is string => !!folder))];
   const visibleProjects = library.projects.filter((project) => kindFilter === "all" || project.kind === kindFilter);
+  const showChrome = !["library", "projects", "project", "vault"].includes(screen.name);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#070709] text-[#f4f1ea]">
+    <div className="flex h-full min-h-0 flex-col text-[#f4f1ea]" style={{ ...theme.style, background: theme.tokens.bg, color: theme.tokens.text }}>
       <Toasts />
       <PhoneLink />
+      {showChrome && (
+      <>
       <header className="flex items-center gap-3 border-b border-[#3c342c] px-4 py-3">
         <Link href="/acetate" className="flex items-center gap-2">
           <AcetateMark size={30} />
@@ -398,158 +405,33 @@ export default function AcetateApp() {
         <NavButton active={screen.name === "recap"} onClick={() => setScreen({ name: "recap" })} icon={<History className="size-4" />} label="Recap" />
         <NavButton active={screen.name === "premium"} onClick={() => setScreen({ name: "premium" })} icon={<Sparkles className="size-4" />} label="Premium" />
       </nav>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
-        {screen.name === "library" && (
-          <section
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDropping(true);
-            }}
-            onDragLeave={() => setDropping(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDropping(false);
-              const files = [...e.dataTransfer.files];
-              if (files.length) void run(() => uploadFiles(files));
-            }}
-            className={dropping ? "rounded-3xl ring-2 ring-[#e4a15a]" : ""}
-          >
-            {shelves && (
-              <AcetateShelves
-                tracks={ownTracks}
-                art={art}
-                listenIds={listens.map((row) => row.track_id || "")}
-                onOpen={(id) => setScreen({ name: "track", id })}
-                onPlay={(track) => void run(() => playIds([track.id], null, track.id))}
-              />
-            )}
-            <div className="mb-3 flex flex-wrap gap-2">
-              <button type="button" onClick={() => setShelves((on) => !on)} className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">{shelves ? "List" : "Shelves"}</button>
-              <button type="button" onClick={() => setUnheard((on) => !on)} className={`rounded-full px-3 py-1 text-xs font-semibold ${unheard ? "bg-[#7ee0c6] text-[#070709]" : "bg-white/10"}`}>Unheard</button>
-              <button type="button" onClick={() => void run(() => playIds(visibleTracks.map((track) => track.id), null))} className="rounded-full bg-[#f4f1ea] px-3 py-1 text-xs font-semibold text-[#070709]">Play all</button>
-              {filter && <button type="button" onClick={() => setFilter("")} className="text-xs text-[#8d8880]">Clear search</button>}
-            </div>
-            <div className="mb-3 grid grid-cols-3 gap-2 text-center text-xs">
-              <Stat label="Cuts" value={String(ownTracks.length)} />
-              <Stat label="Starred" value={String(ownTracks.filter((track) => track.starred).length)} />
-              <Stat label="Plays" value={String(listens.length)} />
-            </div>
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <input
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                placeholder="Search title, folder, or key"
-                className="min-w-40 flex-1 rounded-2xl border border-[#3c342c] bg-[#1a1612] px-4 py-2.5 text-sm outline-none focus:border-[#e4a15a]"
-              />
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as "new" | "title" | "bpm")} className="rounded-2xl border border-[#3c342c] bg-[#1a1612] px-3 py-2 text-sm">
-                <option value="new">Recent</option>
-                <option value="title">Title</option>
-                <option value="bpm">BPM</option>
-              </select>
-              <FileButton label="Upload" accept="audio/*" multiple disabled={busy} onFiles={(files) => void run(() => uploadFiles(files))} />
-            </div>
-            <div className="mb-3 flex flex-wrap gap-1.5">
-              <FilterChip active={starredOnly} onClick={() => setStarredOnly((on) => !on)} label="Starred" />
-              <FilterChip active={statusFilter === "all"} onClick={() => setStatusFilter("all")} label="All stages" />
-              {ACETATE_STATUSES.map((status) => (
-                <FilterChip key={status.id} active={statusFilter === status.id} onClick={() => setStatusFilter(status.id)} label={status.label} />
-              ))}
-            </div>
-            {folders.length > 0 && (
-              <div className="mb-3 flex flex-wrap gap-1.5">
-                <FilterChip active={folderFilter === "all"} onClick={() => setFolderFilter("all")} label="All folders" />
-                {folders.map((folder) => (
-                  <FilterChip key={folder} active={folderFilter === folder} onClick={() => setFolderFilter(folder)} label={folder} />
-                ))}
-              </div>
-            )}
-            {uploadNote && <p className="mb-2 text-sm text-[#e4a15a]">{uploadNote}</p>}
-            {visibleTracks.length === 0 && <Empty text={dropping ? "Drop audio to add it to your private library." : "Your library is private. Upload a demo, a bounce, or a voice note."} />}
-            <ul className="space-y-2">
-              {visibleTracks.map((track) => (
-                <li key={track.id} className="flex items-center gap-2 rounded-2xl border border-[#3c342c] bg-[#1a1612] p-2 hover:border-[#e4a15a]/40">
-                  <button type="button" onClick={() => setScreen({ name: "track", id: track.id })} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                    <ArtTile url={art[track.id]} title={track.title} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-semibold">{track.title}</span>
-                      <span className="block truncate text-xs text-[#a3988c]">
-                        {ACETATE_STATUSES.find((status) => status.id === (track.status ?? "demo"))?.label}
-                        {track.folder ? ` · ${track.folder}` : ""}
-                        {track.bpm ? ` · ${track.bpm} BPM` : ""}
-                        {track.musical_key ? ` · ${track.musical_key}` : ""}
-                      </span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={track.starred ? "Unstar" : "Star"}
-                    onClick={() => void run(() => updateTrack(track.id, { starred: !track.starred }))}
-                    className={`px-2 text-lg ${track.starred ? "text-[#e4a15a]" : "text-[#3c342c]"}`}
-                  >
-                    ★
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {listens.length > 0 && (
-              <section className="mt-6">
-                <h2 className="font-serif text-2xl">Recent plays</h2>
-                <ul className="mt-2 space-y-1">
-                  {listens.map((listen) => {
-                    const track = library.tracks.find((item) => item.id === listen.track_id);
-                    return (
-                      <li key={listen.id} className="flex items-center justify-between gap-3 text-sm text-[#a3988c]">
-                        <span className="truncate">{track?.title || "Removed cut"}</span>
-                        <span className="shrink-0">{new Date(listen.created_at).toLocaleString()}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            )}
-          </section>
-        )}
-
-        {screen.name === "radio" && <AcetateRadio />}
-        {screen.name === "recap" && <AcetateRecap />}
-
-        {screen.name === "projects" && (
-          <Projects
-            projects={visibleProjects}
-            kindFilter={kindFilter}
-            setKindFilter={setKindFilter}
+      </>
+      )}
+      <div className={`min-h-0 flex-1 ${screen.name === "library" || screen.name === "projects" || screen.name === "vault" || screen.name === "project" ? "overflow-y-auto" : "overflow-y-auto px-4 pb-6"}`}>
+        {(screen.name === "library" || screen.name === "projects" || screen.name === "vault" || screen.name === "project") && userId && (
+          <AcetateDash
+            library={library}
             art={art}
-            counts={library.memberships}
-            busy={busy}
-            onOpen={(id) => setScreen({ name: "project", id })}
-            onCreate={(kind, title) => void run(async () => { await createProject(kind, title); })}
-          />
-        )}
-
-        {screen.name === "project" && (
-          <ProjectView
-            project={library.projects.find((item) => item.id === screen.id) ?? null}
-            tracks={projectTracks(screen.id)}
-            art={art}
-            libraryTracks={library.tracks}
-            memberIds={new Set(projectTracks(screen.id).map((track) => track.id))}
-            busy={busy}
-            onBack={() => setScreen({ name: "projects" })}
-            onPlay={(startId) => void run(() => playIds(projectTracks(screen.id).map((track) => track.id), library.projects.find((item) => item.id === screen.id)?.title ?? null, startId))}
-            onUpload={(file) => void run(() => uploadAudio(file, { projectId: screen.id, title: file.name.replace(/\.[^.]+$/, "") }).then(() => undefined))}
-            onArt={(file) => void run(() => uploadArtwork(file, "project", screen.id).then(() => undefined))}
-            onAdd={(trackId) => void run(() => addTrackToProject(screen.id, trackId))}
-            onRemove={(trackId) => void run(() => removeTrackFromProject(screen.id, trackId))}
-            onMove={(trackId, dir) => void run(() => moveInProject(screen.id, trackId, dir, library.memberships))}
-            onRename={(title) => void run(() => updateProject(screen.id, { title }))}
-            onNote={(note) => void run(() => updateProject(screen.id, { note }))}
-            onDelete={() => {
-              if (window.confirm("Delete this collection? Tracks stay in your library.")) void run(() => deleteProject(screen.id).then(() => setScreen({ name: "projects" })));
-            }}
-            onOpenTrack={(id) => setScreen({ name: "track", id })}
-            onShare={() => {
-              const project = library.projects.find((item) => item.id === screen.id);
-              if (project) setShareFor({ kind: "project", id: project.id, title: project.title });
+            notices={notices}
+            me={me}
+            userId={userId}
+            email={session?.user.email ?? null}
+            admin={admin}
+            theme={theme}
+            screen={screen.name === "project" ? "project" : screen.name === "vault" ? "vault" : "home"}
+            projectId={screen.name === "project" ? screen.id : undefined}
+            onOpenProject={(id) => setScreen({ name: "project", id })}
+            onOpenTrack={(id, from) => setScreen({ name: "track", id, from })}
+            onHome={() => setScreen({ name: "library" })}
+            onVault={() => setScreen({ name: "vault" })}
+            onPlay={playIds}
+            onShare={(kind, id, title) => setShareFor({ kind, id, title })}
+            run={(task) => void run(task)}
+            onNotices={() => void reload().catch(reportAcetateError)}
+            onNavigate={(name) => {
+              if (name === "radio") setScreen({ name: "radio" });
+              else if (name === "recap") setScreen({ name: "recap" });
+              else setScreen({ name: "premium" });
             }}
           />
         )}
@@ -561,7 +443,7 @@ export default function AcetateApp() {
             detail={detail}
             shares={library.shares.filter((share) => share.track_id === screen.id)}
             busy={busy}
-            onBack={() => setScreen({ name: "library" })}
+            onBack={() => setScreen(screen.name === "track" && screen.from === "vault" ? { name: "vault" } : { name: "library" })}
             onPlayVersion={(version) => {
               const track = library.tracks.find((item) => item.id === screen.id);
               if (!track) return;

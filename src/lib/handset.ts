@@ -31,6 +31,7 @@ export type Handset = {
   trusted?: boolean;
   lost_message?: string | null;
   control_enabled?: boolean;
+  focus_until?: string | null;
   place_alerts?: boolean;
 };
 

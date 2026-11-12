@@ -4,13 +4,14 @@ import { useChatFx } from "@/lib/chatFx";
 import { TypingAnim } from "./TypingBubbles";
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Bell, BellOff, Bookmark, Bot, ChevronLeft, Hash, Image as ImageIcon, Maximize2, MessageSquare, Phone, Search, Users, Video, Volume2 } from "lucide-react";
+import { Bell, BellOff, Bookmark, Bot, ChevronLeft, Clock, Hash, Image as ImageIcon, Maximize2, MessageSquare, Phone, Search, Users, Video, Volume2 } from "lucide-react";
 import { useApp, conversationTitle, findChannel, openProfileCard, toast } from "@/store/app";
 import { haptic } from "@/lib/haptics";
 import { useChat } from "@/store/chat";
 import { useCall, startCall } from "@/lib/call";
 import { clearChatWallpaper, fileToDataUrl, getChatWallpaper, setChatWallpaper, subscribeChatWallpapers } from "@/lib/chatWallpaper";
 import { usePrefs, toggleMute } from "@/store/prefs";
+import { snoozeConversation } from "@/lib/chatReminders";
 import { cn } from "@/lib/utils";
 import Avatar, { statusLabel } from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
@@ -161,6 +162,17 @@ export default function ChatHeader({
             }}
           >
             {muted ? <BellOff className="size-5" /> : <Bell className="size-5" />}
+          </HeaderBtn>
+        )}
+        {kind !== "voice" && (
+          <HeaderBtn
+            label="Snooze notifications"
+            onClick={() => {
+              haptic.light();
+              void snoozeConversation(conversationId, 60).then(() => toast("Snoozed for 1 hour", "success"), (error: Error) => toast(error.message, "error"));
+            }}
+          >
+            <Clock className="size-5" />
           </HeaderBtn>
         )}
         {kind !== "voice" && (

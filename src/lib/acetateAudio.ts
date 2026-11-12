@@ -1,6 +1,6 @@
 /** Browser-side audio helpers for Acetate. Waveform peaks are stored with the version. */
 
-const AUDIO_EXT = new Set(["mp3", "wav", "flac", "aac", "m4a", "ogg", "webm", "opus"]);
+const AUDIO_EXT = new Set(["mp3", "wav", "flac", "aiff", "aif", "aac", "m4a", "ogg", "webm", "opus"]);
 const ART_EXT = new Set(["jpg", "jpeg", "png", "webp"]);
 
 export function fileExt(name: string) {
@@ -9,6 +9,7 @@ export function fileExt(name: string) {
 
 export function audioExt(name: string) {
   const ext = fileExt(name);
+  if (ext === "aif") return "aiff";
   return AUDIO_EXT.has(ext) ? ext : null;
 }
 
@@ -23,6 +24,8 @@ export function mimeForExt(ext: string) {
     mp3: "audio/mpeg",
     wav: "audio/wav",
     flac: "audio/flac",
+    aiff: "audio/aiff",
+    aif: "audio/aiff",
     aac: "audio/aac",
     m4a: "audio/mp4",
     ogg: "audio/ogg",
@@ -90,8 +93,11 @@ function durationFallback(file: Blob) {
   });
 }
 
-/** Decode a local file into a duration and a compact peak envelope. */
+/** Decode a local file into a duration and a compact peak envelope. Large masters skip the full decode. */
 export async function describeAudio(file: Blob): Promise<{ duration: number | null; peaks: number[] }> {
+  if (file.size > 32 * 1024 * 1024) {
+    return { duration: await durationFallback(file), peaks: [] };
+  }
   try {
     const ctx = new AudioContext();
     const raw = await file.arrayBuffer();
