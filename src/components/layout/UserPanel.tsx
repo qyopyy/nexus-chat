@@ -155,6 +155,11 @@ function MeRow() {
                 <Crown className="size-4 text-[#eb459e]" /> Staff Desk
               </button>
             )}
+            {can.setRoles() && (
+              <a href="/admin" className="flex w-full items-center gap-3 rounded px-2 py-1.5 hover:bg-accent hover:text-white">
+                <Crown className="size-4 text-[#eb459e]" /> Admin desk
+              </a>
+            )}
             <button
               onClick={() => {
                 setMenu(false);

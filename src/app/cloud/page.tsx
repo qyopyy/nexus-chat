@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/store/app";
-import { addCloudFiles, addVoiceMemo, cloudUrl, deleteCloud, listCloud, syncCloudIfDue, type CloudFile } from "@/lib/nexusCloud";
+import { addCloudFiles, addVoiceMemo, cloudUrl, deleteCloud, listCloud, sendCloudToPhones, syncCloudIfDue, type CloudFile } from "@/lib/nexusCloud";
 import CloudAlbums from "@/components/cloud/CloudAlbums";
 import { fmtBytes } from "@/lib/acetateAudio";
 
@@ -128,6 +128,7 @@ export default function NexusCloudPage() {
                 {row.name}
               </button>
               <span className="text-xs text-[#8d8880]">{fmtBytes(Number(row.bytes))}</span>
+              <button type="button" className="text-xs text-[#7ee0c6]" onClick={() => void sendCloudToPhones(row).then(() => setNote("Sent to your phones")).catch((err: Error) => setNote(err.message))}>To phone</button>
               <button type="button" className="text-xs text-[#e07a5f]" onClick={() => void deleteCloud(row).then(refresh).catch((err: Error) => setNote(err.message))}>Delete</button>
             </li>
           ))}

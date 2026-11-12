@@ -133,6 +133,17 @@ export async function cloudUrl(row: CloudFile) {
   return data.signedUrl;
 }
 
+export async function sendCloudToPhones(row: CloudFile) {
+  if (row.bytes > 100 * 1024 * 1024) throw new Error("Phone drops are limited to 100 MB");
+  const url = await cloudUrl(row);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Couldn't read that Cloud file");
+  const blob = await res.blob();
+  const file = new File([blob], row.name, { type: row.mime || blob.type || "application/octet-stream" });
+  const { sendDrop } = await import("./nexusDrop");
+  await sendDrop(file);
+}
+
 export async function deleteCloud(row: CloudFile) {
   await supabase.storage.from("nexus-cloud").remove([row.path]);
   const { error } = await supabase.from("nexus_cloud_files").delete().eq("id", row.id);

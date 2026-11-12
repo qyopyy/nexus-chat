@@ -242,6 +242,28 @@ export const THEMES: Record<string, ThemeDef> = {
       wall: "#1e101a",
     },
   },
+  ksubi999: {
+    name: "999 / Ksubi",
+    colors: {
+      rail: "#0a0a0a",
+      side: "#121212",
+      chat: "#0d0d0d",
+      panel: "#101010",
+      hover: "#1c1014",
+      active: "#2a1018",
+      input: "#181214",
+      line: "#2a1518",
+      txt: "#f5f5f5",
+      sub: "#c4a0b0",
+      faint: "#7a6068",
+      accent: "#e10600",
+      accent2: "#ff4da6",
+      bubbleMe: "#5c0a20",
+      bubble: "#1a1214",
+      menu: "#080808",
+      wall: "#0a0a0a",
+    },
+  },
 };
 
 export type FontDef = { name: string; stack: string; url: string | null };
@@ -327,7 +349,7 @@ export const THEME_GROUPS: { id: string; label: string; themes: string[] }[] = [
   {
     id: "ksubi",
     label: "Ksubi",
-    themes: ["ksubi", "ksubiDenim", "ksubiBlood", "ksubiBone", "ksubiAcid", "ksubiPink"],
+    themes: ["ksubi", "ksubiDenim", "ksubiBlood", "ksubiBone", "ksubiAcid", "ksubiPink", "ksubi999"],
   },
 ];
 

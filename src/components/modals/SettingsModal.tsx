@@ -174,6 +174,11 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
             <>
               <p className="px-2.5 pt-4 pb-1 text-xs font-bold tracking-wide text-sub uppercase">Staff</p>
               {nav("admin", "Admin Panel", <Shield className="size-4 text-dnd" />)}
+              {isAdmin && (
+                <a href="/admin" className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sub transition hover:bg-hover hover:text-txt">
+                  <Shield className="size-4 text-dnd" /> Admin desk
+                </a>
+              )}
               {isAdmin && nav("devmode", "Dev / updating", <Construction className="size-4 text-amber-400" />)}
             </>
           )}

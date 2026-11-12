@@ -6,6 +6,7 @@ import { useApp } from "@/store/app";
 import { getDeviceLocation, requestLocationPermission, watchDeviceLocation, type DeviceLocation } from "./location";
 import { isNativeApp } from "./useMobile";
 import { thisDeviceId, type Handset } from "./handset";
+import { loadFeatureFlags } from "./featureFlags";
 
 const SHARE_KEY = "nexus:locator-share";
 
@@ -18,6 +19,8 @@ export async function setLocatorOptIn(on: boolean) {
   const userId = useApp.getState().userId;
   if (!userId) throw new Error("Sign in required");
   if (on) {
+    const flags = await loadFeatureFlags();
+    if (!flags.locator) throw new Error("Locator is turned off");
     const perm = await requestLocationPermission();
     if (perm === "denied") throw new Error("Location permission was denied");
     await getDeviceLocation({ highAccuracy: true });

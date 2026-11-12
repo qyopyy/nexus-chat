@@ -8,11 +8,13 @@ import { useAcetatePlayer } from "./acetatePlayer";
 import { addCloudFiles, addVoiceMemo, cloudUnlocked } from "./nexusCloud";
 import { sendDrop } from "./nexusDrop";
 import { openConversation } from "./data";
+import { setPhoneFocusUntil } from "./phoneFocus";
 
 export type PhoneCommandKind =
   | "open_url"
   | "note"
   | "clipboard"
+  | "clipboard_pull"
   | "ring"
   | "vibrate"
   | "torch"
@@ -22,25 +24,64 @@ export type PhoneCommandKind =
   | "next"
   | "prev"
   | "volume"
+  | "seek"
+  | "sleep"
+  | "crossfade"
+  | "ping"
   | "camera"
   | "voice"
-  | "sign_out";
+  | "sign_out"
+  | "screenshot"
+  | "gallery";
 
 export type PhoneCommand = {
   id: string;
   user_id: string;
   device_id: string;
   kind: PhoneCommandKind;
-  payload: { url?: string; text?: string; delta?: number };
+  payload: { url?: string; text?: string; delta?: number; seconds?: number; minutes?: number; ms?: number };
   status: "pending" | "done" | "denied" | "expired";
   created_at: string;
+};
+
+export type ClipboardItem = {
+  id: string;
+  user_id: string;
+  device_id: string | null;
+  direction: "to_phone" | "to_computer";
+  body: string;
+  created_at: string;
+};
+
+export type HandsetGrant = {
+  user_id: string;
+  device_id: string;
+  clipboard: boolean;
+  files: boolean;
+  chats: boolean;
+  find: boolean;
+  acetate: boolean;
+  screenshot: boolean;
+  gallery: boolean;
+  focus: boolean;
+};
+
+export const DEFAULT_GRANT: Omit<HandsetGrant, "user_id" | "device_id"> = {
+  clipboard: true,
+  files: true,
+  chats: true,
+  find: true,
+  acetate: true,
+  screenshot: false,
+  gallery: false,
+  focus: true,
 };
 
 export type HandsetInbox = {
   id: string;
   user_id: string;
   from_device: string | null;
-  kind: "note" | "link" | "clipboard";
+  kind: "note" | "link" | "clipboard" | "share";
   body: string;
   created_at: string;
   seen_at: string | null;
@@ -57,13 +98,14 @@ export type DeviceNotice = {
   seen_at: string | null;
 };
 
-const SENSITIVE = new Set<PhoneCommandKind>(["camera", "voice", "sign_out"]);
+const SENSITIVE = new Set<PhoneCommandKind>(["camera", "voice", "sign_out", "screenshot", "gallery", "clipboard_pull"]);
 
 export async function sendCommand(deviceId: string, kind: PhoneCommandKind, payload: PhoneCommand["payload"] = {}) {
   const userId = useApp.getState().userId;
   if (!userId) throw new Error("Sign in required");
   const { error } = await supabase.from("nexus_handset_commands").insert({ user_id: userId, device_id: deviceId, kind, payload });
   if (error) throw new Error(errorText(error));
+  if (kind === "clipboard" && payload.text) await saveClipboard("to_phone", payload.text);
 }
 
 export async function resolveCommand(id: string, status: "done" | "denied") {
@@ -77,13 +119,64 @@ export async function setControlEnabled(on: boolean) {
   if (error) throw new Error(errorText(error));
 }
 
-export async function sendToComputers(kind: "note" | "link" | "clipboard", body: string) {
+export async function saveClipboard(direction: "to_phone" | "to_computer", body: string) {
+  const userId = useApp.getState().userId;
+  if (!userId) throw new Error("Sign in required");
+  const text = body.trim().slice(0, 4000);
+  if (!text) return;
+  const { error } = await supabase.from("nexus_clipboard").insert({
+    user_id: userId,
+    device_id: thisDeviceId(),
+    direction,
+    body: text,
+  });
+  if (error) throw new Error(errorText(error));
+}
+
+export async function listClipboard() {
+  const userId = useApp.getState().userId;
+  if (!userId) return [] as ClipboardItem[];
+  const { data } = await supabase.from("nexus_clipboard").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(40);
+  return (data ?? []) as ClipboardItem[];
+}
+
+export async function loadGrant(deviceId: string) {
+  const userId = useApp.getState().userId;
+  if (!userId) return null;
+  const { data } = await supabase.from("nexus_handset_grants").select("*").eq("user_id", userId).eq("device_id", deviceId).maybeSingle();
+  return (data as HandsetGrant | null) ?? null;
+}
+
+export async function saveGrant(deviceId: string, patch: Partial<Omit<HandsetGrant, "user_id" | "device_id">>) {
+  const userId = useApp.getState().userId;
+  if (!userId) throw new Error("Sign in required");
+  const current = (await loadGrant(deviceId)) ?? { ...DEFAULT_GRANT, user_id: userId, device_id: deviceId };
+  const { error } = await supabase.from("nexus_handset_grants").upsert({
+    ...current,
+    ...patch,
+    user_id: userId,
+    device_id: deviceId,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw new Error(errorText(error));
+}
+
+export async function setDeviceFocus(deviceId: string, minutes: number) {
+  const userId = useApp.getState().userId;
+  if (!userId) throw new Error("Sign in required");
+  const focus_until = minutes > 0 ? new Date(Date.now() + minutes * 60_000).toISOString() : null;
+  const { error } = await supabase.from("nexus_handsets").update({ focus_until }).eq("user_id", userId).eq("device_id", deviceId);
+  if (error) throw new Error(errorText(error));
+}
+
+export async function sendToComputers(kind: "note" | "link" | "clipboard" | "share", body: string) {
   const userId = useApp.getState().userId;
   if (!userId) throw new Error("Sign in required");
   const text = body.trim().slice(0, 4000);
   if (!text) throw new Error("Nothing to send");
   const { error } = await supabase.from("nexus_handset_inbox").insert({ user_id: userId, from_device: thisDeviceId(), kind, body: text });
   if (error) throw new Error(errorText(error));
+  if (kind === "clipboard" || kind === "share") await saveClipboard("to_computer", text);
 }
 
 export async function recordDeviceNotice(input: { title: string; body?: string | null; href?: string | null }) {
@@ -128,10 +221,28 @@ export function stopFindEffects() {
   torchStream?.getTracks().forEach((track) => track.stop());
   torchStream = null;
   navigator.vibrate?.(0);
+  const flash = document.getElementById("nexus-find-flash");
+  if (flash) {
+    window.clearInterval(Number(flash.dataset.timer));
+    flash.remove();
+  }
 }
 
 function startRing() {
   stopFindEffects();
+  const flash = document.createElement("div");
+  flash.id = "nexus-find-flash";
+  flash.setAttribute("role", "status");
+  flash.textContent = "Nexus is ringing this phone";
+  flash.style.cssText = "position:fixed;inset:0;z-index:80;display:grid;place-items:center;background:#fff;color:#111;font:700 28px system-ui;text-align:center;padding:24px";
+  document.body.appendChild(flash);
+  let on = true;
+  const blink = window.setInterval(() => {
+    on = !on;
+    flash.style.background = on ? "#fff" : "#111";
+    flash.style.color = on ? "#111" : "#fff";
+  }, 500);
+  flash.dataset.timer = String(blink);
   const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (Ctx) {
     ringCtx = new Ctx();
@@ -140,7 +251,7 @@ function startRing() {
       const osc = ringCtx.createOscillator();
       const gain = ringCtx.createGain();
       osc.frequency.value = 880;
-      gain.gain.value = 0.08;
+      gain.gain.value = 0.2;
       osc.connect(gain);
       gain.connect(ringCtx.destination);
       osc.start();
@@ -218,6 +329,10 @@ async function runCommand(command: PhoneCommand) {
     }
     player.setVolume(player.volume + (payload.delta ?? 0));
   }
+  if (command.kind === "seek") player.seek(Math.max(0, Number(payload.seconds) || 0));
+  if (command.kind === "sleep") player.setSleep(Math.max(0, Number(payload.minutes) || 0));
+  if (command.kind === "crossfade") player.setCrossfade(Math.max(0, Number(payload.ms) || 0));
+  if (command.kind === "ping") toast("Your computer checked this phone", "info");
 }
 
 async function finishSensitive(command: PhoneCommand, allow: boolean) {
@@ -248,6 +363,38 @@ async function finishSensitive(command: PhoneCommand, allow: boolean) {
     if (cloudUnlocked()) await addCloudFiles([file], "photo");
     else await sendDrop(file);
     toast(cloudUnlocked() ? "Photo saved to Cloud" : "Photo sent to your Nexus inbox", "success");
+  }
+  if (command.kind === "screenshot" || command.kind === "gallery") {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    if (command.kind === "gallery") input.multiple = true;
+    const files = await new Promise<File[]>((resolve) => {
+      input.onchange = () => resolve([...(input.files ?? [])]);
+      input.click();
+    });
+    if (!files.length) {
+      await resolveCommand(command.id, "denied");
+      return;
+    }
+    for (const file of files.slice(0, 8)) await sendDrop(file);
+    toast(command.kind === "screenshot" ? "Screenshot sent to your computer" : "Photos sent to your computer", "success");
+  }
+  if (command.kind === "clipboard_pull") {
+    let text = "";
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      toast("This phone did not share the clipboard. iOS only allows a read right after you tap Allow, and some browsers never do.", "info");
+      await resolveCommand(command.id, "denied");
+      return;
+    }
+    if (!text.trim()) {
+      await resolveCommand(command.id, "denied");
+      return;
+    }
+    await sendToComputers("clipboard", text);
+    toast("Clipboard sent to your computer", "success");
   }
   if (command.kind === "voice") {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -285,10 +432,11 @@ export function usePhoneAgent(userId: string | null) {
       if (live) setLost((data as Handset | null)?.lost ? (data as Handset) : null);
     };
     const take = async () => {
-      const { data: self } = await supabase.from("nexus_handsets").select("control_enabled, lost, lost_message, label").eq("user_id", userId).eq("device_id", mine).maybeSingle();
+      const { data: self } = await supabase.from("nexus_handsets").select("control_enabled, lost, lost_message, label, focus_until").eq("user_id", userId).eq("device_id", mine).maybeSingle();
       if (!live) return;
-      const row = self as Handset | null;
+      const row = self as (Handset & { focus_until?: string | null }) | null;
       setLost(row?.lost ? row : null);
+      setPhoneFocusUntil(row?.focus_until ? Date.parse(row.focus_until) : null);
       if (!row?.control_enabled) return;
       const { data } = await supabase
         .from("nexus_handset_commands")

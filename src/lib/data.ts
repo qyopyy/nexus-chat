@@ -278,6 +278,11 @@ export async function createChannel(
 }
 
 export async function setChannelStage(convId: string, on: boolean) {
+  if (on) {
+    const { loadFeatureFlags } = await import("./featureFlags");
+    const flags = await loadFeatureFlags();
+    if (!flags.live_stage) return toast("Live Stage is turned off", "error");
+  }
   const { error } = await supabase.rpc("set_channel_stage", { p_conv: convId, p_on: on });
   if (error) return toast(errorText(error), "error");
   const channel = findChannel(get(), convId);

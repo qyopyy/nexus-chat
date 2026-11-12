@@ -28,6 +28,8 @@ import { onScoreChallengeMessage, SCORE_CHALLENGE_RE } from "./scoreChallenges";
 import { isEffect, playEffect } from "./effects";
 import { isMuted } from "@/store/prefs";
 import { isSpaceMuted } from "./spacePrefs";
+import { phoneFocusActive } from "./phoneFocus";
+import { conversationSnoozed } from "./chatReminders";
 import { haptic } from "./haptics";
 import { refreshBadges } from "./admin";
 import { nativeLocalNotify, usePush } from "./push";
@@ -69,7 +71,7 @@ function spaceIdForConv(convId: string): string | null {
 function notify(m: Message, opts?: { skipSound?: boolean }) {
   const s = useApp.getState();
   const sid = spaceIdForConv(m.conversation_id);
-  if (s.myStatus === "dnd" || isMuted(m.conversation_id) || (sid && isSpaceMuted(sid))) return;
+  if (s.myStatus === "dnd" || isMuted(m.conversation_id) || (sid && isSpaceMuted(sid)) || phoneFocusActive() || conversationSnoozed(m.conversation_id)) return;
   if (!opts?.skipSound) {
     sfx.message();
     haptic.light();
@@ -127,7 +129,9 @@ async function onMessageInsert(m: Message) {
     const silenced =
       useApp.getState().myStatus === "dnd" ||
       isMuted(m.conversation_id) ||
-      (!!sid && isSpaceMuted(sid));
+      (!!sid && isSpaceMuted(sid)) ||
+      phoneFocusActive() ||
+      conversationSnoozed(m.conversation_id);
     if (!silenced) {
       sfx.message();
       haptic.light();
