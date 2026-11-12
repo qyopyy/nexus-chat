@@ -44,6 +44,10 @@ export type AcetateTrack = {
   bpm?: number | null;
   musical_key?: string | null;
   folder?: string | null;
+  artist?: string | null;
+  source_url?: string | null;
+  source_kind?: "soundcloud" | null;
+  external_art?: string | null;
   lyrics?: string | null;
   lyrics_on_share?: boolean;
   lyric_cues?: { t: number; line: string }[] | null;
@@ -296,6 +300,10 @@ export async function updateTrack(
     bpm?: number | null;
     musical_key?: string | null;
     folder?: string | null;
+    artist?: string | null;
+    source_url?: string | null;
+    source_kind?: "soundcloud" | null;
+    external_art?: string | null;
     lyrics?: string | null;
     lyrics_on_share?: boolean;
     lyric_cues?: { t: number; line: string }[] | null;
