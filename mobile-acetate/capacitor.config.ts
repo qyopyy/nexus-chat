@@ -13,7 +13,20 @@ const config: CapacitorConfig = {
   server: {
     url,
     cleartext: false,
-    allowNavigation: ["nexusproject.cc", "*.nexusproject.cc", "*.supabase.co", "*.vercel.app"],
+    allowNavigation: [
+      "nexusproject.cc",
+      "*.nexusproject.cc",
+      "*.supabase.co",
+      "*.vercel.app",
+      "secure.soundcloud.com",
+      "soundcloud.com",
+      "*.soundcloud.com",
+      "open.spotify.com",
+      "youtube.com",
+      "*.youtube.com",
+      "youtu.be",
+      "www.youtube-nocookie.com",
+    ],
   },
   ios: {
     contentInset: "never",

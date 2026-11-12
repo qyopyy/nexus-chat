@@ -5,6 +5,9 @@ import Link from "next/link";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { asPeaks, fmtTime } from "@/lib/acetateAudio";
 import { commentOnShare, downloadShare, openShare, recordListen, shareInfo, type SharedOpen, type SharedTrack } from "@/lib/acetate";
+import { CONVERT_MAX_BYTES, convertLimitMessage } from "@/lib/acetateConvert";
+import { featureFlags, loadFeatureFlags } from "@/lib/featureFlags";
+import AcetateConvert from "./AcetateConvert";
 import { updateMyProfile } from "@/lib/data";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/store/app";
@@ -26,6 +29,9 @@ export default function AcetateListen({ token }: { token: string }) {
   const [guest, setGuest] = useState("");
   const [busy, setBusy] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
+  const [canConvert, setCanConvert] = useState(featureFlags().format_convert);
+  const [convertFile, setConvertFile] = useState<File | null>(null);
+  const [convertNote, setConvertNote] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const currentRef = useRef(0);
   const track: SharedTrack | null = opened?.tracks[index] ?? null;
@@ -33,6 +39,10 @@ export default function AcetateListen({ token }: { token: string }) {
     if (!track) return null;
     return track.versions.find((v) => v.id === versionId) ?? track.versions[0] ?? null;
   }, [track, versionId]);
+
+  useEffect(() => {
+    void loadFeatureFlags().then((flags) => setCanConvert(flags.format_convert));
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -284,7 +294,34 @@ export default function AcetateListen({ token }: { token: string }) {
                   Download
                 </button>
               )}
+              {opened.download && canConvert && version && (
+                <button
+                  type="button"
+                  className="rounded-full border border-[#3c342c] px-3 py-1.5 text-sm"
+                  onClick={() => {
+                    if (Number(version.bytes) > CONVERT_MAX_BYTES) {
+                      setConvertNote(convertLimitMessage(Number(version.bytes)));
+                      return;
+                    }
+                    void downloadShare(clean, version.id, password).then(async (file) => {
+                      const res = await fetch(file.url);
+                      if (!res.ok) throw new Error("Couldn't download that file");
+                      const blob = await res.blob();
+                      setConvertFile(new File([blob], file.name, { type: blob.type || "application/octet-stream" }));
+                      setConvertNote(null);
+                    }).catch((e: Error) => setConvertNote(e.message));
+                  }}
+                >
+                  Convert
+                </button>
+              )}
             </div>
+            {opened.download && canConvert && convertFile && (
+              <div className="mt-4">
+                <AcetateConvert source={convertFile} sourceLabel={track.title} />
+              </div>
+            )}
+            {opened.download && convertNote && <p className="mt-2 text-sm text-[#a3988c]">{convertNote}</p>}
           </section>
         )}
 

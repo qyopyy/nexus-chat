@@ -21,7 +21,7 @@ type Overview = {
   vault_bytes: number;
   signups: { day: string; n: number }[];
   uploads: { day: string; n: number }[];
-  flags: { phone_link: boolean; locator: boolean; live_stage: boolean; vault_uploads: boolean };
+  flags: { phone_link: boolean; locator: boolean; live_stage: boolean; vault_uploads: boolean; format_convert?: boolean; soundcloud_import?: boolean; link_import?: boolean };
   policy: { shelf_free_bytes: number; vault_quota_bytes: number | null; file_bytes: number };
 };
 
@@ -257,9 +257,20 @@ export default function OwnerDesk({ userId }: { userId?: string }) {
               <FlagRow label="Locator" on={overview.flags.locator} set={(v) => setOverview({ ...overview, flags: { ...overview.flags, locator: v } })} />
               <FlagRow label="Live Stage" on={overview.flags.live_stage} set={(v) => setOverview({ ...overview, flags: { ...overview.flags, live_stage: v } })} />
               <FlagRow label="Vault uploads" on={overview.flags.vault_uploads} set={(v) => setOverview({ ...overview, flags: { ...overview.flags, vault_uploads: v } })} />
+              <FlagRow label="Format converter" on={overview.flags.format_convert !== false} set={(v) => setOverview({ ...overview, flags: { ...overview.flags, format_convert: v } })} />
+              <FlagRow label="SoundCloud import" on={overview.flags.soundcloud_import !== false} set={(v) => setOverview({ ...overview, flags: { ...overview.flags, soundcloud_import: v } })} />
+              <FlagRow label="Link import" on={overview.flags.link_import !== false} set={(v) => setOverview({ ...overview, flags: { ...overview.flags, link_import: v } })} />
               <button type="button" className="mt-3 rounded-full bg-accent px-3 py-1.5 text-sm font-semibold text-white" onClick={() => {
                 if (!confirm("Save these switches for everyone?")) return;
-                void supabase.rpc("admin_set_flags", { p_phone: overview.flags.phone_link, p_locator: overview.flags.locator, p_stage: overview.flags.live_stage, p_vault: overview.flags.vault_uploads }).then(({ error }) => toast(error ? errorText(error) : "Switches saved", error ? "error" : "success"));
+                void supabase.rpc("admin_set_flags", {
+                  p_phone: overview.flags.phone_link,
+                  p_locator: overview.flags.locator,
+                  p_stage: overview.flags.live_stage,
+                  p_vault: overview.flags.vault_uploads,
+                  p_format: overview.flags.format_convert !== false,
+                  p_soundcloud: overview.flags.soundcloud_import !== false,
+                  p_links: overview.flags.link_import !== false,
+                }).then(({ error }) => toast(error ? errorText(error) : "Switches saved", error ? "error" : "success"));
               }}>Save switches</button>
             </Panel>
             <Panel title="Vault storage rule">

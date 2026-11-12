@@ -67,7 +67,11 @@ import AcetateRecap from "./AcetateRecap";
 import { asLyricCues, formatLyricCues, parseLyricCues } from "@/lib/acetateLyrics";
 import PhoneCommandHost from "@/components/phone/PhoneCommandHost";
 import AcetateDash from "./AcetateDash";
+import AcetateBring from "./AcetateBring";
+import AcetateConvert from "./AcetateConvert";
 import { useAcetateTheme } from "@/lib/acetateTheme";
+import { CONVERT_MAX_BYTES, convertLimitMessage } from "@/lib/acetateConvert";
+import { soundCloudPage } from "@/lib/acetateImportParse";
 
 type Screen =
   | { name: "library" }
@@ -77,7 +81,8 @@ type Screen =
   | { name: "premium" }
   | { name: "radio" }
   | { name: "recap" }
-  | { name: "vault" };
+  | { name: "vault" }
+  | { name: "bring" };
 
 type LibraryState = {
   projects: AcetateProject[];
@@ -183,13 +188,31 @@ export default function AcetateApp() {
   }, [userId, needsMfa]);
 
   useEffect(() => {
+    const sc = new URLSearchParams(window.location.search).get("sc");
+    if (!sc) return;
+    const messages: Record<string, string> = {
+      connected: "SoundCloud connected",
+      denied: "SoundCloud sign-in was cancelled",
+      config: "SoundCloud not configured",
+      state: "SoundCloud sign-in expired. Try again.",
+      token: "SoundCloud didn't finish signing in",
+    };
+    toast(messages[sc] || "SoundCloud didn't finish signing in", sc === "connected" ? "success" : "error");
+    if (sc === "connected") setScreen({ name: "bring" });
+    window.history.replaceState({}, "", "/acetate/app");
+  }, []);
+
+  useEffect(() => {
     if (!library) return;
     let live = true;
     const paths = new Map<string, string>();
+    const next: Record<string, string | null> = {};
     for (const project of library.projects) if (project.artwork_path) paths.set(project.id, project.artwork_path);
-    for (const track of library.tracks) if (track.artwork_path) paths.set(track.id, track.artwork_path);
+    for (const track of library.tracks) {
+      if (track.artwork_path) paths.set(track.id, track.artwork_path);
+      else if (track.external_art?.startsWith("https://")) next[track.id] = track.external_art;
+    }
     void (async () => {
-      const next: Record<string, string | null> = {};
       for (const [id, path] of paths) next[id] = await acetateSigned(path);
       if (live) setArt(next);
     })();
@@ -352,7 +375,7 @@ export default function AcetateApp() {
     });
   const folders = [...new Set(ownTracks.map((track) => track.folder).filter((folder): folder is string => !!folder))];
   const visibleProjects = library.projects.filter((project) => kindFilter === "all" || project.kind === kindFilter);
-  const showChrome = !["library", "projects", "project", "vault"].includes(screen.name);
+  const showChrome = !["library", "projects", "project", "vault", "bring"].includes(screen.name);
 
   return (
     <div className="flex h-full min-h-0 flex-col text-[#f4f1ea]" style={{ ...theme.style, background: theme.tokens.bg, color: theme.tokens.text }}>
@@ -407,7 +430,7 @@ export default function AcetateApp() {
       </nav>
       </>
       )}
-      <div className={`min-h-0 flex-1 ${screen.name === "library" || screen.name === "projects" || screen.name === "vault" || screen.name === "project" ? "overflow-y-auto" : "overflow-y-auto px-4 pb-6"}`}>
+      <div className={`min-h-0 flex-1 ${screen.name === "library" || screen.name === "projects" || screen.name === "vault" || screen.name === "project" || screen.name === "bring" ? "overflow-y-auto" : "overflow-y-auto px-4 pb-6"}`}>
         {(screen.name === "library" || screen.name === "projects" || screen.name === "vault" || screen.name === "project") && userId && (
           <AcetateDash
             library={library}
@@ -431,8 +454,19 @@ export default function AcetateApp() {
             onNavigate={(name) => {
               if (name === "radio") setScreen({ name: "radio" });
               else if (name === "recap") setScreen({ name: "recap" });
+              else if (name === "bring") setScreen({ name: "bring" });
               else setScreen({ name: "premium" });
             }}
+          />
+        )}
+
+        {screen.name === "bring" && userId && (
+          <AcetateBring
+            tracks={library.tracks.filter((track) => track.owner_id === userId)}
+            onBack={() => setScreen({ name: "library" })}
+            onPlayVault={(id) => void playIds([id], null, id)}
+            reload={reload}
+            run={(task) => void run(task)}
           />
         )}
 
@@ -471,6 +505,10 @@ export default function AcetateApp() {
               });
             }}
             onUpload={(file, label) => void run(() => uploadAudio(file, { trackId: screen.id, label }).then(() => undefined))}
+            onConvert={async (file, label) => {
+              await uploadAudio(file, { trackId: screen.id, label });
+              await reload();
+            }}
             onArt={(file) => void run(() => uploadArtwork(file, "track", screen.id).then(() => undefined))}
             onRename={(title) => void run(() => updateTrack(screen.id, { title }))}
             onMeta={(patch) => void run(async () => {
@@ -771,6 +809,7 @@ function TrackView(props: {
   onBack: () => void;
   onPlayVersion: (version: AcetateVersion) => void;
   onUpload: (file: File, label: string) => void;
+  onConvert: (file: File, label: string) => Promise<void>;
   onArt: (file: File) => void;
   onRename: (title: string) => void;
   onMeta: (patch: { note?: string | null; status?: AcetateStatus; bpm?: number | null; musical_key?: string | null; folder?: string | null; starred?: boolean; lyrics?: string | null; lyrics_on_share?: boolean; lyric_cues?: { t: number; line: string }[] | null }) => void;
@@ -791,6 +830,8 @@ function TrackView(props: {
   const [lyricsOnShare, setLyricsOnShare] = useState(!!track?.lyrics_on_share);
   const [cuesText, setCuesText] = useState(formatLyricCues(asLyricCues(track?.lyric_cues)));
   const [cueLine, setCueLine] = useState("");
+  const [convertFile, setConvertFile] = useState<File | null>(null);
+  const [convertNote, setConvertNote] = useState<string | null>(null);
   const playing = useAcetatePlayer((s) => s.queue[s.index]);
   const current = useAcetatePlayer((s) => s.current);
   useEffect(() => setTitle(track?.title ?? ""), [track?.title]);
@@ -833,6 +874,10 @@ function TrackView(props: {
           }}
         />
       </div>
+      {track.artist && <p className="mt-2 text-sm text-[#a3988c]">{track.artist}</p>}
+      {track.source_url && soundCloudPage(track.source_url) && (
+        <a href={track.source_url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-sm text-[#e4a15a]">SoundCloud</a>
+      )}
       <div className="mt-3 flex flex-wrap gap-2">
         {active && (
           <button type="button" onClick={() => props.onPlayVersion(active)} className="rounded-full bg-[#e4a15a] px-4 py-2 text-sm font-semibold text-[#100e0c]">
@@ -942,6 +987,41 @@ function TrackView(props: {
         <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Version name (rough mix)" className="min-w-40 flex-1 rounded-2xl border border-[#3c342c] bg-transparent px-3 py-2 text-sm outline-none" />
         <button type="submit" disabled={props.busy} className="rounded-full bg-[#f3eadf] px-4 text-sm font-semibold text-[#100e0c] disabled:opacity-50">Add version</button>
       </form>
+      {active && (
+        <div className="mt-4">
+          {convertFile ? (
+            <AcetateConvert
+              source={convertFile}
+              sourceLabel={track.title}
+              onSave={props.onConvert}
+            />
+          ) : (
+            <button
+              type="button"
+              className="rounded-full border border-[#3c342c] px-4 py-2 text-sm"
+              onClick={() => {
+                if (Number(active.bytes) > CONVERT_MAX_BYTES) {
+                  setConvertNote(convertLimitMessage(Number(active.bytes)));
+                  return;
+                }
+                void (async () => {
+                  const url = await acetateSigned(active.path);
+                  if (!url) throw new Error("Couldn't read that version");
+                  const res = await fetch(url);
+                  if (!res.ok) throw new Error("Couldn't read that version");
+                  const blob = await res.blob();
+                  const ext = active.path.split(".").pop() || "audio";
+                  setConvertFile(new File([blob], `${track.title}.${ext}`, { type: blob.type || active.mime || "application/octet-stream" }));
+                  setConvertNote(null);
+                })().catch((error: Error) => setConvertNote(error.message));
+              }}
+            >
+              Convert this version
+            </button>
+          )}
+          {convertNote && <p className="mt-2 text-sm text-[#a3988c]">{convertNote}</p>}
+        </div>
+      )}
       <ul className="mt-4 space-y-2">
         {(detail?.versions ?? []).map((version) => (
           <li key={version.id} className="flex items-center gap-3 rounded-2xl border border-[#3c342c] px-3 py-2">

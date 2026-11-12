@@ -54,7 +54,7 @@ export default function AcetateDash(props: {
   onShare: (kind: "track" | "project", id: string, title: string) => void;
   run: (task: () => Promise<void>) => void;
   onNotices: () => void;
-  onNavigate: (name: "radio" | "recap" | "premium") => void;
+  onNavigate: (name: "radio" | "recap" | "premium" | "bring") => void;
 }) {
   const [chip, setChip] = useState<Chip>("all");
   const [query, setQuery] = useState("");
@@ -151,6 +151,7 @@ export default function AcetateDash(props: {
               {item === "all" ? "All" : item === "projects" ? "Projects" : "Tracks"}
             </button>
           ))}
+          <button type="button" onClick={() => props.onNavigate("bring")} className="rounded-full px-4 py-2 text-sm font-bold" style={{ background: "var(--ac-card)" }}>Bring</button>
         </div>
       )}
       {props.screen === "vault" && (
@@ -160,6 +161,7 @@ export default function AcetateDash(props: {
           <p className="mt-1 max-w-xl text-sm" style={{ color: "var(--ac-muted)" }}>
             Vault storage is {props.library.storage.vault_limit == null ? "unlimited" : fmtBytes(props.library.storage.vault_limit)}. It does not use the free library quota. Files still have a per-file cap of {fmtBytes(props.library.storage.file_bytes ?? 5 * 1024 ** 3)}.
           </p>
+          <button type="button" className="mt-3 rounded-full px-4 py-2 text-sm font-bold" style={{ background: "var(--ac-accent)", color: "var(--ac-accent-text)" }} onClick={() => props.onNavigate("bring")}>Convert or import</button>
         </div>
       )}
       {props.screen === "project" && project && (
@@ -470,7 +472,7 @@ function AccountSheet(props: {
   admin: boolean;
   theme: ReturnType<typeof useAcetateTheme>;
   onPlan: () => void;
-  onNavigate: (name: "radio" | "recap" | "premium") => void;
+  onNavigate: (name: "radio" | "recap" | "premium" | "bring") => void;
 }) {
   const crossfade = useAcetatePlayer((s) => s.crossfade);
   const [saved, setSaved] = useState<string | null>(null);
@@ -567,6 +569,7 @@ function AccountSheet(props: {
           </div>
         </div>
         <div className="mt-3 space-y-2 text-sm">
+          <button type="button" className="block w-full rounded-2xl px-3 py-3 text-left" style={{ background: "var(--ac-card)" }} onClick={() => props.onNavigate("bring")}>Convert or import</button>
           <button type="button" className="block w-full rounded-2xl px-3 py-3 text-left" style={{ background: "var(--ac-card)" }} onClick={() => props.onNavigate("radio")}>Radio</button>
           <button type="button" className="block w-full rounded-2xl px-3 py-3 text-left" style={{ background: "var(--ac-card)" }} onClick={() => props.onNavigate("recap")}>Recap</button>
           <Link href="/contact" className="block rounded-2xl px-3 py-3" style={{ background: "var(--ac-card)" }}>Contact support</Link>
