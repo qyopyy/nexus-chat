@@ -22,7 +22,14 @@ export function previewLine(m: {
     if (kind !== "File") return kind;
   }
   const text = m.content?.trim();
-  if (text) return text;
+  if (text) {
+    const card = text.includes("[wump-card:") || text.includes("[bump-pin:");
+    if (card) {
+      const clean = text.replace(/\[wump-card:[^\]]+\]/g, "").replace(/\[bump-pin:[^\]]+\]/g, "").replace(/https?:\/\/\S+/g, "").trim();
+      return clean || "📍 Location";
+    }
+    return text;
+  }
   if (m.attachment_name) return m.attachment_name;
   return "Message";
 }

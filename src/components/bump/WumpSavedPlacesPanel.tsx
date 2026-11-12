@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Bell, Bookmark, ExternalLink, Folder, FolderPlus, MapPin, Pencil, Trash2, X } from "lucide-react";
+import { Bell, Bookmark, ExternalLink, Folder, FolderPlus, MapPin, Pencil, Star, Trash2, X } from "lucide-react";
 import { appleMapsLink } from "@/lib/appleMaps";
 import { timeAgo } from "@/lib/videos";
-import { wumpPlaceSubtitle, type WumpPlaceRole, type WumpSavedPlace } from "@/lib/wumpPlaces";
+import { wumpPlaceSubtitle, wumpSetFavorite, localFavoriteIds, type WumpPlaceRole, type WumpSavedPlace } from "@/lib/wumpPlaces";
 import { wumpRoleEmoji, wumpSetPlaceWatch } from "@/lib/wumpTogether";
 import { alertSummary, roleChip } from "@/lib/hundred";
 import { createPlaceFolder, deletePlaceFolder, listPlaceFolders, renamePlaceFolder, setPlaceFolder, type WumpPlaceFolder } from "@/lib/wumpShare";
 import { addCheckin, deleteCheckin, myCheckins, type CheckIn } from "@/lib/wumpLive";
+import LocationPicker from "@/components/maps/LocationPicker";
 import { toast } from "@/store/app";
 import { cn } from "@/lib/utils";
 
@@ -38,15 +39,20 @@ export default function WumpSavedPlacesPanel({
   const [editing, setEditing] = useState<string | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
   const [watching, setWatching] = useState<string | null>(null);
+  const [favOnly, setFavOnly] = useState(false);
+  const [localFavs, setLocalFavs] = useState<string[]>([]);
 
   useEffect(() => {
     void listPlaceFolders().then(setFolders);
+    setLocalFavs(localFavoriteIds());
   }, []);
 
-  const shown = useMemo(
-    () => (active === "all" ? places : active === "none" ? places.filter((p) => !p.folder_id) : places.filter((p) => p.folder_id === active)),
-    [places, active],
-  );
+  const shown = useMemo(() => {
+    const base = active === "all" ? places : active === "none" ? places.filter((p) => !p.folder_id) : places.filter((p) => p.folder_id === active);
+    if (!favOnly) return base;
+    const fav = new Set(localFavs);
+    return base.filter((p) => p.favorite || fav.has(p.id));
+  }, [places, active, favOnly, localFavs]);
   const count = (id: string) => places.filter((p) => p.folder_id === id).length;
 
   async function addFolder() {
@@ -120,6 +126,9 @@ export default function WumpSavedPlacesPanel({
                 {label} · {n}
               </button>
             ))}
+            <button type="button" onClick={() => setFavOnly((v) => !v)} className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold", favOnly ? "bg-amber-400 text-amber-950" : "bg-white/5 text-sub hover:bg-white/10")}>
+              <Star className="size-3" /> Favorites
+            </button>
             {folders.map((f) => (
               <button
                 key={f.id}
@@ -211,6 +220,22 @@ export default function WumpSavedPlacesPanel({
                           {p.created_at ? ` · ${timeAgo(p.created_at)}` : ""}
                         </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const on = !(p.favorite || localFavs.includes(p.id));
+                          void wumpSetFavorite(p.id, on).then((ok) => {
+                            if (!ok) return;
+                            setLocalFavs(localFavoriteIds());
+                            onChanged?.(p.id, { favorite: on });
+                          });
+                        }}
+                        className="grid size-8 place-items-center rounded-full text-sub transition hover:bg-white/10 hover:text-amber-200"
+                        aria-label={p.favorite || localFavs.includes(p.id) ? `Unfavorite ${p.name}` : `Favorite ${p.name}`}
+                        title="Favorite"
+                      >
+                        <Star className={cn("size-3.5", (p.favorite || localFavs.includes(p.id)) && "fill-amber-300 text-amber-300")} />
+                      </button>
                       <a
                         href={appleMapsLink(p.lat, p.lng, p.name)}
                         target="_blank"
@@ -295,6 +320,7 @@ function Checkins({ places }: { places: WumpSavedPlace[] }) {
   const [rows, setRows] = useState<CheckIn[]>([]);
   const [placeId, setPlaceId] = useState("");
   const [note, setNote] = useState("");
+  const [picking, setPicking] = useState(false);
 
   useEffect(() => {
     void myCheckins().then(setRows);
@@ -316,6 +342,7 @@ function Checkins({ places }: { places: WumpSavedPlace[] }) {
               setRows(next);
               setNote("");
               toast("Checked in", "success");
+              window.dispatchEvent(new Event("wump-checkins"));
             })
             .catch((err: Error) => toast(err.message, "error"));
         }}
@@ -326,8 +353,24 @@ function Checkins({ places }: { places: WumpSavedPlace[] }) {
           ))}
         </select>
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note" maxLength={280} className="min-w-0 flex-1 rounded-full bg-black/30 px-2 py-1 text-[11px] outline-none" />
+        <button type="button" onClick={() => setPicking((v) => !v)} className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold">Map</button>
         <button type="submit" className="rounded-full bg-sky-400 px-2.5 py-1 text-[11px] font-bold text-sky-950">Check in</button>
       </form>
+      {picking && (
+        <div className="mt-2">
+          <LocationPicker
+            confirmLabel="Check in here"
+            onCancel={() => setPicking(false)}
+            onPick={async (picked) => {
+              await addCheckin({ name: picked.name, lat: picked.lat, lng: picked.lng, note: picked.address });
+              setRows(await myCheckins());
+              setPicking(false);
+              toast("Checked in", "success");
+              window.dispatchEvent(new Event("wump-checkins"));
+            }}
+          />
+        </div>
+      )}
       <ul className="mt-2 space-y-1">
         {rows.slice(0, 8).map((row) => (
           <li key={row.id} className="flex items-center justify-between gap-2 text-[11px]">

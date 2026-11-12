@@ -100,6 +100,7 @@ export default function WumpRoutesPanel({ headingPoints }: { headingPoints: { la
                       {minutes === 60 ? "1 hour" : minutes === 1440 ? "1 day" : "7 days"}
                     </button>
                   ))}
+                  <button type="button" className="text-sky-200" onClick={() => window.dispatchEvent(new CustomEvent("wump-show-path", { detail: route.points }))}>Show</button>
                   <button type="button" className="text-dnd" onClick={() => void deleteRoute(route.id).then(refresh).catch((err: Error) => toast(err.message, "error"))}>Delete</button>
                 </div>
                 {live.map((link) => (

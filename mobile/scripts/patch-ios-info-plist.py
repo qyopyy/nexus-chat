@@ -19,11 +19,11 @@ DEFAULT_PLIST = Path(__file__).resolve().parents[1] / "ios" / "App" / "App" / "I
 # Keep strings aligned with .github/workflows/ipa.yml / ipa-appstore.yml
 STRING_KEYS: dict[str, str] = {
     "NSLocationWhenInUseUsageDescription": (
-        "Nexus uses your location for Bump so you can find friends and family nearby. "
+        "Nexus uses your location for the Wump map, directions, check-ins, and finding friends nearby. "
         "Location is rounded and expires after 20 minutes."
     ),
     "NSLocationAlwaysAndWhenInUseUsageDescription": (
-        "Nexus can refresh your Bump pin in the background while you are Live, "
+        "Nexus can refresh your Wump pin in the background while you are Live, "
         "so family can keep finding you nearby. Turn Live off anytime to stop sharing."
     ),
     "NSMicrophoneUsageDescription": "Nexus uses your microphone for voice calls.",

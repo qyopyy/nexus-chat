@@ -1,59 +1,161 @@
 import { NextRequest } from "next/server";
 import { rateLimit } from "@/lib/apiGuard";
 import { cacheGet, cacheSet } from "@/lib/serverCache";
-import { coord, getJson, wumpJson, type WumpRoute } from "@/lib/wumpApi";
+import { getJson, wumpJson, type WumpRoute } from "@/lib/wumpApi";
+import {
+  decodePolyline,
+  maneuverText,
+  orsProfile,
+  osrmUrl,
+  parseLatLngPair,
+  parseVia,
+  pickRouteProvider,
+  routeStops,
+  valhallaCosting,
+  valhallaEndpoint,
+  type LatLng,
+  type RouteMode,
+  type RouteProvider,
+} from "@/lib/wumpRoutePlan";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// OSRM (OpenStreetMap routing) — walking/cycling via routing.openstreetmap.de, driving via the OSRM demo server
-const HOSTS = { walk: "https://routing.openstreetmap.de/routed-foot/route/v1/driving", bike: "https://routing.openstreetmap.de/routed-bike/route/v1/driving", drive: "https://router.project-osrm.org/route/v1/driving" } as const;
+/**
+ * Directions — GET /api/wump/route?from=lat,lng&to=lat,lng&mode=walk|bike|drive&via=lat,lng|lat,lng
+ *
+ * Provider (first match):
+ *   OPENROUTESERVICE_API_KEY — OpenRouteService
+ *   VALHALLA_URL             — Valhalla (optional VALHALLA_API_KEY bearer)
+ *   otherwise the public OSRM demo / FOSSGIS foot & bike routers
+ */
 
-type OsrmStep = { distance: number; name: string; maneuver: { type: string; modifier?: string } };
-type Osrm = { code: string; routes?: { distance: number; duration: number; geometry: { coordinates: [number, number][] }; legs: { steps: OsrmStep[] }[] }[] };
+type Step = { text: string; distance: number };
 
-const say = (s: OsrmStep) => {
-  const m = s.maneuver;
-  const dir = m.modifier ? m.modifier.replace("slight ", "slightly ").replace("sharp ", "sharp ") : "";
-  const on = s.name ? ` onto ${s.name}` : "";
-  switch (m.type) {
-    case "depart": return `Head ${dir || "out"}${s.name ? ` on ${s.name}` : ""}`;
-    case "arrive": return "Arrive at your destination";
-    case "turn": return `Turn ${dir}${on}`;
-    case "roundabout": case "rotary": return `Take the roundabout${on}`;
-    case "merge": return `Merge ${dir}${on}`;
-    case "fork": return `Keep ${dir}${on}`;
-    case "end of road": return `At the end of the road turn ${dir}${on}`;
-    default: return `Continue${dir ? ` ${dir}` : ""}${on}`;
-  }
-};
+function modeOf(v: string | null): RouteMode {
+  return v === "bike" || v === "drive" ? v : "walk";
+}
 
-/** Directions — GET /api/wump/route?from=lat,lng&to=lat,lng&mode=walk|bike|drive */
+function envProvider(): RouteProvider {
+  return pickRouteProvider({
+    ors: process.env.OPENROUTESERVICE_API_KEY,
+    valhalla: process.env.VALHALLA_URL,
+  });
+}
+
+async function fromOsrm(stops: LatLng[], mode: RouteMode): Promise<{ distance: number; duration: number; coords: LatLng[]; steps: Step[] }> {
+  type OsrmStep = { distance: number; name: string; maneuver: { type: string; modifier?: string } };
+  type Osrm = { code: string; routes?: { distance: number; duration: number; geometry: { coordinates: [number, number][] }; legs: { steps: OsrmStep[] }[] }[] };
+  const j = await getJson<Osrm>(osrmUrl(mode, stops), {}, 12_000);
+  const r = j.routes?.[0];
+  if (j.code !== "Ok" || !r) throw new Error("No route found between those points");
+  return {
+    distance: Math.round(r.distance),
+    duration: Math.round(r.duration),
+    coords: r.geometry.coordinates.map(([lng, lat]) => [lat, lng] as LatLng),
+    steps: r.legs
+      .flatMap((l) => l.steps)
+      .filter((s) => s.distance > 0 || s.maneuver.type === "arrive")
+      .slice(0, 60)
+      .map((s) => ({ text: maneuverText(s.maneuver.type, s.maneuver.modifier, s.name), distance: Math.round(s.distance) })),
+  };
+}
+
+async function fromOrs(stops: LatLng[], mode: RouteMode): Promise<{ distance: number; duration: number; coords: LatLng[]; steps: Step[] }> {
+  const key = process.env.OPENROUTESERVICE_API_KEY || "";
+  type Ors = {
+    features?: {
+      properties?: { summary?: { distance: number; duration: number }; segments?: { steps?: { distance: number; instruction?: string; name?: string }[] }[] };
+      geometry?: { coordinates: [number, number][] };
+    }[];
+  };
+  const j = await getJson<Ors>(
+    `https://api.openrouteservice.org/v2/directions/${orsProfile(mode)}/geojson`,
+    {
+      method: "POST",
+      headers: { Authorization: key, "Content-Type": "application/json" },
+      body: JSON.stringify({ coordinates: stops.map(([lat, lng]) => [lng, lat]) }),
+    },
+    14_000,
+  );
+  const f = j.features?.[0];
+  const summary = f?.properties?.summary;
+  const coords = f?.geometry?.coordinates;
+  if (!summary || !coords?.length) throw new Error("No route found between those points");
+  const steps = (f.properties?.segments ?? [])
+    .flatMap((seg) => seg.steps ?? [])
+    .slice(0, 60)
+    .map((s) => ({ text: s.instruction || (s.name ? `Continue on ${s.name}` : "Continue"), distance: Math.round(s.distance) }));
+  return {
+    distance: Math.round(summary.distance),
+    duration: Math.round(summary.duration),
+    coords: coords.map(([lng, lat]) => [lat, lng] as LatLng),
+    steps,
+  };
+}
+
+async function fromValhalla(stops: LatLng[], mode: RouteMode): Promise<{ distance: number; duration: number; coords: LatLng[]; steps: Step[] }> {
+  const base = process.env.VALHALLA_URL || "";
+  const key = process.env.VALHALLA_API_KEY || "";
+  type Val = {
+    trip?: {
+      summary?: { length: number; time: number };
+      legs?: { shape?: string; maneuvers?: { instruction?: string; length?: number }[] }[];
+    };
+  };
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (key) headers.Authorization = `Bearer ${key}`;
+  const j = await getJson<Val>(
+    valhallaEndpoint(base),
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        locations: stops.map(([lat, lng]) => ({ lat, lon: lng })),
+        costing: valhallaCosting(mode),
+        units: "kilometers",
+      }),
+    },
+    14_000,
+  );
+  const trip = j.trip;
+  if (!trip?.summary || !trip.legs?.length) throw new Error("No route found between those points");
+  const coords = trip.legs.flatMap((leg) => (leg.shape ? decodePolyline(leg.shape, 6) : []));
+  const steps = trip.legs
+    .flatMap((leg) => leg.maneuvers ?? [])
+    .slice(0, 60)
+    .map((m) => ({ text: m.instruction || "Continue", distance: Math.round((m.length ?? 0) * 1000) }));
+  if (coords.length < 2) throw new Error("No route found between those points");
+  return {
+    distance: Math.round(trip.summary.length * 1000),
+    duration: Math.round(trip.summary.time),
+    coords,
+    steps,
+  };
+}
+
 export async function GET(req: NextRequest) {
   const limited = rateLimit(req, "wump-route", 30, 60_000);
   if (limited) return limited;
-  const from = coord(req.nextUrl.searchParams.get("from"));
-  const to = coord(req.nextUrl.searchParams.get("to"));
-  const m = req.nextUrl.searchParams.get("mode");
-  const mode: WumpRoute["mode"] = m === "bike" || m === "drive" ? m : "walk";
+  const from = parseLatLngPair(req.nextUrl.searchParams.get("from"));
+  const to = parseLatLngPair(req.nextUrl.searchParams.get("to"));
+  const mode = modeOf(req.nextUrl.searchParams.get("mode"));
+  const via = parseVia(req.nextUrl.searchParams.get("via"));
   if (!from || !to) return wumpJson({ error: "from and to must be lat,lng" }, 400);
-  const key = `${mode}|${from.map((n) => n.toFixed(4))}|${to.map((n) => n.toFixed(4))}`;
+  const stops = routeStops(from, to, via);
+  if (stops.length < 2) return wumpJson({ error: "Pick two different points" }, 400);
+  const provider = envProvider();
+  const key = `${provider}|${mode}|${stops.map((p) => p.map((n) => n.toFixed(4)).join(",")).join(";")}`;
   const hit = cacheGet<WumpRoute>("wump-route", key, 10 * 60_000);
   if (hit) return wumpJson(hit, 200, 120);
   try {
-    const j = await getJson<Osrm>(`${HOSTS[mode]}/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson&steps=true`, {}, 12_000);
-    const r = j.routes?.[0];
-    if (j.code !== "Ok" || !r) return wumpJson({ error: "No route found between those points" }, 404);
-    const out: WumpRoute = {
-      mode,
-      distance: Math.round(r.distance),
-      duration: Math.round(r.duration),
-      coords: r.geometry.coordinates.map(([lng, lat]) => [lat, lng] as [number, number]),
-      steps: r.legs.flatMap((l) => l.steps).filter((s) => s.distance > 0 || s.maneuver.type === "arrive").slice(0, 60).map((s) => ({ text: say(s), distance: Math.round(s.distance) })),
-    };
+    const built = provider === "ors" ? await fromOrs(stops, mode) : provider === "valhalla" ? await fromValhalla(stops, mode) : await fromOsrm(stops, mode);
+    const out: WumpRoute = { mode, provider, ...built };
     cacheSet("wump-route", key, out);
     return wumpJson(out, 200, 120);
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "";
+    if (/No route/.test(msg)) return wumpJson({ error: msg }, 404);
     return wumpJson({ error: "Directions are busy — try again" }, 502);
   }
 }

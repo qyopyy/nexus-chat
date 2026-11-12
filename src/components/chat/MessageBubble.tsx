@@ -32,7 +32,9 @@ import MessageVeil from "./MessageVeil";
 import { PollCard } from "./Poll";
 import { POLL_RE } from "@/lib/polls";
 import { BUMP_PIN_RE, CAPSULE_RE, JAM_RE } from "@/lib/chatExtras";
+import { WUMP_CARD_RE } from "@/lib/wumpCard";
 import { BumpPinCard, CapsuleCard, JamCard } from "./Extras";
+import WumpPlaceCard from "@/components/maps/WumpPlaceCard";
 import { useSignedUrl } from "@/lib/storage";
 import { downloadAttachment } from "@/lib/downloadAttachment";
 import { FormattedText } from "@/lib/chatFormat";
@@ -389,6 +391,8 @@ function MessageBubbleImpl({
                 <JamCard id={displayContent.match(JAM_RE)![1]} />
               ) : CAPSULE_RE.test(displayContent) ? (
                 <CapsuleCard id={displayContent.match(CAPSULE_RE)![1]} mine={mine} />
+              ) : WUMP_CARD_RE.test(displayContent) ? (
+                <WumpPlaceCard text={displayContent} mine={mine} />
               ) : BUMP_PIN_RE.test(displayContent) ? (
                 <BumpPinCard text={displayContent} mine={mine} />
               ) : displayContent ? (
@@ -402,6 +406,7 @@ function MessageBubbleImpl({
                 !POLL_RE.test(displayContent) &&
                 !JAM_RE.test(displayContent) &&
                 !CAPSULE_RE.test(displayContent) &&
+                !WUMP_CARD_RE.test(displayContent) &&
                 !BUMP_PIN_RE.test(displayContent) &&
                 !displayContent.includes("/acetate/s/") && <LinkEmbed text={displayContent} mine={mine} />}
               {displayContent.includes("/v/") && !deleted && <VideoEmbed text={displayContent} />}

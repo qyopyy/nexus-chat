@@ -24,5 +24,12 @@ export async function getJson<T>(url: string, init: RequestInit = {}, timeout = 
 }
 
 export type WumpSearchResult = { id: string; name: string; address: string | null; kind: string | null; lat: number; lng: number };
-export type WumpRoute = { mode: "walk" | "bike" | "drive"; distance: number; duration: number; coords: [number, number][]; steps: { text: string; distance: number }[] };
+export type WumpRoute = {
+  mode: "walk" | "bike" | "drive";
+  provider?: "osrm" | "ors" | "valhalla";
+  distance: number;
+  duration: number;
+  coords: [number, number][];
+  steps: { text: string; distance: number }[];
+};
 export type WumpPoi = { id: string; name: string; kind: string; lat: number; lng: number; address: string | null; open: string | null; website: string | null };

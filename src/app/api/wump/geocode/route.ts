@@ -112,10 +112,31 @@ export async function GET(req: NextRequest) {
   if (cached?.ok) return json(cached);
 
   let out: WumpGeocode | null = null;
-  try {
-    out = await fromNominatim(lat, lng);
-  } catch {
-    /* try fallback */
+  const maptiler = process.env.MAPTILER_API_KEY || process.env.NEXT_PUBLIC_MAPTILER_KEY || "";
+  if (maptiler) {
+    try {
+      const mu = new URL(`https://api.maptiler.com/geocoding/${lng},${lat}.json`);
+      mu.searchParams.set("key", maptiler);
+      mu.searchParams.set("limit", "1");
+      type Mt = { features?: { text?: string; place_name?: string }[] };
+      const res = await fetch(mu.toString(), { signal: AbortSignal.timeout(8_000) });
+      if (res.ok) {
+        const j = (await res.json()) as Mt;
+        const f = j.features?.[0];
+        if (f?.place_name || f?.text) {
+          out = { ok: true, name: f.text || null, locality: null, city: null, country: null, display: (f.place_name || f.text || "").slice(0, 160), source: "maptiler" };
+        }
+      }
+    } catch {
+      /* Nominatim below */
+    }
+  }
+  if (!out?.display) {
+    try {
+      out = await fromNominatim(lat, lng);
+    } catch {
+      /* try fallback */
+    }
   }
   if (!out?.display) {
     try {
