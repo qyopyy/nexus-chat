@@ -15,8 +15,10 @@ import {
   Link2,
   Lock,
   Play,
+  Pin,
   Plus,
   RefreshCw,
+  Search,
   Share2,
   Trash2,
   Upload,
@@ -142,9 +144,24 @@ function MeProfileBtn() {
   );
 }
 
+const PIN_KEY = "untitled.pins";
+
+function readPins() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PIN_KEY) || "[]") as unknown;
+    return Array.isArray(raw) ? raw.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 function Home() {
   const [projects, setProjects] = useState<UntitledProject[] | null>(null);
   const [creating, setCreating] = useState(false);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<"new" | "title" | "listens">("new");
+  const [pins, setPins] = useState<string[]>([]);
+  useEffect(() => setPins(readPins()), []);
 
   const load = useCallback(() => {
     void listMyProjects()
@@ -161,6 +178,28 @@ function Home() {
         <p className="mt-2 max-w-md text-sm text-[#8a8478]">
           Upload unfinished demos (mp3, wav, m4a, mp4…), version them, share listen or download links, and grow a public profile when you&apos;re ready.
         </p>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <label className="relative min-w-0 flex-1">
+          <Search className="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[#8a8478]" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search cuts"
+            className="w-full rounded-full border border-white/10 bg-white/[0.03] py-2 pr-3 pl-9 text-sm outline-none"
+          />
+        </label>
+        <select
+          value={sort}
+          onChange={(event) => setSort(event.target.value as "new" | "title" | "listens")}
+          className="rounded-full border border-white/10 bg-[#070709] px-3 py-2 text-xs font-semibold"
+          aria-label="Sort cuts"
+        >
+          <option value="new">Newest</option>
+          <option value="title">Title</option>
+          <option value="listens">Most listened</option>
+        </select>
       </div>
 
       <div className="mb-4 flex items-center justify-between">
@@ -193,9 +232,50 @@ function Home() {
           <p className="mt-3 text-sm text-[#8a8478]">No projects yet. Create one and drop in a sketch.</p>
         </div>
       ) : (
+        <CutList
+          projects={projects}
+          query={query}
+          sort={sort}
+          pins={pins}
+          onPin={(id) => {
+            const next = pins.includes(id) ? pins.filter((pin) => pin !== id) : [id, ...pins];
+            setPins(next);
+            localStorage.setItem(PIN_KEY, JSON.stringify(next));
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function CutList({
+  projects,
+  query,
+  sort,
+  pins,
+  onPin,
+}: {
+  projects: UntitledProject[];
+  query: string;
+  sort: "new" | "title" | "listens";
+  pins: string[];
+  onPin: (id: string) => void;
+}) {
+  const needle = query.trim().toLowerCase();
+  const shown = projects
+    .filter((project) => !needle || `${project.title} ${project.note ?? ""}`.toLowerCase().includes(needle))
+    .sort((a, b) => {
+      const pin = Number(pins.includes(b.id)) - Number(pins.includes(a.id));
+      if (pin) return pin;
+      if (sort === "title") return a.title.localeCompare(b.title);
+      if (sort === "listens") return b.listen_count - a.listen_count;
+      return a.updated_at < b.updated_at ? 1 : -1;
+    });
+  if (!shown.length) return <p className="py-10 text-center text-sm text-[#8a8478]">No cuts match that search.</p>;
+  return (
         <div>
           <div className="mb-6 flex gap-3 overflow-x-auto pb-2">
-            {projects.map((p) => (
+            {shown.map((p) => (
               <button key={`cover-${p.id}`} onClick={() => untitledGo({ view: "project", id: p.id })} className="w-36 shrink-0 text-left sm:w-40">
                 <span className="grid aspect-square w-full place-items-center rounded-xl shadow-lg" style={{ background: `linear-gradient(160deg,${p.color},#101614)` }}>
                   <Disc3 className="size-8 text-white/80" />
@@ -206,8 +286,9 @@ function Home() {
             ))}
           </div>
         <div className="space-y-2">
-          {projects.map((p) => (
-            <button key={p.id} onClick={() => untitledGo({ view: "project", id: p.id })} className="flex w-full items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.03] p-3 text-left hover:bg-white/[0.05]">
+          {shown.map((p) => (
+            <div key={p.id} className="flex items-center gap-1 rounded-2xl border border-white/5 bg-white/[0.03] pr-2 hover:bg-white/[0.05]">
+            <button onClick={() => untitledGo({ view: "project", id: p.id })} className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left">
               <span className="grid size-12 place-items-center rounded-xl" style={{ background: `linear-gradient(145deg,${p.color},#1a1714)` }}>
                 <Headphones className="size-5 text-white/80" />
               </span>
@@ -218,10 +299,12 @@ function Home() {
                 </span>
               </span>
             </button>
+            <button type="button" aria-label={pins.includes(p.id) ? "Unpin" : "Pin"} aria-pressed={pins.includes(p.id)} className={`grid size-9 place-items-center rounded-full ${pins.includes(p.id) ? "text-[#c4a574]" : "text-[#8a8478]"}`} onClick={() => onPin(p.id)}>
+              <Pin className="size-4" />
+            </button>
+            </div>
           ))}
         </div>
-        </div>
-      )}
     </div>
   );
 }

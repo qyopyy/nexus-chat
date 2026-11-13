@@ -4,6 +4,8 @@
 
 - Distro iOS builds publish a GitHub Release tagged `distro-ios-N` with `Distro.ipa`.
 - Untitled (Cutroom) has its own shell at `/untitled/app`, bundle `hu.qyopy.untitled`, and a release tagged `untitled-ios-N`.
+- Untitled home can search cuts, sort them, and pin one to the top on this device.
+- Distro overview counts live, in-review, draft, and needs-you releases.
 
 ## Distro iOS 1.0.0
 
