@@ -12,8 +12,8 @@ import { openLiveHub } from "@/lib/live";
 import { openPulse } from "@/lib/pulse";
 import { bumpIpaReleasesUrl, openBump } from "@/lib/bump";
 import { browserIpaReleasesUrl, openBrowser } from "@/lib/browser";
-import { NEXUS_IPA_RELEASES_URL, fetchLatestIpa } from "@/lib/ipaDownloads";
-import { isBrowserApp, isBumpApp, isNativeApp } from "@/lib/useMobile";
+import { NEXUS_IPA_RELEASES_URL, fetchLatestIpa, ipaReleasesUrl } from "@/lib/ipaDownloads";
+import { isBrowserApp, isBumpApp, isDistroApp, isNativeApp } from "@/lib/useMobile";
 import { openStaffDesk } from "@/lib/privileges";
 import { leaveCall } from "@/lib/call";
 import { supabase } from "@/lib/supabase";
@@ -186,6 +186,12 @@ export default function MobileMe() {
         {!isBumpApp() &&
           row(<Download className="size-[18px]" />, "#7c3aed", "Download Wump iOS app (IPA)", () => {
             window.open(bumpIpaReleasesUrl(), "_blank", "noopener,noreferrer");
+          })}
+        {!isDistroApp() &&
+          row(<Download className="size-[18px]" />, "#27272a", "Download Distro iOS app (IPA)", () => {
+            void fetchLatestIpa("distro").then((hit) => {
+              window.open(hit?.url || ipaReleasesUrl("distro"), "_blank", "noopener,noreferrer");
+            });
           })}
         {row(<Vault className="size-[18px]" />, "#5865f2", "My Vault — private files & share links", () => {
           useStudio.setState({ section: "vault", releaseId: null });

@@ -15,6 +15,7 @@ export type IpaKind =
   | "wump"
   | "link"
   | "browser"
+  | "distro"
   | "appstore"
   | "wump-appstore"
   | "browser-appstore"
@@ -83,6 +84,13 @@ export const IPA_KIND_META: Record<
     assetHint: "Browser.ipa",
     query: "Browser iOS",
     bundleId: "hu.qyopy.browser.B44X8B76QR",
+  },
+  distro: {
+    label: "Distro (Sideloadly)",
+    tagPrefix: "distro-ios-",
+    assetHint: "Distro.ipa",
+    query: "Distro iOS",
+    bundleId: "hu.qyopy.distro",
   },
 };
 
