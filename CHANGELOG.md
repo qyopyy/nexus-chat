@@ -1,5 +1,10 @@
 # Changelog
 
+## Distro and Untitled releases
+
+- Distro iOS builds publish a GitHub Release tagged `distro-ios-N` with `Distro.ipa`.
+- Untitled (Cutroom) has its own shell at `/untitled/app`, bundle `hu.qyopy.untitled`, and a release tagged `untitled-ios-N`.
+
 ## Distro iOS 1.0.0
 
 - Standalone Distro shell, bundle `hu.qyopy.distro`, opens `/distro/app`. Unsigned IPA artifact `Distro-ipa` from the Distro iOS workflow.

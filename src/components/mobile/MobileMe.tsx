@@ -13,7 +13,7 @@ import { openPulse } from "@/lib/pulse";
 import { bumpIpaReleasesUrl, openBump } from "@/lib/bump";
 import { browserIpaReleasesUrl, openBrowser } from "@/lib/browser";
 import { NEXUS_IPA_RELEASES_URL, fetchLatestIpa, ipaReleasesUrl } from "@/lib/ipaDownloads";
-import { isBrowserApp, isBumpApp, isDistroApp, isNativeApp } from "@/lib/useMobile";
+import { isBrowserApp, isBumpApp, isDistroApp, isNativeApp, isUntitledApp } from "@/lib/useMobile";
 import { openStaffDesk } from "@/lib/privileges";
 import { leaveCall } from "@/lib/call";
 import { supabase } from "@/lib/supabase";
@@ -191,6 +191,12 @@ export default function MobileMe() {
           row(<Download className="size-[18px]" />, "#27272a", "Download Distro iOS app (IPA)", () => {
             void fetchLatestIpa("distro").then((hit) => {
               window.open(hit?.url || ipaReleasesUrl("distro"), "_blank", "noopener,noreferrer");
+            });
+          })}
+        {!isUntitledApp() &&
+          row(<Download className="size-[18px]" />, "#c4a574", "Download Untitled iOS app (IPA)", () => {
+            void fetchLatestIpa("untitled").then((hit) => {
+              window.open(hit?.url || ipaReleasesUrl("untitled"), "_blank", "noopener,noreferrer");
             });
           })}
         {row(<Vault className="size-[18px]" />, "#5865f2", "My Vault — private files & share links", () => {

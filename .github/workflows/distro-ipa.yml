@@ -122,3 +122,133 @@ jobs:
         with:
           name: Distro-ipa
           path: mobile-distro/Distro.ipa
+
+      - name: Publish release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="distro-ios-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" Distro.ipa --repo "$GITHUB_REPOSITORY" \
+            --title "Distro iOS ${APP_VERSION} (build ${GITHUB_RUN_NUMBER})" \
+            --notes "Standalone **Distro** IPA (bundle \`hu.qyopy.distro\`).
+
+          Install with Sideloadly / AltStore using your Apple ID.
+          Opens: ${DISTRO_URL}
+
+          Unsigned — Transporter will reject it. The live workspace updates from the website."
+
+  # Untitled is built here on a manual run so the first release can publish
+  # before .github/workflows/untitled-ipa.yml exists on main.
+  untitled-ipa:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: mobile-untitled
+    env:
+      UNTITLED_URL: ${{ github.event.inputs.url || vars.UNTITLED_URL || 'https://nexusproject.cc/untitled/app' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Capacitor
+        run: npm install --no-audit --no-fund
+
+      - name: Create iOS project
+        run: |
+          echo "Untitled app will open: $UNTITLED_URL"
+          npx cap add ios
+          npx cap sync ios
+
+      - name: Read app version
+        run: echo "APP_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+
+      - name: Icon, splash, and playback settings
+        run: |
+          python3 scripts/patch-ios-info-plist.py ios/App/App/Info.plist
+          PLIST=ios/App/App/Info.plist
+          pb() { /usr/libexec/PlistBuddy -c "$1" "$PLIST" 2>/dev/null || true; }
+          pb "Add :UIBackgroundModes array"
+          pb "Add :UIBackgroundModes:0 string audio"
+          pb "Set :CFBundleDisplayName Untitled"
+          pb "Add :CFBundleDisplayName string Untitled"
+          pb "Set :CFBundleName Untitled"
+          pb "Add :CFBundleName string Untitled"
+          pb "Set :CFBundleShortVersionString ${APP_VERSION}"
+          pb "Add :CFBundleShortVersionString string ${APP_VERSION}"
+          pb "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}"
+          pb "Add :CFBundleVersion string ${GITHUB_RUN_NUMBER}"
+          pb "Add :ITSAppUsesNonExemptEncryption bool false"
+          pb "Set :UIUserInterfaceStyle Dark"
+          pb "Add :UIUserInterfaceStyle string Dark"
+          test -f resources/icon-1024.png
+          ICONSET=ios/App/App/Assets.xcassets/AppIcon.appiconset
+          mkdir -p "$ICONSET"
+          cp resources/AppIcon.Contents.json "$ICONSET/Contents.json"
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          src = Path("resources/icon-1024.png")
+          iconset = Path("ios/App/App/Assets.xcassets/AppIcon.appiconset")
+          data = json.loads((iconset / "Contents.json").read_text())
+          for img in data["images"]:
+              w, h = img["size"].split("x")
+              scale = int(img["scale"].replace("x", ""))
+              px = int(round(float(w) * scale))
+              out = iconset / img["filename"]
+              subprocess.check_call(["sips", "-z", str(px), str(px), str(src), "--out", str(out)], stdout=subprocess.DEVNULL)
+          PY
+          sips -p 2732 2732 --padColor 070709 resources/icon-1024.png --out /tmp/untitled-splash.png
+          SPLASH=$(find ios/App/App/Assets.xcassets -type d -name 'Splash.imageset' | head -1)
+          if [ -n "$SPLASH" ]; then
+            for f in "$SPLASH"/*.png; do
+              [ -f "$f" ] && cp /tmp/untitled-splash.png "$f"
+            done
+          fi
+
+      - name: Build (unsigned)
+        run: |
+          cd ios/App
+          if [ -d App.xcworkspace ]; then TARGET="-workspace App.xcworkspace"; else TARGET="-project App.xcodeproj"; fi
+          xcodebuild $TARGET -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/App.xcarchive" archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            MARKETING_VERSION="${APP_VERSION}" CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
+            | tail -40
+          test -d build/App.xcarchive/Products/Applications/App.app
+
+      - name: Package IPA
+        run: |
+          cd ios/App
+          APP=build/App.xcarchive/Products/Applications/App.app
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier hu.qyopy.untitled" "$APP/Info.plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string hu.qyopy.untitled" "$APP/Info.plist"
+          bash "$GITHUB_WORKSPACE/.github/scripts/fix-ios-framework-ids.sh" "$APP"
+          rm -rf Payload && mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qry ../../Untitled.ipa Payload
+          ls -lh ../../Untitled.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Untitled-ipa
+          path: mobile-untitled/Untitled.ipa
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="untitled-ios-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" Untitled.ipa --repo "$GITHUB_REPOSITORY" \
+            --title "Untitled iOS ${APP_VERSION} (build ${GITHUB_RUN_NUMBER})" \
+            --notes "Standalone **Untitled** (Cutroom) IPA (bundle \`hu.qyopy.untitled\`).
+
+          Install with Sideloadly / AltStore using your Apple ID.
+          Opens: ${UNTITLED_URL}
+
+          Unsigned — Transporter will reject it. Projects stay on the same Nexus account."

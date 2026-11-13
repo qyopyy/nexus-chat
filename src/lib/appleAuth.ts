@@ -47,6 +47,7 @@ function appleReturnPath() {
   const path = window.location.pathname;
   if (path.startsWith("/bump") || path.startsWith("/wump")) return "/wump/app";
   if (path.startsWith("/distro")) return "/distro/app";
+  if (path.startsWith("/untitled/app")) return "/untitled/app";
   if (path.startsWith("/acetate")) return "/acetate/app";
   if (path.startsWith("/bio")) return "/bio/app";
   if (path.startsWith("/browser")) return "/browser/app";

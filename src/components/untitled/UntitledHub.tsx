@@ -24,6 +24,7 @@ import {
   Users,
 } from "lucide-react";
 import { useApp, toast } from "@/store/app";
+import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import PlayerBar from "./PlayerBar";
@@ -80,7 +81,7 @@ type ProjectTab = "tracks" | "share" | "activity";
 
 const COLORS = ["#c4a574", "#7aa2a0", "#b07a8a", "#8a9a6a", "#6a8ab0", "#a08a6a"];
 
-export default function UntitledHub({ mobile }: { mobile?: boolean }) {
+export default function UntitledHub({ mobile, standalone }: { mobile?: boolean; standalone?: boolean }) {
   const stack = useUntitled((s) => s.stack);
   const route = stack[stack.length - 1];
   const [queueTracks, setQueueTracks] = useState<UntitledTrack[]>([]);
@@ -94,6 +95,8 @@ export default function UntitledHub({ mobile }: { mobile?: boolean }) {
           <button onClick={untitledBack} className="grid size-9 place-items-center rounded-full hover:bg-white/5" aria-label="Back">
             <ArrowLeft className="size-5" />
           </button>
+        ) : standalone ? (
+          <span className="grid size-9 place-items-center text-lg text-[#c4a574]" aria-hidden>♩</span>
         ) : (
           <button onClick={() => useApp.setState(mobile ? { hub: null, mobileTab: "music" } : { hub: "music" })} className="grid size-9 place-items-center rounded-full hover:bg-white/5" aria-label="Back to Music">
             <ArrowLeft className="size-5" />
@@ -108,6 +111,11 @@ export default function UntitledHub({ mobile }: { mobile?: boolean }) {
             Explore
           </button>
           <MeProfileBtn />
+          {standalone && (
+            <button type="button" onClick={() => void supabase.auth.signOut()} className="rounded-full px-2 py-1.5 text-xs text-[#8a8478]">
+              Sign out
+            </button>
+          )}
         </div>
       </header>
 
