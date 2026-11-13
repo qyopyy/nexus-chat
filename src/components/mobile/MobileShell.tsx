@@ -14,6 +14,7 @@ import MobileMe from "./MobileMe";
 import MobileCallBar from "./MobileCallBar";
 import GamesHub from "@/components/games/GamesHub";
 import AppsHub from "@/components/apps/AppsHub";
+import DistributionPanelHub from "@/components/distribution/DistributionPanelHub";
 import BumpHub from "@/components/bump/BumpHub";
 import MusicHub from "@/components/music/MusicHub";
 import VideosHub from "@/components/videos/VideosHub";
@@ -66,6 +67,8 @@ export default function MobileShell() {
                 mobile
                 onBack={() => useApp.setState({ hub: "apps", appsTool: null })}
               />
+            ) : hub === "panel" ? (
+              <DistributionPanelHub mobile onBack={() => useApp.setState({ hub: "apps", appsTool: null })} />
             ) : (
               <AppsHub mobile />
             ))}

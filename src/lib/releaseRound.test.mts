@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { offlinePath } from "./acetateOffline.ts";
 import { pinAgeSeconds, pinIsLive } from "./wumpMapStyle.ts";
@@ -41,8 +42,10 @@ test("wild spawns stay on the rounded block and are stable", () => {
 });
 
 test("release notes match the shells", () => {
-  assert.equal(NEXUS_RELEASE.version, "1.9.0");
-  assert.equal(ACETATE_RELEASE.version, "1.2.0");
+  const nexus = JSON.parse(readFileSync(new URL("../../mobile/package.json", import.meta.url), "utf8")) as { version: string };
+  const acetate = JSON.parse(readFileSync(new URL("../../mobile-acetate/package.json", import.meta.url), "utf8")) as { version: string };
+  assert.equal(NEXUS_RELEASE.version, nexus.version);
+  assert.equal(ACETATE_RELEASE.version, acetate.version);
   assert.equal(NEXUS_RELEASE.items.length >= 4, true);
   assert.equal(ACETATE_RELEASE.items.length >= 3, true);
 });

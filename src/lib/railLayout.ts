@@ -17,6 +17,7 @@ export type RailHubId =
   | "apps"
   | "studio"
   | "bump"
+  | "panel"
   | "staff";
 
 export const RAIL_HUB_IDS: RailHubId[] = [
@@ -32,6 +33,7 @@ export const RAIL_HUB_IDS: RailHubId[] = [
   "apps",
   "studio",
   "bump",
+  "panel",
   "staff",
 ];
 

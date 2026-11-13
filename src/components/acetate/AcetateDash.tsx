@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Bell, Download, MoreHorizontal, Pause, Play, Plus, Search, Share2 } from "lucide-react";
+import { useDistributionPanelEnabled } from "@/lib/distributionPanel";
+import { ACETATE_RELEASE } from "@/lib/releaseNotes";
 import { supabase } from "@/lib/supabase";
 import { toast, useApp } from "@/store/app";
 import {
@@ -80,7 +82,7 @@ export default function AcetateDash(props: {
   onShare: (kind: "track" | "project", id: string, title: string) => void;
   run: (task: () => Promise<void>) => void;
   onNotices: () => void;
-  onNavigate: (name: "radio" | "recap" | "premium" | "bring") => void;
+  onNavigate: (name: "radio" | "recap" | "premium" | "bring" | "panel") => void;
 }) {
   const [chip, setChip] = useState<Chip>(props.screen === "projects" ? "projects" : "all");
   const [query, setQuery] = useState("");
@@ -292,18 +294,18 @@ export default function AcetateDash(props: {
       )}
       {props.screen !== "project" && (
         <>
-          <label className="fixed bottom-24 left-4 grid size-14 cursor-pointer place-items-center rounded-full shadow-lg" style={{ background: "var(--ac-accent)", color: "var(--ac-accent-text)" }}>
+          <label className="fixed bottom-40 left-4 grid size-14 cursor-pointer place-items-center rounded-full shadow-lg md:bottom-24" style={{ background: "var(--ac-accent)", color: "var(--ac-accent-text)" }}>
             <Plus className="size-6" />
             <span className="sr-only">Upload</span>
             <input type="file" accept="audio/*,.wav,.aiff,.aif,.flac,.mp3" multiple className="hidden" onChange={(e) => { const files = [...(e.target.files ?? [])]; e.target.value = ""; if (files.length) upload(files, props.screen === "vault" ? "vault" : "shelf"); }} />
           </label>
           {props.screen !== "vault" && (
-            <button type="button" aria-label="Vault" className="fixed right-4 bottom-24 grid size-14 place-items-center rounded-full" style={{ background: "var(--ac-card)" }} onClick={props.onVault}>
+            <button type="button" aria-label="Vault" className="fixed right-4 bottom-40 grid size-14 place-items-center rounded-full md:bottom-24" style={{ background: "var(--ac-card)" }} onClick={props.onVault}>
               <StackIcon />
             </button>
           )}
           {props.screen === "vault" && (
-            <button type="button" className="fixed right-4 bottom-24 rounded-full px-4 py-3 text-sm font-bold" style={{ background: "var(--ac-card)" }} onClick={() => {
+            <button type="button" className="fixed right-4 bottom-40 rounded-full px-4 py-3 text-sm font-bold md:bottom-24" style={{ background: "var(--ac-card)" }} onClick={() => {
               const title = window.prompt("Folder name");
               if (title?.trim()) props.run(() => createProject("project", title.trim(), undefined, "vault").then(() => undefined));
             }}>New folder</button>
@@ -509,7 +511,7 @@ function AccountSheet(props: {
   admin: boolean;
   theme: ReturnType<typeof useAcetateTheme>;
   onPlan: () => void;
-  onNavigate: (name: "radio" | "recap" | "premium" | "bring") => void;
+  onNavigate: (name: "radio" | "recap" | "premium" | "bring" | "panel") => void;
 }) {
   const crossfade = useAcetatePlayer((s) => s.crossfade);
   const [saved, setSaved] = useState<ReturnType<typeof offlineCuts>>([]);
@@ -524,6 +526,7 @@ function AccountSheet(props: {
   const musicShare = used > 0 ? music / used : 0;
   const coverShare = used > 0 ? covers / used : 0;
   const exported = exportTheme(props.theme.tokens);
+  const panelOn = useDistributionPanelEnabled();
   useEffect(() => {
     let live = true;
     void (async () => {
@@ -575,7 +578,7 @@ function AccountSheet(props: {
         </div>
         <ul className="mt-3 overflow-hidden rounded-2xl text-sm" style={{ background: "var(--ac-card)" }}>
           <Row label="Playback" value={crossfade > 0 ? `${Math.round(crossfade / 100) / 10}s crossfade` : "No crossfade"} onClick={() => useAcetatePlayer.getState().setCrossfade(crossfade > 0 ? 0 : 4000)} />
-          <Row label="What's new" value="1.2.0" onClick={() => window.dispatchEvent(new Event("acetate-whats-new"))} />
+          <Row label="What's new" value={ACETATE_RELEASE.version} onClick={() => window.dispatchEvent(new Event("acetate-whats-new"))} />
           <Row label="On this device" value={saved.length ? String(saved.length) : "None"} />
           <Row label="Privacy" value={props.shares ? "Private · links on" : "Private"} />
           <Row label="Share links" value={String(props.shares)} />
@@ -636,6 +639,7 @@ function AccountSheet(props: {
           </div>
         </div>
         <div className="mt-3 space-y-2 text-sm">
+          {panelOn && <button type="button" className="block w-full rounded-2xl px-3 py-3 text-left" style={{ background: "var(--ac-card)" }} onClick={() => props.onNavigate("panel")}>Distribution <span className="float-right" style={{ color: "var(--ac-muted)" }}>Panel</span></button>}
           <button type="button" className="block w-full rounded-2xl px-3 py-3 text-left" style={{ background: "var(--ac-card)" }} onClick={() => props.onNavigate("bring")}>Convert or import</button>
           <button type="button" className="block w-full rounded-2xl px-3 py-3 text-left" style={{ background: "var(--ac-card)" }} onClick={() => props.onNavigate("radio")}>Radio</button>
           <button type="button" className="block w-full rounded-2xl px-3 py-3 text-left" style={{ background: "var(--ac-card)" }} onClick={() => props.onNavigate("recap")}>Recap</button>

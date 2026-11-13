@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import Link from "next/link";
 import { Disc3, History, Library, Plus, Radio, Sparkles } from "lucide-react";
+import { useDistributionPanelEnabled } from "@/lib/distributionPanel";
+import DistributionPanelCard from "@/components/distribution/DistributionPanelCard";
+import { AcetateSidebar, AcetateTabBar, type AcetateDestination } from "./AcetateNav";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { mfaNeedsChallenge } from "@/lib/mfa";
 import { toast, useApp } from "@/store/app";
@@ -84,7 +87,8 @@ type Screen =
   | { name: "radio" }
   | { name: "recap" }
   | { name: "vault" }
-  | { name: "bring" };
+  | { name: "bring" }
+  | { name: "panel" };
 
 type LibraryState = {
   projects: AcetateProject[];
@@ -133,6 +137,7 @@ export default function AcetateApp() {
   const me = useApp((s) => (userId ? s.profiles[userId] : undefined));
   const chats = useApp((s) => s.chatList);
   const admin = roleRank(me?.site_role) >= 3;
+  const panelOn = useDistributionPanelEnabled();
 
   useEffect(() => {
     if (!isConfigured) return;
@@ -377,10 +382,23 @@ export default function AcetateApp() {
     });
   const folders = [...new Set(ownTracks.map((track) => track.folder).filter((folder): folder is string => !!folder))];
   const visibleProjects = library.projects.filter((project) => kindFilter === "all" || project.kind === kindFilter);
-  const showChrome = !["library", "projects", "project", "vault", "bring"].includes(screen.name);
+  const showChrome = !["library", "projects", "project", "vault", "bring", "panel"].includes(screen.name);
+
+  function go(name: AcetateDestination) {
+    if (name === "library") setScreen({ name: "library" });
+    else if (name === "projects") setScreen({ name: "projects" });
+    else if (name === "vault") setScreen({ name: "vault" });
+    else if (name === "bring") setScreen({ name: "bring" });
+    else if (name === "radio") setScreen({ name: "radio" });
+    else if (name === "recap") setScreen({ name: "recap" });
+    else if (name === "panel") setScreen({ name: "panel" });
+    else setScreen({ name: "premium" });
+  }
 
   return (
-    <div className="flex h-full min-h-0 flex-col text-[#f4f1ea]" style={{ ...theme.style, background: theme.tokens.bg, color: theme.tokens.text }}>
+    <div className="flex h-full min-h-0 text-[#f4f1ea]" style={{ ...theme.style, background: theme.tokens.bg, color: theme.tokens.text }}>
+      <AcetateSidebar current={screen.name} onGo={go} />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <Toasts />
       <WhatsNew release={ACETATE_RELEASE} storageKey="acetate.seenRelease" openEvent="acetate-whats-new" />
       <PhoneLink />
@@ -430,10 +448,11 @@ export default function AcetateApp() {
         <NavButton active={screen.name === "radio"} onClick={() => setScreen({ name: "radio" })} icon={<Radio className="size-4" />} label="Radio" />
         <NavButton active={screen.name === "recap"} onClick={() => setScreen({ name: "recap" })} icon={<History className="size-4" />} label="Recap" />
         <NavButton active={screen.name === "premium"} onClick={() => setScreen({ name: "premium" })} icon={<Sparkles className="size-4" />} label="Premium" />
+        {panelOn && <NavButton active={false} onClick={() => setScreen({ name: "panel" })} icon={<Disc3 className="size-4" />} label="Distribution" />}
       </nav>
       </>
       )}
-      <div className={`min-h-0 flex-1 ${screen.name === "library" || screen.name === "projects" || screen.name === "vault" || screen.name === "project" || screen.name === "bring" ? "overflow-y-auto" : "overflow-y-auto px-4 pb-6"}`}>
+      <div className={`min-h-0 flex-1 ${screen.name === "library" || screen.name === "projects" || screen.name === "vault" || screen.name === "project" || screen.name === "bring" || screen.name === "panel" ? "overflow-y-auto" : "overflow-y-auto px-4 pb-6"}`}>
         {(screen.name === "library" || screen.name === "projects" || screen.name === "vault" || screen.name === "project") && userId && (
           <AcetateDash
             library={library}
@@ -454,13 +473,15 @@ export default function AcetateApp() {
             onShare={(kind, id, title) => setShareFor({ kind, id, title })}
             run={(task) => void run(task)}
             onNotices={() => void reload().catch(reportAcetateError)}
-            onNavigate={(name) => {
-              if (name === "radio") setScreen({ name: "radio" });
-              else if (name === "recap") setScreen({ name: "recap" });
-              else if (name === "bring") setScreen({ name: "bring" });
-              else setScreen({ name: "premium" });
-            }}
+            onNavigate={go}
           />
+        )}
+
+        {screen.name === "panel" && (
+          <div className="px-4 py-4">
+            <button type="button" className="mb-3 text-sm" style={{ color: "var(--ac-muted, #a3988c)" }} onClick={() => setScreen({ name: "library" })}>Home</button>
+            <DistributionPanelCard tone="acetate" />
+          </div>
         )}
 
         {screen.name === "bring" && userId && (
@@ -539,6 +560,9 @@ export default function AcetateApp() {
           />
         )}
 
+        {screen.name === "radio" && <AcetateRadio />}
+        {screen.name === "recap" && <AcetateRecap />}
+
         {screen.name === "premium" && (
           <Premium storage={storage} busy={busy} onCheckout={() => void run(async () => {
             const result = await startCheckout();
@@ -563,6 +587,7 @@ export default function AcetateApp() {
         </div>
       )}
       <PhoneCommandHost />
+      <AcetateTabBar current={screen.name} onGo={go} />
       <AcetatePlayerBar />
       {shareFor && (
         <ShareSheet
@@ -585,6 +610,7 @@ export default function AcetateApp() {
           onSend={(id) => void run(() => sendToNexusChat(id, nexusFor.title, nexusFor.url).then(() => setNexusFor(null)))}
         />
       )}
+      </div>
     </div>
   );
 }

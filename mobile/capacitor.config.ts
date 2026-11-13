@@ -3,7 +3,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 // The iOS/Android apps are native shells around the live site, so every web deploy
 // updates the apps automatically — no rebuild needed for UI / bots / server features.
 // Wump (MapLibre map, directions, place alerts) ships in that web bundle at /wump/app.
-// Shell 1.9.0 — scratch notes, drop claiming, and the map hosts below are web + this config.
+// Shell 1.9.1 — distribution panel opens via @capacitor/browser; the host below is explicit.
 // Prefer the production domain; NEXUS_URL overrides for staging builds.
 const url = process.env.NEXUS_URL || "https://nexusproject.cc";
 
@@ -22,6 +22,7 @@ const config: CapacitorConfig = {
     allowNavigation: [
       "nexusproject.cc",
       "*.nexusproject.cc",
+      "panel.nexusproject.cc",
       "*.supabase.co",
       "*.vercel.app",
       "fonts.googleapis.com",

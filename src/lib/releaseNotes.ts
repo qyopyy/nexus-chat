@@ -6,8 +6,12 @@ export type ReleaseNote = {
 
 export const NEXUS_RELEASE: ReleaseNote = {
   app: "Nexus",
-  version: "1.9.0",
+  version: "1.9.1",
   items: [
+    {
+      title: "Distribution panel",
+      body: "Panel is in the sidebar, Apps, and Settings. It opens the music distribution dashboard in a new tab, or in the iPhone in-app browser so that sign-in stays there.",
+    },
     {
       title: "A note that stays with the chat",
       body: "Each conversation has a private scratch note. Only you can read it, and it follows you to your other signed-in devices.",
@@ -45,8 +49,12 @@ export const NEXUS_RELEASE: ReleaseNote = {
 
 export const ACETATE_RELEASE: ReleaseNote = {
   app: "Acetate",
-  version: "1.2.0",
+  version: "1.2.1",
   items: [
+    {
+      title: "Distribution panel",
+      body: "Distribution is in the sidebar, the phone tabs, and Account. Releases and splits open on the panel. On iPhone that is the in-app browser.",
+    },
     {
       title: "Vault tracks on this device",
       body: "Keep versions you own in Vault on the phone. They play from that copy when the signed link is gone, and Account lists what is saved so you can remove it.",

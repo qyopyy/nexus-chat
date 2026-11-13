@@ -10,6 +10,7 @@ export type FeatureFlags = {
   format_convert: boolean;
   soundcloud_import: boolean;
   link_import: boolean;
+  distribution_panel: boolean;
 };
 
 const ON: FeatureFlags = {
@@ -20,8 +21,10 @@ const ON: FeatureFlags = {
   format_convert: true,
   soundcloud_import: true,
   link_import: true,
+  distribution_panel: true,
 };
 
+const WITH_PANEL = "phone_link, locator, live_stage, vault_uploads, format_convert, soundcloud_import, link_import, distribution_panel";
 const FULL = "phone_link, locator, live_stage, vault_uploads, format_convert, soundcloud_import, link_import";
 const LEGACY = "phone_link, locator, live_stage, vault_uploads";
 
@@ -42,15 +45,21 @@ function read(row: Partial<FeatureFlags> | null): FeatureFlags {
     format_convert: row.format_convert !== false,
     soundcloud_import: row.soundcloud_import !== false,
     link_import: row.link_import !== false,
+    distribution_panel: row.distribution_panel !== false,
   };
 }
 
 export async function loadFeatureFlags() {
   if (Date.now() - loaded < 15_000) return cache;
-  const first = await supabase.from("site_settings").select(FULL).eq("id", 1).maybeSingle();
+  const first = await supabase.from("site_settings").select(WITH_PANEL).eq("id", 1).maybeSingle();
   loaded = Date.now();
   if (!first.error) {
     cache = read(first.data as Partial<FeatureFlags> | null);
+    return cache;
+  }
+  const previous = await supabase.from("site_settings").select(FULL).eq("id", 1).maybeSingle();
+  if (!previous.error) {
+    cache = read(previous.data as Partial<FeatureFlags> | null);
     return cache;
   }
   const legacy = await supabase.from("site_settings").select(LEGACY).eq("id", 1).maybeSingle();

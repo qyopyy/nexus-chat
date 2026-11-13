@@ -8,6 +8,7 @@ import {
   Music2,
   NotebookPen,
   ChartPie,
+  Disc3,
   Ruler,
   ArrowLeft,
   AudioLines,
@@ -69,6 +70,8 @@ import IpaDownloads from "@/components/apps/IpaDownloads";
 import TestFlightInvites from "@/components/apps/TestFlightInvites";
 import { openBump } from "@/lib/bump";
 import { openBrowser } from "@/lib/browser";
+import { openDistributionHub } from "@/components/distribution/DistributionPanelHub";
+import { useDistributionPanelEnabled } from "@/lib/distributionPanel";
 
 type ToolId =
   | "bump"
@@ -430,6 +433,7 @@ const TOOLS: {
 export default function AppsHub({ mobile }: { mobile?: boolean }) {
   const appsTool = useApp((s) => s.appsTool);
   const hub = useApp((s) => s.hub);
+  const panelOn = useDistributionPanelEnabled();
   const [tool, setTool] = useState<ToolId | null>((appsTool as ToolId) || null);
 
   useEffect(() => {
@@ -561,6 +565,31 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
               </span>
             </div>
           </button>
+
+          {panelOn && (
+            <button
+              type="button"
+              onClick={() => openDistributionHub()}
+              className="group relative w-full overflow-hidden rounded-3xl text-left ring-1 ring-[#e4a15a]/40 transition hover:-translate-y-0.5"
+              style={{ background: "linear-gradient(135deg,#3c2a1a 0%,#1a120c 55%,#100e0c 100%)" }}
+            >
+              <div className="relative flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:p-6">
+                <span className="grid size-16 shrink-0 place-items-center rounded-2xl bg-[#e4a15a] text-[#100e0c] sm:size-20">
+                  <Disc3 className="size-8" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-bold tracking-[0.14em] text-[#e4a15a] uppercase">Distribution</div>
+                  <div className="mt-1 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Panel</div>
+                  <p className="mt-1 max-w-xl text-sm text-white/75">
+                    Releases, splits, and your panel account. Opens in a new tab on the web, and in the in-app browser on iPhone.
+                  </p>
+                </div>
+                <span className="inline-flex shrink-0 items-center justify-center rounded-full bg-[#e4a15a] px-5 py-2.5 text-sm font-bold text-[#100e0c]">
+                  Open
+                </span>
+              </div>
+            </button>
+          )}
 
           <TestFlightInvites />
 
