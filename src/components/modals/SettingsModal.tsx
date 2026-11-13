@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Accessibility, Bell, Camera, ChevronLeft, ChevronRight, Construction, Crown, Database, Keyboard, Link2, MapPin, MonitorSmartphone, ShieldCheck, LogOut, Mic, Palette, Shield, Smile, Sparkles, Upload, User, Wifi, X } from "lucide-react";
+import { Accessibility, Bell, Camera, ChevronLeft, ChevronRight, Construction, Crown, Database, Disc3, Keyboard, Link2, MapPin, MonitorSmartphone, ShieldCheck, LogOut, Mic, Palette, Shield, Smile, Sparkles, Upload, User, Wifi, X } from "lucide-react";
 import { LIVE_STYLES, TYPING_STYLES, setChatFx, useChatFx } from "@/lib/chatFx";
 import { LiveText, TypingAnim } from "@/components/chat/TypingBubbles";
 import { useApp, closeModal, openModal, toast } from "@/store/app";
 import { detectPush, disablePush, enablePush, usePush } from "@/lib/push";
 import { isNativeApp } from "@/lib/useMobile";
+import { useDistributionPanelEnabled } from "@/lib/distributionPanel";
 import { CAMERA_QUALITY_OPTIONS, effectiveCameraQuality, pickCameraQuality, useCall, leaveCall, micConstraints, updateSettings, type NoiseMode, type ScreenQuality, type VoiceQuality } from "@/lib/call";
 import AvatarStudio from "@/components/vavatar/AvatarStudio";
 import DevelopmentModePanel from "@/components/admin/DevelopmentModePanel";
@@ -57,6 +58,7 @@ const MOBILE_GROUPS: { title: string; items: [Section, string, React.ReactNode, 
 
 /** phone settings home: every page in an iOS-style list */
 function MobileSettingsHome({ isStaff, isAdmin, onPick }: { isStaff: boolean; isAdmin: boolean; onPick: (s: Section) => void }) {
+  const panelOn = useDistributionPanelEnabled();
   const groups = isStaff
     ? [...MOBILE_GROUPS, { title: "Staff", items: [["admin", "Admin Panel", <Shield key="ad" className="size-[18px]" />, "#ed4245"], ...(isAdmin ? [["devmode", "Dev / updating", <Construction key="dv" className="size-[18px]" />, "#f0a020"]] : [])] as [Section, string, React.ReactNode, string][] }]
     : MOBILE_GROUPS;
@@ -91,6 +93,11 @@ function MobileSettingsHome({ isStaff, isAdmin, onPick }: { isStaff: boolean; is
         <a href="/phone" className="flex min-h-[52px] w-full items-center gap-3 rounded-2xl bg-side px-3.5 text-left font-semibold active:bg-white/[.06]">
           <MonitorSmartphone className="size-5" /> Phone Link
         </a>
+        {panelOn && (
+          <a href="/panel" className="flex min-h-[52px] w-full items-center gap-3 rounded-2xl bg-side px-3.5 text-left font-semibold active:bg-white/[.06]">
+            <Disc3 className="size-5" /> Panel
+          </a>
+        )}
         <button onClick={() => openModal("premium")} className="flex min-h-[52px] w-full items-center gap-3 rounded-2xl bg-side px-3.5 text-left font-semibold text-[#f0b232] active:bg-white/[.06]">
           <Crown className="size-5" /> Nexus Premium
         </button>
@@ -112,6 +119,7 @@ function MobileSettingsHome({ isStaff, isAdmin, onPick }: { isStaff: boolean; is
 }
 
 export default function SettingsModal({ initial }: { initial: string | null }) {
+  const panelOn = useDistributionPanelEnabled();
   const [section, setSection] = useState<Section>(() => {
     const base = (initial ?? "account").split(":")[0];
     return ALL.includes(base as Section) ? (base as Section) : "account";
@@ -166,6 +174,11 @@ export default function SettingsModal({ initial }: { initial: string | null }) {
           <a href="/phone" className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sub transition hover:bg-hover hover:text-txt">
             <MonitorSmartphone className="size-4" /> Phone Link
           </a>
+          {panelOn && (
+            <a href="/panel" className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sub transition hover:bg-hover hover:text-txt">
+              <Disc3 className="size-4" /> Panel
+            </a>
+          )}
           <button onClick={() => openModal("premium")} className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left font-semibold text-[#f0b232] transition hover:bg-hover">
             <Crown className="size-4" />
             Nexus Premium

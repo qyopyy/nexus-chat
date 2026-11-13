@@ -39,6 +39,7 @@ import { startPush } from "@/lib/push";
 import { joinGame } from "@/store/games";
 import GamesHub from "@/components/games/GamesHub";
 import AppsHub from "@/components/apps/AppsHub";
+import DistributionPanelHub from "@/components/distribution/DistributionPanelHub";
 import BumpHub from "@/components/bump/BumpHub";
 import MusicHub from "./music/MusicHub";
 import VideosHub from "./videos/VideosHub";
@@ -342,6 +343,8 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
             <BumpHub />
           ) : hub === "apps" ? (
             <AppsHub />
+          ) : hub === "panel" ? (
+            <DistributionPanelHub />
           ) : hub === "cutroom" || hub === "untitled" ? (
             <UntitledHub />
           ) : hub === "radio" ? (

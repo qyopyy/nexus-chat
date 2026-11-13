@@ -2,7 +2,9 @@
 
 import { emojiPlain } from "@/lib/customEmoji";
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Phone, Search, SquarePen, Users } from "lucide-react";
+import { ChevronDown, ChevronUp, Disc3, Phone, Search, SquarePen, Users } from "lucide-react";
+import { openDistributionHub } from "@/components/distribution/DistributionPanelHub";
+import { useDistributionPanelEnabled } from "@/lib/distributionPanel";
 import { useApp, openModal } from "@/store/app";
 import { friendIds, openConversation, openDM } from "@/lib/data";
 import { cn, formatListTime } from "@/lib/utils";
@@ -36,6 +38,7 @@ export default function HomeSidebar() {
   const pending = friendships.filter((f) => f.status === "pending" && f.addressee_id === me).length;
   const chatOrder = useSpacePrefs((s) => s.chatOrder);
   const [reorderChats, setReorderChats] = useState(false);
+  const panelOn = useDistributionPanelEnabled();
 
   const titleOf = (c: ChatListItem) =>
     c.kind === "dm" ? profiles[c.other_user_id ?? ""]?.display_name ?? "Direct message" : c.name ?? "Group";
@@ -159,6 +162,17 @@ export default function HomeSidebar() {
           <span className="flex-1 font-medium">Friends</span>
           {pending > 0 && <span className="rounded-full bg-dnd px-1.5 text-xs font-bold text-white">{pending}</span>}
         </button>
+
+        {panelOn && (
+          <button
+            type="button"
+            onClick={() => openDistributionHub()}
+            className="mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sub transition hover:bg-hover hover:text-txt"
+          >
+            <Disc3 className="size-5 text-[#e4a15a]" />
+            <span className="flex-1 font-medium">Panel</span>
+          </button>
+        )}
 
         {visible.length === 0 && newContacts.length === 0 && (
           <p className="px-3 py-8 text-center text-sm text-sub">

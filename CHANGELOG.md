@@ -1,5 +1,22 @@
 # Changelog
 
+## Nexus 1.9.1
+
+- Panel entry in the server rail, the chat sidebar, Apps, You, and Settings. It explains the distribution dashboard and opens it.
+- On the web the panel opens in a new tab. In the iOS shell it opens in the in-app browser so the panel sign-in persists.
+- Admin desk quick links for the panel, plus a Distribution panel switch (default on).
+- Shell 1.9.1 includes `@capacitor/browser` and lists `panel.nexusproject.cc` in allowNavigation.
+
+Migration (not applied): `supabase/migrations/20261113120000_distribution_panel.sql`.
+
+Optional env: `NEXT_PUBLIC_DISTRIBUTION_PANEL_URL` (defaults to `https://panel.nexusproject.cc`).
+
+## Acetate 1.2.1
+
+- Distribution in the desktop sidebar, the phone tab bar and menu, and Account.
+- Landing page at `/panel` with sign-in, sign-up, releases, and splits. Those paths were checked on the live panel.
+- Same in-app browser on the Acetate iOS shell. The entry hides when the admin switch is off.
+
 ## Nexus 1.9.0
 
 - Private scratch notes on a chat, visible only to you, synced with your account.

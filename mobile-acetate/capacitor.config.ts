@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 // Standalone Acetate shell — same Supabase backend and Nexus accounts, its own bundle id and icon.
-// Web deploys to /acetate/app update this app without rebuilding.
+// Shell 1.2.1 — distribution panel opens via @capacitor/browser. Web deploys to /acetate/app update this app without rebuilding.
 const url = process.env.ACETATE_URL || process.env.NEXUS_URL || "https://nexusproject.cc/acetate/app";
 
 const config: CapacitorConfig = {
@@ -16,6 +16,7 @@ const config: CapacitorConfig = {
     allowNavigation: [
       "nexusproject.cc",
       "*.nexusproject.cc",
+      "panel.nexusproject.cc",
       "*.supabase.co",
       "*.vercel.app",
       "secure.soundcloud.com",

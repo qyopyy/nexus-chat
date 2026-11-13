@@ -11,6 +11,7 @@ import {
   Gamepad2,
   Headphones,
   LayoutDashboard,
+  Disc3,
   MapPin,
   Megaphone,
   MessageCircle,
@@ -30,6 +31,8 @@ import { openRadio } from "@/lib/radio";
 import { openLiveHub } from "@/lib/live";
 import { openPulse } from "@/lib/pulse";
 import { openBump } from "@/lib/bump";
+import { openDistributionHub } from "@/components/distribution/DistributionPanelHub";
+import { useDistributionPanelEnabled } from "@/lib/distributionPanel";
 import { can, openStaffDesk } from "@/lib/privileges";
 import { cn, initials } from "@/lib/utils";
 import { haptic } from "@/lib/haptics";
@@ -100,6 +103,7 @@ const HUB_ICON: Record<RailHubId, React.ReactNode> = {
   apps: <AppWindow className="size-6" />,
   studio: <LayoutDashboard className="size-6" />,
   bump: <MapPin className="size-5" />,
+  panel: <Disc3 className="size-5" />,
   staff: <Crown className="size-5" />,
 };
 
@@ -114,6 +118,7 @@ const HUB_COLOR: Partial<Record<RailHubId, string>> = {
   games: "#ff2bd6",
   apps: "#00a8fc",
   bump: "#7c3aed",
+  panel: "#e4a15a",
   staff: "#eb459e",
 };
 
@@ -156,6 +161,9 @@ function activateHub(id: RailHubId) {
     case "bump":
       openBump();
       break;
+    case "panel":
+      openDistributionHub();
+      break;
     case "staff":
       openStaffDesk();
       break;
@@ -172,6 +180,8 @@ function hubActive(id: RailHubId, spaceId: string | null, hub: string | null) {
       return hub === "studio";
     case "bump":
       return hub === "bump";
+    case "panel":
+      return hub === "panel";
     case "apps":
       return hub === "apps";
     default:
@@ -229,9 +239,11 @@ export default function ServerRail() {
   }, [chatList, unread, friendships, me]);
 
   const staffOk = can.staffDesk();
+  const panelOn = useDistributionPanelEnabled();
 
   function renderHub(id: RailHubId) {
     if (id === "staff" && !staffOk) return null;
+    if (id === "panel" && !panelOn) return null;
     const active = hubActive(id, spaceId, hub);
     const color = active ? HUB_COLOR[id] : undefined;
     return (

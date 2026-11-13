@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase, errorText } from "@/lib/supabase";
 import { useApp, toast } from "@/store/app";
 import { fmtBytes } from "@/lib/acetateAudio";
+import { DISTRIBUTION_PANEL_LINKS, distributionPanelUrl } from "@/lib/distributionPanel";
 import { banUser, setRole, unbanUser } from "@/lib/admin";
 import type { SiteRole } from "@/lib/theme";
 
@@ -21,7 +22,7 @@ type Overview = {
   vault_bytes: number;
   signups: { day: string; n: number }[];
   uploads: { day: string; n: number }[];
-  flags: { phone_link: boolean; locator: boolean; live_stage: boolean; vault_uploads: boolean; format_convert?: boolean; soundcloud_import?: boolean; link_import?: boolean };
+  flags: { phone_link: boolean; locator: boolean; live_stage: boolean; vault_uploads: boolean; format_convert?: boolean; soundcloud_import?: boolean; link_import?: boolean; distribution_panel?: boolean };
   policy: { shelf_free_bytes: number; vault_quota_bytes: number | null; file_bytes: number };
 };
 
@@ -172,6 +173,16 @@ export default function OwnerDesk({ userId }: { userId?: string }) {
             <Panel title="Acetate uploads">
               <Bars rows={overview.uploads} />
             </Panel>
+            <Panel title="Quick links">
+              <div className="flex flex-wrap gap-2 text-sm">
+                <Link href="/panel" className="rounded-full bg-chat px-3 py-1.5 font-semibold">Distribution page</Link>
+                {DISTRIBUTION_PANEL_LINKS.map((link) => (
+                  <a key={link.id} href={distributionPanelUrl(link.path)} target="_blank" rel="noopener noreferrer" className="rounded-full bg-chat px-3 py-1.5">
+                    {link.label}
+                  </a>
+                ))}
+              </div>
+            </Panel>
             <Panel title="Announcement">
               <textarea value={notice} onChange={(e) => setNotice(e.target.value)} maxLength={280} className="min-h-20 w-full rounded-xl bg-chat px-3 py-2 text-sm outline-none" />
               <label className="mt-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={noticeOn} onChange={(e) => setNoticeOn(e.target.checked)} /> Show to everyone</label>
@@ -261,9 +272,10 @@ export default function OwnerDesk({ userId }: { userId?: string }) {
               <FlagRow label="Format converter" on={overview.flags.format_convert !== false} set={(v) => setOverview({ ...overview, flags: { ...overview.flags, format_convert: v } })} />
               <FlagRow label="SoundCloud import" on={overview.flags.soundcloud_import !== false} set={(v) => setOverview({ ...overview, flags: { ...overview.flags, soundcloud_import: v } })} />
               <FlagRow label="Link import" on={overview.flags.link_import !== false} set={(v) => setOverview({ ...overview, flags: { ...overview.flags, link_import: v } })} />
+              <FlagRow label="Distribution panel" on={overview.flags.distribution_panel !== false} set={(v) => setOverview({ ...overview, flags: { ...overview.flags, distribution_panel: v } })} />
               <button type="button" className="mt-3 rounded-full bg-accent px-3 py-1.5 text-sm font-semibold text-white" onClick={() => {
                 if (!confirm("Save these switches for everyone?")) return;
-                void supabase.rpc("admin_set_flags", {
+                const args = {
                   p_phone: overview.flags.phone_link,
                   p_locator: overview.flags.locator,
                   p_stage: overview.flags.live_stage,
@@ -271,7 +283,22 @@ export default function OwnerDesk({ userId }: { userId?: string }) {
                   p_format: overview.flags.format_convert !== false,
                   p_soundcloud: overview.flags.soundcloud_import !== false,
                   p_links: overview.flags.link_import !== false,
-                }).then(({ error }) => toast(error ? errorText(error) : "Switches saved", error ? "error" : "success"));
+                  p_panel: overview.flags.distribution_panel !== false,
+                };
+                void supabase.rpc("admin_set_flags", args).then(async ({ error }) => {
+                  if (!error) {
+                    toast("Switches saved", "success");
+                    return;
+                  }
+                  const missing = /schema cache|PGRST202|could not find the function/i.test(error.message);
+                  if (!missing) {
+                    toast(errorText(error), "error");
+                    return;
+                  }
+                  const { p_panel: _panel, ...previous } = args;
+                  const fallback = await supabase.rpc("admin_set_flags", previous);
+                  toast(fallback.error ? errorText(fallback.error) : "Other switches saved. Apply the distribution panel migration before that switch can be stored.", fallback.error ? "error" : "info");
+                });
               }}>Save switches</button>
             </Panel>
             <Panel title="Vault storage rule">
