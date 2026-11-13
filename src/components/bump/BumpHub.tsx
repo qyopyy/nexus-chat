@@ -372,10 +372,11 @@ export default function BumpHub({
 
   // Background watch + heartbeat while Live (works in Bump IPA / Nexus IPA)
   useEffect(() => {
-    if (!live || !me || quietHoursActive()) {
+    if (!live || !me) {
       void stopBumpBackground({ clearServer: false });
       return;
     }
+    if (quietHoursActive()) return;
     if (!bgShare) {
       void stopBumpBackground({ clearServer: false });
       // 5-minute scheduled refresh when background share is off (foreground poll still moves pins)
@@ -890,7 +891,7 @@ export default function BumpHub({
               openPin={mapPin}
               onPlaces={() => {
                 setPlacesPanel((v) => !v);
-                if (!live) void goLive();
+                if (!live && !quietHoursActive()) void goLive();
               }}
             />
             <WumpExplorePanel
@@ -898,9 +899,9 @@ export default function BumpHub({
               username={myUsername}
               onOpenProfile={myUsername ? () => openProfilePage(myUsername) : undefined}
             />
-            {quiet && live && (
+            {quiet && (
               <p className="rounded-2xl bg-indigo-500/15 px-3 py-2 text-xs font-semibold text-indigo-100">
-                Quiet hours are on. Friends cannot see your pin until the window ends.
+                Quiet hours are on. Go Live stays off, and a pin that was already up is hidden until the window ends.
               </p>
             )}
             <WumpMeetCard

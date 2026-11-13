@@ -145,6 +145,7 @@ function MeProfileBtn() {
 }
 
 const PIN_KEY = "untitled.pins";
+const LAST_KEY = "untitled.last";
 
 function readPins() {
   try {
@@ -161,7 +162,15 @@ function Home() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"new" | "title" | "listens">("new");
   const [pins, setPins] = useState<string[]>([]);
-  useEffect(() => setPins(readPins()), []);
+  const [lastId, setLastId] = useState<string | null>(null);
+  useEffect(() => {
+    setPins(readPins());
+    try {
+      setLastId(localStorage.getItem(LAST_KEY));
+    } catch {
+      setLastId(null);
+    }
+  }, []);
 
   const load = useCallback(() => {
     void listMyProjects()
@@ -211,7 +220,7 @@ function Home() {
             try {
               const p = await createProject("New cut");
               load();
-              untitledGo({ view: "project", id: p.id });
+              openCut(p.id);
             } catch (e) {
               toast(String((e as Error).message ?? e), "error");
             } finally {
@@ -223,6 +232,20 @@ function Home() {
           <Plus className="size-3.5" /> New cut
         </button>
       </div>
+
+      {lastId && projects?.some((project) => project.id === lastId) && (
+        <button
+          type="button"
+          onClick={() => untitledGo({ view: "project", id: lastId })}
+          className="mb-4 flex w-full items-center justify-between rounded-2xl border border-[#c4a574]/30 bg-[#c4a574]/10 px-4 py-3 text-left"
+        >
+          <span>
+            <span className="block text-[10px] font-semibold tracking-[0.16em] text-[#c4a574] uppercase">Continue</span>
+            <span className="block font-semibold">{projects.find((project) => project.id === lastId)?.title}</span>
+          </span>
+          <span className="text-sm text-[#c4a574]">Open</span>
+        </button>
+      )}
 
       {projects === null ? (
         <div className="py-16 text-center text-sm text-[#8a8478]">Loading…</div>
@@ -248,6 +271,15 @@ function Home() {
   );
 }
 
+function openCut(id: string) {
+  try {
+    localStorage.setItem(LAST_KEY, id);
+  } catch {
+    /* private mode */
+  }
+  untitledGo({ view: "project", id });
+}
+
 function CutList({
   projects,
   query,
@@ -269,6 +301,7 @@ function CutList({
       if (pin) return pin;
       if (sort === "title") return a.title.localeCompare(b.title);
       if (sort === "listens") return b.listen_count - a.listen_count;
+      if (a.updated_at === b.updated_at) return a.title.localeCompare(b.title);
       return a.updated_at < b.updated_at ? 1 : -1;
     });
   if (!shown.length) return <p className="py-10 text-center text-sm text-[#8a8478]">No cuts match that search.</p>;
@@ -276,7 +309,7 @@ function CutList({
         <div>
           <div className="mb-6 flex gap-3 overflow-x-auto pb-2">
             {shown.map((p) => (
-              <button key={`cover-${p.id}`} onClick={() => untitledGo({ view: "project", id: p.id })} className="w-36 shrink-0 text-left sm:w-40">
+              <button key={`cover-${p.id}`} onClick={() => openCut(p.id)} className="w-36 shrink-0 text-left sm:w-40">
                 <span className="grid aspect-square w-full place-items-center rounded-xl shadow-lg" style={{ background: `linear-gradient(160deg,${p.color},#101614)` }}>
                   <Disc3 className="size-8 text-white/80" />
                 </span>
@@ -288,7 +321,7 @@ function CutList({
         <div className="space-y-2">
           {shown.map((p) => (
             <div key={p.id} className="flex items-center gap-1 rounded-2xl border border-white/5 bg-white/[0.03] pr-2 hover:bg-white/[0.05]">
-            <button onClick={() => untitledGo({ view: "project", id: p.id })} className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left">
+            <button onClick={() => openCut(p.id)} className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left">
               <span className="grid size-12 place-items-center rounded-xl" style={{ background: `linear-gradient(145deg,${p.color},#1a1714)` }}>
                 <Headphones className="size-5 text-white/80" />
               </span>
