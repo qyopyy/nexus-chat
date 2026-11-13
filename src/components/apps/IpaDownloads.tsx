@@ -14,7 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const SIGNED_KINDS: IpaKind[] = ["appstore", "wump-appstore", "browser-appstore", "link-appstore"];
-const SIDELOAD_KINDS: IpaKind[] = ["nexus", "wump", "link", "browser", "distro"];
+const SIDELOAD_KINDS: IpaKind[] = ["nexus", "wump", "link", "browser", "distro", "untitled"];
 
 /** Website surface for GitHub IPA builds + Capgo cloud channel. */
 export default function IpaDownloads({ compact }: { compact?: boolean }) {

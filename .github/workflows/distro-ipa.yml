@@ -122,3 +122,17 @@ jobs:
         with:
           name: Distro-ipa
           path: mobile-distro/Distro.ipa
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="distro-ios-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" Distro.ipa --repo "$GITHUB_REPOSITORY" \
+            --title "Distro iOS ${APP_VERSION} (build ${GITHUB_RUN_NUMBER})" \
+            --notes "Standalone **Distro** IPA (bundle \`hu.qyopy.distro\`).
+
+          Install with Sideloadly / AltStore using your Apple ID.
+          Opens: ${DISTRO_URL}
+
+          Unsigned — Transporter will reject it. The live workspace updates from the website."

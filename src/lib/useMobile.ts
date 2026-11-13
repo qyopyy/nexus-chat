@@ -47,6 +47,17 @@ export function isBrowserApp() {
   }
 }
 
+/** Standalone Untitled / Cutroom IPA (`hu.qyopy.untitled`). */
+export function isUntitledApp() {
+  if (typeof window === "undefined") return false;
+  if (/UntitledApp/i.test(navigator.userAgent)) return true;
+  try {
+    return window.location.pathname.startsWith("/untitled/app");
+  } catch {
+    return false;
+  }
+}
+
 /** Standalone Distro IPA (`hu.qyopy.distro`, UA includes DistroApp). */
 export function isDistroApp() {
   if (typeof window === "undefined") return false;
