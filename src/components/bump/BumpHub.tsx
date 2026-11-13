@@ -89,6 +89,7 @@ import { fetchWumpPrivacy, loadWumpPrivacyLocal, saveWumpPrivacy, type WumpPriva
 import { heartbeatArgs, privacyEventName } from "@/lib/hundred";
 import WumpOnboarding from "./WumpOnboarding";
 import WumpTogetherPanel from "./WumpTogetherPanel";
+import WumpWilds from "./WumpWilds";
 import WumpLiveSharePanel from "./WumpLiveSharePanel";
 import WumpSafetyPanel from "./WumpSafetyPanel";
 import WumpRoutesPanel from "./WumpRoutesPanel";
@@ -929,6 +930,7 @@ export default function BumpHub({
               }}
               onChanged={(id, patch) => setSavedPlaces((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)))}
             />
+            {me && <WumpWilds me={me} />}
             {me && (
               <WumpTogetherPanel me={me} myLat={myLat} myLng={myLng} placeName={myPlaceName} friendIds={friendIds} />
             )}

@@ -74,6 +74,20 @@ export function saveWumpPrivacyLocal(p: WumpPrivacy) {
   }
 }
 
+let privacyFetchedAt = 0;
+
+/** Re-read server privacy at most once a minute so another device can turn sharing off. */
+export async function refreshWumpPrivacyThrottled(userId: string, maxAge = 60_000) {
+  const local = loadWumpPrivacyLocal();
+  if (Date.now() - privacyFetchedAt < maxAge) return local;
+  privacyFetchedAt = Date.now();
+  try {
+    return await fetchWumpPrivacy(userId);
+  } catch {
+    return local;
+  }
+}
+
 export async function fetchWumpPrivacy(userId: string): Promise<WumpPrivacy> {
   const full = await supabase.from("user_privacy").select(PRIVACY_EXTRA).eq("user_id", userId).maybeSingle();
   const data = full.error

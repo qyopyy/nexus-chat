@@ -53,13 +53,13 @@ export function PollCard({ id, mine }: { id: string; mine: boolean }) {
   const toggle = async (i: number) => {
     if (closed) return;
     const on = !mineVotes.has(i);
-    // optimistic
+    const before = votes;
     setVotes((v) => {
       let n = poll.multi ? v : v.filter((x) => x.user_id !== me);
       n = on ? [...n, { poll_id: poll.id, user_id: me!, option: i }] : n.filter((x) => !(x.user_id === me && x.option === i));
       return n;
     });
-    await vote(poll, i, on);
+    if (!(await vote(poll, i, on))) setVotes(before);
   };
 
   const openRoster = (e: React.MouseEvent | React.KeyboardEvent) => {

@@ -313,7 +313,7 @@ export async function updateTrack(
   if (error) throw new Error(errorText(error));
 }
 
-export async function moveInProject(projectId: string, trackId: string, dir: -1 | 1, memberships: AcetateMembership[]) {
+export async function moveInProject(projectId: string, trackId: string, dir: -1 | 1, memberships: Pick<AcetateMembership, "project_id" | "track_id" | "position">[]) {
   const rows = memberships.filter((row) => row.project_id === projectId).sort((a, b) => a.position - b.position || a.track_id.localeCompare(b.track_id));
   const index = rows.findIndex((row) => row.track_id === trackId);
   const swap = rows[index + dir];

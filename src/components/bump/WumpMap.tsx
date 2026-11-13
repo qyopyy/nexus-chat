@@ -27,7 +27,7 @@ import {
   WUMP_STYLE_LABEL,
 } from "@/lib/geo";
 import { loadWumpGl, newWumpGlMap } from "@/lib/wumpGl";
-import { wumpBasemapCredit } from "@/lib/wumpMapStyle";
+import { pinAgeSeconds, pinIsLive, wumpBasemapCredit } from "@/lib/wumpMapStyle";
 import WumpMapTools from "./WumpMapTools";
 import WumpLiveWith from "./WumpLiveWith";
 import { useWumpPlus, wumpPlusStyles, PLUS_GOLD, type WumpPlusStyle } from "@/lib/wumpPlus";
@@ -206,6 +206,12 @@ export default function WumpMap({
       setFollow(false);
     }
   };
+  const focusFriendRef = useRef(focusFriend);
+  focusFriendRef.current = focusFriend;
+  const openPersonRef = useRef(onOpenPerson);
+  openPersonRef.current = onOpenPerson;
+  const openProfileRef = useRef(onOpenProfilePage);
+  openProfileRef.current = onOpenProfilePage;
   useEffect(() => {
     onFocusChange?.(withId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -490,10 +496,10 @@ export default function WumpMap({
       const marker = L.marker([lat, lng], { icon: wumpAvatarIcon(L, o), cluster: !opts.me }).addTo(map) as unknown as MarkerHandle;
       marker.on?.("click", () => {
         if (opts.me) {
-          if (opts.username && onOpenProfilePage) onOpenProfilePage(opts.username);
+          if (opts.username) openProfileRef.current?.(opts.username);
           return;
         }
-        focusFriend(id);
+        focusFriendRef.current(id);
       });
       markersRef.current.set(id, marker);
     };
@@ -561,7 +567,7 @@ export default function WumpMap({
       const p = profiles[n.user_id];
       const username = n.username || p?.username || null;
       const name = n.display_name || p?.display_name || username || "?";
-      const age = n.age_seconds ?? (n.updated_at ? (Date.now() - new Date(n.updated_at).getTime()) / 1000 : null);
+      const age = pinAgeSeconds(n);
       const stale = age != null && age > 90;
       const dist = formatMeters(n.meters);
       const ageTxt = ageLabel(age);
@@ -607,7 +613,7 @@ export default function WumpMap({
       const marker = L.marker([n.profile_place_lat, n.profile_place_lng], {
         icon: wumpPlaceIcon(L, { title: n.profile_place_name, color: profiles[n.user_id]?.avatar_color || "#f59e0b" }),
       }).addTo(map) as unknown as MarkerHandle;
-      marker.on?.("click", () => onOpenPerson(n.user_id));
+      marker.on?.("click", () => openPersonRef.current(n.user_id));
       placeMarkersRef.current.set(id, marker);
     }
     for (const [id, m] of [...placeMarkersRef.current.entries()]) {
@@ -821,7 +827,7 @@ export default function WumpMap({
     setSaving(false);
   };
 
-  const liveFriends = nearby.filter((n) => (n.age_seconds ?? 0) < 90).length;
+  const liveFriends = nearby.filter((n) => pinIsLive(n)).length;
   const shownPlace = shortPlace(myPlaceName || resolvedMine, 48);
   const profileHref = myUsername ? wumpProfileUrl(myUsername) : null;
   const pct = Math.max(0, Math.min(100, explorePercent || 0));

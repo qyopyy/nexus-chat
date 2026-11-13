@@ -24,7 +24,7 @@ jobs:
       - name: Type-check
         run: npx tsc --noEmit
       - name: Unit tests
-        run: node --experimental-strip-types --test src/lib/wumpMapPlan.test.mts
+        run: npm test
       - name: Build
         run: npm run build
       - name: Save lockfile

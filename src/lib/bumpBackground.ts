@@ -12,7 +12,7 @@ import { wumpExploreMark } from "./wumpPlaces";
 import { isNativeApp } from "./useMobile";
 import { haptic } from "./haptics";
 import { useApp } from "@/store/app";
-import { loadWumpPrivacyLocal } from "./wumpPrivacy";
+import { loadWumpPrivacyLocal, refreshWumpPrivacyThrottled } from "./wumpPrivacy";
 
 type CapLN = {
   requestPermissions?: () => Promise<{ display?: string }>;
@@ -108,7 +108,8 @@ async function publishQuiet(loc: DeviceLocation, force = false) {
   }
   lastLat = loc.lat;
   lastLng = loc.lng;
-  const priv = loadWumpPrivacyLocal();
+  const userId = useApp.getState().userId;
+  const priv = userId ? await refreshWumpPrivacyThrottled(userId) : loadWumpPrivacyLocal();
   if (!priv.wump_share_enabled) return;
   const ok = await bumpPublishSample(loc, opts.visible, opts.label, { geocode });
   if (ok) {

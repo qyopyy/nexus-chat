@@ -5,6 +5,7 @@ import AcetateConvert from "./AcetateConvert";
 import AcetateLinkPlayer from "./AcetateLinkPlayer";
 import { featureFlags, loadFeatureFlags, type FeatureFlags } from "@/lib/featureFlags";
 import { uploadAudio, updateTrack, type AcetateTrack } from "@/lib/acetate";
+import { toast } from "@/store/app";
 import { fmtTime } from "@/lib/acetateAudio";
 import {
   deleteLinkList,
@@ -73,6 +74,7 @@ export default function AcetateBring(props: {
         source_kind: "soundcloud",
         external_art: audio.artwork,
       });
+      toast(`${audio.title} is in Vault`, "success");
     });
   }
 
@@ -99,9 +101,10 @@ export default function AcetateBring(props: {
               source={localFile}
               saveLabel="Save into Vault"
               onFile={setLocalFile}
-              onSave={async (file) => {
-                await uploadAudio(file, { library: "vault", title: file.name.replace(/\.[^.]+$/, "") });
+              onSave={async (file, label) => {
+                await uploadAudio(file, { library: "vault", title: file.name.replace(/\.[^.]+$/, ""), label });
                 await props.reload();
+                toast(`Saved ${label} into Vault`, "success");
               }}
             />
           </div>
@@ -208,7 +211,7 @@ export default function AcetateBring(props: {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-semibold">{list.title}</span>
-                      <span className="block text-xs capitalize" style={{ color: "var(--ac-muted)" }}>{list.source}{list.partial ? " · partial" : ""}</span>
+                      <span className="block text-xs capitalize" style={{ color: "var(--ac-muted)" }}>{list.source}{list.partial ? " · some tracks could not be listed" : ""}</span>
                     </span>
                   </button>
                   {openId === list.id && (
@@ -229,7 +232,7 @@ export default function AcetateBring(props: {
                               </div>
                               {matches.length > 0 && !row.vault_track_id && (
                                 <button type="button" className="mt-1 text-xs font-semibold" style={{ color: "var(--ac-accent)" }} onClick={() => props.run(() => matchLinkToVault(row.id, matches[0].id).then(() => setRows((current) => current.map((item) => item.id === row.id ? { ...item, vault_track_id: matches[0].id } : item))))}>
-                                  Match to my Vault · {matches[0].title}
+                                  Match to my Vault · {matches[0].title}{matches.length > 1 ? ` · ${matches.length} titles` : ""}
                                 </button>
                               )}
                               {playing?.id === row.id && <AcetateLinkPlayer item={{ source: row.source, kind: row.kind, title: row.title, externalId: row.external_id, sourceUrl: row.source_url }} />}

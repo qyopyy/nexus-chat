@@ -293,6 +293,13 @@ function AccountSection() {
   return (
     <>
       <H>My Account</H>
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new Event("nexus-whats-new"))}
+        className="mb-4 w-full rounded-xl bg-rail px-4 py-3 text-left text-sm font-semibold hover:bg-hover"
+      >
+        What's new in Nexus 1.9
+      </button>
       <div className="overflow-hidden rounded-xl bg-rail">
         <div
           className="h-28 bg-cover bg-center"

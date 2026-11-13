@@ -10,6 +10,21 @@
 
 export type WumpMapStyle = "streets" | "dark" | "satellite" | "hybrid" | "outdoors";
 
+/** Seconds since a live pin moved. Null when the server sent neither an age nor a timestamp. */
+export function pinAgeSeconds(pin: { age_seconds?: number | null; updated_at?: string | null }, now = Date.now()) {
+  if (pin.age_seconds != null && Number.isFinite(pin.age_seconds)) return pin.age_seconds;
+  if (!pin.updated_at) return null;
+  const at = new Date(pin.updated_at).getTime();
+  if (!Number.isFinite(at)) return null;
+  return (now - at) / 1000;
+}
+
+/** A pin is live when its age is known and under 90 seconds. Missing age is not treated as fresh. */
+export function pinIsLive(pin: { age_seconds?: number | null; updated_at?: string | null }, now = Date.now()) {
+  const age = pinAgeSeconds(pin, now);
+  return age != null && age >= 0 && age < 90;
+}
+
 export type RasterStyle = {
   version: 8;
   name: string;

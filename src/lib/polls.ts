@@ -18,7 +18,12 @@ export async function createPoll(conversationId: string, question: string, optio
     .select("id")
     .single();
   if (error) throw new Error(errorText(error));
-  await sendMessage(conversationId, `📊 ${question.trim().slice(0, 200)}\n[poll:${(data as { id: string }).id}]`);
+  const id = (data as { id: string }).id;
+  const sent = await sendMessage(conversationId, `📊 ${question.trim().slice(0, 200)}\n[poll:${id}]`);
+  if (!sent) {
+    await supabase.from("polls").delete().eq("id", id);
+    throw new Error("The poll was not posted");
+  }
 }
 
 export async function loadPoll(id: string): Promise<{ poll: Poll | null; votes: Vote[] }> {

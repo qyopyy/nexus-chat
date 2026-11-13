@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useApp } from "@/store/app";
 import { addCloudFiles, addVoiceMemo, cloudUrl, deleteCloud, listCloud, sendCloudToPhones, syncCloudIfDue, type CloudFile } from "@/lib/nexusCloud";
+import { beginVoiceMemo } from "@/lib/voiceMemo";
 import CloudAlbums from "@/components/cloud/CloudAlbums";
 import { fmtBytes } from "@/lib/acetateAudio";
 
@@ -14,8 +15,7 @@ export default function NexusCloudPage() {
   const [rows, setRows] = useState<CloudFile[]>([]);
   const [note, setNote] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
-  const rec = useRef<MediaRecorder | null>(null);
-  const chunks = useRef<Blob[]>([]);
+  const rec = useRef<{ finish: () => Promise<File> } | null>(null);
 
   async function refresh() {
     setRows(await listCloud());
@@ -94,23 +94,14 @@ export default function NexusCloudPage() {
               className="rounded-full border border-white/15 px-4 py-2 text-sm"
               onClick={() => {
                 if (recording && rec.current) {
-                  rec.current.stop();
+                  const current = rec.current;
+                  rec.current = null;
                   setRecording(false);
+                  void current.finish().then((file) => addVoiceMemo(file)).then(refresh).catch((err: Error) => setNote(err.message));
                   return;
                 }
-                void navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-                  const recorder = new MediaRecorder(stream);
-                  chunks.current = [];
-                  recorder.ondataavailable = (event) => {
-                    if (event.data.size) chunks.current.push(event.data);
-                  };
-                  recorder.onstop = () => {
-                    stream.getTracks().forEach((track) => track.stop());
-                    const blob = new Blob(chunks.current, { type: recorder.mimeType || "audio/webm" });
-                    void addVoiceMemo(blob).then(refresh).catch((err: Error) => setNote(err.message));
-                  };
+                void beginVoiceMemo().then((recorder) => {
                   rec.current = recorder;
-                  recorder.start();
                   setRecording(true);
                 }).catch(() => setNote("Microphone permission is needed for a voice memo."));
               }}

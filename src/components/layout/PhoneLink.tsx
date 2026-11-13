@@ -14,7 +14,7 @@ import {
   thisDeviceId,
   type Handset,
 } from "@/lib/handset";
-import { incomingDrops, openDrop, sendDrop, type NexusDrop } from "@/lib/nexusDrop";
+import { incomingDrops, openAndClaimDrop, sendDrop, type NexusDrop } from "@/lib/nexusDrop";
 
 function fresh(row: Handset) {
   return Date.now() - new Date(row.last_seen).getTime() < 3 * 60_000;
@@ -51,7 +51,7 @@ export default function PhoneLink() {
     const channel = supabase
       .channel(`handset:${userId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "nexus_handsets", filter: `user_id=eq.${userId}` }, () => void load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "nexus_drops" }, () => void incomingDrops().then(setDrops))
+      .on("postgres_changes", { event: "*", schema: "public", table: "nexus_drops", filter: `to_user=eq.${userId}` }, () => void incomingDrops().then(setDrops))
       .subscribe();
     return () => {
       live = false;
@@ -169,7 +169,7 @@ export default function PhoneLink() {
               <button
                 type="button"
                 className="w-full truncate rounded bg-accent/15 px-2 py-1 text-left text-xs"
-                onClick={() => void openDrop(drop).then((url) => window.open(url, "_blank", "noopener")).then(() => incomingDrops().then(setDrops)).catch((err: Error) => toast(err.message, "error"))}
+                onClick={() => void openAndClaimDrop(drop).then(() => incomingDrops().then(setDrops)).catch((err: Error) => toast(err.message, "error"))}
               >
                 Drop · {drop.name}
               </button>

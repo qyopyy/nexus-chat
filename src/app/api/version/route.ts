@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ACETATE_RELEASE, NEXUS_RELEASE } from "@/lib/releaseNotes";
 
 /** Build identity the Capacitor shells poll so a web deploy reloads them instantly. */
 export const dynamic = "force-dynamic";
@@ -19,6 +20,8 @@ export function GET() {
       build,
       short: build.slice(0, 12),
       at: deployedAt,
+      nexus: NEXUS_RELEASE.version,
+      acetate: ACETATE_RELEASE.version,
       // Phone shells load this host remotely — no APK/IPA rebuild needed for UI.
       live: true,
     },

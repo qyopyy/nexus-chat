@@ -10,7 +10,7 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET") return;
-  if (url.pathname.startsWith("/acetate-offline/")) {
+  if (url.pathname.startsWith("/acetate/offline/") || url.pathname.startsWith("/acetate-offline/")) {
     event.respondWith(caches.match(event.request).then((hit) => hit || new Response("", { status: 404 })));
     return;
   }

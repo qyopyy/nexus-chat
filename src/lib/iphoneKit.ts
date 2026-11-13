@@ -116,23 +116,9 @@ function pickFile(accept: string, capture = false) {
 
 async function recordMemo(ms: number) {
   if (!cloudUnlocked()) throw new Error("Voice memos in Cloud are part of Premium");
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
-  if (!stream) throw new Error("Microphone is off");
-  const rec = new MediaRecorder(stream);
-  const bits: Blob[] = [];
-  const done = new Promise<Blob>((resolve) => {
-    rec.ondataavailable = (event) => {
-      if (event.data.size) bits.push(event.data);
-    };
-    rec.onstop = () => {
-      stream.getTracks().forEach((track) => track.stop());
-      resolve(new Blob(bits, { type: rec.mimeType || "audio/webm" }));
-    };
-  });
-  rec.start();
+  const { recordVoiceBlob } = await import("./voiceMemo");
   toast(`Recording ${Math.round(ms / 1000)} seconds`, "info");
-  window.setTimeout(() => rec.stop(), ms);
-  await addVoiceMemo(await done);
+  await addVoiceMemo(await recordVoiceBlob(ms));
   toast("Memo saved to Cloud", "success");
 }
 

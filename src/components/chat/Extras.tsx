@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { loadProfiles } from "@/lib/data";
 import { answerFive, sendFive } from "@/lib/realtime";
 import { BUMP_PIN_RE, capsuleInfo, createCapsule, loadJam, saveJam, startJam, type CapsuleInfo, type Jam } from "@/lib/chatExtras";
+import { openWumpPin } from "@/lib/wumpOpen";
 import { INSTS, NOTES, hit, pctx, type Pattern } from "@/components/music/Tools2";
 import { cn } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
@@ -177,28 +178,32 @@ export function BumpPinCard({ text, mine }: { text: string; mine: boolean }) {
     .join(" ")
     .trim();
   return (
-    <a
-      href={maps}
-      target="_blank"
-      rel="noreferrer noopener"
+    <div
       className={cn(
-        "mt-1 block w-[min(280px,78vw)] overflow-hidden rounded-2xl ring-1 transition hover:brightness-110",
+        "mt-1 w-[min(280px,78vw)] overflow-hidden rounded-2xl ring-1",
         mine ? "bg-white/10 ring-white/15" : "bg-side ring-line",
       )}
     >
-      <div
-        className="relative h-28 bg-[radial-gradient(circle_at_50%_40%,#fb718555,transparent_55%),linear-gradient(160deg,#0f172a,#7c3aed)]"
+      <button
+        type="button"
+        onClick={() => openWumpPin({ lat, lng, name: note || "Shared place" })}
+        className="block w-full text-left transition hover:brightness-110"
       >
-        <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[70%] text-3xl drop-shadow">📍</span>
-        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 text-[11px] font-semibold text-white/90">
-          {lat.toFixed(4)}, {lng.toFixed(4)}
-        </span>
-      </div>
-      <div className="px-3 py-2">
-        <div className="text-sm font-bold">Wump location</div>
-        <div className="text-[11px] text-sub">{note || "Tap to open in Maps"}</div>
-      </div>
-    </a>
+        <div className="relative h-28 bg-[radial-gradient(circle_at_50%_40%,#fb718555,transparent_55%),linear-gradient(160deg,#0f172a,#7c3aed)]">
+          <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[70%] text-3xl drop-shadow">📍</span>
+          <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 text-[11px] font-semibold text-white/90">
+            {lat.toFixed(4)}, {lng.toFixed(4)}
+          </span>
+        </div>
+        <div className="px-3 py-2">
+          <div className="text-sm font-bold">Wump location</div>
+          <div className="text-[11px] text-sub">{note || "Open in Wump"}</div>
+        </div>
+      </button>
+      <a href={maps} target="_blank" rel="noreferrer noopener" className="block px-3 pb-2 text-[11px] text-sub underline-offset-2 hover:underline">
+        Apple Maps
+      </a>
+    </div>
   );
 }
 

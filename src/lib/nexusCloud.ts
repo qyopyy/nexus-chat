@@ -3,8 +3,9 @@
 import { supabase, errorText } from "./supabase";
 import { xhrStorageUpload } from "./storageUpload";
 import { scanUpload } from "./malwareGuard";
-import { useApp } from "@/store/app";
+import { toast, useApp } from "@/store/app";
 import { myTier } from "./premium";
+import { voiceMemoFile } from "./voiceMemo";
 
 export type CloudKind = "photo" | "file" | "voice";
 export type CloudFile = {
@@ -103,20 +104,29 @@ export async function addCloudFiles(files: File[], kind: CloudKind) {
 }
 
 export async function addVoiceMemo(blob: Blob) {
-  const name = `memo-${new Date().toISOString().slice(0, 16)}.webm`;
-  await queueCloudFile(blob, name, "voice");
+  const file = blob instanceof File && blob.name ? blob : voiceMemoFile(blob);
+  await queueCloudFile(file, file.name, "voice");
   await syncCloudNow();
 }
 
-/** Upload anything still only on this device, then stamp the daily sync. */
+/** Upload anything still only on this device, then stamp the daily sync. One failure does not drop the rest. */
 export async function syncCloudNow() {
   if (!cloudUnlocked()) return;
   const queued = await pendingFiles();
+  let uploaded = 0;
+  let failed = 0;
   for (const item of queued) {
-    await putFile(item.blob, item.name, item.kind);
-    await dropPending(item.id);
+    try {
+      await putFile(item.blob, item.name, item.kind);
+      await dropPending(item.id);
+      uploaded += 1;
+    } catch {
+      failed += 1;
+    }
   }
-  await supabase.rpc("nexus_cloud_sync_mark");
+  if (uploaded) await supabase.rpc("nexus_cloud_sync_mark");
+  if (failed && uploaded) toast(`${uploaded} saved to Cloud. ${failed} still waiting on this device.`, "info");
+  if (failed && !uploaded) throw new Error("Couldn't upload the Cloud files waiting on this device");
 }
 
 export async function syncCloudIfDue() {

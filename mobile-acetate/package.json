@@ -1,6 +1,6 @@
 {
   "name": "acetate-mobile",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Standalone Acetate iOS/Android shell (Capacitor). Loads the live Acetate web app — same Nexus account and Supabase backend, separate home-screen icon.",
   "scripts": {

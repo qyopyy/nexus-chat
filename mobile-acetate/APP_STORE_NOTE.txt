@@ -1,4 +1,5 @@
 Acetate is a separate Capacitor target from Nexus, Wump, Browser, and Link.
+Shell 1.2.0.
 It opens https://nexusproject.cc/acetate/app and uses the same Nexus account.
 
 The Xcode project is generated, not committed (ios/ is gitignored), same as Wump:
