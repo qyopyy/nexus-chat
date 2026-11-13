@@ -289,10 +289,11 @@ export async function bumpPublish(visible: BumpVisible = "friends", label?: stri
   }
 }
 
-export async function bumpClear() {
+export async function bumpClear(opts?: { silent?: boolean }) {
   const { error } = await supabase.rpc("bump_clear");
-  if (error) toast(errorText(error) || "Couldn't clear", "error");
-  else toast("Location sharing stopped", "info");
+  if (error) {
+    if (!opts?.silent) toast(errorText(error) || "Couldn't clear", "error");
+  } else if (!opts?.silent) toast("Location sharing stopped", "info");
   return !error;
 }
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## Distro iOS 1.0.0
+
+- Standalone Distro shell, bundle `hu.qyopy.distro`, opens `/distro/app`. Unsigned IPA artifact `Distro-ipa` from the Distro iOS workflow.
+- Apple sign-in from the Distro shell returns to the workspace.
+
+## Wump
+
+- Meet in the middle: when a friend's pin is focused, Wump shows the halfway point, drops it on the map, and can invite them to a meetup there.
+- Quiet hours hide your Live pin on a local schedule. Going Live stays off until the window ends, then sharing resumes if you were still Live.
+
 ## Nexus 1.9.1
 
 - Panel entry in the server rail, the chat sidebar, Apps, You, and Settings. It explains the distribution dashboard and opens it.

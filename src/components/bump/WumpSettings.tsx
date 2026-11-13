@@ -18,6 +18,7 @@ import type { BumpVisible } from "@/lib/bump";
 import { WUMP } from "@/lib/wumpBrand";
 import { WumpProfilePrivacy } from "./WumpProfileBits";
 import WumpLookPanel from "./WumpLookPanel";
+import WumpQuietHours from "./WumpQuietHours";
 import { cn } from "@/lib/utils";
 import { privacyEventName, privacyFromRow } from "@/lib/hundred";
 
@@ -98,6 +99,8 @@ export default function WumpSettings({ userId }: { userId: string }) {
             {precisionLabel(p.wump_precision)}. Friends see this fuzzed pin. A trail is off until you turn it on, and it uses this same precision.
           </p>
         </Field>
+
+        <WumpQuietHours />
 
         <Toggle
           label="Record my trail"

@@ -1,0 +1,124 @@
+name: Distro iOS app (.ipa)
+
+# Unsigned Distro.ipa (bundle hu.qyopy.distro) — Sideloadly / AltStore.
+# Opens https://nexusproject.cc/distro/app — same Nexus account and Supabase backend.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Distro web entry URL (leave empty for production /distro/app)"
+        required: false
+  pull_request:
+    paths:
+      - "mobile-distro/**"
+      - ".github/workflows/distro-ipa.yml"
+  push:
+    branches: [main]
+    paths:
+      - "mobile-distro/**"
+      - ".github/workflows/distro-ipa.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  distro-ipa:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: mobile-distro
+    env:
+      DISTRO_URL: ${{ github.event.inputs.url || vars.DISTRO_URL || 'https://nexusproject.cc/distro/app' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Capacitor
+        run: npm install --no-audit --no-fund
+
+      - name: Create iOS project
+        run: |
+          echo "Distro app will open: $DISTRO_URL"
+          npx cap add ios
+          npx cap sync ios
+
+      - name: Read app version
+        run: echo "APP_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+
+      - name: Icon, splash, and playback settings
+        run: |
+          python3 scripts/patch-ios-info-plist.py ios/App/App/Info.plist
+          PLIST=ios/App/App/Info.plist
+          pb() { /usr/libexec/PlistBuddy -c "$1" "$PLIST" 2>/dev/null || true; }
+          pb "Add :UIBackgroundModes array"
+          pb "Add :UIBackgroundModes:0 string audio"
+          pb "Set :CFBundleDisplayName Distro"
+          pb "Add :CFBundleDisplayName string Distro"
+          pb "Set :CFBundleName Distro"
+          pb "Add :CFBundleName string Distro"
+          pb "Set :CFBundleShortVersionString ${APP_VERSION}"
+          pb "Add :CFBundleShortVersionString string ${APP_VERSION}"
+          pb "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}"
+          pb "Add :CFBundleVersion string ${GITHUB_RUN_NUMBER}"
+          pb "Add :ITSAppUsesNonExemptEncryption bool false"
+          pb "Set :UIUserInterfaceStyle Dark"
+          pb "Add :UIUserInterfaceStyle string Dark"
+          test -f resources/icon-1024.png
+          ICONSET=ios/App/App/Assets.xcassets/AppIcon.appiconset
+          mkdir -p "$ICONSET"
+          cp resources/AppIcon.Contents.json "$ICONSET/Contents.json"
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          src = Path("resources/icon-1024.png")
+          iconset = Path("ios/App/App/Assets.xcassets/AppIcon.appiconset")
+          data = json.loads((iconset / "Contents.json").read_text())
+          for img in data["images"]:
+              w, h = img["size"].split("x")
+              scale = int(img["scale"].replace("x", ""))
+              px = int(round(float(w) * scale))
+              out = iconset / img["filename"]
+              subprocess.check_call(["sips", "-z", str(px), str(px), str(src), "--out", str(out)], stdout=subprocess.DEVNULL)
+          PY
+          sips -p 2732 2732 --padColor 0E0E0E resources/icon-1024.png --out /tmp/distro-splash.png
+          SPLASH=$(find ios/App/App/Assets.xcassets -type d -name 'Splash.imageset' | head -1)
+          if [ -n "$SPLASH" ]; then
+            for f in "$SPLASH"/*.png; do
+              [ -f "$f" ] && cp /tmp/distro-splash.png "$f"
+            done
+            if ! ls "$SPLASH"/*.png >/dev/null 2>&1; then
+              cp /tmp/distro-splash.png "$SPLASH/splash-2732x2732.png"
+            fi
+          fi
+
+      - name: Build (unsigned)
+        run: |
+          cd ios/App
+          if [ -d App.xcworkspace ]; then TARGET="-workspace App.xcworkspace"; else TARGET="-project App.xcodeproj"; fi
+          xcodebuild $TARGET -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/App.xcarchive" archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            MARKETING_VERSION="${APP_VERSION}" CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
+            | tail -40
+          test -d build/App.xcarchive/Products/Applications/App.app
+
+      - name: Package IPA
+        run: |
+          cd ios/App
+          APP=build/App.xcarchive/Products/Applications/App.app
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier hu.qyopy.distro" "$APP/Info.plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string hu.qyopy.distro" "$APP/Info.plist"
+          bash "$GITHUB_WORKSPACE/.github/scripts/fix-ios-framework-ids.sh" "$APP"
+          rm -rf Payload && mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qry ../../Distro.ipa Payload
+          ls -lh ../../Distro.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Distro-ipa
+          path: mobile-distro/Distro.ipa

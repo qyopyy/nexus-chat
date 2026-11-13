@@ -42,10 +42,21 @@ export function appleSignInAvailable() {
   return true; // OAuth always offered; native used when plugin present
 }
 
+function appleReturnPath() {
+  if (typeof window === "undefined") return "/";
+  const path = window.location.pathname;
+  if (path.startsWith("/bump") || path.startsWith("/wump")) return "/wump/app";
+  if (path.startsWith("/distro")) return "/distro/app";
+  if (path.startsWith("/acetate")) return "/acetate/app";
+  if (path.startsWith("/bio")) return "/bio/app";
+  if (path.startsWith("/browser")) return "/browser/app";
+  return "/";
+}
+
 export async function signInWithApple(): Promise<{ ok: true } | { ok: false; error: string }> {
   const redirectTo =
     typeof window !== "undefined"
-      ? `${window.location.origin}${window.location.pathname.startsWith("/bump") || window.location.pathname.startsWith("/wump") ? "/wump/app" : "/"}`
+      ? `${window.location.origin}${appleReturnPath()}`
       : "https://nexusproject.cc/";
 
   const native = applePlugin();

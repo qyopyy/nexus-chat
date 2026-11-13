@@ -25,6 +25,7 @@ function tagMatches(kind: IpaKind, tag: string, prefix: string): boolean {
   if (kind === "wump") return /^wump-ios-\d+$/.test(tag);
   if (kind === "browser") return /^browser-ios-\d+$/.test(tag);
   if (kind === "link") return /^link-ios-\d+$/.test(tag);
+  if (kind === "distro") return /^distro-ios-\d+$/.test(tag);
   return tag.startsWith(prefix);
 }
 

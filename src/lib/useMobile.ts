@@ -47,6 +47,17 @@ export function isBrowserApp() {
   }
 }
 
+/** Standalone Distro IPA (`hu.qyopy.distro`, UA includes DistroApp). */
+export function isDistroApp() {
+  if (typeof window === "undefined") return false;
+  if (/DistroApp/i.test(navigator.userAgent)) return true;
+  try {
+    return window.location.pathname.startsWith("/distro/app");
+  } catch {
+    return false;
+  }
+}
+
 /** Standalone Nexus Link IPA (`hu.qyopy.link`, UA includes LinkBioApp / NexusLink). */
 export function isLinkBioApp() {
   if (typeof window === "undefined") return false;

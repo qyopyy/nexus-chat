@@ -87,6 +87,7 @@ import { WUMP, WUMP_TAGLINE } from "@/lib/wumpBrand";
 import { pauseBumpMusic, playBumpTrack, useBumpMusic } from "@/lib/bumpMusic";
 import { fetchWumpPrivacy, loadWumpPrivacyLocal, saveWumpPrivacy, type WumpPrivacy } from "@/lib/wumpPrivacy";
 import { heartbeatArgs, privacyEventName } from "@/lib/hundred";
+import { quietHoursActive, useQuietHoursActive } from "@/lib/wumpQuiet";
 import WumpOnboarding from "./WumpOnboarding";
 import WumpTogetherPanel from "./WumpTogetherPanel";
 import WumpWilds from "./WumpWilds";
@@ -117,6 +118,7 @@ import {
   type WumpSavedPlace,
 } from "@/lib/wumpPlaces";
 import WumpExplorePanel from "./WumpExplorePanel";
+import WumpMeetCard from "./WumpMeetCard";
 import WumpSavedPlacesPanel from "./WumpSavedPlacesPanel";
 import WumpFriendsPanel from "./WumpFriendsPanel";
 
@@ -196,6 +198,7 @@ export default function BumpHub({
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [nudgeBurst, setNudgeBurst] = useState<{ id: number; emoji: string } | null>(null);
   const bumpOnly = standalone || isBumpApp();
+  const quiet = useQuietHoursActive();
   const myUsername = me ? profiles[me]?.username || null : null;
   const musicPlaying = useBumpMusic((s) => s.playing);
   const musicCurrentId = useBumpMusic((s) => s.currentId);
@@ -369,7 +372,7 @@ export default function BumpHub({
 
   // Background watch + heartbeat while Live (works in Bump IPA / Nexus IPA)
   useEffect(() => {
-    if (!live || !me) {
+    if (!live || !me || quietHoursActive()) {
       void stopBumpBackground({ clearServer: false });
       return;
     }
@@ -408,7 +411,7 @@ export default function BumpHub({
     return () => {
       void stopBumpBackground({ clearServer: false });
     };
-  }, [live, me, bgShare]); // eslint-disable-line react-hooks/exhaustive-deps -- restart only on live/bg
+  }, [live, me, bgShare, quiet]); // eslint-disable-line react-hooks/exhaustive-deps -- restart when Live, background share, or quiet hours change
 
   useEffect(() => {
     if (!live) return;
@@ -488,7 +491,18 @@ export default function BumpHub({
     return () => window.removeEventListener("wump-open-pin", onPin);
   }, [setTab]);
 
+  useEffect(() => {
+    if (!live || !quiet) return;
+    void stopBumpBackground({ clearServer: true });
+    void bumpClear({ silent: true });
+    toast("Quiet hours — your pin is hidden until the window ends", "info");
+  }, [live, quiet]);
+
   async function goLive() {
+    if (quietHoursActive()) {
+      toast("Quiet hours are on. Turn them off in Settings to go Live.", "info");
+      return;
+    }
     setBusy(true);
     haptic.medium();
     const row = await bumpPublish(visible, liveLabel.trim() || undefined);
@@ -883,6 +897,24 @@ export default function BumpHub({
               stats={explore}
               username={myUsername}
               onOpenProfile={myUsername ? () => openProfilePage(myUsername) : undefined}
+            />
+            {quiet && live && (
+              <p className="rounded-2xl bg-indigo-500/15 px-3 py-2 text-xs font-semibold text-indigo-100">
+                Quiet hours are on. Friends cannot see your pin until the window ends.
+              </p>
+            )}
+            <WumpMeetCard
+              me={myLat != null && myLng != null ? { lat: myLat, lng: myLng } : null}
+              friend={(() => {
+                const row = focusFriend ? nearby.find((person) => person.user_id === focusFriend) : null;
+                return row ? { lat: row.lat, lng: row.lng } : null;
+              })()}
+              friendId={focusFriend}
+              friendName={(() => {
+                const row = focusFriend ? nearby.find((person) => person.user_id === focusFriend) : null;
+                return row?.display_name || (focusFriend ? profiles[focusFriend]?.display_name : null) || "your friend";
+              })()}
+              onDropPin={setMapPin}
             />
             {live && (myPlaceName || nearby.some((n) => n.place_name || n.profile_place_name || n.username)) && (
               <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
