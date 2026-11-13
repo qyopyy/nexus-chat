@@ -124,6 +124,7 @@ jobs:
           path: mobile-distro/Distro.ipa
 
       - name: Publish release
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

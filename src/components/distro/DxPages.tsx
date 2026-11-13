@@ -203,13 +203,21 @@ export function DxOverview({ go, releases }: { go: (s: DxSection, rel?: string |
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {(
           [
-            ["Live", releases.filter((release) => release.status === "live").length],
-            ["In review", releases.filter((release) => ["in_review", "sending", "pending", "approved"].includes(release.status)).length],
-            ["Drafts", releases.filter((release) => release.status === "draft").length],
-            ["Needs you", needs.length],
+            ["Live", "live", releases.filter((release) => release.status === "live").length],
+            ["In review", "progress", releases.filter((release) => PROGRESS.includes(release.status)).length],
+            ["Drafts", "draft", releases.filter((release) => release.status === "draft").length],
+            ["Needs you", "needs", needs.length],
           ] as const
-        ).map(([label, count]) => (
-          <button key={label} type="button" onClick={() => go("releases")} className="rounded-[10px] border border-[var(--dx-line)] bg-[var(--dx-raise)] px-3 py-3 text-left hover:bg-[var(--dx-hi)]">
+        ).map(([label, tab, count]) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => {
+              rememberReleaseTab(tab);
+              go("releases");
+            }}
+            className="rounded-[10px] border border-[var(--dx-line)] bg-[var(--dx-raise)] px-3 py-3 text-left hover:bg-white/[0.04]"
+          >
             <div className="text-[22px] font-medium text-white">{count}</div>
             <div className="text-[12px] text-[var(--dx-muted)]">{label}</div>
           </button>
@@ -218,8 +226,14 @@ export function DxOverview({ go, releases }: { go: (s: DxSection, rel?: string |
 
       <Panel title="Updates">
         <ul className="space-y-2 text-[14px] text-[var(--dx-sub)]">
-          <li>Distro is an iPhone app. Install the Sideloadly build from GitHub Releases, tag distro-ios.</li>
-          <li>The catalog counts above jump to Releases. Needs you is still the list of fixes, rejections, and failed sends.</li>
+          <li>
+            Distro on iPhone is a Sideloadly build.{" "}
+            <a href="https://github.com/qyopyy/nexus-chat/releases?q=Distro+iOS&expanded=true" target="_blank" rel="noopener noreferrer" className="text-white underline underline-offset-2">
+              Get Distro.ipa
+            </a>
+            .
+          </li>
+          <li>The catalog counts open the matching Releases tab. Needs you is fixes, rejections, and failed sends.</li>
           <li>
             The distribution panel stays separate.{" "}
             <a href="/panel" className="text-white underline underline-offset-2">Open it from Nexus</a>.
@@ -467,8 +481,29 @@ function ReleaseTable({ rows, onOpen, empty }: { rows: DistRelease[]; onOpen: (i
 }
 
 type RelTab = "all" | "needs" | "progress" | "live" | "draft";
+
+const RELEASE_TAB_KEY = "dx.releaseTab";
+
+function rememberReleaseTab(tab: RelTab) {
+  try {
+    sessionStorage.setItem(RELEASE_TAB_KEY, tab);
+  } catch {
+    /* private mode */
+  }
+}
+
+function takeReleaseTab(): RelTab {
+  try {
+    const raw = sessionStorage.getItem(RELEASE_TAB_KEY);
+    sessionStorage.removeItem(RELEASE_TAB_KEY);
+    if (raw === "needs" || raw === "progress" || raw === "live" || raw === "draft" || raw === "all") return raw;
+  } catch {
+    /* private mode */
+  }
+  return "all";
+}
 export function DxReleases({ releases, onReload }: { releases: DistRelease[]; onReload: () => void }) {
-  const [tab, setTab] = useState<RelTab>("all");
+  const [tab, setTab] = useState<RelTab>(takeReleaseTab);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<"needs" | "newest" | "oldest" | "date" | "title">("needs");
   useEffect(onReload, []); // eslint-disable-line react-hooks/exhaustive-deps

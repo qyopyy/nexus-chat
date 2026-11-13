@@ -121,6 +121,7 @@ jobs:
           path: mobile-untitled/Untitled.ipa
 
       - name: Publish release
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

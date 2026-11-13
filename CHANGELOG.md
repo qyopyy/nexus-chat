@@ -5,7 +5,9 @@
 - Distro iOS builds publish a GitHub Release tagged `distro-ios-N` with `Distro.ipa`.
 - Untitled (Cutroom) has its own shell at `/untitled/app`, bundle `hu.qyopy.untitled`, and a release tagged `untitled-ios-N`.
 - Untitled home can search cuts, sort them, and pin one to the top on this device.
-- Distro overview counts live, in-review, draft, and needs-you releases.
+- Distro overview counts live, in-review, draft, and needs-you releases, and each count opens that Releases tab.
+- Untitled remembers the last cut you opened. Quiet hours no longer offer Go Live, and the banner stays up for the whole window.
+- Distro and Untitled release publishes stay on main. Pull requests still upload the IPA artifact without creating a GitHub Release.
 
 ## Distro iOS 1.0.0
 
