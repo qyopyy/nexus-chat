@@ -1,0 +1,3 @@
+git add package.json package-lock.json
+git commit -m "fix(ci): add typescript as devDependency for CI type-check"
+git push origin main
