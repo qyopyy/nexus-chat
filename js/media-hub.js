@@ -5,7 +5,6 @@ export function parseSmartEmbedUrl(rawInput) {
   const url = (rawInput || '').trim();
   if (!url) return null;
 
-  // 1. SubVito Hungarian South Park Portal
   if (url.includes('subvito.eu')) {
     return {
       platform: 'subvito',
@@ -15,7 +14,6 @@ export function parseSmartEmbedUrl(rawInput) {
     };
   }
 
-  // 2. Videa.hu Hungarian Video Host
   if (url.includes('videa.hu')) {
     let embedUrl = url;
     if (!url.includes('/player?v=') && url.includes('/videok/')) {
@@ -30,7 +28,6 @@ export function parseSmartEmbedUrl(rawInput) {
     };
   }
 
-  // 3. Indavideo.hu Hungarian Host
   if (url.includes('indavideo.hu')) {
     return {
       platform: 'indavideo',
@@ -40,7 +37,6 @@ export function parseSmartEmbedUrl(rawInput) {
     };
   }
 
-  // 4. YouTube
   if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
     let videoId = '';
     if (url.includes('youtu.be/')) {
@@ -59,7 +55,6 @@ export function parseSmartEmbedUrl(rawInput) {
     }
   }
 
-  // 5. Spotify Track / Playlist / Album
   if (url.includes('open.spotify.com/')) {
     const embedUrl = url.includes('/embed/')
       ? url
@@ -72,7 +67,6 @@ export function parseSmartEmbedUrl(rawInput) {
     };
   }
 
-  // 6. SoundCloud Track / Set
   if (url.includes('soundcloud.com/')) {
     const embedUrl = `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%236366f1&auto_play=false&show_artwork=true`;
     return {
@@ -83,7 +77,6 @@ export function parseSmartEmbedUrl(rawInput) {
     };
   }
 
-  // Fallback Generic IFrame
   return {
     platform: 'custom',
     rawUrl: url,
@@ -112,7 +105,6 @@ export function renderMediaHub(container) {
 
   container.innerHTML = `
     <div class="max-w-6xl mx-auto space-y-5">
-      <!-- Top Universal URL Bar & SubVito Route Builder -->
       <div class="bg-[#0f1320] border border-slate-800/90 rounded-2xl p-4 shadow-xl space-y-3">
         <div class="flex flex-col md:flex-row gap-2.5">
           <div class="flex-1 relative">
@@ -138,7 +130,6 @@ export function renderMediaHub(container) {
           </button>
         </div>
 
-        <!-- Custom SubVito Episode Builder -->
         <div class="pt-2 border-t border-slate-800/70 flex flex-wrap items-center gap-2 text-xs">
           <span class="text-slate-400 font-medium">SubVito Route Builder:</span>
           <input id="subvito-season" type="number" value="29" min="1" max="30" class="w-16 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs font-mono text-white" title="Season (Évad)" />
@@ -149,7 +140,6 @@ export function renderMediaHub(container) {
         </div>
       </div>
 
-      <!-- Active Embedded Theater Stage -->
       <div class="bg-[#0b0e17] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
         <div class="px-4 py-3 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
           <div class="flex items-center gap-2.5">
@@ -183,7 +173,6 @@ export function renderMediaHub(container) {
         </div>
       </div>
 
-      <!-- Pre-Loaded SubVito Season 29 Episode Library -->
       <div class="space-y-3">
         <div class="flex items-center justify-between">
           <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -234,7 +223,6 @@ export function renderMediaHub(container) {
     </div>
   `;
 
-  // Bind Events
   const inputEl = container.querySelector('#universal-embed-input');
   container.querySelector('#btn-load-embed')?.addEventListener('click', () => {
     launchUrlInStage(inputEl.value);

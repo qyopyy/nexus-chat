@@ -1,16 +1,20 @@
 {
   "name": "nexus-chat",
-  "version": "2.6.0",
-  "description": "Nexus Workspace — Wump Chat, SubVito & Multi-Platform Media Hub, [untitled] Music Studio, and MOV/MKV-to-MP4 Video Converter.",
+  "version": "2.6.1",
+  "description": "Nexus Workspace \u2014 Wump Chat, SubVito & Multi-Platform Media Hub, [untitled] Music Studio, and MOV/MKV-to-MP4 Video Converter.",
   "main": "js/main.js",
   "scripts": {
     "start": "npx serve . -l 3000",
-    "dev": "npx live-server --port=3000"
+    "dev": "npx live-server --port=3000",
+    "typecheck": "tsc --noEmit"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/qyopyy/nexus-chat.git"
   },
   "author": "qyopyy (MA Beats / 3.5 - mxteen)",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
 }

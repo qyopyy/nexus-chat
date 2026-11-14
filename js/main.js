@@ -10,7 +10,6 @@ function renderWorkspace() {
   const sidebarEl = document.getElementById('nexus-sidebar-chat');
   const { activeModule } = store.state;
 
-  // Update active navigation tab styling
   document.querySelectorAll('#nexus-nav-tabs .nav-tab').forEach((btn) => {
     if (btn.dataset.module === activeModule) {
       btn.classList.add('active-tab');
@@ -19,7 +18,6 @@ function renderWorkspace() {
     }
   });
 
-  // Render active main view
   if (activeModule === 'media-hub') {
     renderMediaHub(mainEl);
   } else if (activeModule === 'wump') {
@@ -30,7 +28,6 @@ function renderWorkspace() {
     renderVideoConverter(mainEl);
   }
 
-  // Always keep live Watch-Party & Wump sidebar synced
   renderSidebarChat(sidebarEl);
 }
 

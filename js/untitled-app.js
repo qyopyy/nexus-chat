@@ -23,7 +23,6 @@ export function renderUntitledStudio(container) {
         </label>
       </div>
 
-      <!-- Active Player & Visualizer -->
       <div class="bg-[#0b0e17] border border-slate-800 rounded-2xl p-5 space-y-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -60,7 +59,6 @@ export function renderUntitledStudio(container) {
         </div>
       </div>
 
-      <!-- Track Vault List -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         ${tracks
           .map(

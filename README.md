@@ -28,7 +28,6 @@ A full-stack modular creative workspace combining **Wump Community Chat**, **Sub
 ```bash
 git clone https://github.com/qyopyy/nexus-chat.git
 cd nexus-chat
-npx serve .
+npm install
+npm start
 ```
-
-Or open `index.html` directly in any modern browser.
