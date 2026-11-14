@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nexus Workspace — Wump Chat, SubVito Media Hub & [untitled] Studio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="bg-[#07090e] text-slate-100 antialiased selection:bg-indigo-500 selection:text-white overflow-hidden h-screen flex flex-col">
+
+  <!-- Top Navigation Header -->
+  <header class="h-14 border-b border-slate-800/90 bg-[#0b0e17]/95 backdrop-blur-md px-4 flex items-center justify-between shrink-0 z-30">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-violet-600 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 font-black text-white text-sm tracking-tighter">
+        NX
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-sm tracking-tight text-white">qyopyy / nexus-chat</span>
+          <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">v2.6.0</span>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">SubVito S29 Ready</span>
+        </div>
+        <p class="text-[11px] text-slate-400">Modular Workspace: SubVito Hub • Wump Chat • [untitled] Studio • MOV/MKV Converter</p>
+      </div>
+    </div>
+
+    <!-- Module Switcher Tabs -->
+    <nav id="nexus-nav-tabs" class="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+      <button data-module="media-hub" class="nav-tab active-tab px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
+        <span>🎬</span> SubVito & Media Hub
+      </button>
+      <button data-module="wump" class="nav-tab px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
+        <span>💬</span> Wump Chat
+      </button>
+      <button data-module="untitled" class="nav-tab px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
+        <span>🎵</span> [untitled] Studio
+      </button>
+      <button data-module="converter" class="nav-tab px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
+        <span>⚡</span> MOV/MKV → MP4
+      </button>
+    </nav>
+
+    <!-- User Profile Pill -->
+    <div class="flex items-center gap-2.5">
+      <div class="hidden sm:flex items-center gap-2 bg-slate-900/80 border border-slate-800 px-3 py-1.5 rounded-xl">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="text-xs font-semibold text-slate-200">3.5 - mxteen</span>
+        <span class="text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded font-mono">VERIFIED</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace Container -->
+  <div class="flex-1 flex overflow-hidden relative">
+    <!-- Primary Active Module View -->
+    <main id="nexus-main-view" class="flex-1 overflow-y-auto p-4 lg:p-6"></main>
+
+    <!-- Persistent Live Watch-Party & Quick Chat Sidebar -->
+    <aside id="nexus-sidebar-chat" class="w-80 lg:w-96 border-l border-slate-800/90 bg-[#0b0e17] flex flex-col shrink-0"></aside>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="nexus-toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Modular ES6 Scripts -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

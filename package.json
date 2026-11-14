@@ -1,42 +1,16 @@
 {
   "name": "nexus-chat",
-  "version": "0.1.0",
-  "private": true,
+  "version": "2.6.0",
+  "description": "Nexus Workspace — Wump Chat, SubVito & Multi-Platform Media Hub, [untitled] Music Studio, and MOV/MKV-to-MP4 Video Converter.",
+  "main": "js/main.js",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/lib/wumpMapPlan.test.mts src/lib/releaseRound.test.mts src/lib/wumpMeet.test.mts"
+    "start": "npx serve . -l 3000",
+    "dev": "npx live-server --port=3000"
   },
-  "dependencies": {
-    "@breezystack/lamejs": "^1.2.7",
-    "@supabase/supabase-js": "^2.119.0",
-    "@vercel/analytics": "^2.0.1",
-    "clsx": "^2.1.1",
-    "lucide-react": "^1.70.0",
-    "maplibre-gl": "^5.24.1",
-    "mp4-muxer": "^5.2.2",
-    "next": "^16.4.5",
-    "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "6.5.438",
-    "qrcode": "^1.5.4",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "tus-js-client": "^4.3.1",
-    "zustand": "^5.0.16"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qyopyy/nexus-chat.git"
   },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.4",
-    "@types/node": "^22.19.21",
-    "@types/qrcode": "^1.5.6",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "supabase": "^3.0.0",
-    "tailwindcss": "^4.3.4",
-    "typescript": "^5.9.3"
-  },
-  "engines": {
-    "node": ">=20.9"
-  }
+  "author": "qyopyy (MA Beats / 3.5 - mxteen)",
+  "license": "MIT"
 }
