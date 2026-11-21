@@ -4,6 +4,19 @@ A full-stack modular creative workspace combining **Wump Community Chat**, **Sub
 
 ## Modules Included
 
+### Nexus Pre-save
+
+Create **unlimited, independent pre-save campaigns** with your existing Nexus account. Open **Pre-save links** from the workspace navigation or mobile tools.
+
+- Customize artwork (upload or HTTPS URL), title, artist, description, release time, link name, four themes, two layouts, accent color, countdown, and button text.
+- Create, search, edit, duplicate, publish, unpublish, and delete campaigns. There is no distribution-release requirement or campaign-count paywall.
+- Share public pages with fans; drafts remain private. Campaigns and analytics are stored in Supabase.
+- Spotify pre-saves use real PKCE authorization and a scheduled library-save worker once the service is configured. Other destinations are ordinary outbound links.
+
+With the current static server, open **`/public/presave/index.html`**. A Next.js deployment serves the same files at **`/presave/index.html`**. Public campaign URLs add `?slug=your-release`.
+
+**Deployment is required before publishing working links:** apply the pre-save migration, deploy its Edge Function, and configure the public URL. Spotify authorization additionally needs a Spotify developer application and the release worker. See [the complete pre-save setup guide](docs/presave-service.md) and [verification instructions](tests/README.md).
+
 1. **SubVito & Universal Media Hub (`js/media-hub.js`)**
    - Pre-loaded **South Park Season 29** Hungarian archive (`subvito.eu/29-evad/...`) with 1-click episode launching (`29x01`, `29x02`, `29x03`, etc.).
    - Custom Season & Episode Slug Route Builder for `subvito.eu`.

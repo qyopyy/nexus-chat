@@ -2,7 +2,7 @@
 
 import { emojiPlain } from "@/lib/customEmoji";
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Disc3, Phone, Search, SquarePen, Users } from "lucide-react";
+import { ChevronDown, ChevronUp, Disc3, Link2, Phone, Search, SquarePen, Users } from "lucide-react";
 import { openDistributionHub } from "@/components/distribution/DistributionPanelHub";
 import { useDistributionPanelEnabled } from "@/lib/distributionPanel";
 import { useApp, openModal } from "@/store/app";
@@ -162,6 +162,11 @@ export default function HomeSidebar() {
           <span className="flex-1 font-medium">Friends</span>
           {pending > 0 && <span className="rounded-full bg-dnd px-1.5 text-xs font-bold text-white">{pending}</span>}
         </button>
+
+        <a href="/presave/index.html" className="mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sub transition hover:bg-hover hover:text-txt">
+          <Link2 className="size-5 text-[#c6b8ff]" />
+          <span className="flex-1 font-medium">Pre-save links</span>
+        </a>
 
         {panelOn && (
           <button
