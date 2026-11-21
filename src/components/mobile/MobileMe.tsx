@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { AppWindow, Bell, ChevronRight, Copy, Crown, Disc3, Download, Gamepad2, Globe, Headphones, LayoutDashboard, LogOut, MapPin, Megaphone, Mic, Moon, Palette, Radio, Settings, Shield, Sparkles, Tv, UserPen, Users, Vault, Volume2, VolumeX } from "lucide-react";
+import { AppWindow, Bell, ChevronRight, Copy, Crown, Disc3, Download, Gamepad2, Globe, Headphones, LayoutDashboard, Link2, LogOut, MapPin, Megaphone, Mic, Moon, Palette, Radio, Settings, Shield, Sparkles, Tv, UserPen, Users, Vault, Volume2, VolumeX } from "lucide-react";
 import { openDistributionHub } from "@/components/distribution/DistributionPanelHub";
 import { useDistributionPanelEnabled } from "@/lib/distributionPanel";
 import { useApp, openModal, toast } from "@/store/app";
@@ -164,6 +164,7 @@ export default function MobileMe() {
       <div className="mx-4 mt-4 overflow-hidden rounded-2xl bg-side [&>button+button]:border-t [&>button+button]:border-white/[.05]">
         {row(<Users className="size-[18px]" />, "#2aabee", "Friends", () => useApp.setState({ mobileTab: "friends" }), pending > 0 ? <span className="rounded-full bg-dnd px-2 text-xs font-bold text-white">{pending}</span> : undefined)}
         {row(<LayoutDashboard className="size-[18px]" />, "#eb459e", "Studio — videos & music releases", () => useApp.setState({ hub: "studio" }))}
+        {row(<Link2 className="size-[18px]" />, "#7963c7", "Pre-save links — unlimited campaigns", () => window.location.assign("/presave/index.html"))}
         {row(<Tv className="size-[18px]" />, "#9146ff", "Nexus Live — HD & 4K streams", () => openLiveHub())}
         {row(<Megaphone className="size-[18px]" />, "#1d9bf0", "Pulse — Twitter-style posts", () => openPulse())}
         {row(<Radio className="size-[18px]" />, "#ff2bd6", "Nexus Radio — listen & jam together", () => void openRadio())}

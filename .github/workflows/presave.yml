@@ -1,0 +1,45 @@
+name: Pre-save checks
+
+on:
+  pull_request:
+    paths:
+      - "public/presave/**"
+      - "supabase/functions/presave/**"
+      - "supabase/migrations/*presave_service.sql"
+      - "tests/presave*.test.mjs"
+      - ".github/workflows/presave.yml"
+  push:
+    branches: [main]
+    paths:
+      - "public/presave/**"
+      - "supabase/functions/presave/**"
+      - "supabase/migrations/*presave_service.sql"
+      - "tests/presave*.test.mjs"
+      - ".github/workflows/presave.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  presave:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check JavaScript syntax
+        run: |
+          node --check public/presave/app.mjs
+          node --check public/presave/auth.mjs
+          node --check public/presave/core.mjs
+          node --check supabase/functions/presave/handler.mjs
+          node --check supabase/functions/presave/core.mjs
+      - name: Install isolated test dependencies
+        run: npm install --prefix "$RUNNER_TEMP/presave-qa" --no-audit --no-fund @electric-sql/pglite@0.5.17 jsdom@31.0.1 esbuild@0.28.2
+      - name: Run security, flow, and PostgreSQL checks
+        env:
+          PRESAVE_PGLITE_MODULE: ${{ runner.temp }}/presave-qa/node_modules/@electric-sql/pglite/dist/index.cjs
+          PRESAVE_QA_PACKAGE: ${{ runner.temp }}/presave-qa/package.json
+        run: node --test tests/presave*.test.mjs
