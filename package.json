@@ -10,7 +10,7 @@
     "dev:static": "npx live-server --port=3000",
     "start:static": "npx serve . -l 3000",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/presave-core.test.mjs tests/presave-browser-core.test.mjs tests/presave-handler.test.mjs",
+    "test": "node --test src/lib/*.test.mts tests/presave-core.test.mjs tests/presave-browser-core.test.mjs tests/presave-handler.test.mjs",
     "test:presave": "node --test tests/presave-core.test.mjs tests/presave-browser-core.test.mjs tests/presave-handler.test.mjs",
     "test:presave:db": "node --test tests/presave-database.test.mjs",
     "test:presave:dom": "node --test tests/presave-dom.test.mjs"
@@ -49,6 +49,6 @@
     "zustand": "^5.0.16"
   },
   "engines": {
-    "node": ">=20.9"
+    "node": ">=22.18.0"
   }
 }
