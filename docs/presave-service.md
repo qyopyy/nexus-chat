@@ -4,7 +4,7 @@ Nexus Pre-save adds independent, customizable campaigns to `qyopyy/nexus-chat`. 
 
 ## User experience
 
-Open **Pre-save links** in the current static workspace, the Next.js desktop sidebar, or the mobile tools list. Sign in with an existing Nexus account or create one through the existing Nexus signup function. Same-origin sessions use the standard Supabase session key. TOTP MFA is supported; passkey users can complete authentication in the existing Nexus login screen.
+Open **Pre-save links** in the Next.js desktop sidebar, the mobile tools list, or the legacy static workspace. Sign in with an existing Nexus account or create one through the existing Nexus signup function. Same-origin sessions use the standard Supabase session key. TOTP MFA is supported; passkey users can complete authentication in the existing Nexus login screen.
 
 The service includes:
 
@@ -28,12 +28,12 @@ The repository currently contains two application entry points. This implementat
 
 | Host | Entry URL |
 | --- | --- |
-| Current `npm start` static server | `/public/presave/index.html` |
-| Next.js, which serves `public/` at the origin root | `/presave/index.html` |
+| Next.js (`npm run dev`, or `npm run build` then `npm start`) | `/presave/index.html` |
+| Legacy static workspace (`npm run start:static`) | `/public/presave/index.html` |
 
 The assets are relative to `index.html`, and public links use `?slug=your-release`, so no rewrite rule is required. Choose one canonical HTTPS entry URL for production and set `PRESAVE_PUBLIC_URL` to it.
 
-The root manifest currently declares static scripts while the lockfile and `src/` retain a larger Next.js application. The existing web workflow calls `npm test` and `npm run build`, which were absent before this feature. This change does not attempt to restore or migrate the unrelated application build. A separate `Pre-save checks` workflow exercises this service.
+The root manifest and lockfile run the Next.js application in `src/`. The web workflow installs the locked dependencies, type-checks the app, runs the existing app tests and dependency-free pre-save tests, and creates a production build. A separate `Pre-save checks` workflow also exercises the database and DOM integration tests.
 
 The existing distribution-based `/l/[slug]` smart-link system is unchanged.
 

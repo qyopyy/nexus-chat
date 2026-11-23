@@ -2,6 +2,8 @@
 
 The pre-save tests are independent of the repository's existing Next.js build configuration.
 
+The root `npm test` command runs the existing app tests in `src/lib/*.test.mts` and the dependency-free pre-save tests below. Use Node.js 22.18 or newer for the app's native TypeScript tests. `npm run typecheck` checks the full Next.js application, and `npm run build` creates its production build.
+
 Run the dependency-free security and cryptography checks:
 
 ```sh

@@ -13,7 +13,7 @@ Create **unlimited, independent pre-save campaigns** with your existing Nexus ac
 - Share public pages with fans; drafts remain private. Campaigns and analytics are stored in Supabase.
 - Spotify pre-saves use real PKCE authorization and a scheduled library-save worker once the service is configured. Other destinations are ordinary outbound links.
 
-With the current static server, open **`/public/presave/index.html`**. A Next.js deployment serves the same files at **`/presave/index.html`**. Public campaign URLs add `?slug=your-release`.
+In the Next.js app, open **`/presave/index.html`**. The optional legacy static server serves the same files at **`/public/presave/index.html`**. Public campaign URLs add `?slug=your-release`.
 
 **Deployment is required before publishing working links:** apply the pre-save migration, deploy its Edge Function, and configure the public URL. Spotify authorization additionally needs a Spotify developer application and the release worker. See [the complete pre-save setup guide](docs/presave-service.md) and [verification instructions](tests/README.md).
 
@@ -38,9 +38,19 @@ With the current static server, open **`/public/presave/index.html`**. A Next.js
 
 ## Quick Start
 
+Use Node.js 22.18 or newer.
+
 ```bash
 git clone https://github.com/qyopyy/nexus-chat.git
 cd nexus-chat
-npm install
-npm start
+npm ci
+cp .env.local.example .env.local
+# Fill in the existing project's public Supabase URL and publishable key.
+npm run dev
 ```
+
+The main application runs with Next.js. Open `http://localhost:3000`; the pre-save dashboard is at `http://localhost:3000/presave/index.html`.
+
+For a production build, run `npm run build`, then `npm start`. Validate changes with `npm run typecheck` and `npm test`.
+
+To run the legacy root `index.html` workspace instead, use `npm run start:static` (or `npm run dev:static` for live reload). Its pre-save entry is `http://localhost:3000/public/presave/index.html`.
