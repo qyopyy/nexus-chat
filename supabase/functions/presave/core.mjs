@@ -9,10 +9,14 @@ export class HttpError extends Error {
 }
 
 export const MAX_ADVANCE_DAYS = 179;
-export const THEMES = ['midnight', 'paper', 'aurora', 'sunset'];
+export const THEMES = ['midnight', 'paper', 'aurora', 'sunset', 'galaxy', 'nebula', 'starlight', 'ocean', 'forest', 'rose', 'ember', 'arctic', 'lavender', 'monochrome', 'neon', 'champagne', 'custom'];
 export const LAYOUTS = ['centered', 'split'];
+export const DESIGN_DEFAULTS = Object.freeze({
+  background_url: null, background_overlay: 55, background_motion: true,
+  background_color: '#101019', text_color: '#f5f5fb', button_style: 'rounded', font_style: 'modern',
+});
 export const RESERVED_SLUGS = ['admin', 'api', 'app', 'auth', 'callback', 'config', 'dashboard', 'login', 'new', 'presave', 'settings'];
-export const PUBLIC_FIELDS = ['slug', 'title', 'artist', 'description', 'release_at', 'artwork_url', 'theme', 'layout', 'accent', 'button_label', 'spotify_uri', 'links', 'show_countdown'];
+export const PUBLIC_FIELDS = ['slug', 'title', 'artist', 'description', 'release_at', 'artwork_url', 'theme', 'layout', 'accent', 'button_label', 'spotify_uri', 'links', 'show_countdown', ...Object.keys(DESIGN_DEFAULTS)];
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const enc = new TextEncoder();
 
@@ -47,6 +51,9 @@ export function httpsUrl(value, label = 'URL') {
   if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || /[\s<>"\\]/.test(input)) {
     throw new HttpError(400, `${label} must be an HTTPS URL without embedded credentials.`);
   }
+  // URL serialization can expand Unicode and percent-encode characters. Match
+  // the stored URL bound, rather than validating only the pre-normalized text.
+  if (url.href.length > 2048) throw new HttpError(400, `${label} must be at most 2048 characters.`);
   return url.href;
 }
 
@@ -70,6 +77,14 @@ function bool(value, fallback) {
   return value;
 }
 
+function color(value, fallback, label) {
+  const selected = value === undefined ? fallback : value;
+  if (typeof selected !== 'string' || !/^#[0-9a-f]{6}$/i.test(selected)) {
+    throw new HttpError(400, `${label} must be a six-digit hex color.`);
+  }
+  return selected.toLowerCase();
+}
+
 export function validateCampaign(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new HttpError(400, 'Campaign details are required.');
   const theme = value.theme ?? 'midnight';
@@ -77,6 +92,15 @@ export function validateCampaign(value) {
   const accent = value.accent ?? '#a78bfa';
   if (!THEMES.includes(theme) || !LAYOUTS.includes(layout) || typeof accent !== 'string' || !/^#[0-9a-f]{6}$/i.test(accent)) {
     throw new HttpError(400, 'Choose a supported theme, layout, and six-digit accent color.');
+  }
+  const overlay = value.background_overlay === undefined ? DESIGN_DEFAULTS.background_overlay : value.background_overlay;
+  if (!Number.isInteger(overlay) || overlay < 0 || overlay > 90) {
+    throw new HttpError(400, 'Background overlay must be a whole number from 0 to 90.');
+  }
+  const buttonStyle = value.button_style === undefined ? DESIGN_DEFAULTS.button_style : value.button_style;
+  const fontStyle = value.font_style === undefined ? DESIGN_DEFAULTS.font_style : value.font_style;
+  if (!['rounded', 'pill', 'square'].includes(buttonStyle) || !['modern', 'editorial', 'mono'].includes(fontStyle)) {
+    throw new HttpError(400, 'Choose a supported button shape and font style.');
   }
   let release = null;
   if (value.release_at != null && value.release_at !== '') {
@@ -103,6 +127,13 @@ export function validateCampaign(value) {
     release_at: release,
     artwork_url: httpsUrl(value.artwork_url, 'Artwork'),
     theme, layout, accent: accent.toLowerCase(),
+    background_url: httpsUrl(value.background_url, 'Background image'),
+    background_overlay: overlay,
+    background_motion: bool(value.background_motion, DESIGN_DEFAULTS.background_motion),
+    background_color: color(value.background_color, DESIGN_DEFAULTS.background_color, 'Background color'),
+    text_color: color(value.text_color, DESIGN_DEFAULTS.text_color, 'Text color'),
+    button_style: buttonStyle,
+    font_style: fontStyle,
     button_label: text(value.button_label ?? 'Pre-save on Spotify', 'Button text', 40, true),
     spotify_uri: spotifyUri(value.spotify_uri),
     links: links.map((link) => {

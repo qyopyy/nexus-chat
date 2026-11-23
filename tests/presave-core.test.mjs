@@ -3,7 +3,7 @@ import test from 'node:test';
 import {
   HttpError, validateCampaign, httpsUrl, spotifyUri, safeReturnUrl,
   callbackReturn, publicCampaign, randomToken, sha256, pkceChallenge,
-  encrypt, decrypt, retryPlan, oauthCookie,
+  encrypt, decrypt, retryPlan, oauthCookie, THEMES, DESIGN_DEFAULTS,
 } from '../supabase/functions/presave/core.mjs';
 
 const campaign = (overrides = {}) => ({
@@ -30,6 +30,53 @@ test('campaign validation rejects ambiguous flags, reserved URLs, unsupported la
     { theme: 'url(https://evil.example)' }, { accent: '#fff;background:url(https://evil.example)' },
     { title: 'x\u0000y' }, { artist: '   ' }, { description: 'x'.repeat(1201) },
   ]) rejectsInput(() => validateCampaign(campaign(patch)));
+});
+
+test('all curated and custom themes support complete appearance settings with backward-compatible defaults', () => {
+  const defaults = validateCampaign(campaign());
+  for (const [key, value] of Object.entries(DESIGN_DEFAULTS)) assert.equal(defaults[key], value, key);
+  assert.equal(THEMES.length, 17);
+  assert.equal(new Set(THEMES).size, THEMES.length);
+  for (const theme of THEMES) {
+    const result = validateCampaign(campaign({
+      theme, background_url: 'https://images.example/background.jpg?size=large',
+      background_overlay: 90, background_motion: false,
+      background_color: '#AABBCC', text_color: '#001122', button_style: 'pill', font_style: 'editorial',
+    }));
+    assert.equal(result.theme, theme);
+    assert.equal(result.background_url, 'https://images.example/background.jpg?size=large');
+    assert.equal(result.background_overlay, 90);
+    assert.equal(result.background_motion, false);
+    assert.equal(result.background_color, '#aabbcc');
+    assert.equal(result.text_color, '#001122');
+    assert.equal(result.button_style, 'pill');
+    assert.equal(result.font_style, 'editorial');
+    const projection = publicCampaign(result);
+    for (const key of Object.keys(DESIGN_DEFAULTS)) assert.equal(projection[key], result[key], key);
+  }
+  assert.equal(validateCampaign(campaign({ background_overlay: 0, button_style: 'square', font_style: 'mono' })).background_overlay, 0);
+});
+
+test('appearance validation rejects malformed images, arbitrary CSS, ambiguous toggles, and unbounded overlays', () => {
+  for (const patch of [
+    { background_url: 'javascript:alert(1)' }, { background_url: 'http://example.com/cover.jpg' },
+    { background_url: 'https://user:password@example.com/cover.jpg' }, { background_url: 'data:image/png;base64,AAA' },
+    { background_url: 'https://example.com/";color:red' }, { background_url: 'https://example.com/' + 'a'.repeat(2048) },
+    { background_overlay: -1 }, { background_overlay: 91 }, { background_overlay: 55.5 },
+    { background_overlay: '55' }, { background_overlay: null }, { background_overlay: false },
+    { background_motion: 'false' }, { background_motion: null },
+    { background_color: '#fff' }, { background_color: '#123456;color:red' }, { background_color: null },
+    { text_color: 'red' }, { text_color: '#f5f5fb;background:url(https://evil.example)' },
+    { button_style: 'url(https://evil.example)' }, { button_style: null }, { font_style: 'Comic Sans' },
+  ]) rejectsInput(() => validateCampaign(campaign(patch)));
+});
+
+test('URL size is checked after Unicode expansion as well as before normalization', () => {
+  const url = 'https://example.com/' + 'é'.repeat(400);
+  assert.ok(url.length < 2048);
+  assert.ok(new URL(url).href.length > 2048);
+  rejectsInput(() => httpsUrl(url));
+  rejectsInput(() => validateCampaign(campaign({ background_url: url })));
 });
 
 test('destinations reject executable schemes, credentials, injection characters, and malformed records', () => {

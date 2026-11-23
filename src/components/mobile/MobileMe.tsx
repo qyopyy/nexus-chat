@@ -165,6 +165,7 @@ export default function MobileMe() {
         {row(<Users className="size-[18px]" />, "#2aabee", "Friends", () => useApp.setState({ mobileTab: "friends" }), pending > 0 ? <span className="rounded-full bg-dnd px-2 text-xs font-bold text-white">{pending}</span> : undefined)}
         {row(<LayoutDashboard className="size-[18px]" />, "#eb459e", "Studio — videos & music releases", () => useApp.setState({ hub: "studio" }))}
         {row(<Link2 className="size-[18px]" />, "#7963c7", "Pre-save links — unlimited campaigns", () => window.location.assign("/presave/index.html"))}
+        {row(<Radio className="size-[18px]" />, "#a78bfa", "Nexus Drop — share between devices", () => window.location.assign("/drop/index.html"))}
         {row(<Tv className="size-[18px]" />, "#9146ff", "Nexus Live — HD & 4K streams", () => openLiveHub())}
         {row(<Megaphone className="size-[18px]" />, "#1d9bf0", "Pulse — Twitter-style posts", () => openPulse())}
         {row(<Radio className="size-[18px]" />, "#ff2bd6", "Nexus Radio — listen & jam together", () => void openRadio())}

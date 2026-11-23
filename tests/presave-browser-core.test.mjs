@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   escapeHtml, safeUrl, spotifyUri, campaignUrl, countdownParts,
-  validateCampaign, localDateInput, accentInk,
+  validateCampaign, localDateInput, accentInk, appearance, contrastRatio, THEMES, newCampaign,
 } from '../public/presave/core.mjs';
+import { THEMES as SERVER_THEMES } from '../supabase/functions/presave/core.mjs';
 
 test('release copy and destination labels cannot break out of generated HTML', () => {
   const payloads = ['<script>alert(1)</script>', '"><img src=x onerror=alert(1)>', "' autofocus onfocus='alert(1)", 'A & B'];
@@ -83,4 +84,50 @@ test('countdown stops at release and editing an instant preserves local timezone
     if (previousTimezone === undefined) delete process.env.TZ;
     else process.env.TZ = previousTimezone;
   }
+});
+
+test('every appearance preset can be persisted and older campaigns receive compatible defaults', () => {
+  assert.deepEqual(THEMES, SERVER_THEMES);
+  assert.equal(THEMES.length, 17);
+  for (const theme of THEMES) {
+    const { campaign, valid } = validateCampaign({ title: 'Release', artist: 'Artist', slug: 'valid-release', theme });
+    assert.equal(valid, true, theme);
+    assert.equal(campaign.background_url, null);
+    assert.equal(campaign.background_overlay, 55);
+    assert.equal(campaign.background_motion, true);
+    assert.equal(campaign.button_style, 'rounded');
+    assert.equal(campaign.font_style, 'modern');
+  }
+  assert.equal(newCampaign({ title: 'An older draft' }).background_color, '#101019');
+});
+
+test('appearance rendering cannot create CSS or HTML from untrusted customization', () => {
+  const look = appearance({
+    theme: 'galaxy" onclick="bad', accent: '#fff;position:fixed',
+    background_url: 'https://example.com/a\\b', background_color: 'url(javascript:bad)',
+    text_color: '#fff"', background_overlay: '0;position:absolute',
+    background_motion: 'false', button_style: 'pill"', font_style: 'editorial"',
+  });
+  assert.deepEqual(look, appearance());
+  const base = { title: 'Release', artist: 'Artist', slug: 'valid-release' };
+  for (const patch of [
+    { background_url: 'data:image/svg+xml,<svg onload=bad>' },
+    { background_url: 'https://user:pass@example.com/background.jpg' },
+    { background_url: 'https://example.com/' + 'é'.repeat(400) },
+    { background_overlay: -1 }, { background_overlay: 91 }, { background_overlay: .5 },
+    { background_overlay: '55' }, { background_motion: 'false' },
+    { background_color: '#fff;display:none' }, { text_color: '#fff' },
+    { button_style: 'triangle' }, { font_style: 'external-font' },
+  ]) assert.equal(validateCampaign({ ...base, ...patch }).valid, false, JSON.stringify(patch));
+  assert.equal(safeUrl('https://example.com/' + 'é'.repeat(400)), '');
+});
+
+test('custom palette contrast helps creators choose readable text without blocking image designs', () => {
+  assert.equal(contrastRatio('#ffffff', '#000000'), 21);
+  assert.equal(contrastRatio('#808080', '#808080'), 1);
+  assert.equal(contrastRatio('invalid', '#000000'), 0);
+  assert.ok(contrastRatio('#f5f5fb', '#101019') >= 4.5);
+  const base = { title: 'Release', artist: 'Artist', slug: 'valid-release', links: [{ label: 'L'.repeat(60), url: 'https://example.com' }] };
+  assert.equal(validateCampaign(base).valid, true);
+  assert.equal(validateCampaign({ ...base, links: [{ ...base.links[0], label: 'L'.repeat(61) }] }).valid, false);
 });

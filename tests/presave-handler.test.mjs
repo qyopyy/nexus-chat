@@ -109,6 +109,59 @@ test('HTTP campaign mutations cannot read, duplicate, overwrite, or delete anoth
   assert.equal((await created.json()).campaign.owner_id, ALICE);
 });
 
+test('custom appearance survives create, edit, list, and duplicate without publishing the duplicate', async () => {
+  const token = jwt();
+  const db = database([], new Map([[token, { id: ALICE }]]));
+  const handler = createPresaveHandler({ db, env: TEST_ENV });
+  const headers = { Authorization: `Bearer ${token}` };
+  const design = {
+    theme: 'galaxy', background_url: 'https://images.example/nebula.webp',
+    background_overlay: 42, background_motion: false,
+    background_color: '#112233', text_color: '#eeddff', button_style: 'pill', font_style: 'mono',
+  };
+  const fresh = campaign(design);
+  delete fresh.id;
+  const created = await handler(request({ action: 'save', campaign: fresh }, headers));
+  assert.equal(created.status, 200);
+  const saved = (await created.json()).campaign;
+  for (const [key, value] of Object.entries(design)) assert.equal(saved[key], value, key);
+  const updatedResponse = await handler(request({ action: 'save', campaign: { ...saved, title: 'An edited release', background_overlay: 0, background_url: null } }, headers));
+  assert.equal(updatedResponse.status, 200);
+  const updated = (await updatedResponse.json()).campaign;
+  assert.equal(updated.background_overlay, 0);
+  assert.equal(updated.background_url, null);
+  const listing = await (await handler(request({ action: 'list' }, headers))).json();
+  assert.equal(listing.campaigns[0].font_style, design.font_style);
+  const duplicatedResponse = await handler(request({ action: 'duplicate', id: saved.id }, headers));
+  assert.equal(duplicatedResponse.status, 200);
+  const duplicate = (await duplicatedResponse.json()).campaign;
+  for (const key of Object.keys(design)) assert.equal(duplicate[key], updated[key], key);
+  assert.notEqual(duplicate.id, saved.id);
+  assert.notEqual(duplicate.slug, saved.slug);
+  assert.equal(duplicate.published, false);
+  assert.equal(duplicate.owner_id, ALICE);
+});
+
+test('older clients can edit a campaign without resetting appearance fields they do not know', async () => {
+  const token = jwt();
+  const design = {
+    background_url: 'https://images.example/saved.png', background_overlay: 72,
+    background_motion: false, background_color: '#223344', text_color: '#ddeeff',
+    button_style: 'square', font_style: 'editorial',
+  };
+  const db = database([campaign(design)], new Map([[token, { id: ALICE }]]));
+  const handler = createPresaveHandler({ db, env: TEST_ENV });
+  const headers = { Authorization: `Bearer ${token}` };
+  const response = await handler(request({ action: 'save', campaign: campaign({ title: 'Saved by an older client' }) }, headers));
+  assert.equal(response.status, 200);
+  const updated = (await response.json()).campaign;
+  assert.equal(updated.title, 'Saved by an older client');
+  for (const [key, value] of Object.entries(design)) assert.equal(updated[key], value, key);
+  const invalid = await handler(request({ action: 'save', campaign: campaign({ background_motion: 'false' }) }, headers));
+  assert.equal(invalid.status, 400);
+  assert.equal(db.tables.presave_campaigns[0].background_motion, false);
+});
+
 test('HTTP parsing limits and neutral errors prevent unbounded requests and secret disclosure', async () => {
   const db = database([], new Map([[jwt(), { id: ALICE }]]));
   const handler = createPresaveHandler({ db, env: TEST_ENV });

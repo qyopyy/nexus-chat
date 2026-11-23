@@ -1,4 +1,4 @@
-import { escapeHtml as esc, safeUrl, spotifyUri, slugify, accentInk, localDateInput, releaseDate, campaignUrl, countdownParts, newCampaign, validateCampaign, THEMES, ACCENTS } from './core.mjs';
+import { escapeHtml as esc, safeUrl, spotifyUri, slugify, accentInk, localDateInput, releaseDate, campaignUrl, countdownParts, newCampaign, validateCampaign, appearance, contrastRatio, THEME_DETAILS, APPEARANCE_DEFAULTS, ACCENTS } from './core.mjs';
 import { api, client, configured, needsMfa, uploadArtwork } from './auth.mjs';
 
 const root = document.querySelector('#app');
@@ -7,7 +7,7 @@ const publicSlug = new URLSearchParams(location.search).get('slug');
 const state = {
   user: null, view: 'campaigns', campaigns: [], summary: {}, total: 0, page: 1, pageSize: 12,
   search: '', filter: 'all', loading: false, listError: '', service: null, draft: null,
-  dirty: false, saving: false, slugEdited: false, request: 0, booting: true,
+  dirty: false, saving: false, slugEdited: false, request: 0, booting: true, previewSize: 'mobile',
 };
 const ICONS = {
   link: '<path d="M10 13a5 5 0 0 0 7 .1l3-3a5 5 0 0 0-7-7l-2 2"/><path d="M14 11a5 5 0 0 0-7-.1l-3 3a5 5 0 0 0 7 7l2-2"/>',
@@ -95,14 +95,13 @@ function dashboardHtml() {
 
 function artwork(c, className = 'campaign-art', decorative = false) {
   const url = safeUrl(c.artwork_url);
-  const theme = THEMES.includes(c.theme) ? c.theme : 'midnight';
-  return `<div class="${className}" data-theme="${theme}">${url ? `<img src="${esc(url)}" alt="${decorative ? '' : esc(c.title + ' cover artwork')}" loading="lazy" referrerpolicy="no-referrer">` : `<div class="release-placeholder" aria-hidden="true"><span class="art-orbit"></span><span class="art-word">${esc(c.title || 'YOUR NEXT RELEASE')}</span><span class="art-credit">${esc(c.artist || 'NEXUS PRE-SAVE')}</span></div>`}</div>`;
+  return `<div class="${className} appearance-art" ${appearanceAttributes(c)}>${url ? `<img src="${esc(url)}" alt="${decorative ? '' : esc(c.title + ' cover artwork')}" loading="lazy" referrerpolicy="no-referrer">` : `<div class="release-placeholder" aria-hidden="true"><span class="art-orbit"></span><span class="art-word">${esc(c.title || 'YOUR NEXT RELEASE')}</span><span class="art-credit">${esc(c.artist || 'NEXUS PRE-SAVE')}</span></div>`}</div>`;
 }
 
 function campaignCard(c) {
   const live = Boolean(c.published);
   return `<article class="campaign-card">
-    <button class="campaign-art-button" data-action="edit" data-id="${esc(c.id)}" aria-label="Edit ${esc(c.title)}">${artwork(c, 'campaign-art', true)}<span class="badge ${live ? 'badge-live' : 'badge-draft'}">${live ? isReleased(c) ? 'Released' : 'Published' : 'Draft'}</span></button>
+    <button class="campaign-art-button" data-action="edit" data-id="${esc(c.id)}" aria-label="Edit ${esc(c.title)}">${artwork(c, 'campaign-art', true)}<span class="badge ${live ? 'badge-live' : 'badge-draft'}">${live ? isReleased(c) ? 'Released' : 'Published' : 'Draft'}</span><span class="campaign-look">${safeUrl(c.background_url) ? `<img src="${esc(safeUrl(c.background_url))}" class="campaign-background-thumb" alt="" loading="lazy" referrerpolicy="no-referrer">` : icon('brush')}${THEME_DETAILS.find((theme) => theme.id === c.theme)?.name || 'Midnight'}</span></button>
     <div class="card-content"><div class="card-title"><h3>${esc(c.title)}</h3><button class="icon-button" data-action="edit" data-id="${esc(c.id)}" aria-label="Edit ${esc(c.title)}">${icon('edit')}</button></div><p class="card-artist">${esc(c.artist)}</p><p class="card-date">${icon('calendar')} ${esc(releaseDate(c.release_at, true))}</p>
     <div class="card-stats"><span><strong>${number(c.stats?.pre_saves)}</strong> pre-saves</span><span><strong>${number(c.stats?.views)}</strong> views</span><span><strong>${number(c.stats?.saved)}</strong> saved</span></div>
     <div class="card-footer"><div class="card-actions">${live ? `<button class="button button-small button-secondary" data-action="copy" data-id="${esc(c.id)}">${icon('copy')} Copy link</button>` : `<button class="button button-small button-secondary" data-action="edit" data-id="${esc(c.id)}">${icon('edit')} Edit draft</button>`}
@@ -146,21 +145,30 @@ async function loadCampaigns() {
   }
 }
 
-const TEMPLATES = [
-  { name: 'After hours', note: 'Deep tones. A little mystery.', theme: 'midnight', accent: '#c6b8ff', title: 'Midnight echoes', artist: 'Your artist name', layout: 'centered' },
-  { name: 'A fresh start', note: 'Clean, quiet, all about the cover.', theme: 'paper', accent: '#3b4d39', title: 'In full bloom', artist: 'Your artist name', layout: 'centered' },
-  { name: 'Northern lights', note: 'Color that moves with your music.', theme: 'aurora', accent: '#a3e6c5', title: 'Out of the blue', artist: 'Your artist name', layout: 'split' },
-  { name: 'Golden hour', note: 'Warm colors for lasting impressions.', theme: 'sunset', accent: '#f3c36b', title: 'Soft landing', artist: 'Your artist name', layout: 'centered' },
-];
+const TEMPLATES = THEME_DETAILS.filter((theme) => theme.id !== 'custom').map((theme) => ({
+  name: theme.name, note: theme.note, theme: theme.id, accent: theme.accent,
+  title: theme.title, artist: 'Your artist name', layout: theme.id === 'aurora' ? 'split' : 'centered',
+  font_style: ['paper', 'rose', 'champagne'].includes(theme.id) ? 'editorial' : theme.id === 'monochrome' ? 'mono' : 'modern',
+}));
+
+function appearanceAttributes(c) {
+  const look = appearance(c);
+  return `data-theme="${look.theme}" data-motion="${look.background_motion}" data-button-style="${look.button_style}" data-font-style="${look.font_style}" style="--campaign-accent:${look.accent};--campaign-ink:${accentInk(look.accent)};--custom-background:${look.background_color};--custom-text:${look.text_color};--background-shade:${look.background_overlay / 100}"`;
+}
+
+function backgroundLayers(c, animate = true) {
+  const look = appearance(c);
+  return `<div class="page-background" aria-hidden="true">${look.background_url ? `<img class="background-image" src="${esc(look.background_url)}" alt="" referrerpolicy="no-referrer"><span class="background-shade"></span>` : ''}${['galaxy', 'nebula', 'starlight'].includes(look.theme) ? `<span class="galaxy-cloud"></span><span class="stars stars-near ${animate ? '' : 'stars-still'}"></span><span class="stars stars-far ${animate ? '' : 'stars-still'}"></span>` : ''}</div>`;
+}
 
 function templatesHtml() {
-  return `<div class="page-heading"><div><p class="eyebrow">A STARTING POINT, NOT A LIMIT.</p><h1>Make it feel like you.</h1><p class="page-subtitle">Pick a look. Change everything. Every template is yours to customize.</p></div></div><div class="template-grid">${TEMPLATES.map((t, i) => `<article class="template-card"><div class="template-preview" data-theme="${t.theme}" style="--campaign-accent:${t.accent};--campaign-ink:${accentInk(t.accent)}">${artwork(t, 'template-artwork', true)}<h3>${t.title}</h3><p>${t.artist}</p><span class="template-button">Pre-save on Spotify</span></div><div class="card-content"><h2>${t.name}</h2><p>${t.note}</p>${button('Use this template', 'template', 'secondary', `data-template="${i}"`)}</div></article>`).join('')}</div><p class="field-help">Template titles and artwork are preview examples. They aren’t published campaigns.</p>`;
+  return `<div class="page-heading"><div><p class="eyebrow">YOUR MUSIC HAS A WORLD OF ITS OWN.</p><h1>Find your signature.</h1><p class="page-subtitle">16 distinct looks. Infinite ways to make them yours.</p></div>${button(icon('plus') + ' Build a custom look', 'custom-template', 'secondary')}</div><div class="template-grid">${TEMPLATES.map((t, i) => `<article class="template-card"><div class="template-preview appearance-surface" ${appearanceAttributes(t)}>${backgroundLayers(t, false)}${artwork(t, 'template-artwork', true)}<h3>${esc(t.title)}</h3><p>${esc(t.artist)}</p><span class="template-button">Pre-save on Spotify</span></div><div class="card-content"><div class="template-title"><h2>${esc(t.name)}</h2>${THEME_DETAILS[i].animated ? '<span class="motion-badge">Animated</span>' : ''}</div><p>${esc(t.note)}</p>${button('Use this template', 'template', 'secondary', `data-template="${i}"`)}</div></article>`).join('')}</div><p class="field-help">Template titles and artwork are preview examples. They aren’t published campaigns. Background motion respects your device’s reduced-motion setting.</p>`;
 }
 
 function guideHtml() {
   return `<div class="page-heading"><div><p class="eyebrow">A GOOD RELEASE DESERVES A HEAD START.</p><h1>A link. A look. A launch.</h1><p class="page-subtitle">Your pre-save page brings your next release and your fans together.</p></div>${button('Create a link', 'create', 'primary')}</div><div class="guide-grid">
     <section class="guide-card">${icon('link')}<h2>Create your campaign</h2><p>Sign in with your Nexus account. Add your release title, artist, release time, and a unique link name. Create as many campaigns as you like.</p></section>
-    <section class="guide-card">${icon('brush')}<h2>Give it your identity</h2><p>Upload cover artwork, choose a theme and layout, set an accent color, and write your own button text. See your changes in the live preview.</p></section>
+    <section class="guide-card">${icon('brush')}<h2>Give it your identity</h2><p>Choose from 16 curated themes or create your own. Add cover artwork and a background image, explore animated galaxies, and tune typography, colors, and buttons. See your changes in the live preview.</p></section>
     <section class="guide-card">${icon('music')}<h2>Connect the release</h2><p>Add the exact Spotify track or album URL from your distributor. Fans authorize Nexus through Spotify. Once your release is due, the service can add it to their library.</p></section>
     <section class="guide-card">${icon('globe')}<h2>Publish and share</h2><p>Publish your campaign, copy its link, and share it in Nexus, your bio, or wherever your fans are. Keep unfinished pages as private drafts.</p></section>
     </div><section class="form-section"><h2>A few things to know</h2><div class="guide-grid"><div><h3>Spotify pre-saves</h3><p>Spotify must be connected by the Nexus service owner. A fan authorizes one specific track or album. Spotify access and service availability can affect fulfillment. Campaigns can be created at any time; fan authorization opens within 179 days of release.</p></div><div><h3>Other music services</h3><p>Apple Music, YouTube, Bandcamp, and other destinations can be added as ordinary links. Opening one of these links does not automatically save music to a fan’s library.</p></div><div><h3>Your pages and your fans</h3><p>Only you can edit your campaigns. Publishing makes the page visible to anyone with its link. Unpublishing hides it and pauses pending saves. Deleting a campaign cancels its pending saves.</p></div><div><h3>Campaign analytics</h3><p>Views and destination clicks measure activity. Spotify pre-saves count authorizations, and saved counts completed library saves. Views are not unique visitors.</p></div></div></section>`;
@@ -172,7 +180,7 @@ function inputField(label, name, value, options = {}) {
 }
 
 function editorHtml() {
-  const c = state.draft;
+  const c = newCampaign(state.draft);
   return `<div class="editor-heading"><div><button class="button button-ghost button-small" data-action="navigate" data-view="campaigns">All campaigns</button><h1>${c.id ? 'Make it yours.' : 'Start something good.'}</h1><p class="page-subtitle">${c.id ? 'Your next chapter, down to the details.' : 'Build a home for your next release.'}</p></div><div class="editor-heading-actions"><span class="badge ${c.published ? 'badge-live' : 'badge-draft'}">${c.published ? 'Published' : 'Draft'}</span>${c.published ? button(icon('copy') + ' Copy link', 'copy-draft', 'secondary') : ''}${button('Save changes', 'save-draft', 'primary', 'id="save-top"')}</div></div>
   <div class="editor-grid"><form id="campaign-form" class="editor-form" novalidate>
     <section class="form-section"><div class="section-title"><span class="section-icon">${icon('music')}</span><div><h2>The release</h2><p>The details your fans will see.</p></div></div>
@@ -186,9 +194,17 @@ function editorHtml() {
     <section class="form-section"><div class="section-title"><span class="section-icon">${icon('brush')}</span><div><h2>The look</h2><p>Same music. Entirely your world.</p></div></div>
       <div class="artwork-upload"><div id="artwork-thumb">${artwork(c, 'upload-thumb', true)}</div><div><strong>Cover artwork</strong><p class="field-help">Square JPG, PNG, or WebP · up to 5 MB</p><label class="button button-secondary button-small">${icon('upload')} Upload artwork<input type="file" id="artwork-file" accept="image/jpeg,image/png,image/webp" class="sr-only"></label><span class="field-help" id="upload-status" role="status"></span></div></div>
       ${inputField('Or use an image URL', 'artwork_url', c.artwork_url, { type: 'url', placeholder: 'https://…/your-cover.jpg', max: 2048, help: 'Use an image you own or have permission to use.' })}
-      <fieldset class="field"><legend class="field-label">Page theme</legend><div class="theme-grid">${THEMES.map((theme) => `<label class="theme-option" data-theme="${theme}"><input type="radio" name="theme" value="${theme}" ${c.theme === theme ? 'checked' : ''}><span class="theme-sample"></span><strong>${theme[0].toUpperCase() + theme.slice(1)}</strong></label>`).join('')}</div></fieldset>
-      <div class="field-row"><label class="field"><span class="field-label">Accent color</span><div class="color-control"><input type="color" name="accent" value="${esc(c.accent)}" aria-label="Custom accent color"><span id="accent-label">${esc(c.accent.toUpperCase())}</span></div><div class="color-swatches">${ACCENTS.map((color) => `<button type="button" class="swatch" style="--swatch:${color}" data-action="accent" data-color="${color}" aria-label="Use ${color}" aria-pressed="${color === c.accent}"></button>`).join('')}</div></label>
+      <fieldset class="field theme-picker"><legend class="field-label">Choose your world <span>16 themes + custom</span></legend><div class="theme-grid">${THEME_DETAILS.map((theme) => `<label class="theme-option" data-theme="${theme.id}" title="${esc(theme.note)}"><input type="radio" name="theme" value="${theme.id}" ${c.theme === theme.id ? 'checked' : ''}><span class="theme-sample" aria-hidden="true">${theme.animated ? '<span class="theme-stars">✦</span>' : ''}</span><strong>${theme.name}</strong><small>${theme.animated ? 'Animated stars' : theme.id === 'custom' ? 'Your own palette' : theme.note}</small></label>`).join('')}</div><span class="field-help" id="theme-description">${esc(THEME_DETAILS.find((theme) => theme.id === c.theme)?.note || '')}</span><span class="field-error" id="error-theme"></span></fieldset>
+      <div class="field-row"><label class="field"><span class="field-label">Accent color</span><div class="color-control"><input type="color" name="accent" value="${esc(c.accent)}" aria-label="Custom accent color"><span id="accent-label">${esc(c.accent.toUpperCase())}</span></div><div class="color-swatches">${ACCENTS.map((color) => `<button type="button" class="swatch" style="--swatch:${color}" data-action="accent" data-color="${color}" aria-label="Use ${color}" aria-pressed="${color === c.accent}"></button>`).join('')}</div><span class="field-error" id="error-accent"></span></label>
       <label class="field"><span class="field-label">Layout</span><select name="layout" class="select"><option value="centered" ${c.layout === 'centered' ? 'selected' : ''}>Centered</option><option value="split" ${c.layout === 'split' ? 'selected' : ''}>Cover & content</option></select><span class="field-help">Both layouts adapt to smaller screens.</span></label></div>
+      <div class="custom-palette" id="custom-palette" ${c.theme === 'custom' ? '' : 'hidden'}><div class="field-row">${[['background_color', 'Background color'], ['text_color', 'Text color']].map(([key, label]) => `<label class="field"><span class="field-label">${label}</span><div class="color-control"><input type="color" name="${key}" value="${esc(c[key])}" aria-label="${label}"><span id="${key}-label">${esc(c[key].toUpperCase())}</span></div><span class="field-error" id="error-${key}"></span></label>`).join('')}</div><p class="field-help" id="contrast-help" role="status"></p></div>
+      <div class="appearance-divider"></div><div class="section-heading"><div><h3>Set the scene</h3><p class="field-help">An image, a galaxy, or just your colors.</p></div></div>
+      <div class="background-upload"><div class="background-thumb appearance-surface" id="background-thumb" ${appearanceAttributes(c)}>${backgroundLayers(c, false)}<span>${icon('brush')}</span></div><div><label class="button button-secondary button-small">${icon('upload')} Upload background<input type="file" id="background-file" accept="image/jpeg,image/png,image/webp" class="sr-only"></label><span class="field-help">JPG, PNG, or WebP · up to 5 MB</span><span class="field-help" id="background-upload-status" role="status"></span></div></div>
+      ${inputField('Background image URL', 'background_url', c.background_url, { type: 'url', placeholder: 'https://…/your-background.jpg', max: 2048, help: 'Wide images work well. Uploads and image URLs are public; use images you own or have permission to share.' })}
+      <div class="background-options"><label class="field"><span class="field-label">Image shade <output id="overlay-label" for="background-overlay">${c.background_overlay}%</output></span><input class="range-input" id="background-overlay" name="background_overlay" type="range" min="0" max="90" step="1" value="${c.background_overlay}" aria-describedby="overlay-help error-background_overlay"><span class="field-help" id="overlay-help">Darken your image so the release details stay readable.</span><span class="field-error" id="error-background_overlay"></span></label>${button('Remove image', 'remove-background', 'ghost')}</div>
+      <label class="switch-label"><input type="checkbox" name="background_motion" ${c.background_motion ? 'checked' : ''}><span>Animate Galaxy, Nebula, and Starlight backgrounds</span></label><p class="field-help">Motion stays off when a visitor prefers reduced motion.</p><span class="field-error" id="error-background_motion"></span>
+      <div class="appearance-divider"></div><div class="field-row"><label class="field"><span class="field-label">Typography</span><select name="font_style" class="select">${[['modern','Modern · clean sans'],['editorial','Editorial · expressive serif'],['mono','Mono · studio minimal']].map(([value,label]) => `<option value="${value}" ${c.font_style === value ? 'selected' : ''}>${label}</option>`).join('')}</select><span class="field-error" id="error-font_style"></span></label><label class="field"><span class="field-label">Button shape</span><select name="button_style" class="select">${[['rounded','Soft corners'],['pill','Pill'],['square','Square']].map(([value,label]) => `<option value="${value}" ${c.button_style === value ? 'selected' : ''}>${label}</option>`).join('')}</select><span class="field-error" id="error-button_style"></span></label></div>
+      <div class="appearance-reset">${button('Reset appearance', 'reset-appearance', 'ghost')}<span class="field-help">Restore the original look; keep your release details.</span></div>
       ${inputField('Spotify button text', 'button_label', c.button_label, { max: 40, required: true })}
       <label class="switch-label"><input type="checkbox" name="show_countdown" ${c.show_countdown ? 'checked' : ''}><span>Show the release countdown</span></label>
     </section>
@@ -203,11 +219,11 @@ function editorHtml() {
       <label class="switch-label"><input type="checkbox" name="published" ${c.published ? 'checked' : ''}><span>Publish this campaign</span></label><p class="field-help">Anyone with the link can open a published page. Unpublishing hides the page and pauses pending pre-saves.</p>
       <div id="save-error" class="form-error" role="alert"></div><div class="modal-actions"><button class="button button-primary" type="submit" id="save-bottom">${icon('check')} Save campaign</button><span id="save-status" class="field-help" role="status">${state.user ? 'Changes are saved when you press Save.' : 'Sign in to save or publish. Your preview is ready to customize.'}</span></div>
     </section>
-  </form><aside class="editor-preview" aria-label="Live page preview"><div class="preview-label"><span>${icon('eye')} LIVE PREVIEW</span><span class="badge badge-draft">Preview only</span></div><div class="preview-frame" id="release-preview"></div><p class="preview-note">This is how your release feels to a fan.<br>Your edits appear here as you make them.</p></aside></div>`;
+  </form><aside class="editor-preview" aria-label="Live page preview"><div class="preview-label"><span>${icon('eye')} LIVE PREVIEW</span><span class="badge badge-draft">Preview only</span></div><div class="preview-frame" id="release-preview"></div><button type="button" class="button button-secondary preview-expand" data-action="expand-preview">${icon('external')} Open full preview</button><p class="preview-note">This is how your release feels to a fan.<br>Your edits appear here as you make them.</p></aside></div>`;
 }
 
 function linkRow(link, index) {
-  return `<div class="link-row" data-index="${index}"><label class="field"><span class="field-label">Button label</span><input class="input" data-link-label="${index}" maxlength="50" placeholder="Apple Music" value="${esc(link.label)}"></label><label class="field"><span class="field-label">Destination URL</span><input class="input" type="url" data-link-url="${index}" maxlength="2048" placeholder="https://…" value="${esc(link.url)}"></label><button type="button" class="icon-button" data-action="remove-link" data-index="${index}" aria-label="Remove destination ${index + 1}">${icon('close')}</button></div>`;
+  return `<div class="link-row" data-index="${index}"><label class="field"><span class="field-label">Button label</span><input class="input" data-link-label="${index}" maxlength="60" placeholder="Apple Music" value="${esc(link.label)}"></label><label class="field"><span class="field-label">Destination URL</span><input class="input" type="url" data-link-url="${index}" maxlength="2048" placeholder="https://…" value="${esc(link.url)}"></label><button type="button" class="icon-button" data-action="remove-link" data-index="${index}" aria-label="Remove destination ${index + 1}">${icon('close')}</button></div>`;
 }
 
 function readForm() {
@@ -221,6 +237,10 @@ function readForm() {
     slug: String(values.get('slug') || ''), description: String(values.get('description') || ''),
     release_at: date && !Number.isNaN(date.getTime()) ? date.toISOString() : null,
     artwork_url: String(values.get('artwork_url') || '') || null,
+    background_url: String(values.get('background_url') || '') || null,
+    background_overlay: Number(values.get('background_overlay')), background_motion: values.has('background_motion'),
+    background_color: String(values.get('background_color') || '#101019'), text_color: String(values.get('text_color') || '#f5f5fb'),
+    button_style: String(values.get('button_style') || 'rounded'), font_style: String(values.get('font_style') || 'modern'),
     theme: String(values.get('theme') || 'midnight'), layout: String(values.get('layout') || 'centered'),
     accent: String(values.get('accent') || '#c6b8ff'), button_label: String(values.get('button_label') || ''),
     spotify_uri: String(values.get('spotify_uri') || '') || null,
@@ -234,11 +254,11 @@ function readForm() {
 
 function releaseHtml(c, preview = false, spotifyConfigured = false) {
   const future = c.release_at && Date.parse(c.release_at) > Date.now();
-  const color = /^#[a-f0-9]{6}$/i.test(c.accent) ? c.accent : '#c6b8ff';
+  const look = appearance(c);
   const hasSpotify = Boolean(spotifyUri(c.spotify_uri));
   const canAuthorize = !preview && hasSpotify && spotifyConfigured;
   const links = (Array.isArray(c.links) ? c.links : []).filter((item) => safeUrl(item.url) && item.label);
-  return `<div class="release-page ${c.layout === 'split' ? 'split-layout' : ''}" data-theme="${THEMES.includes(c.theme) ? c.theme : 'midnight'}" style="--campaign-accent:${color};--campaign-ink:${accentInk(color)}"><article class="release-card">
+  return `<div class="release-page appearance-surface ${look.layout === 'split' ? 'split-layout' : ''} ${look.background_url ? 'has-background-image' : ''}" ${appearanceAttributes(c)}>${backgroundLayers(c)}<article class="release-card">
     ${artwork(c, 'release-artwork')}<div class="release-content"><p class="release-eyebrow">${future ? 'SOMETHING GOOD IS COMING' : c.release_at ? 'THE WAIT IS OVER' : 'YOUR NEXT FAVORITE'}</p><h1 class="release-title">${esc(c.title || 'Your next release')}</h1><p class="release-artist">${esc(c.artist || 'Your artist name')}</p>${c.description ? `<p class="release-description">${esc(c.description)}</p>` : ''}
     ${c.release_at ? `<p class="release-date">${future ? 'Releasing ' : 'Released '}${esc(releaseDate(c.release_at))}</p>` : ''}
     ${future && c.show_countdown ? `<div class="countdown" data-countdown="${esc(c.release_at)}" aria-label="Time until release">${countdownParts(c.release_at).map((part, i) => `<div class="countdown-unit"><b>${String(part).padStart(2, '0')}</b><span>${['days','hours','min','sec'][i]}</span></div>`).join('')}</div>` : ''}
@@ -247,7 +267,7 @@ function releaseHtml(c, preview = false, spotifyConfigured = false) {
     ${{ true: '' }[Boolean(links.length || hasSpotify || preview)] ?? '<p class="field-help">The artist will add listening links here soon.</p>'}</div>
     ${hasSpotify ? `<p class="consent">${spotifyConfigured || preview ? 'Continue to Spotify to authorize Nexus to save this release to your library. No Spotify password is shared with Nexus.' : 'Spotify pre-saving is currently unavailable for this page.'}</p>` : ''}
     ${hasSpotify && !preview ? '<p class="consent">You can cancel a pending pre-save from the confirmation page, or remove Nexus in your <a href="https://www.spotify.com/account/apps/" target="_blank" rel="noopener noreferrer">Spotify app settings</a>.</p>' : ''}
-    <div id="${preview ? 'preview-feedback' : 'public-feedback'}" role="status" class="release-notice"></div><div class="release-footer"><span class="mini-brand">${icon('link')} nexus</span><span>Made for what’s next.</span></div></div></article></div>`;
+    <div ${preview ? '' : 'id="public-feedback"'} role="status" class="release-notice"></div><div class="release-footer"><span class="mini-brand">${icon('link')} nexus</span><span>Made for what’s next.</span></div></div></article></div>`;
 }
 
 function updatePreview() {
@@ -257,6 +277,29 @@ function updatePreview() {
   document.querySelector('#slug-preview').textContent = state.draft.slug ? shareUrl(state.draft.slug) : 'Your shareable link will appear here';
   document.querySelector('#accent-label').textContent = state.draft.accent.toUpperCase();
   document.querySelectorAll('.swatch').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.color === state.draft.accent)));
+  const look = appearance(state.draft);
+  document.querySelector('#custom-palette').hidden = look.theme !== 'custom';
+  document.querySelector('#theme-description').textContent = THEME_DETAILS.find((theme) => theme.id === look.theme).note;
+  document.querySelector('#overlay-label').textContent = `${look.background_overlay}%`;
+  for (const name of ['background_color', 'text_color']) document.getElementById(name + '-label').textContent = look[name].toUpperCase();
+  document.querySelector('#background-thumb').outerHTML = `<div class="background-thumb appearance-surface" id="background-thumb" ${appearanceAttributes(state.draft)}>${backgroundLayers(state.draft, false)}<span>${icon('brush')}</span></div>`;
+  document.querySelector('#artwork-thumb').innerHTML = artwork(state.draft, 'upload-thumb', true);
+  const contrast = document.querySelector('#contrast-help');
+  const ratio = contrastRatio(look.text_color, look.background_color);
+  contrast.textContent = look.background_url ? 'Check readability over your image in the preview. The shade control can help.' : `${ratio.toFixed(1)}:1 text contrast. ${ratio >= 4.5 ? 'Your colors are readable for normal text.' : 'Try a lighter text color or a darker background for easier reading.'}`;
+  contrast.classList.toggle('contrast-warning', !look.background_url && ratio < 4.5);
+  document.querySelector('[data-action="remove-background"]').disabled = !state.draft.background_url;
+}
+
+function openPreview(size = state.previewSize) {
+  if (!state.draft) return;
+  state.previewSize = size === 'desktop' ? 'desktop' : 'mobile';
+  const dialog = document.querySelector('#confirm-dialog');
+  dialog.className = 'modal preview-modal';
+  dialog.setAttribute('aria-labelledby', 'full-preview-title');
+  dialog.innerHTML = `<div class="full-preview-toolbar"><div><h2 id="full-preview-title">Your release page</h2><p>Preview only · changes are not published</p></div><div class="preview-size-controls" aria-label="Preview width">${['mobile','desktop'].map((mode) => `<button type="button" data-action="preview-size" data-size="${mode}" aria-pressed="${mode === state.previewSize}">${mode === 'mobile' ? 'Mobile' : 'Desktop'}</button>`).join('')}</div><button type="button" class="icon-button" data-close-dialog aria-label="Close preview">${icon('close')}</button></div><div class="full-preview-scroll"><div class="preview-frame full-preview-frame" data-size="${state.previewSize}">${releaseHtml(state.draft, true, Boolean(state.service?.spotify_configured))}</div></div>`;
+  if (!dialog.open) dialog.showModal();
+  dialog.querySelector(`[data-size="${state.previewSize}"]`).focus();
 }
 
 function confirmAction(title, message, label = 'Continue') {
@@ -289,7 +332,7 @@ async function navigate(view) {
 
 async function openEditor(campaign = null) {
   if (!await mayLeave()) return;
-  state.draft = campaign ? structuredClone(campaign) : newCampaign({ artist: state.user?.user_metadata?.display_name || '' });
+  state.draft = campaign ? newCampaign(structuredClone(campaign)) : newCampaign({ artist: state.user?.user_metadata?.display_name || '' });
   state.view = 'editor'; state.dirty = false; state.slugEdited = Boolean(state.draft.slug);
   render(); window.scrollTo({ top: 0, behavior: 'instant' });
   document.querySelector('#campaign-form [name="title"]').focus({ preventScroll: true });
@@ -325,7 +368,7 @@ async function saveCampaign() {
     if (state.user?.id !== owner) return;
     const response = await api('save', { campaign: result.campaign }, true);
     if (state.user?.id !== owner) return;
-    state.draft = response.campaign; state.dirty = false;
+    state.draft = newCampaign(response.campaign); state.dirty = false;
     toast(state.draft.published ? 'Your campaign is published. Your link is ready to share.' : 'Draft saved to your Nexus account.');
     render();
     document.querySelector('#save-status').textContent = state.draft.published ? 'Published. Copy your link to share it.' : 'All changes saved.';
@@ -524,6 +567,10 @@ document.addEventListener('input', (event) => {
   }
   if (event.target.closest('#campaign-form') && event.target.type !== 'file') {
     if (event.target.name === 'slug') state.slugEdited = true;
+    if (event.target.name === 'theme' && event.target.value !== 'custom') {
+      const selected = THEME_DETAILS.find((theme) => theme.id === event.target.value);
+      if (selected) document.querySelector('[name="accent"]').value = selected.accent;
+    }
     if (!state.slugEdited && ['title','artist'].includes(event.target.name)) {
       const form = document.querySelector('#campaign-form');
       const generated = slugify([form.elements.artist.value, form.elements.title.value].filter(Boolean).join('-'));
@@ -535,22 +582,27 @@ document.addEventListener('input', (event) => {
 });
 
 document.addEventListener('change', async (event) => {
-  if (event.target.id !== 'artwork-file') return;
-  const file = event.target.files[0]; if (!file) return;
-  if (!state.user) { event.target.value = ''; openAuth(); return; }
-  if (state.uploading) return;
-  const status = document.querySelector('#upload-status');
+  const input = event.target;
+  if (!['artwork-file', 'background-file'].includes(input.id)) return;
+  const file = input.files[0]; if (!file) return;
+  const background = input.id === 'background-file';
+  const status = document.querySelector(background ? '#background-upload-status' : '#upload-status');
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size <= 0 || file.size > 5 * 1024 * 1024) {
+    status.textContent = 'Choose a nonempty JPG, PNG, or WebP image up to 5 MB.'; input.value = ''; return;
+  }
+  if (!state.user) { input.value = ''; openAuth(); return; }
+  if (state.uploading) { input.value = ''; toast('Please wait for your current image upload to finish.'); return; }
   const owner = state.user.id, draft = state.draft;
-  state.uploading = true; status.textContent = 'Uploading artwork…';
+  state.uploading = true; input.disabled = true; status.textContent = background ? 'Uploading background…' : 'Uploading artwork…';
   try {
     const url = await uploadArtwork(file, owner);
-    if (state.user?.id !== owner || state.draft?.id !== draft.id) return;
-    document.querySelector('[name="artwork_url"]').value = url;
+    if (state.user?.id !== owner || state.view !== 'editor' || state.draft?.id !== draft.id) return;
+    document.querySelector(background ? '[name="background_url"]' : '[name="artwork_url"]').value = url;
     state.dirty = true; readForm(); updatePreview();
-    document.querySelector('#artwork-thumb').innerHTML = artwork(state.draft, 'upload-thumb', true);
-    status.textContent = 'Uploaded. Save the campaign to keep this artwork.';
+    status.textContent = `Uploaded. Save the campaign to keep this ${background ? 'background' : 'artwork'}.`;
+    document.querySelector('#save-status').textContent = 'You have unsaved changes.';
   } catch (error) { if (status.isConnected) status.textContent = error.message; }
-  finally { state.uploading = false; event.target.value = ''; }
+  finally { state.uploading = false; input.disabled = false; input.value = ''; }
 });
 
 document.addEventListener('click', async (event) => {
@@ -564,13 +616,16 @@ document.addEventListener('click', async (event) => {
   const campaign = state.campaigns.find((c) => c.id === target.dataset.id);
   try {
     if (state.saving && !['preview-only','copy-draft'].includes(action)) { toast('Please wait for your campaign to finish saving.'); return; }
+    if (state.uploading && ['reset-appearance', 'remove-background'].includes(action)) { toast('Please wait for your image upload to finish.'); return; }
     switch (action) {
       case 'navigate': await navigate(target.dataset.view); break;
       case 'create': await openEditor(); break;
       case 'template': {
         const t = TEMPLATES[Number(target.dataset.template)];
-        await openEditor(newCampaign({ theme: t.theme, accent: t.accent, layout: t.layout })); break;
+        if (!t) break;
+        await openEditor(newCampaign({ theme: t.theme, accent: t.accent, layout: t.layout, font_style: t.font_style })); break;
       }
+      case 'custom-template': await openEditor(newCampaign({ theme: 'custom' })); break;
       case 'edit': if (campaign) await openEditor(campaign); break;
       case 'signin': openAuth(); break;
       case 'auth-mode': openAuth(target.dataset.mode); break;
@@ -603,6 +658,17 @@ document.addEventListener('click', async (event) => {
           await loadCampaigns();
         } break;
       case 'save-draft': await saveCampaign(); break;
+      case 'expand-preview': readForm(); openPreview(); break;
+      case 'preview-size': openPreview(target.dataset.size); break;
+      case 'remove-background':
+        document.querySelector('[name="background_url"]').value = ''; state.dirty = true; readForm(); updatePreview();
+        document.querySelector('#background-upload-status').textContent = 'Image removed from the design. Save to update the campaign.';
+        document.querySelector('#save-status').textContent = 'You have unsaved changes.'; break;
+      case 'reset-appearance':
+        readForm(); Object.assign(state.draft, APPEARANCE_DEFAULTS); state.dirty = true; render();
+        document.querySelector('#save-status').textContent = 'Appearance reset. Save to keep these changes.';
+        document.querySelector('[name="theme"]:checked').focus({ preventScroll: true });
+        toast('Appearance reset. Your release details and cover artwork are unchanged.'); break;
       case 'accent': document.querySelector('[name="accent"]').value = target.dataset.color; state.dirty = true; readForm(); updatePreview(); break;
       case 'add-link':
         readForm(); if (state.draft.links.length >= 12) break;
@@ -638,8 +704,16 @@ document.addEventListener('click', async (event) => {
 window.addEventListener('beforeunload', (event) => {
   if (state.dirty || state.saving || state.uploading) { event.preventDefault(); event.returnValue = ''; }
 });
-root.addEventListener('error', (event) => {
+document.addEventListener('error', (event) => {
   if (event.target instanceof HTMLImageElement) {
+    if (event.target.classList.contains('background-image') || event.target.classList.contains('campaign-background-thumb')) {
+      event.target.closest('.has-background-image')?.classList.remove('has-background-image');
+      event.target.parentElement?.querySelector('.background-shade')?.remove();
+      event.target.remove();
+      const status = document.querySelector('#background-upload-status');
+      if (status) status.textContent = 'This background image could not load. Your page theme is shown instead.';
+      return;
+    }
     const placeholder = document.createElement('div'); placeholder.className = 'release-placeholder';
     const message = document.createElement('span'); message.className = 'art-word'; message.textContent = 'Artwork unavailable';
     placeholder.append(message); event.target.replaceWith(placeholder);

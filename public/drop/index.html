@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b12">
+  <meta name="description" content="A little less distance between your devices. Share files, links, and notes with Nexus Drop.">
+  <meta name="referrer" content="no-referrer">
+  <title>Nexus Drop — a little less distance</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="../presave/config.js"></script>
+  <script src="./config.js"></script>
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to sharing</a>
+  <header class="topbar">
+    <a class="brand" id="home-link" href="/" aria-label="Nexus workspace"><span class="brand-mark" aria-hidden="true">n<span>✦</span></span><span>nexus<span class="brand-product"> / drop</span></span></a>
+    <nav aria-label="Nexus tools"><a href="../presave/index.html">Pre-save studio</a><a href="#how-it-works">How it works</a></nav>
+    <span class="connection" id="connection" role="status">Ready when you are</span>
+  </header>
+  <main id="main">
+    <section class="intro">
+      <span class="eyebrow"><span aria-hidden="true">✧</span> YOUR FILES. IN GOOD COMPANY.</span>
+      <h1>A little less distance.<br><span>A lot more flow.</span></h1>
+      <p>From your laptop to your phone. From your ideas to your people.<br class="desktop-break"> Drop files, links, and notes into the moment.</p>
+    </section>
+
+    <div id="support-error" class="notice" role="alert" hidden></div>
+    <div class="workspace">
+      <section class="panel connect-panel" aria-labelledby="connect-heading">
+        <div class="panel-heading"><span class="section-label">THE CONNECTION</span><span class="tag">No account needed</span></div>
+        <h2 id="connect-heading">Your little corner<br>of the internet.</h2>
+        <p class="muted">Open the same invitation on another device. Keep both pages open while you share.</p>
+        <div class="orbit" aria-hidden="true"><div class="orbit-ring ring-one"></div><div class="orbit-ring ring-two"></div><div class="orbit-ring ring-three"></div><span class="orbit-star star-one">✦</span><span class="orbit-star star-two">✧</span><div class="orbit-center">n<span>✦</span></div><span class="orbit-chip chip-phone">▯</span><span class="orbit-chip chip-file">▤</span></div>
+        <label class="field">This device<input id="device-name" maxlength="32" autocomplete="off" placeholder="My laptop"></label>
+        <div id="start-controls"><button class="button primary full" id="create-room">Create a sharing room <span aria-hidden="true">✦</span></button><div class="divider"><span>or join your other device</span></div><form id="join-form"><label class="sr-only" for="invitation-input">Invitation link or pairing code</label><div class="join-row"><input id="invitation-input" placeholder="Paste an invitation link" autocomplete="off" spellcheck="false" required><button class="button secondary" type="submit">Join</button></div></form></div>
+        <div id="room-controls" hidden><label class="field">Your private invitation<input id="room-link" readonly aria-describedby="invitation-help"></label><p class="fine" id="invitation-help">Anyone with this link can join this room. Device names are chosen by their owners.</p><div class="button-row"><button id="copy-invite" class="button primary">Copy invitation</button><button id="share-invite" class="button secondary">Share</button></div><button id="leave-room" class="text-button full">Leave room</button></div>
+      </section>
+
+      <section class="panel send-panel" aria-labelledby="send-heading">
+        <div class="panel-heading"><span class="section-label">THE GOOD STUFF</span><span class="tag subtle">Up to 100 MB</span></div>
+        <div class="heading-row"><h2 id="send-heading">What’s moving?</h2><div class="mode-switch" role="group" aria-label="Share type"><button id="files-mode" aria-pressed="true">Files</button><button id="note-mode" aria-pressed="false">Text & links</button></div></div>
+        <div id="files-content"><label class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose files to share"><input type="file" id="file-input" multiple class="sr-only"><span class="file-stack" aria-hidden="true"><span>♫</span><span>✧</span><span>▤</span></span><strong>Good things are worth sharing.</strong><span>Drop files here, or <em>browse files</em></span><small>Photos, demos, documents. Up to 20 files at a time.</small></label><div id="selected-files" class="selected-files" aria-live="polite"></div></div>
+        <div id="note-content" hidden><label class="field" for="note-input">A note, a link, a spark of an idea<textarea id="note-input" rows="7" maxlength="8000" placeholder="Paste a link or write something worth passing along…"></textarea></label><div class="input-footer"><span>Only sent after the other device accepts.</span><span id="note-count">0 / 8,000</span></div></div>
+        <div class="devices-heading"><h3>Send to a device</h3><span id="device-count" class="fine">Join a room to connect</span></div>
+        <div id="devices" class="devices"><div class="empty-devices"><span aria-hidden="true">◎</span><p>A little quiet here.<br><span>Your connected devices will appear here.</span></p></div></div>
+        <button id="send" class="button primary full" disabled>Choose a device to send</button>
+        <p class="privacy-note"><span aria-hidden="true">◇</span> Direct, encrypted transfer. You choose what to receive.</p>
+      </section>
+    </div>
+
+    <section id="transfer-panel" class="panel transfer-panel" aria-label="Current transfer" hidden></section>
+    <section id="received-panel" class="panel received-panel" aria-labelledby="received-heading" hidden><div class="heading-row"><div><span class="section-label">LANDED SAFELY</span><h2 id="received-heading">Made it to your side.</h2></div><button id="clear-received" class="button secondary small">Clear received</button></div><p class="fine">Download files before closing this page. Received items stay in this tab only.</p><div id="received-items"></div></section>
+
+    <section id="how-it-works" class="how-section" aria-labelledby="how-heading"><div><span class="section-label">SMALL STEPS. BIG POSSIBILITIES.</span><h2 id="how-heading">Less setup.<br>More sending.</h2></div><article><span class="step-symbol" aria-hidden="true">⌘</span><h3>Make a connection</h3><p>Create a room and share its invitation with your other device or a friend.</p></article><article><span class="step-symbol" aria-hidden="true">✧</span><h3>Pick your good stuff</h3><p>Choose your files or paste a note. Select a device and send a request.</p></article><article><span class="step-symbol" aria-hidden="true">↓</span><h3>Accept. And it’s there.</h3><p>The recipient accepts, then downloads. Keep both screens awake until delivery completes.</p></article></section>
+    <p class="network-note">Works best on the same Wi-Fi. Some networks block direct connections. Nexus Drop pairs browsers through an invitation; it does not use Apple AirDrop or Bluetooth discovery.</p>
+  </main>
+  <footer><span class="footer-brand">nexus <span>✦</span></span><p>Less friction. More connection.</p><a href="../presave/index.html">Make your next release a moment</a></footer>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <noscript><p class="notice">Nexus Drop needs JavaScript to pair devices and transfer files.</p></noscript>
+</body>
+</html>

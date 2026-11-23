@@ -1,5 +1,5 @@
 import {
-  HttpError, MAX_ADVANCE_DAYS, callbackReturn, configuredPublicUrl, decrypt,
+  HttpError, MAX_ADVANCE_DAYS, DESIGN_DEFAULTS, callbackReturn, configuredPublicUrl, decrypt,
   encrypt, oauthCookie, pkceChallenge, randomToken, readCookie, retryPlan,
   safeReturnUrl, sha256, slug, tokenKey, uuid, validateCampaign,
 } from './core.mjs';
@@ -335,6 +335,13 @@ export function createPresaveHandler({ db, env, fetchImpl = fetch }) {
         case 'save': {
           const userId = await owner(req);
           const campaign = validateCampaign(body.campaign);
+          // Earlier clients do not know these appearance fields. An edit from
+          // one must keep the saved design; only new campaigns use defaults.
+          if (body.campaign.id) {
+            for (const key of Object.keys(DESIGN_DEFAULTS)) {
+              if (body.campaign[key] === undefined) delete campaign[key];
+            }
+          }
           const result = body.campaign.id
             ? await db.from('presave_campaigns').update(campaign).eq('id', uuid(body.campaign.id)).eq('owner_id', userId).select('*').maybeSingle()
             : await db.from('presave_campaigns').insert({ ...campaign, owner_id: userId }).select('*').single();

@@ -1,0 +1,51 @@
+name: Nexus Drop checks
+
+on:
+  pull_request:
+    paths:
+      - "public/drop/**"
+      - "public/presave/config.js"
+      - "public/presave/vendor/**"
+      - "src/lib/nexusDrop.ts"
+      - "src/components/layout/PhoneLink.tsx"
+      - "src/components/phone/PhoneLinkPanel.tsx"
+      - "supabase/migrations/*nexus_drop*.sql"
+      - "tests/drop*.test.mjs"
+      - "tests/nexus-drop*.test.mjs"
+      - ".github/workflows/drop.yml"
+  push:
+    branches: [main]
+    paths:
+      - "public/drop/**"
+      - "public/presave/config.js"
+      - "public/presave/vendor/**"
+      - "src/lib/nexusDrop.ts"
+      - "src/components/layout/PhoneLink.tsx"
+      - "src/components/phone/PhoneLinkPanel.tsx"
+      - "supabase/migrations/*nexus_drop*.sql"
+      - "tests/drop*.test.mjs"
+      - "tests/nexus-drop*.test.mjs"
+      - ".github/workflows/drop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check JavaScript syntax
+        run: |
+          for source in public/drop/*.mjs; do node --check "$source"; done
+      - name: Install isolated test dependencies
+        run: npm install --prefix "$RUNNER_TEMP/drop-qa" --no-audit --no-fund @electric-sql/pglite@0.5.17 jsdom@31.0.1 esbuild@0.28.2
+      - name: Run transfer, integration, and storage security checks
+        env:
+          NEXUS_DROP_PGLITE_MODULE: ${{ runner.temp }}/drop-qa/node_modules/@electric-sql/pglite/dist/index.cjs
+          NEXUS_DROP_QA_PACKAGE: ${{ runner.temp }}/drop-qa/package.json
+        run: node --test tests/drop*.test.mjs tests/nexus-drop*.test.mjs

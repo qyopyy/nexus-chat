@@ -5,7 +5,7 @@ on:
     paths:
       - "public/presave/**"
       - "supabase/functions/presave/**"
-      - "supabase/migrations/*presave_service.sql"
+      - "supabase/migrations/*presave*.sql"
       - "tests/presave*.test.mjs"
       - ".github/workflows/presave.yml"
   push:
@@ -13,7 +13,7 @@ on:
     paths:
       - "public/presave/**"
       - "supabase/functions/presave/**"
-      - "supabase/migrations/*presave_service.sql"
+      - "supabase/migrations/*presave*.sql"
       - "tests/presave*.test.mjs"
       - ".github/workflows/presave.yml"
   workflow_dispatch:

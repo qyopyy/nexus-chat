@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BatteryCharging, BatteryMedium, MonitorSmartphone } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { errorText, supabase } from "@/lib/supabase";
 import { useApp, toast } from "@/store/app";
 import {
   clearHandsetLink,
@@ -35,29 +35,45 @@ export default function PhoneLink() {
   const [note, setNote] = useState("");
   const [link, setLink] = useState("");
   const [drops, setDrops] = useState<NexusDrop[]>([]);
+  const [dropError, setDropError] = useState<string | null>(null);
   const [dropUser, setDropUser] = useState("");
   const mine = thisDeviceId();
   const seenPing = useRef<string | null>(null);
+  const refreshDrops = useCallback(async (isActive: () => boolean = () => true) => {
+    try {
+      const incoming = await incomingDrops();
+      if (isActive()) {
+        setDrops(incoming);
+        setDropError(null);
+      }
+    } catch (error) {
+      if (isActive()) setDropError(`Couldn't load your Drop inbox: ${errorText(error)}`);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setDrops([]);
+      setDropError(null);
+      return;
+    }
     let live = true;
     const load = async () => {
       const { data } = await supabase.from("nexus_handsets").select("*").eq("user_id", userId).order("last_seen", { ascending: false });
       if (live) setRows((data ?? []) as Handset[]);
     };
     void load();
-    void incomingDrops().then(setDrops);
+    void refreshDrops(() => live);
     const channel = supabase
       .channel(`handset:${userId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "nexus_handsets", filter: `user_id=eq.${userId}` }, () => void load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "nexus_drops", filter: `to_user=eq.${userId}` }, () => void incomingDrops().then(setDrops))
+      .on("postgres_changes", { event: "*", schema: "public", table: "nexus_drops", filter: `to_user=eq.${userId}` }, () => void refreshDrops(() => live))
       .subscribe();
     return () => {
       live = false;
       void supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [userId, refreshDrops]);
 
   useEffect(() => {
     const hit = rows.find((row) => row.device_id === mine && row.ping_at && Date.now() - new Date(row.ping_at).getTime() < 15000);
@@ -77,7 +93,7 @@ export default function PhoneLink() {
   if (!userId) return null;
   const ago = livePhone ? Math.max(0, Math.round((Date.now() - new Date(livePhone.last_seen).getTime()) / 1000)) : 0;
   const until = livePhone ? mins(livePhone.full_in_sec) : null;
-  if (!livePhone && drops.length === 0 && !open) {
+  if (!livePhone && drops.length === 0 && !open && !dropError) {
     return (
       <div className="border-t border-line px-2 py-1.5">
         <a href="/phone" className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-xs text-sub hover:bg-hover">
@@ -105,11 +121,12 @@ export default function PhoneLink() {
         </span>
         <MonitorSmartphone className="size-3.5 text-sub" />
       </button>
+      {dropError && <p role="alert" className="mt-2 text-xs text-dnd">{dropError} <button type="button" className="underline" onClick={() => void refreshDrops()}>Retry</button></p>}
       {open && (
         <div className="mt-1 space-y-2 rounded-md bg-hover/60 p-2 text-xs">
           {livePhone && <p className="text-sub">{fresh(livePhone) ? `Seen ${ago}s ago` : "The phone tab looks asleep. Keep Nexus open on the phone."}</p>}
-          {livePhone.note && <p>{livePhone.note}</p>}
-          {livePhone.link_url && (
+          {livePhone?.note && <p>{livePhone.note}</p>}
+          {livePhone?.link_url && (
             <a href={livePhone.link_url} target="_blank" rel="noreferrer" className="block truncate text-accent" onClick={() => void clearHandsetLink()}>
               Open {livePhone.link_url}
             </a>
@@ -152,7 +169,7 @@ export default function PhoneLink() {
               e.preventDefault();
               const input = (e.currentTarget.elements.namedItem("drop") as HTMLInputElement).files?.[0];
               if (!input) return;
-              void sendDrop(input, dropUser).then(() => incomingDrops().then(setDrops)).catch((err: Error) => toast(err.message, "error"));
+              void sendDrop(input, dropUser).then(() => refreshDrops()).catch((err: Error) => toast(err.message, "error"));
               e.currentTarget.reset();
             }}
           >
@@ -169,7 +186,7 @@ export default function PhoneLink() {
               <button
                 type="button"
                 className="w-full truncate rounded bg-accent/15 px-2 py-1 text-left text-xs"
-                onClick={() => void openAndClaimDrop(drop).then(() => incomingDrops().then(setDrops)).catch((err: Error) => toast(err.message, "error"))}
+                onClick={() => void openAndClaimDrop(drop).then(() => refreshDrops()).catch((err: Error) => toast(err.message, "error"))}
               >
                 Drop · {drop.name}
               </button>

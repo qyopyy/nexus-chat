@@ -12,15 +12,33 @@ The service includes:
 - Unlimited campaign creation; independent public URLs and private drafts.
 - Editing, duplication into a fresh private draft, publication, unpublication, and deletion.
 - Custom title, artist, description, release time, slug, cover artwork, theme, layout, accent, button text, and countdown.
-- Four starter looks: Midnight, Paper, Aurora, and Sunset.
-- JPG, PNG, or WebP artwork uploads up to 5 MB, plus external HTTPS image URLs.
-- Up to twelve destination buttons per campaign. This is a page-content bound, not a campaign-count limit.
+- Sixteen preset themes: Midnight, Paper, Aurora, Sunset, Galaxy, Nebula, Starlight, Ocean, Forest, Rose, Ember, Arctic, Lavender, Monochrome, Neon, and Champagne, plus a Custom theme with editable background and text colors.
+- Animated star fields and nebula light for Galaxy, Nebula, and Starlight. The creator can disable motion; a visitor's reduced-motion preference also disables the animation.
+- JPG, PNG, or WebP artwork and background uploads up to 5 MB, plus external HTTPS image URLs. Background shading ranges from 0–90% to help keep release details readable.
+- Modern, editorial, and monospace typography; rounded, pill, and square buttons; centered and split layouts; custom palette contrast feedback; and appearance reset without removing release details or cover artwork.
+- A live page preview and an expanded mobile/desktop preview. Saved appearance is carried through editing, duplication, and public-page rendering.
+- Up to twelve destination buttons per campaign, with labels up to 60 characters. This is a page-content bound, not a campaign-count limit.
 - View and destination-click counts, Spotify authorization counts, and completed-save counts.
 - Public pages that visitors can open without a Nexus account.
 - Real Spotify authorization and scheduled library saves after configuration.
 - A private cancellation capability and a verified status receipt for each fan authorization.
 
 The editor and template previews work before signing in. Only a successful server save creates a persistent campaign. The UI does not create local-only campaigns that appear to have been published.
+
+### Appearance settings
+
+| Field | Allowed value and default | Behavior |
+| --- | --- | --- |
+| `theme` | Sixteen preset names above, or `custom`; default `midnight` | Chooses the page palette and background treatment. |
+| `background_url` | HTTPS image URL up to 2,048 characters after URL normalization; default `null` | Adds a full-page background image. Uploads populate the same field. |
+| `background_overlay` | Integer from `0` to `90`; default `55` | Sets the dark shade over a background image, in percent. |
+| `background_motion` | Boolean; default `true` | Enables motion for the three animated themes, subject to the visitor's reduced-motion preference. |
+| `background_color` | Six-digit hexadecimal color; default `#101019` | Sets the base background for the Custom theme. |
+| `text_color` | Six-digit hexadecimal color; default `#f5f5fb` | Sets the text color for the Custom theme. |
+| `button_style` | `rounded`, `pill`, or `square`; default `rounded` | Changes the Spotify and destination button shapes. |
+| `font_style` | `modern`, `editorial`, or `mono`; default `modern` | Uses built-in font stacks; no external font upload or font service is needed. |
+
+The existing accent color controls the primary button, with light or dark button text chosen for readability. Preset selection sets its suggested accent, which can then be customized. The Custom theme's contrast hint compares its text and solid background colors; image readability still needs a visual check. Failed background images fall back to the selected page theme. Removing an image from a campaign does not delete the uploaded object from storage.
 
 ## Existing repository compatibility
 
@@ -45,18 +63,27 @@ The existing distribution-based `/l/[slug]` smart-link system is unchanged.
 | `public/presave/config.js` | Public Supabase URL and publishable key |
 | `public/presave/vendor/` | Locally served, pinned Supabase SDK; no CDN script dependency |
 | `supabase/migrations/20261121180000_presave_service.sql` | Tables, RLS, validation, RPCs, artwork bucket, worker leases |
+| `supabase/migrations/20261123120000_presave_design.sql` | Additional themes, validated appearance fields, and updated public-page projection |
 | `supabase/functions/presave/index.ts` | Supabase Edge entry |
 | `supabase/functions/presave/handler.mjs` | Request handling and Spotify workflow |
 | `supabase/functions/presave/core.mjs` | Validation, PKCE, encryption, retry logic |
 | `supabase/presave-schedule.sql` | Optional release-worker schedule |
 | `tests/presave*.test.mjs` | Focused frontend, handler, and PostgreSQL checks |
 
-## Deploy the basic service
+## Deploy or upgrade the basic service
 
 Use the Supabase project that already owns Nexus accounts. `public/presave/config.js` starts with the existing public settings from `.github/workflows/web.yml`. A publishable key is intended for the browser; never put a service-role key or Spotify token in this file.
 
-1. Apply `supabase/migrations/20261121180000_presave_service.sql` through the normal migration process. On an already linked project, inspect pending changes with `supabase db push --dry-run` before applying them with `supabase db push`. The migration can also be reviewed and executed as a complete transaction in the Supabase SQL editor. Do not rerun an already applied migration.
-2. Deploy the new function:
+1. Apply the database migrations through the normal migration process. On an already linked project, inspect pending changes with `supabase db push --dry-run` before applying reviewed pending migrations with `supabase db push`. The SQL files can also be reviewed and executed as complete transactions in the Supabase SQL editor.
+
+   | Installation state | Pre-save migration order |
+   | --- | --- |
+   | Fresh pre-save installation | Apply `supabase/migrations/20261121180000_presave_service.sql`, then `supabase/migrations/20261123120000_presave_design.sql`. |
+   | Original pre-save service already installed | Apply only `supabase/migrations/20261123120000_presave_design.sql` if it has not yet been applied. |
+
+   Do not rerun an already applied migration. The design migration extends the allowed themes, adds appearance columns with defaults for existing campaigns, and updates the published-page projection. It preserves the existing ownership and MFA policies.
+
+2. Redeploy the pre-save Edge Function **after the design migration succeeds**:
 
    ```sh
    supabase functions deploy presave --no-verify-jwt
@@ -64,7 +91,7 @@ Use the Supabase project that already owns Nexus accounts. `public/presave/confi
 
    Public pages and the Spotify callback must be callable without a Nexus JWT. The function itself verifies owner JWTs with Supabase `getUser()` and enforces MFA before any owner operation. Disabling the gateway JWT check does not disable these owner checks.
 
-3. Host the static assets through the existing Nexus deployment. For static-only hosting, deploy `public/presave/` as its own directory, or use its existing location inside the repository. The entry must be served over HTTPS for public use.
+3. Publish the updated frontend assets **after the migration and Edge Function update**. Host them through the existing Nexus deployment. For static-only hosting, deploy `public/presave/` as its own directory, or use its existing location inside the repository. The entry must be served over HTTPS for public use.
 4. Set `PRESAVE_PUBLIC_URL` in Supabase Edge Function secrets to the exact production frontend entry, with no query or fragment. Examples of path structure:
 
    ```text
@@ -73,7 +100,9 @@ Use the Supabase project that already owns Nexus accounts. `public/presave/confi
    ```
 
 5. Confirm `config.js` points to the same Supabase project as the migration and function. Add the chosen frontend URL to Supabase Auth's redirect allowlist if password-reset email links will return to this page.
-6. Verify two Nexus accounts can each create campaigns and cannot read or change one another's records. Publish a page and open its link in a signed-out browser.
+6. Verify two Nexus accounts can each create campaigns and cannot read or change one another's records. Save a campaign with a new theme and background, reopen it, duplicate it, and confirm its appearance. Publish a page and open its link in a signed-out browser, including a mobile viewport and reduced-motion mode.
+
+The rollout order matters: the updated function and frontend send fields that do not exist in the original database schema. Deploying them first can cause save failures. Existing campaigns keep their original themes and receive defaults for the added fields. When an older client omits the new appearance fields from an update, the updated handler preserves their stored values. Apply any normal asset-cache invalidation used by the deployment so editors receive the new theme controls.
 
 No Spotify settings are needed for campaign CRUD, customization, public pages, and ordinary destination links. The Spotify button stays unavailable until all required integration settings are present.
 
@@ -156,7 +185,7 @@ Spotify refresh tokens are encrypted with AES-GCM with per-record context. The s
 
 The cancellation token is a private capability. It arrives in the URL fragment, is removed from the address bar, and is kept only in session storage for the current browser session. Fans can copy their cancellation link before closing the session. Anyone with that link can inspect and cancel that one authorization. Cancellation cannot undo an already completed or in-flight Spotify API write; the fan can remove the music in Spotify and revoke app access in [Spotify's account app settings](https://www.spotify.com/account/apps/).
 
-Artwork uses a public bucket because it appears on publicly shareable release pages. Only its owner can upload, replace, or delete objects in that owner's path. Draft campaign data is private, but an uploaded artwork URL itself can be viewed by anyone who knows it. Replaced or abandoned uploads are not deleted automatically; review unused objects through the normal storage-maintenance process.
+Cover artwork and background images share the existing public `presave-artwork` bucket because they appear on publicly shareable release pages. Only their owner can upload, replace, or delete objects in that owner's path. Draft campaign data is private, but an uploaded image URL itself can be viewed by anyone who knows it. Replaced, removed, or abandoned uploads are not deleted automatically; review unused objects through the normal storage-maintenance process. No additional storage bucket is required for background images.
 
 View and click counts are rate-limited activity counts, not unique-visitor analytics. Public authorization and cancellation endpoints also have abuse limits; campaign creation has no count cap. Rate-limit keys hash the proxy-provided IP address with a server secret rather than retaining raw addresses.
 
@@ -184,6 +213,6 @@ All JSON actions use `POST /functions/v1/presave`.
 
 Run `npm run test:presave` for dependency-free core and handler checks. Follow [tests/README.md](../tests/README.md) to run the actual PostgreSQL migration tests with PGlite. The dedicated CI workflow installs its test engine outside the project dependencies.
 
-The tests cover isolated ownership, anonymous draft denial, MFA, 125 independent campaign inserts, input validation, PKCE, browser binding, replay rejection, authenticated encryption, cancellation receipts, exact provider targets, successful-save cleanup, failure/retry behavior, storage policies, and job leases.
+The tests cover isolated ownership, anonymous draft denial, MFA, 125 independent campaign inserts, input validation, PKCE, browser binding, replay rejection, authenticated encryption, cancellation receipts, exact provider targets, successful-save cleanup, failure/retry behavior, storage policies, and job leases. Appearance coverage includes all preset names and defaults, database constraints and public projection, create/edit/list/duplicate behavior, preservation of new fields omitted by older clients, and unsafe URL or style rejection. DOM tests cover save/reopen/duplicate/public-page appearance, background upload validation and error recovery, broken-image fallback, custom contrast feedback, preview sizes, and appearance reset.
 
-The creation environment could not provide its browser preview relay, so rendered desktop/mobile layouts have not been visually verified there. Before launch, check the dashboard, editor, modal keyboard focus, artwork uploads, public page, and release countdown in desktop and mobile browsers. Local database tests do not replace live Supabase/Spotify smoke checks.
+The local tests do not establish production deployment or provider readiness. Before launch, check the dashboard, theme gallery, editor, modal keyboard focus, artwork/background uploads, galaxy motion and reduced-motion behavior, public page, and release countdown in desktop and mobile browsers. DOM tests do not verify rendered layout. Local database tests do not replace live Supabase/Spotify smoke checks, and a successful local run does not mean migrations, Edge Functions, or frontend assets have been deployed.

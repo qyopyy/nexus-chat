@@ -56,7 +56,7 @@ export async function sendDrop(file: File, toUsername?: string) {
 export async function incomingDrops() {
   const me = useApp.getState().userId;
   if (!me) return [] as NexusDrop[];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("nexus_drops")
     .select("*")
     .eq("to_user", me)
@@ -64,25 +64,44 @@ export async function incomingDrops() {
     .gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false })
     .limit(20);
+  if (error) throw new Error(errorText(error));
   return ((data ?? []) as NexusDrop[]).filter((row) => row.from_device !== thisDeviceId());
 }
 
 export async function openDrop(row: NexusDrop) {
   const { data, error } = await supabase.storage.from("nexus-drops").createSignedUrl(row.path, 120, { download: row.name });
-  if (error || !data?.signedUrl) throw new Error(errorText(error) || "Couldn't open that drop");
+  if (error) throw new Error(errorText(error));
+  if (!data?.signedUrl) throw new Error("Couldn't open that drop");
   return data.signedUrl;
 }
 
-/** Mark a drop taken only after the browser actually opened it. */
+/** Mark a drop taken after its download tab has been navigated successfully. */
 export async function claimDrop(id: string) {
   const { error } = await supabase.from("nexus_drops").update({ claimed_at: new Date().toISOString() }).eq("id", id).is("claimed_at", null);
   if (error) throw new Error(errorText(error));
 }
 
 export async function openAndClaimDrop(row: NexusDrop) {
-  const url = await openDrop(row);
-  const opened = window.open(url, "_blank", "noopener");
+  // Reserve the tab while this call still has the click's user activation.
+  // The `noopener` window feature always returns null in modern browsers, so
+  // detach the blank tab's opener ourselves before requesting the signed URL.
+  const opened = window.open("about:blank", "_blank");
   if (!opened) throw new Error("Allow pop-ups to open this drop. It is still in your inbox.");
-  await claimDrop(row.id);
+  let url: string;
+  try {
+    opened.opener = null;
+    url = await openDrop(row);
+    if (opened.closed) throw new Error("The download tab was closed. This drop is still in your inbox.");
+    opened.location.replace(url);
+  } catch (error) {
+    try { opened.close(); } catch { /* A detached tab must not hide the original error. */ }
+    throw error;
+  }
+  try {
+    await claimDrop(row.id);
+  } catch (error) {
+    // A claim failure must not close the download or pretend it never opened.
+    throw new Error(`The download opened, but we couldn't update your inbox: ${errorText(error)}`);
+  }
   return url;
 }

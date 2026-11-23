@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { errorText, supabase } from "@/lib/supabase";
 import { useApp, toast } from "@/store/app";
 import { isPhoneDevice, platformLabel, thisDeviceId, type Handset } from "@/lib/handset";
 import { deviceHistory, myDevices, setDeviceFlags } from "@/lib/locator";
@@ -45,6 +45,7 @@ export default function PhoneLinkPanel() {
   const [clips, setClips] = useState<ClipboardItem[]>([]);
   const [notices, setNotices] = useState<DeviceNotice[]>([]);
   const [drops, setDrops] = useState<NexusDrop[]>([]);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [grant, setGrant] = useState<HandsetGrant | null>(null);
   const [lostNote, setLostNote] = useState("");
   const [focusMin, setFocusMin] = useState(60);
@@ -57,25 +58,35 @@ export default function PhoneLinkPanel() {
   const profiles = useApp((s) => s.profiles);
 
   async function refresh() {
-    const list = await myDevices();
-    setRows(list);
-    setInbox(await listInbox());
-    setNotices(await listNotices());
-    setDrops(await incomingDrops());
-    setClips(await listClipboard());
-    const next = list.find((row) => row.kind === "phone" && row.device_id !== mine)?.device_id || list.find((row) => row.device_id !== mine)?.device_id || null;
-    setPicked((current) => current || next);
+    // One unavailable service must not hide the other device tools.
+    const results = await Promise.allSettled([myDevices(), listInbox(), listNotices(), incomingDrops(), listClipboard()]);
+    const [devices, inboxResult, noticesResult, dropsResult, clipsResult] = results;
+    if (devices.status === "fulfilled") {
+      const list = devices.value;
+      setRows(list);
+      const next = list.find((row) => row.kind === "phone" && row.device_id !== mine)?.device_id || list.find((row) => row.device_id !== mine)?.device_id || null;
+      setPicked((current) => current || next);
+    }
+    if (inboxResult.status === "fulfilled") setInbox(inboxResult.value);
+    if (noticesResult.status === "fulfilled") setNotices(noticesResult.value);
+    if (dropsResult.status === "fulfilled") setDrops(dropsResult.value);
+    if (clipsResult.status === "fulfilled") setClips(clipsResult.value);
+    const labels = ["Devices", "Phone inbox", "Notifications", "Drop inbox", "Clipboard"];
+    const errors = results.flatMap((result, index) => result.status === "rejected" ? [`${labels[index]}: ${errorText(result.reason)}`] : []);
+    setRefreshError(errors.length ? errors.join(" · ") : null);
   }
 
   useEffect(() => {
+    let live = true;
     let channel: ReturnType<typeof supabase.channel> | null = null;
     void supabase.auth.getSession().then(({ data }) => {
+      if (!live) return;
       const id = data.session?.user.id;
       if (!id) return;
       useApp.setState({ userId: id });
       void refresh();
-      void refreshChatList();
-      void loadFeatureFlags().then((flags) => setFlagsOn(flags.phone_link));
+      void refreshChatList().catch((error: unknown) => { if (live) setRefreshError(errorText(error)); });
+      void loadFeatureFlags().then((flags) => { if (live) setFlagsOn(flags.phone_link); }).catch((error: unknown) => { if (live) setRefreshError(errorText(error)); });
       channel = supabase
         .channel(`phone-panel:${id}`)
         .on("postgres_changes", { event: "*", schema: "public", table: "nexus_handsets", filter: `user_id=eq.${id}` }, () => void refresh())
@@ -87,8 +98,9 @@ export default function PhoneLinkPanel() {
         })
         .on("postgres_changes", { event: "*", schema: "public", table: "nexus_drops" }, () => void refresh())
         .subscribe();
-    });
+    }).catch((error: unknown) => { if (live) setRefreshError(errorText(error)); });
     return () => {
+      live = false;
       if (channel) void supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,6 +146,7 @@ export default function PhoneLinkPanel() {
           Owner-only and opt-in. This is not screen mirroring, SMS, iMessage, call logs, or iCloud. The installed Nexus app can ring, open links, and take files you choose while it is open or backgrounded. Safari on iPhone updates only while the tab is open, hides the battery percentage, and cannot toggle the flashlight. Photos, screenshots, clipboard reads, and sign-out wait for a tap on the phone. Nothing is captured silently.
         </p>
         {!flagsOn && <p className="mt-3 rounded-2xl bg-[#3a2418] px-4 py-3 text-sm text-[#e4a15a]">Phone Link is turned off by an admin.</p>}
+        {refreshError && <p role="alert" className="mt-3 rounded-2xl bg-[#3a2418] px-4 py-3 text-sm text-[#e4a15a]">{refreshError} <button type="button" className="ml-2 underline" onClick={() => void refresh()}>Retry</button></p>}
         {featureFlags().phone_link === false ? null : null}
 
         <div className="mt-5 grid gap-3 md:grid-cols-[280px_1fr]">
@@ -288,13 +301,14 @@ export default function PhoneLinkPanel() {
                 </form>
                 <form className="space-y-2 text-sm" onSubmit={(e) => {
                   e.preventDefault();
-                  const text = (e.currentTarget.elements.namedItem("share") as HTMLInputElement).value;
-                  const file = (e.currentTarget.elements.namedItem("file") as HTMLInputElement).files?.[0];
+                  const form = e.currentTarget;
+                  const text = (form.elements.namedItem("share") as HTMLInputElement).value;
+                  const file = (form.elements.namedItem("file") as HTMLInputElement).files?.[0];
                   const task = async () => {
                     if (text.trim()) await sendToComputers("share", text);
                     if (file) await sendDrop(file);
                   };
-                  void task().then(() => { toast("Sent to your computer", "success"); e.currentTarget.reset(); }).catch((err: Error) => toast(err.message, "error"));
+                  void task().then(() => { toast("Sent to your computer", "success"); form.reset(); }).catch((err: Error) => toast(err.message, "error"));
                 }}>
                   <input name="share" placeholder="Share text or a link to your computer" className="w-full rounded-xl bg-[#141414] px-3 py-2 text-sm outline-none" />
                   <input name="file" type="file" accept="image/*,*/*" className="text-xs" />

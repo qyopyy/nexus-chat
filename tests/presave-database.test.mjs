@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import test from 'node:test';
+import { THEMES, DESIGN_DEFAULTS, PUBLIC_FIELDS } from '../supabase/functions/presave/core.mjs';
 
 const require = createRequire(import.meta.url);
 let PGlite;
@@ -85,6 +86,62 @@ test('pre-save migration security and scheduler behavior in real PostgreSQL', {
     `);
     await db.query('insert into auth.users(id) values ($1),($2)', [ALICE, BOB]);
     await db.exec(await readFile(new URL('../supabase/migrations/20261121180000_presave_service.sql', import.meta.url), 'utf8'));
+    const legacy = await createCampaign(db, ALICE, 'before-design-migration', { theme: 'paper', published: true });
+    await db.exec(await readFile(new URL('../supabase/migrations/20261123120000_presave_design.sql', import.meta.url), 'utf8'));
+
+    await t.test('appearance migration keeps existing campaigns and backfills all defaults', async () => {
+      const stored = (await db.query('select * from public.presave_campaigns where id=$1', [legacy.id])).rows[0];
+      assert.equal(stored.theme, 'paper');
+      assert.equal(stored.published, true);
+      assert.equal(stored.slug, legacy.slug);
+      for (const [key, value] of Object.entries(DESIGN_DEFAULTS)) assert.equal(stored[key], value, key);
+      await asRole(db, 'anon', null, async () => {
+        const page = (await db.query('select public.presave_public($1) as page', [legacy.slug])).rows[0].page;
+        assert.deepEqual(Object.keys(page).sort(), [...PUBLIC_FIELDS].sort());
+        for (const [key, value] of Object.entries(DESIGN_DEFAULTS)) assert.equal(page[key], value, key);
+      });
+      await db.query('delete from public.presave_campaigns where id=$1', [legacy.id]);
+    });
+
+    await t.test('all theme presets and custom designs persist under owner RLS and render only when published', async () => {
+      const design = {
+        background_url: 'https://images.example/galaxy.webp', background_overlay: 38,
+        background_motion: false, background_color: '#112233', text_color: '#ddeeff',
+        button_style: 'pill', font_style: 'editorial',
+      };
+      const created = [];
+      await asRole(db, 'authenticated', ALICE, async () => {
+        for (const theme of THEMES) {
+          const row = await createCampaign(db, ALICE, `theme-${theme}`, { ...design, theme });
+          created.push(row);
+          for (const [key, value] of Object.entries(design)) assert.equal(row[key], value, key);
+        }
+      });
+      const custom = created.find((row) => row.theme === 'custom');
+      await asRole(db, 'authenticated', BOB, async () => {
+        assert.equal((await db.query('select * from public.presave_campaigns where id=$1', [custom.id])).rows.length, 0);
+        assert.equal((await db.query('update public.presave_campaigns set background_url=$1,background_overlay=0 where id=$2 returning id', ['https://evil.example/image.png', custom.id])).rows.length, 0);
+      });
+      await asRole(db, 'anon', null, async () => {
+        assert.equal((await db.query('select public.presave_public($1) as page', [custom.slug])).rows[0].page, null);
+      });
+      await asRole(db, 'authenticated', ALICE, async () => {
+        await db.query('update public.presave_campaigns set published=true,background_overlay=0 where id=$1', [custom.id]);
+      });
+      await asRole(db, 'anon', null, async () => {
+        const page = (await db.query('select public.presave_public($1) as page', [custom.slug])).rows[0].page;
+        assert.equal(page.theme, 'custom');
+        assert.equal(page.background_overlay, 0);
+        for (const [key, value] of Object.entries(design)) if (key !== 'background_overlay') assert.equal(page[key], value, key);
+        assert.deepEqual(Object.keys(page).sort(), [...PUBLIC_FIELDS].sort());
+      });
+      await asRole(db, 'service_role', null, async () => {
+        const listing = (await db.query("select public.presave_list($1,1,50,'theme-','all') as data", [ALICE])).rows[0].data;
+        assert.equal(listing.campaigns.length, THEMES.length);
+        assert.ok(listing.campaigns.every((row) => row.background_url === design.background_url));
+      });
+      for (const row of created) await db.query('delete from public.presave_campaigns where id=$1', [row.id]);
+    });
 
     await t.test('authenticated campaign CRUD is isolated by owner, including forged inserts and ownership changes', async () => {
       const alice = await asRole(db, 'authenticated', ALICE, () => createCampaign(db, ALICE, 'alice-private'));
@@ -150,6 +207,14 @@ test('pre-save migration security and scheduler behavior in real PostgreSQL', {
           { artwork_url: 'javascript:alert(1)' }, { artwork_url: 'https://user:password@example.com' },
           { artwork_url: 'https://' }, { artwork_url: 'https://example.com/a b' },
           { theme: 'arbitrary-css' }, { layout: 'unsafe-layout' }, { accent: 'red;display:none' },
+          { background_url: 'javascript:alert(1)' }, { background_url: 'http://example.com/cover.jpg' },
+          { background_url: 'https://user:password@example.com/cover.jpg' }, { background_url: 'https://example.com/";display:none' },
+          { background_url: 'https://example.com/' + 'a'.repeat(2048) },
+          { background_overlay: -1 }, { background_overlay: 91 }, { background_overlay: null },
+          { background_overlay: '55.5' }, { background_motion: null },
+          { background_color: '#fff' }, { background_color: 'red;display:none' }, { background_color: null },
+          { text_color: '#gggggg' }, { text_color: null },
+          { button_style: 'round' }, { button_style: null }, { font_style: 'url(https://evil.example)' },
           { links: JSON.stringify({ url: 'https://example.com' }) },
           { links: JSON.stringify([null]) }, { links: JSON.stringify([{ label: 'Listen', url: 'javascript:alert(1)' }]) },
           { links: JSON.stringify([{ label: 'Listen' }]) }, { links: JSON.stringify([{ label: '', url: 'https://example.com' }]) },
