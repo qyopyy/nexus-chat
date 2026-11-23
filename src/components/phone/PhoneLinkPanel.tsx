@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import ApproveDevice from "./ApproveDevice";
+import BatteryWatch from "./BatteryWatch";
 import { errorText, supabase } from "@/lib/supabase";
 import { useApp, toast } from "@/store/app";
 import { isPhoneDevice, platformLabel, thisDeviceId, type Handset } from "@/lib/handset";
@@ -149,6 +151,8 @@ export default function PhoneLinkPanel() {
         {refreshError && <p role="alert" className="mt-3 rounded-2xl bg-[#3a2418] px-4 py-3 text-sm text-[#e4a15a]">{refreshError} <button type="button" className="ml-2 underline" onClick={() => void refresh()}>Retry</button></p>}
         {featureFlags().phone_link === false ? null : null}
 
+        <ApproveDevice />
+        <BatteryWatch rows={rows} refresh={() => void refresh()} />
         <div className="mt-5 grid gap-3 md:grid-cols-[280px_1fr]">
           <section className="space-y-2">
             {rows.filter((row) => row.kind === "phone" || row.device_id === mine).map((row) => {

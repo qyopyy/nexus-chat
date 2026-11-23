@@ -417,6 +417,7 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
                 or
                 <span className="h-px flex-1 bg-white/10" />
               </div>
+              {mode === "login" && <a href="/link-device" className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-[#7ee0c6]/30 bg-[#7ee0c6]/10 py-3 text-sm font-bold text-[#7ee0c6] hover:bg-[#7ee0c6]/20"><MonitorUp className="size-5" /> Sign in with a six-digit device code</a>}
               {mode === "login" && passkeysOk && (
                 <button
                   type="button"

@@ -193,8 +193,28 @@ export function useHandsetReporter(userId: string | null) {
       void push();
     });
 
-    const timer = window.setInterval(() => void push(), 20000);
-    const onVis = () => void push();
+    const timer = window.setInterval(() => {
+      // Native Capacitor does not expose BatteryManager events. Re-read the
+      // OS battery on every heartbeat rather than re-publishing stale values.
+      if (manager) { void push(); return; }
+      void readBattery().then((fresh) => {
+        if (dead) return;
+        battery = fresh.battery;
+        charging = fresh.charging;
+        full_in_sec = fresh.full_in_sec;
+        void push();
+      });
+    }, 20000);
+    const onVis = () => {
+      if (document.hidden) return;
+      void readBattery().then((fresh) => {
+        if (dead) return;
+        battery = fresh.battery;
+        charging = fresh.charging;
+        full_in_sec = fresh.full_in_sec;
+        void push();
+      });
+    };
     document.addEventListener("visibilitychange", onVis);
     return () => {
       dead = true;
