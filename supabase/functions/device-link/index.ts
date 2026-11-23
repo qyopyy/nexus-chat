@@ -25,7 +25,7 @@ async function owner(req:Request){
   if(error||!data.user) return null;
   // Approving a new signed-in screen is sensitive. Do not permit an
   // account enrolled in MFA to authorize pairing from only AAL1.
-  const aal=await auth.auth.mfa.getAuthenticatorAssuranceLevel();
+  const aal=await auth.auth.mfa.getAuthenticatorAssuranceLevel(jwt);
   if(aal.error||!aal.data||aal.data.currentLevel!==aal.data.nextLevel) return {mfa:true} as const;
   return {id:data.user.id,email:data.user.email??""} as const;
 }
