@@ -22,6 +22,8 @@ export type StudioSection =
   | "vault"
   | "licenses"
   | "isrc"
+  | "label"
+  | "leak-check"
   | "claims"
   | "checkmark"
   | "orders";

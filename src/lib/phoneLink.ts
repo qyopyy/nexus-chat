@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase, errorText } from "./supabase";
 import { useApp, toast } from "@/store/app";
-import { thisDeviceId, type Handset } from "./handset";
+import { thisDeviceId, refreshHandset, type Handset } from "./handset";
 import { useAcetatePlayer } from "./acetatePlayer";
 import { addCloudFiles, addVoiceMemo, cloudUnlocked } from "./nexusCloud";
 import { recordVoiceBlob } from "./voiceMemo";
@@ -33,7 +33,15 @@ export type PhoneCommandKind =
   | "voice"
   | "sign_out"
   | "screenshot"
-  | "gallery";
+  | "gallery"
+  | "message"
+  | "speak"
+  | "timer"
+  | "wake_on"
+  | "wake_off"
+  | "reload"
+  | "battery_now"
+  | "sos";
 
 export type PhoneCommand = {
   id: string;
@@ -319,8 +327,99 @@ async function startTorch() {
   await track.applyConstraints({ advanced: [{ torch: true } as MediaTrackConstraintSet] });
 }
 
+let wakeLock: { release: () => Promise<void> } | null = null;
+let timerHandle = 0;
+
+/** A full-screen note from the computer. The person on the phone dismisses it. */
+function showPhoneMessage(text: string) {
+  document.getElementById("nexus-phone-message")?.remove();
+  const box = document.createElement("div");
+  box.id = "nexus-phone-message";
+  box.setAttribute("role", "alertdialog");
+  box.setAttribute("aria-label", "Message from your computer");
+  box.style.cssText = "position:fixed;inset:0;z-index:80;display:grid;place-items:center;background:rgba(0,0,0,.88);color:#fff;font:600 26px/1.35 system-ui;text-align:center;padding:28px";
+  const inner = document.createElement("div");
+  inner.style.cssText = "max-width:520px";
+  const label = document.createElement("div");
+  label.textContent = "From your computer";
+  label.style.cssText = "font:700 12px system-ui;letter-spacing:.2em;text-transform:uppercase;color:#7ee0c6;margin-bottom:14px";
+  const body = document.createElement("div");
+  body.textContent = text; // text only, never HTML
+  const close = document.createElement("button");
+  close.textContent = "Dismiss";
+  close.style.cssText = "margin-top:26px;border:0;border-radius:999px;padding:12px 28px;font:700 16px system-ui;background:#f4f1ea;color:#070709";
+  close.onclick = () => box.remove();
+  inner.append(label, body, close);
+  box.append(inner);
+  document.body.appendChild(box);
+  close.focus();
+}
+
 async function runCommand(command: PhoneCommand) {
   const payload = command.payload ?? {};
+  if (command.kind === "message") {
+    const text = String(payload.text ?? "").trim().slice(0, 240);
+    if (!text) throw new Error("Empty message");
+    showPhoneMessage(text);
+    navigator.vibrate?.(200);
+    return;
+  }
+  if (command.kind === "speak") {
+    const text = String(payload.text ?? "").trim().slice(0, 240);
+    if (!text) throw new Error("Nothing to say");
+    if (!("speechSynthesis" in window)) {
+      showPhoneMessage(text);
+      toast("This browser can't speak aloud, so the text is on screen instead.", "info");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+    return;
+  }
+  if (command.kind === "timer") {
+    window.clearTimeout(timerHandle);
+    const minutes = Math.min(180, Math.max(0, Math.floor(Number(payload.minutes) || 0)));
+    if (minutes === 0) {
+      toast("Timer cancelled", "info");
+      return;
+    }
+    timerHandle = window.setTimeout(() => {
+      startRing();
+      showPhoneMessage(`Your ${minutes}-minute timer from your computer is done.`);
+    }, minutes * 60_000);
+    toast(`Timer set for ${minutes} min. Keep Nexus open on this phone.`, "info");
+    return;
+  }
+  if (command.kind === "wake_on" || command.kind === "wake_off") {
+    if (command.kind === "wake_off") {
+      await wakeLock?.release().catch(() => undefined);
+      wakeLock = null;
+      toast("Screen can sleep again", "info");
+      return;
+    }
+    const api = (navigator as unknown as { wakeLock?: { request: (type: "screen") => Promise<{ release: () => Promise<void> }> } }).wakeLock;
+    if (!api) throw new Error("This browser can't keep the screen awake");
+    wakeLock = await api.request("screen");
+    toast("Keeping the screen awake while Nexus is open", "info");
+    return;
+  }
+  if (command.kind === "battery_now") {
+    await refreshHandset();
+    return;
+  }
+  if (command.kind === "sos") {
+    const dot = 150, dash = 450, gap = 150;
+    const ok = navigator.vibrate?.([dot, gap, dot, gap, dot, gap, dash, gap, dash, gap, dash, gap, dot, gap, dot, gap, dot]);
+    if (!ok) toast("This browser did not vibrate. iOS Safari usually ignores vibrate.", "info");
+    return;
+  }
+  if (command.kind === "reload") {
+    // Resolve first: reloading before the command is marked done would replay it forever.
+    await resolveCommand(command.id, "done");
+    finishClaim(command.id);
+    window.setTimeout(() => window.location.reload(), 400);
+    return;
+  }
   if (command.kind === "find_stop") {
     stopFindEffects();
     return;

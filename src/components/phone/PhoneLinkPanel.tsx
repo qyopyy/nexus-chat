@@ -42,6 +42,8 @@ export default function PhoneLinkPanel() {
   const [link, setLink] = useState("");
   const [clip, setClip] = useState("");
   const [reply, setReply] = useState("");
+  const [shout, setShout] = useState("");
+  const [timerMin, setTimerMin] = useState(10);
   const [chatId, setChatId] = useState<string | null>(null);
   const [inbox, setInbox] = useState<HandsetInbox[]>([]);
   const [clips, setClips] = useState<ClipboardItem[]>([]);
@@ -243,6 +245,30 @@ export default function PhoneLinkPanel() {
                     </div>
                   </Card>
                 </div>
+
+                <Card title="More phone actions">
+                  <p className="text-xs text-[#8d8880]">These run while Nexus is open or backgrounded on the phone. iOS Safari may ignore speech, vibration and keeping the screen awake.</p>
+                  <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); if (!shout.trim()) return; act("message", { text: shout }); setShout(""); }}>
+                    <input value={shout} onChange={(e) => setShout(e.target.value)} maxLength={240} placeholder="Message to show full-screen" aria-label="Message to show full-screen on the phone" className="min-w-0 flex-1 rounded-xl bg-[#141414] px-3 py-2 text-sm outline-none" />
+                    <button className="rounded-full bg-white/10 px-3 text-sm" disabled={!rules.chats}>Show</button>
+                    <button type="button" className="rounded-full bg-white/10 px-3 text-sm" disabled={!rules.find || !shout.trim()} onClick={() => { act("speak", { text: shout }); setShout(""); }}>Speak</button>
+                  </form>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                    <label htmlFor="phone-timer-min" className="text-xs text-[#8d8880]">Timer</label>
+                    <select id="phone-timer-min" value={timerMin} onChange={(e) => setTimerMin(Number(e.target.value))} className="rounded-lg bg-[#141414] px-2 py-1">
+                      {[1, 5, 10, 15, 30, 60].map((m) => <option key={m} value={m}>{m} min</option>)}
+                    </select>
+                    <button type="button" className="rounded-full bg-white/10 px-3 py-1" disabled={!rules.find} onClick={() => act("timer", { minutes: timerMin })}>Start</button>
+                    <button type="button" className="rounded-full bg-white/10 px-3 py-1" disabled={!rules.find} onClick={() => act("timer", { minutes: 0 })}>Cancel</button>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-sm">
+                    <button type="button" className="rounded-full bg-white/10 px-3 py-1" disabled={!rules.find} onClick={() => act("wake_on")}>Keep screen awake</button>
+                    <button type="button" className="rounded-full bg-white/10 px-3 py-1" disabled={!rules.find} onClick={() => act("wake_off")}>Let it sleep</button>
+                    <button type="button" className="rounded-full bg-white/10 px-3 py-1" disabled={!rules.find} onClick={() => act("battery_now")}>Refresh battery now</button>
+                    <button type="button" className="rounded-full bg-white/10 px-3 py-1" disabled={!rules.find} onClick={() => act("sos")}>SOS buzz</button>
+                    <button type="button" className="rounded-full bg-white/10 px-3 py-1" onClick={() => act("reload")}>Reload Nexus</button>
+                  </div>
+                </Card>
 
                 <Card title="Clipboard">
                   <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (!rules.clipboard) return; act("clipboard", { text: clip }); setClip(""); }}>

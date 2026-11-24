@@ -36,3 +36,11 @@ When Nexus is in the background on a linked phone, short previews of new Nexus c
 - This is controlled per phone by **Phone Link → Permissions → Chat reply**. When it is off, previews are not copied at all.
 - Previews are deleted after 7 days (`nexus_prune_device_notices`, daily at 04:17 UTC; migration `20261124121000_device_notice_retention.sql`).
 - This shows **Nexus** messages only. iOS never lets an app read another app's notifications, so texts, iMessage and other apps cannot be mirrored. On Android that needs a native notification-listener plugin in a new app build, which this release does not include.
+
+## More phone actions
+
+Phone Link → **More phone actions** adds: show a full-screen message, speak text aloud, a countdown timer (1–180 min), keep the screen awake, refresh the battery reading now, an SOS vibration pattern and reload Nexus. They need the new migration `20261124122000_phone_link_more_commands.sql`. They run only while Nexus is open or backgrounded on the phone, only when Phone Link is on there, and follow the phone's permissions (message uses *Chat reply*; the rest use *Find*). iOS Safari may ignore speech, vibration and wake lock.
+
+## Leak check
+
+Studio → Protection → **Leak check** checks the email on your own account against known breaches (Have I Been Pwned) and tests a password with k-anonymity (only a 5-character hash prefix leaves the device). It needs the Edge Function `leak-check` and the secret `HIBP_API_KEY`. Only your own account email is accepted; there is no search by name or by other people's emails.

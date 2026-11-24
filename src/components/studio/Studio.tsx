@@ -18,6 +18,7 @@ import {
   Disc3,
   ExternalLink,
   Gauge,
+  Globe,
   Eye,
   EyeOff,
   LayoutDashboard,
@@ -51,6 +52,8 @@ import { Thumb } from "@/components/videos/VideoCard";
 import UploadDialog from "./UploadDialog";
 import { Releases, ReviewQueue, Royalties, DistSettings } from "./Distribution";
 import DistOverview from "./DistOverview";
+import LabelIdentity from "./LabelIdentity";
+import LeakCheck from "./LeakCheck";
 import LiveCatalog from "./LiveCatalog";
 import OrdersAdmin from "./OrdersAdmin";
 import { NEED, gate, useCanReview } from "@/lib/premium";
@@ -78,6 +81,7 @@ const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: st
   { id: "releases", label: "Releases", icon: <Disc3 className="size-5" />, group: "Music distribution" },
   { id: "royalties", label: "Royalties", icon: <Wallet className="size-5" />, group: "Music distribution" },
   { id: "isrc", label: "ISRC codes", icon: <Barcode className="size-5" />, group: "Music distribution" },
+  { id: "label", label: "Label & website", icon: <Globe className="size-5" />, group: "Music distribution" },
   { id: "claims", label: "Profile claims", icon: <BadgeCheck className="size-5" />, group: "Music distribution" },
   { id: "licenses", label: "Licenses", icon: <ScrollText className="size-5" />, group: "Music distribution" },
   { id: "tools", label: "Music tools", icon: <AudioWaveform className="size-5" />, group: "Music distribution" },
@@ -85,6 +89,7 @@ const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: st
   { id: "content-id", label: "Content ID", icon: <Fingerprint className="size-5" />, group: "Protection" },
   { id: "checkmark", label: "Verification", icon: <BadgeCheck className="size-5" />, group: "Protection" },
   { id: "defender", label: "Profile Defender", icon: <UserRoundCheck className="size-5" />, group: "Protection" },
+  { id: "leak-check", label: "Leak check", icon: <ShieldAlert className="size-5" />, group: "Protection" },
   { id: "takedowns", label: "Takedowns", icon: <ShieldAlert className="size-5" />, group: "Protection" },
   { id: "vault", label: "Nexus Drive", icon: <Vault className="size-5" />, group: "Protection" },
   { id: "review", label: "Manage releases", icon: <ShieldCheck className="size-5" />, group: "Admin", reviewer: true },
@@ -220,6 +225,8 @@ export default function Studio() {
             {section === "comments" && <CommentsSection />}
             {section === "customization" && <Customization />}
             {section === "dist-overview" && <DistOverview />}
+            {section === "label" && <LabelIdentity />}
+            {section === "leak-check" && <LeakCheck />}
             {section === "live-catalog" && <LiveCatalog />}
             {section === "releases" && <Releases />}
             {section === "royalties" && <Royalties />}

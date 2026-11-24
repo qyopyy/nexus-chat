@@ -47,6 +47,16 @@ export default function AboutPage() {
           </Reveal>
         ))}
       </section>
+      <section id="label" className="mx-auto mt-14 max-w-3xl px-4 sm:px-6">
+        <Reveal>
+          <div className="site-card rounded-2xl bg-white/[.04] p-6 ring-1 ring-white/10">
+            <div className="text-lg font-bold">Nexus Project &amp; Audia Music Recordings LLC</div>
+            <p className="mt-2 text-white/60">
+              Nexus Project (nexusproject.cc) and Audia Music Recordings LLC are owned and operated by the same person. Nexus is the platform; Audia Music Recordings is the label that releases music worldwide through it.
+            </p>
+          </div>
+        </Reveal>
+      </section>
       <section className="mx-auto mt-14 max-w-5xl px-4 text-center sm:px-6">
         <Reveal>
           <div className="flex flex-col justify-center gap-3 sm:flex-row">
