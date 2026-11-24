@@ -216,3 +216,36 @@ Run `npm run test:presave` for dependency-free core and handler checks. Follow [
 The tests cover isolated ownership, anonymous draft denial, MFA, 125 independent campaign inserts, input validation, PKCE, browser binding, replay rejection, authenticated encryption, cancellation receipts, exact provider targets, successful-save cleanup, failure/retry behavior, storage policies, and job leases. Appearance coverage includes all preset names and defaults, database constraints and public projection, create/edit/list/duplicate behavior, preservation of new fields omitted by older clients, and unsafe URL or style rejection. DOM tests cover save/reopen/duplicate/public-page appearance, background upload validation and error recovery, broken-image fallback, custom contrast feedback, preview sizes, and appearance reset.
 
 The local tests do not establish production deployment or provider readiness. Before launch, check the dashboard, theme gallery, editor, modal keyboard focus, artwork/background uploads, galaxy motion and reduced-motion behavior, public page, and release countdown in desktop and mobile browsers. DOM tests do not verify rendered layout. Local database tests do not replace live Supabase/Spotify smoke checks, and a successful local run does not mean migrations, Edge Functions, or frontend assets have been deployed.
+
+## Custom endings and your own domain
+
+Every campaign has a clean link in addition to the original query-string link:
+
+| Link | Example |
+| --- | --- |
+| Clean ending (Nexus site) | `https://nexusproject.cc/p/your-release` |
+| Original (still works) | `https://nexusproject.cc/presave/index.html?slug=your-release` |
+
+The ending is the campaign's **link name** from the editor. `next.config.ts` rewrites `/p/:slug` to `/presave/index.html`; `index.html` adds a `<base href="/presave/">` so styles and scripts still load, and `app.mjs` reads the slug from the path. Hosts that do not serve `/p/` (for example the legacy static workspace under `/public/presave/`) keep the query-string link automatically.
+
+### Own domain
+
+In the editor of a saved campaign, **Your own domain** lets a creator open the page at an address they own, such as `music.yourname.com`.
+
+1. The creator enters the domain. The service stores a pending claim with a random proof token (`presave_domains`).
+2. The creator adds two DNS records at their registrar: a TXT proof (`_nexus-presave.<domain>` = `nexus-presave-verify=<token>`) and a routing record (`CNAME cname.vercel-dns.com` for a subdomain, `A 76.76.21.21` for an apex domain).
+3. **Check DNS** (rate limited to 20 checks per 5 minutes) looks the records up through DNS-over-HTTPS. TXT found → *Verified*. TXT found, routing correct and the domain attached to the hosting project → *Live*.
+4. `src/proxy.ts` looks up non-Nexus hosts (cached for 60 seconds). A live pre-save host opens the campaign at `/`; any other path redirects to the Nexus site.
+
+Only verified or live claims serve a page. A pending claim never does, so typing someone else's domain gives no access to it. One campaign can hold one domain; a domain can belong to only one campaign or one Nexus profile at a time.
+
+**Optional automatic HTTPS.** Set these Edge Function secrets so the service adds and removes the domain on the Vercel project itself: `VERCEL_TOKEN`, `VERCEL_PROJECT_ID` and, for team projects, `VERCEL_TEAM_ID` (the same secrets the profile `domains` function uses). Without them a verified domain waits at *Verified* until the domain is added to the project by hand in the Vercel dashboard.
+
+**Spotify on a custom domain.** After fans authorize, Spotify returns them to the same domain. The service only accepts a return address that is the configured entry path on a host connected to that campaign. Nothing else is trusted. The Spotify app's redirect URI is still the single Edge Function callback, so no Spotify dashboard change is needed.
+
+### Rollout
+
+1. Apply `supabase/migrations/20261124120000_presave_domains.sql` (after the earlier pre-save migrations).
+2. Redeploy the Edge Function: `supabase functions deploy presave --no-verify-jwt`.
+3. Deploy the site (new `next.config.ts` rewrite, `src/proxy.ts`, and `public/presave/*`).
+4. Optionally add the Vercel secrets above.

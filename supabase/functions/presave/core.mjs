@@ -43,6 +43,17 @@ export function slug(value) {
   return clean;
 }
 
+const DOMAIN = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/;
+const RESERVED_DOMAIN = /(?:^|\.)(?:nexusproject\.cc|vercel\.app|vercel\.com|vercel-dns\.com|supabase\.co|supabase\.in|localhost)$/;
+/** Normalize "https://www.Music.YourName.com/path" → "music.yourname.com" or throw a friendly 400. */
+export function domainName(value) {
+  let clean = text(value, 'Domain', 253, true).toLowerCase();
+  clean = clean.replace(/^https?:\/\//, '').replace(/[/?#].*$/, '').replace(/^www\./, '').replace(/\.$/, '');
+  if (clean.length > 253 || !DOMAIN.test(clean)) throw new HttpError(400, 'Enter a domain like music.yourname.com.');
+  if (RESERVED_DOMAIN.test(clean)) throw new HttpError(400, 'That domain can’t be used.');
+  return clean;
+}
+
 export function httpsUrl(value, label = 'URL') {
   if (value == null || value === '') return null;
   const input = text(value, label, 2048, true);
@@ -161,16 +172,20 @@ export function configuredPublicUrl(value) {
   return url;
 }
 
-export function safeReturnUrl(requested, configured) {
+export function safeReturnUrl(requested, configured, customHosts = []) {
   const base = configuredPublicUrl(configured);
-  // A callback can only return to the one configured app entry, never to a
-  // supplied external URL or another same-origin endpoint.
+  // A callback can only return to the one configured app entry — or the same entry path on this
+  // campaign's own verified custom domain — never to a supplied external URL or another endpoint.
   if (requested != null) {
     let candidate;
     try { candidate = new URL(requested); } catch { throw new HttpError(400, 'Invalid return address.'); }
-    if (candidate.origin !== base.origin || candidate.pathname !== base.pathname || candidate.username || candidate.password || candidate.search || candidate.hash) {
+    const bare = candidate.username || candidate.password || candidate.search || candidate.hash;
+    const mine = candidate.origin === base.origin;
+    const custom = candidate.protocol === 'https:' && !candidate.port && customHosts.includes(candidate.hostname.toLowerCase().replace(/^www\./, ''));
+    if ((!mine && !custom) || candidate.pathname !== base.pathname || bare) {
       throw new HttpError(400, 'Return address must match this service’s public page.');
     }
+    if (custom && !mine) return candidate.href;
   }
   return base.href;
 }

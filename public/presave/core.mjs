@@ -115,6 +115,29 @@ export function campaignUrl(slug, base) {
   return url.href;
 }
 
+// Clean endings: https://your-nexus-host/p/your-release. Only the Nexus site
+// serves /p/<slug>, so other hosts keep the query-string link.
+export function vanityAvailable(base) {
+  try { return /^\/presave(\/|$)/.test(new URL(base).pathname); } catch { return false; }
+}
+
+export function vanityUrl(slug, base) {
+  const url = new URL(base);
+  url.pathname = '/p/' + slug;
+  url.search = '';
+  url.hash = '';
+  return url.href;
+}
+
+export function shareLink(slug, base) {
+  return vanityAvailable(base) ? vanityUrl(slug, base) : campaignUrl(slug, base);
+}
+
+export function pathSlug(pathname) {
+  const match = /^\/p\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/.exec(String(pathname ?? ''));
+  return match && match[1].length >= 3 && match[1].length <= 64 ? match[1] : null;
+}
+
 export function countdownParts(iso, now = Date.now()) {
   const seconds = Math.max(0, Math.floor((new Date(iso).getTime() - now) / 1000)) || 0;
   return [Math.floor(seconds / 86400), Math.floor(seconds % 86400 / 3600), Math.floor(seconds % 3600 / 60), seconds % 60];

@@ -11,7 +11,7 @@ import { DEFAULT_GRANT, loadGrant, saveGrant, type HandsetGrant } from "@/lib/ph
 const FIELDS: { key: keyof Omit<HandsetGrant, "user_id" | "device_id">; label: string; hint: string }[] = [
   { key: "clipboard", label: "Clipboard", hint: "Send text both ways. A read still asks on the phone." },
   { key: "files", label: "Files", hint: "Drag files from this computer. The phone does not upload its camera roll alone." },
-  { key: "chats", label: "Chat reply", hint: "Reply to Nexus chats from this computer." },
+  { key: "chats", label: "Chat reply", hint: "Reply to Nexus chats from this computer. Also copies short previews of new messages here (7 days)." },
   { key: "find", label: "Find", hint: "Ring, vibrate, and flashlight." },
   { key: "acetate", label: "Acetate", hint: "Play, seek, sleep, and crossfade on the phone." },
   { key: "focus", label: "Focus", hint: "Silence Nexus notifications on that phone. Not iOS Focus." },

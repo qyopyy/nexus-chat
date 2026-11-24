@@ -1,8 +1,9 @@
 import {
   HttpError, MAX_ADVANCE_DAYS, DESIGN_DEFAULTS, callbackReturn, configuredPublicUrl, decrypt,
-  encrypt, oauthCookie, pkceChallenge, randomToken, readCookie, retryPlan,
+  domainName, encrypt, oauthCookie, pkceChallenge, randomToken, readCookie, retryPlan,
   safeReturnUrl, sha256, slug, tokenKey, uuid, validateCampaign,
 } from './core.mjs';
+import { checkDomain, dnsRecords, vercelProject } from './domains.mjs';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -50,6 +51,7 @@ async function readJson(req) {
 
 function dbError(error) {
   if (!error) return;
+  if (error.code === '23505' && String(error.message).includes('presave_domains')) throw new HttpError(409, 'That domain is already connected to another campaign.', 'domain_taken');
   if (error.code === '23505') throw new HttpError(409, 'That link name is already taken. Choose another.', 'slug_taken');
   if (error.code === '23514' && String(error.message).startsWith('Spotify recording is locked')) {
     throw new HttpError(409, 'This Spotify recording already has pre-saves. Duplicate the campaign to use a different recording.', 'recording_locked');
@@ -103,6 +105,25 @@ export function createPresaveHandler({ db, env, fetchImpl = fetch }) {
     return data;
   }
 
+  // Hosts this campaign may return fans to after Spotify: its own verified custom domain.
+  async function customHosts(campaignId) {
+    const { data, error } = await db.from('presave_domains').select('domain').eq('campaign_id', campaignId).in('status', ['verified', 'live']);
+    dbError(error);
+    return (data ?? []).map((row) => row.domain);
+  }
+
+  async function ownedCampaign(userId, id) {
+    const { data, error } = await db.from('presave_campaigns').select('id,slug').eq('id', uuid(id)).eq('owner_id', userId).maybeSingle();
+    dbError(error);
+    if (!data) throw new HttpError(404, 'Campaign not found.', 'not_found');
+    return data;
+  }
+
+  const domainView = (row) => row ? {
+    domain: row.domain, status: row.status, note: row.note ?? null, verified_at: row.verified_at ?? null,
+    records: dnsRecords(row.domain, row.token),
+  } : null;
+
   async function rate(req, purpose, limit, seconds) {
     // Trusted reverse-proxy headers are supplied by Supabase's Edge gateway.
     // Raw addresses are never retained in the database or returned to creators.
@@ -124,7 +145,7 @@ export function createPresaveHandler({ db, env, fetchImpl = fetch }) {
     if (Date.parse(campaign.release_at) > Date.now() + MAX_ADVANCE_DAYS * 86400000) {
       throw new HttpError(409, `Spotify pre-saves open ${MAX_ADVANCE_DAYS} days before release. Please come back closer to release day.`, 'release_too_far');
     }
-    const returnUrl = safeReturnUrl(body.return_url, get('PRESAVE_PUBLIC_URL'));
+    const returnUrl = safeReturnUrl(body.return_url, get('PRESAVE_PUBLIC_URL'), await customHosts(campaign.id));
     if (!await rate(req, 'authorize', 20, 300)) throw new HttpError(429, 'Too many connection attempts. Please wait a few minutes.', 'rate_limited');
     const ticket = randomToken();
     const ticketHash = await sha256(ticket);
@@ -367,10 +388,75 @@ export function createPresaveHandler({ db, env, fetchImpl = fetch }) {
           return json({ ok: true });
         }
         case 'page': {
-          const { data, error } = await db.rpc('presave_public', { p_slug: slug(body.slug) });
+          let pageSlug;
+          if (body.domain != null) {
+            // A visitor on a creator's own domain: find the campaign connected to that host.
+            let host;
+            try { host = domainName(body.domain); } catch { throw new HttpError(404, 'This pre-save link is unavailable.', 'not_found'); }
+            const { data: found, error: foundError } = await db.rpc('presave_slug_by_domain', { p_domain: host });
+            dbError(foundError);
+            if (!found) throw new HttpError(404, 'This pre-save link is unavailable.', 'not_found');
+            pageSlug = found;
+          } else pageSlug = slug(body.slug);
+          const { data, error } = await db.rpc('presave_public', { p_slug: pageSlug });
           dbError(error);
           if (!data) throw new HttpError(404, 'This pre-save link is unavailable.', 'not_found');
           return json({ campaign: data, spotify_configured: await spotifyConfigured(), max_advance_days: MAX_ADVANCE_DAYS });
+        }
+        case 'domain_get': {
+          const userId = await owner(req);
+          const campaign = await ownedCampaign(userId, body.id);
+          const { data, error } = await db.from('presave_domains').select('*').eq('campaign_id', campaign.id).maybeSingle();
+          dbError(error);
+          return json({ domain: domainView(data) });
+        }
+        case 'domain_set': {
+          const userId = await owner(req);
+          const campaign = await ownedCampaign(userId, body.id);
+          const host = domainName(body.domain);
+          const { data: taken, error: takenError } = await db.from('presave_domains').select('campaign_id').eq('domain', host).in('status', ['verified', 'live']).neq('campaign_id', campaign.id).limit(1);
+          dbError(takenError);
+          const { data: profileTaken, error: profileError } = await db.from('profile_domains').select('user_id').eq('domain', host).in('status', ['verified', 'live']).limit(1);
+          dbError(profileError);
+          if (taken?.length || profileTaken?.length) throw new HttpError(409, 'That domain is already connected to another page.', 'domain_taken');
+          const { data: current, error: currentError } = await db.from('presave_domains').select('*').eq('campaign_id', campaign.id).maybeSingle();
+          dbError(currentError);
+          const same = current?.domain === host;
+          // Only the campaign that proved ownership has the domain on the hosting project.
+          if (current && !same && current.status !== 'pending') await vercelProject(get, fetchImpl)?.remove(current.domain);
+          const row = {
+            campaign_id: campaign.id, owner_id: userId, domain: host,
+            token: same ? current.token : crypto.randomUUID().replace(/-/g, ''),
+            status: same ? current.status : 'pending', note: same ? current.note : null,
+            verified_at: same ? current.verified_at : null,
+          };
+          const { data, error } = await db.from('presave_domains').upsert(row, { onConflict: 'campaign_id' }).select('*').single();
+          dbError(error);
+          return json({ domain: domainView(data) });
+        }
+        case 'domain_verify': {
+          const userId = await owner(req);
+          const campaign = await ownedCampaign(userId, body.id);
+          const { data: row, error } = await db.from('presave_domains').select('*').eq('campaign_id', campaign.id).maybeSingle();
+          dbError(error);
+          if (!row) throw new HttpError(400, 'Add a domain first.', 'domain_missing');
+          if (!await rate(req, `domain-verify:${userId}`, 20, 300)) throw new HttpError(429, 'Please wait a few minutes before checking again.', 'rate_limited');
+          const result = await checkDomain({ domain: row.domain, token: row.token, fetchImpl, vercel: vercelProject(get, fetchImpl) });
+          const { data: profileTaken } = result.status === 'pending' ? { data: [] } : await db.from('profile_domains').select('user_id').eq('domain', row.domain).in('status', ['verified', 'live']).limit(1);
+          if (profileTaken?.length) throw new HttpError(409, 'That domain is already connected to a Nexus profile.', 'domain_taken');
+          const { data, error: updateError } = await db.from('presave_domains').update({
+            status: result.status, note: result.note, verified_at: result.status === 'pending' ? null : (row.verified_at ?? timestamp()),
+          }).eq('campaign_id', campaign.id).select('*').single();
+          dbError(updateError);
+          return json({ domain: domainView(data) });
+        }
+        case 'domain_remove': {
+          const userId = await owner(req);
+          const campaign = await ownedCampaign(userId, body.id);
+          const { data, error } = await db.from('presave_domains').delete().eq('campaign_id', campaign.id).select('domain,status').maybeSingle();
+          dbError(error);
+          if (data && data.status !== 'pending') await vercelProject(get, fetchImpl)?.remove(data.domain);
+          return json({ ok: true });
         }
         case 'authorize': return await authorize(req, body);
         case 'track': {

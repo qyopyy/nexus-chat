@@ -6,6 +6,10 @@ const immutable = "public, max-age=31536000, immutable";
 
 const nextConfig: NextConfig = {
   reactStrictMode: false, // WebRTC + realtime subscriptions don't like double-mounting in dev
+  async rewrites() {
+    // Clean pre-save endings: nexusproject.cc/p/your-release opens the pre-save page (index.html reads the slug from the path).
+    return [{ source: "/p/:slug", destination: "/presave/index.html" }];
+  },
   async headers() {
     // Next matches the first source — put static chunks before the catch-all.
     return [

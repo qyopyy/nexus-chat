@@ -143,8 +143,8 @@ async function onMessageInsert(m: Message) {
       notify(m, { skipSound: true }); // sound already played above
       if (isPhoneDevice()) {
         const name = useApp.getState().profiles[m.author_id]?.display_name || useApp.getState().profiles[m.author_id]?.username || "Nexus";
-        void import("@/lib/phoneLink").then(({ recordDeviceNotice }) =>
-          recordDeviceNotice({ title: name, body: (m.content || "New message").slice(0, 180), href: `/?conv=${m.conversation_id}` }),
+        void import("@/lib/phoneLink").then(({ recordChatNotice }) =>
+          recordChatNotice({ title: name, body: (m.content || "New message").slice(0, 180), href: `/?conv=${m.conversation_id}` }),
         );
       }
       void syncAppBadge();

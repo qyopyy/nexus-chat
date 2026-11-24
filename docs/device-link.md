@@ -28,3 +28,11 @@
 
 ## Verification
 Run `npm run typecheck` and `npm run build`. Manual: create/approve/redeem, deny by not approving, wait for expiry, attempt code reuse, revoke auth session, verify MFA and user isolation, confirm battery percentages/charging and offline stale indicators on iOS/Android. No live Supabase Auth operation was performed in the authoring environment.
+
+## Incoming messages on your other screens
+
+When Nexus is in the background on a linked phone, short previews of new Nexus chat messages (up to 180 characters) appear in **Phone Link → Reply to Nexus chats** on your other signed-in screens, where you can reply.
+
+- This is controlled per phone by **Phone Link → Permissions → Chat reply**. When it is off, previews are not copied at all.
+- Previews are deleted after 7 days (`nexus_prune_device_notices`, daily at 04:17 UTC; migration `20261124121000_device_notice_retention.sql`).
+- This shows **Nexus** messages only. iOS never lets an app read another app's notifications, so texts, iMessage and other apps cannot be mirrored. On Android that needs a native notification-listener plugin in a new app build, which this release does not include.

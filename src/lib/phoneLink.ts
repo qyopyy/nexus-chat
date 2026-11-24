@@ -166,6 +166,27 @@ export async function listClipboard() {
   return (data ?? []) as ClipboardItem[];
 }
 
+let chatMirrorCache: { at: number; allowed: boolean } | null = null;
+
+/** Message previews are copied to your other screens only while this phone's "Chat reply" permission is on. */
+async function chatMirrorAllowed() {
+  if (chatMirrorCache && Date.now() - chatMirrorCache.at < 30_000) return chatMirrorCache.allowed;
+  let allowed: boolean = DEFAULT_GRANT.chats;
+  try {
+    const grant = await loadGrant(thisDeviceId());
+    allowed = grant?.chats ?? DEFAULT_GRANT.chats;
+  } catch {
+    return false; // unknown: do not copy message text
+  }
+  chatMirrorCache = { at: Date.now(), allowed };
+  return allowed;
+}
+
+export async function recordChatNotice(input: { title: string; body?: string | null; href?: string | null }) {
+  if (!(await chatMirrorAllowed())) return;
+  await recordDeviceNotice(input);
+}
+
 export async function loadGrant(deviceId: string) {
   const userId = useApp.getState().userId;
   if (!userId) return null;
@@ -185,6 +206,7 @@ export async function saveGrant(deviceId: string, patch: Partial<Omit<HandsetGra
     updated_at: new Date().toISOString(),
   });
   if (error) throw new Error(errorText(error));
+  chatMirrorCache = null;
 }
 
 export async function setDeviceFocus(deviceId: string, minutes: number) {

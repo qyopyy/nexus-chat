@@ -7,6 +7,24 @@
     <meta name="theme-color" content="#0c0d12" />
     <meta name="description" content="Your next release starts here. Create unlimited, personalized music pre-save pages with Nexus by qyopyy." />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <script>
+      // Served from /p/<slug> or a creator's own domain: keep ./styles.css, ./app.mjs etc. pointing at /presave/.
+      (function () {
+        if (/\/presave(\/|$)/.test(location.pathname)) return;
+        var base = document.createElement('base');
+        base.href = '/presave/';
+        document.head.appendChild(base);
+        document.documentElement.setAttribute('data-presave-root', '1');
+        // A <base> makes "#main" resolve to /presave/#main; keep in-page links in-page.
+        document.addEventListener('click', function (event) {
+          var link = event.target.closest && event.target.closest('a[href^="#"]');
+          if (!link || event.defaultPrevented) return;
+          var target = document.getElementById(decodeURIComponent(link.getAttribute('href').slice(1)));
+          event.preventDefault();
+          if (target) { target.focus({ preventScroll: true }); target.scrollIntoView(); }
+        });
+      })();
+    </script>
     <title>Nexus Pre-save — by qyopyy</title>
     <link rel="stylesheet" href="./styles.css" />
     <script src="./config.js"></script>

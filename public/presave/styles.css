@@ -720,3 +720,17 @@ dialog.preview-modal { width: min(1050px,calc(100vw - 28px)); max-height: calc(1
 @media (prefers-reduced-motion: reduce) {
   .stars, .galaxy-cloud { animation: none !important; transform: none; }
 }
+
+/* Custom domain panel */
+.domain-section { margin-top: 30px; }
+.domain-add { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 14px; }
+.domain-add .field { flex: 1 1 260px; margin: 0; }
+.domain-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.domain-name { font-size: 1.0625rem; overflow-wrap: anywhere; }
+.domain-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; align-items: center; }
+.dns-table-wrap { overflow-x: auto; margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.dns-table { width: 100%; border-collapse: collapse; font-size: .8125rem; min-width: 560px; }
+.dns-table th, .dns-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.dns-table thead th { color: var(--muted); font-weight: 600; font-size: .75rem; letter-spacing: .04em; text-transform: uppercase; }
+.dns-table tbody tr:last-child th, .dns-table tbody tr:last-child td { border-bottom: 0; }
+.dns-table code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; overflow-wrap: anywhere; word-break: break-all; }

@@ -1,9 +1,15 @@
-import { escapeHtml as esc, safeUrl, spotifyUri, slugify, accentInk, localDateInput, releaseDate, campaignUrl, countdownParts, newCampaign, validateCampaign, appearance, contrastRatio, THEME_DETAILS, APPEARANCE_DEFAULTS, ACCENTS } from './core.mjs';
+import { escapeHtml as esc, safeUrl, spotifyUri, slugify, accentInk, localDateInput, releaseDate, campaignUrl, shareLink, pathSlug, countdownParts, newCampaign, validateCampaign, appearance, contrastRatio, THEME_DETAILS, APPEARANCE_DEFAULTS, ACCENTS } from './core.mjs';
 import { api, client, configured, needsMfa, uploadArtwork } from './auth.mjs';
 
 const root = document.querySelector('#app');
-const localBase = new URL(location.pathname, location.origin).href;
-const publicSlug = new URLSearchParams(location.search).get('slug');
+// index.html adds data-presave-root when it is served from /p/<slug> or a creator's own domain.
+const servedFromRoot = document.documentElement.hasAttribute('data-presave-root');
+const localBase = servedFromRoot ? new URL('/presave/index.html', location.origin).href : new URL(location.pathname, location.origin).href;
+let publicSlug = new URLSearchParams(location.search).get('slug') ?? pathSlug(location.pathname);
+// A custom domain opens at "/" with no slug; the service finds the campaign by host name.
+const domainMode = publicSlug === null && servedFromRoot && location.pathname === '/';
+if (domainMode) publicSlug = '';
+else if (publicSlug === null && servedFromRoot) publicSlug = '!'; // unknown path: show the "not available" page
 const state = {
   user: null, view: 'campaigns', campaigns: [], summary: {}, total: 0, page: 1, pageSize: 12,
   search: '', filter: 'all', loading: false, listError: '', service: null, draft: null,
@@ -34,7 +40,7 @@ const ICONS = {
 const icon = (name) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ICONS.link}</svg>`;
 const number = (value) => new Intl.NumberFormat().format(Number(value) || 0);
 const baseUrl = () => state.service?.public_url || localBase;
-const shareUrl = (slug) => campaignUrl(slug, baseUrl());
+const shareUrl = (slug) => shareLink(slug, baseUrl());
 const isReleased = (c) => c.release_at && Date.parse(c.release_at) <= Date.now();
 const userName = () => state.user?.user_metadata?.display_name || state.user?.user_metadata?.username || state.user?.email?.split('@')[0] || 'Your workspace';
 const button = (label, action, kind = 'secondary', attrs = '') => `<button type="button" class="button button-${kind}" data-action="${action}" ${attrs}>${label}</button>`;
@@ -219,7 +225,73 @@ function editorHtml() {
       <label class="switch-label"><input type="checkbox" name="published" ${c.published ? 'checked' : ''}><span>Publish this campaign</span></label><p class="field-help">Anyone with the link can open a published page. Unpublishing hides the page and pauses pending pre-saves.</p>
       <div id="save-error" class="form-error" role="alert"></div><div class="modal-actions"><button class="button button-primary" type="submit" id="save-bottom">${icon('check')} Save campaign</button><span id="save-status" class="field-help" role="status">${state.user ? 'Changes are saved when you press Save.' : 'Sign in to save or publish. Your preview is ready to customize.'}</span></div>
     </section>
-  </form><aside class="editor-preview" aria-label="Live page preview"><div class="preview-label"><span>${icon('eye')} LIVE PREVIEW</span><span class="badge badge-draft">Preview only</span></div><div class="preview-frame" id="release-preview"></div><button type="button" class="button button-secondary preview-expand" data-action="expand-preview">${icon('external')} Open full preview</button><p class="preview-note">This is how your release feels to a fan.<br>Your edits appear here as you make them.</p></aside></div>`;
+  </form><aside class="editor-preview" aria-label="Live page preview"><div class="preview-label"><span>${icon('eye')} LIVE PREVIEW</span><span class="badge badge-draft">Preview only</span></div><div class="preview-frame" id="release-preview"></div><button type="button" class="button button-secondary preview-expand" data-action="expand-preview">${icon('external')} Open full preview</button><p class="preview-note">This is how your release feels to a fan.<br>Your edits appear here as you make them.</p></aside></div>${domainSectionHtml()}`;
+}
+
+const DOMAIN_STATUS = { pending: ['Waiting for DNS', 'badge-draft'], verified: ['Verified', 'badge-live'], live: ['Live', 'badge-live'] };
+
+function recordRow(label, record) {
+  return `<tr><th scope="row">${esc(label)}</th><td>${esc(record.type)}</td><td><code>${esc(record.name)}</code></td><td><code>${esc(record.value)}</code></td><td><button type="button" class="icon-button" data-action="copy-text" data-text="${esc(record.value)}" aria-label="Copy ${esc(label)} value" title="Copy value">${icon('copy')}</button></td></tr>`;
+}
+
+function domainBody() {
+  const c = state.draft;
+  if (!c?.id) return '<p class="field-help">Save this campaign first. Then you can connect a domain you own, like <strong>music.yourname.com</strong>, so fans see your name in the address bar.</p>';
+  if (state.domainError) return `<div class="error-panel"><p>${esc(state.domainError)}</p>${button('Try again', 'domain-reload', 'secondary')}</div>`;
+  if (state.domain === undefined) return '<p class="field-help" role="status">Checking your domain…</p>';
+  const d = state.domain;
+  if (!d) {
+    return `<p class="field-help">Fans will open this page at your own address instead of a Nexus link. Use a domain or subdomain you control. A subdomain such as <strong>music.yourname.com</strong> is the easiest.</p>
+      <div class="domain-add"><label class="field"><span class="field-label">Your domain</span><input class="input" id="domain-input" type="text" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="253" placeholder="music.yourname.com" aria-describedby="domain-error"></label>${button('Connect domain', 'domain-set', 'primary')}</div><span class="field-error" id="domain-error" role="alert"></span>`;
+  }
+  const [label, tone] = DOMAIN_STATUS[d.status] || DOMAIN_STATUS.pending;
+  const open = d.status !== 'pending' ? `<a class="button button-secondary button-small" href="https://${esc(d.domain)}/" target="_blank" rel="noopener noreferrer">${icon('external')} Open ${esc(d.domain)}</a>` : '';
+  return `<div class="domain-head"><strong class="domain-name">${esc(d.domain)}</strong><span class="badge ${tone}">${label}</span></div>
+    ${d.note ? `<p class="field-help" role="status">${esc(d.note)}</p>` : ''}
+    ${d.status === 'live' ? '' : `<p class="field-help">Add these two records at your domain registrar (the place you bought the domain), then press <strong>Check DNS</strong>. DNS changes can take a few minutes, sometimes longer.</p>
+    <div class="dns-table-wrap"><table class="dns-table"><thead><tr><th scope="col">Purpose</th><th scope="col">Type</th><th scope="col">Name</th><th scope="col">Value</th><th scope="col"><span class="sr-only">Copy</span></th></tr></thead><tbody>${recordRow('Prove ownership', d.records.txt)}${recordRow('Point to Nexus', d.records.route)}</tbody></table></div>`}
+    <div class="domain-actions">${d.status === 'live' ? '' : button('Check DNS', 'domain-verify', 'primary')}${open}${button('Remove domain', 'domain-remove', 'ghost')}</div>
+    <span class="field-error" id="domain-error" role="alert"></span>`;
+}
+
+function domainSectionHtml() {
+  return `<section class="form-section domain-section" id="domain-section" aria-labelledby="domain-title"><div class="section-title"><span class="section-icon">${icon('globe')}</span><div><h2 id="domain-title">Your own domain</h2><p>Share this page from an address you own.</p></div></div><div id="domain-body">${domainBody()}</div></section>`;
+}
+
+function renderDomain() {
+  const el = document.querySelector('#domain-body');
+  if (el) el.innerHTML = domainBody();
+}
+
+async function loadDomain() {
+  const id = state.draft?.id;
+  if (!id || !state.user) return;
+  state.domainFor = id; state.domain = undefined; state.domainError = '';
+  renderDomain();
+  try {
+    const result = await api('domain_get', { id }, true);
+    if (state.domainFor !== id) return;
+    state.domain = result.domain;
+  } catch (error) {
+    if (state.domainFor !== id) return;
+    state.domainError = error.message || 'We couldn’t load your domain settings.';
+  }
+  renderDomain();
+}
+
+async function domainAction(action, payload = {}) {
+  const id = state.draft?.id;
+  if (!id) return;
+  if (await needsMfa()) { await openMfa(); return; }
+  const result = await api(action, { id, ...payload }, true);
+  if (state.draft?.id !== id) return;
+  state.domain = result.domain ?? null; state.domainError = '';
+  renderDomain();
+}
+
+function domainFail(error) {
+  const el = document.querySelector('#domain-error');
+  if (el) el.textContent = error.message || 'Something went wrong. Please try again.'; else toast(error.message || 'Something went wrong.');
 }
 
 function linkRow(link, index) {
@@ -334,8 +406,10 @@ async function openEditor(campaign = null) {
   if (!await mayLeave()) return;
   state.draft = campaign ? newCampaign(structuredClone(campaign)) : newCampaign({ artist: state.user?.user_metadata?.display_name || '' });
   state.view = 'editor'; state.dirty = false; state.slugEdited = Boolean(state.draft.slug);
+  state.domain = null; state.domainFor = null; state.domainError = '';
   render(); window.scrollTo({ top: 0, behavior: 'instant' });
   document.querySelector('#campaign-form [name="title"]').focus({ preventScroll: true });
+  if (state.draft.id) void loadDomain();
 }
 
 function showValidation(errors) {
@@ -368,10 +442,12 @@ async function saveCampaign() {
     if (state.user?.id !== owner) return;
     const response = await api('save', { campaign: result.campaign }, true);
     if (state.user?.id !== owner) return;
-    state.draft = newCampaign(response.campaign); state.dirty = false;
+    const firstSave = !state.draft.id; state.draft = newCampaign(response.campaign); state.dirty = false;
+    if (firstSave) { state.domain = null; state.domainFor = null; }
     toast(state.draft.published ? 'Your campaign is published. Your link is ready to share.' : 'Draft saved to your Nexus account.');
     render();
     document.querySelector('#save-status').textContent = state.draft.published ? 'Published. Copy your link to share it.' : 'All changes saved.';
+    if (state.domainFor !== state.draft.id) void loadDomain();
   } catch (error) {
     const el = document.querySelector('#save-error');
     if (el) el.textContent = error.message;
@@ -492,9 +568,10 @@ async function loadPublic() {
   document.body.classList.add('is-public');
   root.innerHTML = `<div class="public-shell"><header class="public-brand"><a href="${esc(localBase)}">${icon('link')} nexus <span>PRE-SAVE</span></a>${button('Create your own', 'public-home', 'secondary')}</header><main id="main" tabindex="-1"><div class="loading-view"><span class="spinner"></span><p>Finding your next favorite…</p></div></main><footer class="public-footer">Nexus by qyopyy · Made for creators.</footer></div>`;
   try {
-    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(publicSlug) || publicSlug.length < 3 || publicSlug.length > 64) throw Object.assign(new Error('This link is not available.'), { status: 404 });
-    const result = await api('page', { slug: publicSlug });
+    if (!domainMode && (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(publicSlug) || publicSlug.length < 3 || publicSlug.length > 64)) throw Object.assign(new Error('This link is not available.'), { status: 404 });
+    const result = await api('page', domainMode ? { domain: location.hostname } : { slug: publicSlug });
     publicCampaign = result.campaign;
+    if (domainMode) publicSlug = publicCampaign.slug;
     document.title = publicCampaign.title + ' — ' + publicCampaign.artist + ' | Nexus Pre-save';
     document.querySelector('meta[name="description"]')?.setAttribute('content', publicCampaign.description || 'Get ready for ' + publicCampaign.title + ' by ' + publicCampaign.artist + '.');
     document.querySelector('#main').innerHTML = releaseHtml(publicCampaign, false, result.spotify_configured);
@@ -544,7 +621,10 @@ async function authorize(buttonEl) {
   const notice = document.querySelector('#public-feedback');
   notice.textContent = 'Opening Spotify securely…';
   try {
-    const { url } = await api('authorize', { slug: publicSlug, return_url: baseUrl() });
+    // On a creator's own domain, return to that domain (the service checks it is connected to this page).
+    let returnUrl = baseUrl();
+    if (domainMode && state.service?.public_url) { try { returnUrl = new URL(new URL(state.service.public_url).pathname, location.origin).href; } catch {} }
+    const { url } = await api('authorize', { slug: publicSlug, return_url: returnUrl });
     const target = new URL(url);
     const functionOrigin = new URL(window.NEXUS_PRESAVE_CONFIG.supabaseUrl).origin;
     if (target.protocol !== 'https:' || ![functionOrigin, 'https://accounts.spotify.com'].includes(target.origin)) throw new Error('The authorization address is invalid.');
@@ -681,6 +761,31 @@ document.addEventListener('click', async (event) => {
         document.querySelector('#links-list').innerHTML = state.draft.links.map(linkRow).join('');
         document.querySelector('[data-action="add-link"]').disabled = false; updatePreview(); break;
       case 'preview-only': toast('This is a live design preview. Publish your page to share it with fans.'); break;
+      case 'copy-text': await copyText(target.dataset.text || ''); break;
+      case 'domain-reload': await loadDomain(); break;
+      case 'domain-set': {
+        const input = document.querySelector('#domain-input');
+        const value = (input?.value || '').trim();
+        if (!value) { domainFail(new Error('Enter the domain you want to use.')); break; }
+        target.disabled = true;
+        try { await domainAction('domain_set', { domain: value }); toast('Domain added. Add the DNS records, then check them.'); }
+        catch (error) { domainFail(error); target.disabled = false; }
+        break;
+      }
+      case 'domain-verify': {
+        target.disabled = true;
+        try {
+          await domainAction('domain_verify');
+          toast(state.domain?.status === 'pending' ? 'DNS isn’t ready yet. Try again in a few minutes.' : 'Your domain is connected.');
+        } catch (error) { domainFail(error); target.disabled = false; }
+        break;
+      }
+      case 'domain-remove':
+        if (await confirmAction('Remove this domain?', 'Fans will no longer reach this page at ' + (state.domain?.domain || 'your domain') + '. Your Nexus link keeps working.', 'Remove domain')) {
+          target.disabled = true;
+          try { await domainAction('domain_remove'); state.domain = null; renderDomain(); toast('Domain removed.'); }
+          catch (error) { domainFail(error); target.disabled = false; }
+        } break;
       case 'public-home': location.assign(localBase); break;
       case 'public-retry': await loadPublic(); break;
       case 'authorize': await authorize(target); break;
