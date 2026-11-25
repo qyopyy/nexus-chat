@@ -147,7 +147,8 @@ export type ShieldHit = { work_id: string; title: string; artist: string | null;
  * Check a file before it's uploaded anywhere in Nexus. Returns the protected song it matches (upload must stop) or null.
  * `as` = check on behalf of another user (admins sending a member's release).
  */
-export async function shieldCheck(file: File | Blob, context: "chat" | "video" | "release" | "space" | "tool" | "send", as?: string): Promise<ShieldHit | null> {
+export type ShieldContext = "chat" | "video" | "release" | "space" | "tool" | "send" | "sound" | "short";
+export async function shieldCheck(file: File | Blob, context: ShieldContext, as?: string): Promise<ShieldHit | null> {
   const f = file instanceof File ? file : new File([file], "audio", { type: file.type });
   if (!isMedia(f)) return null;
   const [print, hash] = await Promise.all([queryPrint(f), sha256(f).catch(() => null)]);
@@ -165,6 +166,27 @@ export async function shieldGate(file: File | Blob, context: Parameters<typeof s
   if (!hit) return false;
   toast(`🛡️ Blocked by Nexus Shield: “${hit.title}”${hit.artist ? ` by ${hit.artist}` : ""} is protected. Ask the owner to unlock it.`, "error");
   return true;
+}
+
+// ------------------------------------------------------------------ protection switches
+export const ALL_WHERE = ["chat", "video", "space", "release", "send", "sound", "short"] as const;
+/** "TikTok sound block": nobody can reuse the song as a sound clip, in a short, or as a video soundtrack */
+export const TIKTOK_WHERE = ["sound", "short", "video"] as const;
+export const SWITCHES: { id: string; emoji: string; label: string; hint: string; where: readonly string[] }[] = [
+  { id: "tiktok", emoji: "🎵", label: "TikTok sound block", hint: "Blocks the song from being used as a sound, in shorts/reels and as a video soundtrack on Nexus.", where: TIKTOK_WHERE },
+  { id: "chat", emoji: "💬", label: "Chats & DMs", hint: "Can't be sent as a file in any conversation.", where: ["chat"] },
+  { id: "space", emoji: "🎙️", label: "Spaces & radio", hint: "Can't be played in spaces or the radio.", where: ["space"] },
+  { id: "dist", emoji: "🚚", label: "Distribution", hint: "Other people can't release it or send it to stores.", where: ["release", "send"] },
+];
+export const whereOn = (w: ShieldWork, where: readonly string[]) => {
+  const cur: readonly string[] = w.block_where ?? ALL_WHERE;
+  return where.every((x) => cur.includes(x));
+};
+export function toggleWhere(w: ShieldWork, where: readonly string[]) {
+  const cur = new Set<string>(w.block_where ?? ALL_WHERE);
+  const on = whereOn(w, where);
+  for (const x of where) on ? cur.delete(x) : cur.add(x);
+  return [...cur];
 }
 
 // ------------------------------------------------------------------ owners: register + manage songs
@@ -189,6 +211,9 @@ export type ShieldWork = {
   hash_count: number;
   policy?: "block" | "track";
   content_id?: boolean;
+  block_where?: string[];
+  notify_owner?: boolean;
+  strict?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -325,7 +350,7 @@ export async function removeDoc(d: ShieldDoc) {
 
 export type RegisterStep = { step: string; p: number };
 /** fingerprint the whole song, keep the original in the owner-only vault, lock it */
-export async function registerWork(file: File, meta: { title: string; artist?: string; isrc?: string; upc?: string; docs?: { file: File; kind: DocKind }[]; unlock_at?: string | null; allow_users?: string[]; keepFile: boolean }, onStep: (s: RegisterStep) => void) {
+export async function registerWork(file: File, meta: { title: string; artist?: string; isrc?: string; upc?: string; docs?: { file: File; kind: DocKind }[]; unlock_at?: string | null; allow_users?: string[]; keepFile: boolean; block_where?: string[] }, onStep: (s: RegisterStep) => void) {
   const me = useApp.getState().userId!;
   onStep({ step: "Reading audio…", p: 0.02 });
   const buf = await decodeFile(file);
@@ -348,7 +373,7 @@ export async function registerWork(file: File, meta: { title: string; artist?: s
 
   const { data: w, error } = await supabase
     .from("shield_works")
-    .insert({ owner_id: me, title: meta.title.slice(0, 200), artist: meta.artist?.slice(0, 200) || null, isrc: meta.isrc || null, upc: meta.upc || null, unlock_at: meta.unlock_at || null, allow_users: meta.allow_users ?? [], file_name: file.name.slice(0, 300), bytes: file.size, duration: buf.duration })
+    .insert({ owner_id: me, title: meta.title.slice(0, 200), artist: meta.artist?.slice(0, 200) || null, isrc: meta.isrc || null, upc: meta.upc || null, unlock_at: meta.unlock_at || null, allow_users: meta.allow_users ?? [], ...(meta.block_where ? { block_where: meta.block_where } : {}), file_name: file.name.slice(0, 300), bytes: file.size, duration: buf.duration })
     .select()
     .single();
   if (error || !w) throw new Error(errorText(error));

@@ -33,6 +33,8 @@ import Mines from "./Mines";
 import OrbitStrike from "./OrbitStrike";
 import DriftRush from "./DriftRush";
 import ClassicStrikeLauncher from "./classicstrike/ClassicStrikeLauncher";
+import IdleGameView from "./idle/IdleGameView";
+import { SIM_GAMES } from "./idle/registry";
 
 const GAMES: { id: GameId; name: string; tag: string; desc: string; bg: string; emoji: string; C: typeof Blocks | null; isNew?: boolean }[] = [
   {
@@ -97,6 +99,7 @@ const WEB_GAMES: { name: string; url: string; tag: string; color: string }[] = [
 
 export default function GamesHub({ mobile }: { mobile?: boolean }) {
   const [open, setOpen] = useState<GameId | null>(null);
+  const [simOpen, setSimOpen] = useState<string | null>(null);
   const [frame, setFrame] = useState<(typeof WEB_GAMES)[number] | null>(null);
   const [hubChallenge, setHubChallenge] = useState<SoloScoreGame | null>(null);
   const joinCode = useGames((s) => s.joinCode);
@@ -114,6 +117,12 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
     setOpen(soloFocus);
     useGames.setState({ soloFocus: null });
   }, [soloFocus]);
+  const sim = simOpen ? SIM_GAMES.find((g) => g.id === simOpen) : undefined;
+  if (sim) {
+    const back = () => setSimOpen(null);
+    if (sim.cfg) return <IdleGameView key={sim.id} cfg={sim.cfg} onBack={back} mobile={mobile} />;
+    if (sim.Component) return <sim.Component key={sim.id} onBack={back} mobile={mobile} />;
+  }
   if (frame) return <WebFrame game={frame} onBack={() => setFrame(null)} mobile={mobile} />;
   if (open === "streets") return <StreetsLauncher onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "classicstrike") return <ClassicStrikeLauncher onBack={() => setOpen(null)} mobile={mobile} edition="classic" />;
@@ -224,6 +233,25 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
               </span>
             </div>
           </button>
+
+          <section>
+            <h2 className="mb-1 text-lg font-bold">Simulators &amp; idle</h2>
+            <p className="mb-3 text-sm text-sub">Bitcoin mining, stock trading and tycoon games that keep earning while you&apos;re away. Progress saves on this device.</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {SIM_GAMES.map((g) => (
+                <button key={g.id} onClick={() => setSimOpen(g.id)} className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5">
+                  <div className="relative grid aspect-[4/3] place-items-center text-5xl" style={{ background: g.bg }}>
+                    <span className="transition group-hover:scale-110">{g.emoji}</span>
+                    {g.isNew && <span className="absolute top-2 left-2 rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-black">NEW</span>}
+                  </div>
+                  <div className="p-2.5">
+                    <div className="truncate font-semibold">{g.name}</div>
+                    <div className="truncate text-xs text-sub">{g.tag}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
 
           <section>
             <h2 className="mb-3 text-lg font-bold">Nexus games</h2>

@@ -17,6 +17,11 @@ import {
   removeDoc,
   removeWork,
   shieldCheck,
+  SWITCHES,
+  toggleWhere,
+  whereOn,
+  ALL_WHERE,
+  TIKTOK_WHERE,
   syncAcr,
   syncAllAcr,
   updateWork,
@@ -36,9 +41,9 @@ import NameTag from "@/components/ui/NameTag";
 import { Card, H } from "./Studio";
 import { NEED, gate, needPlan, useMyTier } from "@/lib/premium";
 
-type Draft = { id: string; file: File; title: string; artist: string; isrc: string; upc: string; docs: { file: File; kind: DocKind }[]; lockUntil: string; keep: boolean; allow: string[]; step?: RegisterStep; error?: string; done?: boolean };
+type Draft = { id: string; file: File; title: string; artist: string; isrc: string; upc: string; docs: { file: File; kind: DocKind }[]; lockUntil: string; keep: boolean; tiktok: boolean; allow: string[]; step?: RegisterStep; error?: string; done?: boolean };
 
-const WHERE: Record<string, string> = { chat: "in a chat", video: "as a video", release: "as a release", space: "in a space", send: "to stores", tool: "in a test" };
+const WHERE: Record<string, string> = { chat: "in a chat", video: "as a video", release: "as a release", space: "in a space", send: "to stores", tool: "in a test", sound: "as a sound", short: "in a short" };
 
 export default function ShieldStudio() {
   const me = useApp((s) => s.userId)!;
@@ -69,7 +74,7 @@ export default function ShieldStudio() {
     if (!list.length) return toast("Pick audio files (WAV, FLAC, MP3, M4A…)", "error");
     setDrafts((d) => [
       ...d,
-      ...list.map((f) => ({ id: crypto.randomUUID(), file: f, title: f.name.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").slice(0, 200), artist: myName, isrc: "", upc: "", docs: [], lockUntil: "", keep: true, allow: [] })),
+      ...list.map((f) => ({ id: crypto.randomUUID(), file: f, title: f.name.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").slice(0, 200), artist: myName, isrc: "", upc: "", docs: [], lockUntil: "", keep: true, tiktok: true, allow: [] })),
     ]);
   };
   const patch = (id: string, p: Partial<Draft>) => setDrafts((d) => d.map((x) => (x.id === id ? { ...x, ...p } : x)));
@@ -81,7 +86,7 @@ export default function ShieldStudio() {
       try {
         await registerWork(
           d.file,
-          { title: d.title.trim() || "Untitled", artist: d.artist.trim(), isrc: /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(d.isrc) ? d.isrc : undefined, upc: /^\d{12,14}$/.test(d.upc) ? d.upc : undefined, docs: d.docs, unlock_at: d.lockUntil ? new Date(`${d.lockUntil}T00:00:00`).toISOString() : null, allow_users: d.allow, keepFile: d.keep },
+          { title: d.title.trim() || "Untitled", artist: d.artist.trim(), isrc: /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(d.isrc) ? d.isrc : undefined, upc: /^\d{12,14}$/.test(d.upc) ? d.upc : undefined, docs: d.docs, unlock_at: d.lockUntil ? new Date(`${d.lockUntil}T00:00:00`).toISOString() : null, allow_users: d.allow, keepFile: d.keep, block_where: d.tiktok ? [...ALL_WHERE] : ALL_WHERE.filter((x) => !(TIKTOK_WHERE as readonly string[]).includes(x)) },
           (step) => patch(d.id, { step }),
         );
         patch(d.id, { done: true, error: undefined });
@@ -332,7 +337,7 @@ function FriendPicker({ value, onChange }: { value: string[]; onChange: (v: stri
 function DraftRow({ d, busy, onPatch, onRemove }: { d: Draft; busy: boolean; onPatch: (p: Partial<Draft>) => void; onRemove: () => void }) {
   const inp = "w-full rounded-lg border border-line bg-transparent px-2.5 py-1.5 text-sm outline-none focus:border-accent";
   return (
-    <div className="rounded-xl border border-line/70 p-3">
+    <div className="min-w-0 rounded-xl border border-line/70 p-3">
       <div className="mb-2 flex items-center gap-2 text-xs text-sub">
         <span className="min-w-0 flex-1 truncate">
           {d.file.name} · {(d.file.size / 1048576).toFixed(1)} MB
@@ -343,19 +348,22 @@ function DraftRow({ d, busy, onPatch, onRemove }: { d: Draft; busy: boolean; onP
           </button>
         )}
       </div>
-      <fieldset disabled={busy} className="grid gap-2 sm:grid-cols-2">
+      <fieldset disabled={busy} className="m-0 grid min-w-0 gap-2 border-0 p-0 sm:grid-cols-2 [&>*]:min-w-0">
         <input className={inp} value={d.title} onChange={(e) => onPatch({ title: e.target.value })} placeholder="Song title" />
         <input className={inp} value={d.artist} onChange={(e) => onPatch({ artist: e.target.value })} placeholder="Artist" />
         <div className="grid grid-cols-2 gap-2 sm:col-span-2">
           <input className={cn(inp, "font-mono")} value={d.isrc} onChange={(e) => onPatch({ isrc: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12) })} placeholder="ISRC (optional)" />
           <input className={cn(inp, "font-mono")} inputMode="numeric" value={d.upc} onChange={(e) => onPatch({ upc: e.target.value.replace(/\D/g, "").slice(0, 14) })} placeholder="UPC / EAN (optional)" />
         </div>
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex min-w-0 items-center gap-2 text-sm">
           <span className="shrink-0 text-xs text-sub">Auto-unlock</span>
-          <input type="date" className={cn(inp, "[color-scheme:dark]")} value={d.lockUntil} min={new Date().toISOString().slice(0, 10)} onChange={(e) => onPatch({ lockUntil: e.target.value })} />
+          <input type="date" className={cn(inp, "min-w-0 flex-1 appearance-none [color-scheme:dark]")} value={d.lockUntil} min={new Date().toISOString().slice(0, 10)} onChange={(e) => onPatch({ lockUntil: e.target.value })} />
         </label>
         <label className="flex items-center gap-2 text-sm sm:col-span-2">
           <input type="checkbox" checked={d.keep} onChange={(e) => onPatch({ keep: e.target.checked })} className="size-4" /> Keep the original in my private vault
+        </label>
+        <label className="flex items-center gap-2 text-sm sm:col-span-2">
+          <input type="checkbox" checked={d.tiktok} onChange={(e) => onPatch({ tiktok: e.target.checked })} className="size-4" /> 🎵 TikTok sound block — nobody can use it as a sound or in a short
         </label>
         <div className="sm:col-span-2">
           <FriendPicker value={d.allow} onChange={(allow) => onPatch({ allow })} />
@@ -483,6 +491,7 @@ function WorkRow({ w, mine, blocked, onChange, onRemoved }: { w: ShieldWork; min
             </div>
           )}
           {mine && <CodesRow w={w} onChange={onChange} />}
+          {mine && <Switches w={w} onChange={onChange} />}
           <AcrRow w={w} mine={mine} onChange={onChange} />
           <Docs w={w} mine={mine} />
           {mine && (
@@ -550,6 +559,43 @@ function DocPicker({ docs, onChange }: { docs: { file: File; kind: DocKind }[]; 
           onChange([...docs, ...f].slice(0, 20));
         }}
       />
+    </div>
+  );
+}
+
+function SwitchRow({ emoji, label, hint, on, busy, onClick }: { id: string; emoji: string; label: string; hint: string; on: boolean; busy: boolean; onClick: () => void }) {
+  return (
+    <button type="button" disabled={busy} onClick={onClick} role="switch" aria-checked={on} className="flex w-full items-center gap-3 rounded-lg bg-black/20 px-3 py-2 text-left disabled:opacity-60">
+      <span className="text-lg">{emoji}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">{label}</span>
+        <span className="block text-xs text-sub">{hint}</span>
+      </span>
+      <span className={cn("relative h-6 w-10 shrink-0 rounded-full transition", on ? "bg-accent" : "bg-white/15")}>
+        <span className={cn("absolute top-0.5 size-5 rounded-full bg-white shadow transition-all", on ? "left-[18px]" : "left-0.5")} />
+      </span>
+    </button>
+  );
+}
+
+function Switches({ w, onChange }: { w: ShieldWork; onChange: (w: ShieldWork) => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const save = async (id: string, patch: Partial<ShieldWork>) => {
+    setBusy(id);
+    const x = await updateWork(w.id, patch);
+    setBusy(null);
+    if (x) onChange(x);
+  };
+  return (
+    <div>
+      <div className="mb-1 text-xs text-sub">Protection switches — what is blocked while this song is locked</div>
+      <div className="space-y-1.5">
+        {SWITCHES.map((sw) => (
+          <SwitchRow key={sw.id} busy={busy === sw.id} id={sw.id} emoji={sw.emoji} label={sw.label} hint={sw.hint} on={whereOn(w, sw.where)} onClick={() => void save(sw.id, { block_where: toggleWhere(w, sw.where) })} />
+        ))}
+        <SwitchRow busy={busy === "strict"} id="strict" emoji="🔎" label="Strict matching" hint="Catches shorter cuts and rougher copies (may flag more look-alikes)." on={!!w.strict} onClick={() => void save("strict", { strict: !w.strict })} />
+        <SwitchRow busy={busy === "notify"} id="notify" emoji="🔔" label="Alert me" hint="Nexus bot messages you whenever someone is blocked." on={w.notify_owner !== false} onClick={() => void save("notify", { notify_owner: w.notify_owner === false })} />
+      </div>
     </div>
   );
 }

@@ -384,6 +384,9 @@ export async function uploadSound(file: File, meta: { name: string; emoji: strin
   const me = useApp.getState().userId;
   if (!me) throw new Error("Sign in first");
   if (file.size > MAX_BYTES) throw new Error("Max file size is 1 GB");
+  const { shieldCheck } = await import("./shield");
+  const hit = await shieldCheck(file, "sound");
+  if (hit) throw new Error(`🛡️ Blocked by Nexus Shield: “${hit.title}”${hit.artist ? ` by ${hit.artist}` : ""} is protected — it can't be used as a sound.`);
   let body: Blob = file;
   let type = file.type || "audio/mpeg";
   let duration = decoded.duration;

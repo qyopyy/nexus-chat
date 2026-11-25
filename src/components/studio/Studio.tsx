@@ -217,7 +217,7 @@ export default function Studio() {
             </aside>
           </div>
         )}
-        <main className="min-w-0 flex-1 overflow-y-auto pb-safe-2">
+        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto pb-safe-2">
           <div className="mx-auto max-w-6xl px-3 py-5 sm:px-6">
             {section === "dashboard" && <Dashboard />}
             {section === "content" && <Content />}

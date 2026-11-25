@@ -292,6 +292,10 @@ export async function uploadMedia(file: File, onStep?: (s: string) => void): Pro
   const kind = mediaKind(file);
   if (kind === "video") {
     if (file.size > 1024 * 1024 * 1024) throw new Error("Videos can be up to 1 GB");
+    onStep?.("Checking for protected music…");
+    const { shieldCheck } = await import("./shield");
+    const hit = await shieldCheck(file, "short");
+    if (hit) throw new Error(`🛡️ Blocked by Nexus Shield: “${hit.title}”${hit.artist ? ` by ${hit.artist}` : ""} is protected and can't be used in shorts or stories.`);
     // Re-encode HEVC/.mov (and large clips) so stories/posts play on every device
     const progress = (label: string, ratio?: number) => {
       if (ratio == null) onStep?.(label);
