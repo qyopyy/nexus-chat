@@ -253,6 +253,11 @@ export default function PhoneLinkPanel() {
                     <button className="rounded-full bg-white/10 px-3 text-sm" disabled={!rules.chats}>Show</button>
                     <button type="button" className="rounded-full bg-white/10 px-3 text-sm" disabled={!rules.find || !shout.trim()} onClick={() => { act("speak", { text: shout }); setShout(""); }}>Speak</button>
                   </form>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                    {["Call me", "Dinner is ready", "Time to go", "Check Nexus"].map((t) => (
+                      <button key={t} type="button" className="rounded-full border border-white/15 px-3 py-1" disabled={!rules.chats} onClick={() => act("message", { text: t })}>{t}</button>
+                    ))}
+                  </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                     <label htmlFor="phone-timer-min" className="text-xs text-[#8d8880]">Timer</label>
                     <select id="phone-timer-min" value={timerMin} onChange={(e) => setTimerMin(Number(e.target.value))} className="rounded-lg bg-[#141414] px-2 py-1">

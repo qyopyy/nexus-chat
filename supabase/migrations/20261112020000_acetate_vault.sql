@@ -325,9 +325,8 @@ begin
   end if;
   lib := coalesce(lib, 'shelf');
   if sz <= 0 then
-    raise exception 'Acetate could not read the upload size';
-  end if;
-  if sz > reserved then
+    sz := reserved;
+  elsif sz > reserved then
     raise exception 'File is larger than the reserved Acetate upload';
   end if;
 

@@ -62,6 +62,7 @@ import VoiceChangerApp from "./VoiceChangerApp";
 import FlStudioLab from "./FlStudioLab";
 import { FocusTimer, KeyScale, QuickNotes, RoyaltySplits, TipSplit, UnitConverter } from "./MoreApps";
 import { LyricLab, ReleasePlanner, ToneGenerator, Tuner, WorldClock } from "./MoreApps2";
+import { PRO_TOOLS, proToolById, type ProToolId } from "./pro/registry";
 import SpotifyTakedown from "@/components/music/SpotifyTakedown";
 import BumpHub from "@/components/bump/BumpHub";
 import BrowserHub from "@/components/browser/BrowserHub";
@@ -107,7 +108,8 @@ type ToolId =
   | "tone"
   | "lyrics"
   | "planner"
-  | "worldclock";
+  | "worldclock"
+  | ProToolId;
 
 const TOOLS: {
   id: ToolId;
@@ -428,6 +430,7 @@ const TOOLS: {
     emoji: "🌍",
     Icon: Clock,
   },
+  ...PRO_TOOLS.map((t) => ({ id: t.id as ToolId, name: t.name, tag: t.tag, desc: t.desc, bg: t.bg, emoji: t.emoji, Icon: t.Icon })),
 ];
 
 export default function AppsHub({ mobile }: { mobile?: boolean }) {
@@ -435,6 +438,7 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
   const hub = useApp((s) => s.hub);
   const panelOn = useDistributionPanelEnabled();
   const [tool, setTool] = useState<ToolId | null>((appsTool as ToolId) || null);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     // Prefer the dedicated Bump hub (realtime live shell) over the nested Apps tool
@@ -520,6 +524,8 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
   if (tool === "lyrics") return <LyricLab mobile={mobile} onBack={backToGrid} />;
   if (tool === "planner") return <ReleasePlanner mobile={mobile} onBack={backToGrid} />;
   if (tool === "worldclock") return <WorldClock mobile={mobile} onBack={backToGrid} />;
+  const pro = tool ? proToolById(tool) : undefined;
+  if (pro) return <pro.Component mobile={mobile} onBack={backToGrid} />;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-chat">
@@ -596,8 +602,18 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
           <IpaDownloads />
 
           <p className="text-sm text-sub">Creator &amp; artist utilities — UPC, pitch sheets, metadata packs, and more. File tools stay on-device; Music ID and Spotify takedown use server keys when connected.</p>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={`Search ${TOOLS.length - 1} tools — try “invoice”, “chords”, “password”…`}
+            aria-label="Search tools"
+            className="w-full rounded-xl bg-side px-4 py-3 text-base outline-none focus:ring-2 focus:ring-accent/60"
+          />
           <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3">
-            {TOOLS.filter((item) => item.id !== "bump").map((item) => (
+            {TOOLS.filter((item) => item.id !== "bump")
+              .filter((item) => !query.trim() || `${item.name} ${item.tag} ${item.desc}`.toLowerCase().includes(query.trim().toLowerCase()))
+              .map((item) => (
               <button
                 key={item.id}
                 type="button"
