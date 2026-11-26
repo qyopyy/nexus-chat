@@ -5,6 +5,8 @@ const noStore = "no-store, no-cache, must-revalidate, max-age=0";
 const immutable = "public, max-age=31536000, immutable";
 
 const nextConfig: NextConfig = {
+  // Dedicated config so a stray tsconfig.json at the repo root (e.g. from another project's upload) can't break the build.
+  typescript: { tsconfigPath: "tsconfig.nexus.json" },
   reactStrictMode: false, // WebRTC + realtime subscriptions don't like double-mounting in dev
   async rewrites() {
     // Clean pre-save endings: nexusproject.cc/p/your-release opens the pre-save page (index.html reads the slug from the path).
