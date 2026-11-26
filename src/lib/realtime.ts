@@ -38,6 +38,7 @@ import { useMessageBanner } from "./messageBanner";
 import { isNativeApp } from "./useMobile";
 import { isPhoneDevice } from "./handset";
 import type { Message, PresenceState, Profile, Reaction } from "./types";
+import { decryptMessage } from "./e2ee";
 import {
   channelStillOpen,
   connectionLabel,
@@ -104,8 +105,9 @@ function notify(m: Message, opts?: { skipSound?: boolean }) {
 
 const recentMessageIds = new Set<string>();
 
-async function onMessageInsert(m: Message) {
-  if (!m?.id || !rememberMessage(recentMessageIds, m.id)) return;
+async function onMessageInsert(raw: Message) {
+  if (!raw?.id || !rememberMessage(recentMessageIds, raw.id)) return;
+  const m = await decryptMessage(raw);
   const app = useApp.getState();
   const me = app.userId;
   await loadProfiles([m.author_id]);
@@ -164,7 +166,11 @@ async function onMessageInsert(m: Message) {
   }
 }
 
-function onMessageUpdate(m: Message) {
+function onMessageUpdate(raw: Message) {
+  void applyMessageUpdate(raw);
+}
+async function applyMessageUpdate(raw: Message) {
+  const m = await decryptMessage(raw);
   const openId = useChat.getState().conversationId;
   if (m.conversation_id === openId) {
     useChat.setState((s) => ({ messages: s.messages.map((x) => (x.id === m.id ? { ...x, ...m, pending: false } : x)) }));

@@ -981,13 +981,16 @@ function camConstraints(extra: MediaTrackConstraints = {}): MediaTrackConstraint
   return { width: { ideal: p.w }, height: { ideal: p.h }, frameRate: { ideal: p.fps }, ...extra };
 }
 
-async function tuneVideoSender(sender: RTCRtpSender | undefined, kbps: number) {
+async function tuneVideoSender(sender: RTCRtpSender | undefined, kbps: number, degrade?: "maintain-resolution" | "maintain-framerate") {
   if (!sender?.track || sender.track.kind !== "video") return;
   try {
-    const params = sender.getParameters();
+    const params = sender.getParameters() as RTCRtpSendParameters & { degradationPreference?: string };
     if (!params.encodings?.length) return; // not negotiated yet — retried when signaling settles
-    if (params.encodings.every((e) => e.maxBitrate === kbps * 1000)) return;
+    const sameRate = params.encodings.every((e) => e.maxBitrate === kbps * 1000);
+    if (sameRate && (!degrade || params.degradationPreference === degrade)) return;
     for (const e of params.encodings) e.maxBitrate = kbps * 1000;
+    // screens: keep text sharp and let fps drop (or keep motion smooth for 60fps game shares)
+    if (degrade) params.degradationPreference = degrade;
     await sender.setParameters(params);
   } catch {
     /* retried when signaling settles */
@@ -996,7 +999,8 @@ async function tuneVideoSender(sender: RTCRtpSender | undefined, kbps: number) {
 function tunePeerVideo(p: Peer) {
   void tuneVideoSender(p.senders.cam, get().avatarOn ? 2_500 : CAM_PRESETS[effectiveCameraQuality()].kbps);
   const sk = SCREEN_KBPS[get().settings.screenQuality] ?? 4_500;
-  p.senders.screen.forEach((sn) => void tuneVideoSender(sn, sk));
+  const degrade = get().settings.screenQuality === "1080p60" ? "maintain-framerate" : "maintain-resolution";
+  p.senders.screen.forEach((sn) => void tuneVideoSender(sn, sk, degrade));
 }
 
 function isStale(msg: Envelope) {
@@ -1807,31 +1811,81 @@ const SCREEN_PRESETS: Record<ScreenQuality, MediaTrackConstraints> = {
   source: { frameRate: { ideal: 30 } },
 };
 
+/** getDisplayMedia that survives pickers/WebViews that reject newer options or audio. */
+async function captureScreen(q: ScreenQuality): Promise<MediaStream> {
+  const md = navigator.mediaDevices;
+  const rich = {
+    video: { ...SCREEN_PRESETS[q], cursor: "always" } as MediaTrackConstraints,
+    // system/tab audio must stay untouched: echo-cancel/AGC on a game or video sounds like a bad phone line
+    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } as MediaTrackConstraints,
+    // Chromium hints: offer system audio, keep Nexus itself out of the picker, allow switching the shared window live
+    systemAudio: "include",
+    surfaceSwitching: "include",
+    selfBrowserSurface: "exclude",
+    monitorTypeSurfaces: "include",
+  } as DisplayMediaStreamOptions;
+  const attempts: DisplayMediaStreamOptions[] = [
+    rich,
+    { video: SCREEN_PRESETS[q], audio: true },
+    { video: SCREEN_PRESETS[q], audio: false },
+    { video: true, audio: false },
+  ];
+  let last: unknown = null;
+  for (const opts of attempts) {
+    try {
+      return await md.getDisplayMedia(opts);
+    } catch (e) {
+      last = e;
+      const n = (e as DOMException)?.name;
+      // user closed the picker / denied → don't re-prompt with weaker options
+      if (n === "NotAllowedError" || n === "AbortError") throw e;
+    }
+  }
+  throw last;
+}
+
 export async function toggleScreen() {
   if (get().status === "idle") return;
   if (get().localScreen) {
     stopScreen();
     return;
   }
+  if (!canScreenShare()) {
+    set({ error: "Screen sharing isn't supported in this browser. On iPhone use the Nexus desktop/web app to share a screen." });
+    return;
+  }
   try {
     const q = get().settings.screenQuality;
-    const screen = await navigator.mediaDevices.getDisplayMedia({ video: SCREEN_PRESETS[q], audio: true });
+    const screen = await captureScreen(q);
     if (get().status === "idle") {
       stopStream(screen);
       return;
     }
     const vt = screen.getVideoTracks()[0];
+    if (!vt) {
+      stopStream(screen);
+      set({ error: "No video came from the screen picker — try sharing again." });
+      return;
+    }
     vt.contentHint = q === "1080p60" ? "motion" : "detail";
     vt.addEventListener("ended", stopScreen);
     for (const p of peers.values()) {
       screen.getTracks().forEach((t) => p.senders.screen.push(p.pc.addTrack(t, screen)));
       tunePeerVideo(p);
     }
-    set({ localScreen: screen, focused: `${me}:screen` });
+    set({ localScreen: screen, focused: `${me}:screen`, error: null });
     broadcastState();
     sfx.screenOn();
-  } catch {
-    /* user cancelled the picker */
+  } catch (e) {
+    const n = (e as DOMException)?.name;
+    if (n === "NotAllowedError") {
+      // cancelled in the picker is silent; macOS/Windows blocking the browser is not
+      if (/system|permission denied by|denied by system/i.test((e as Error).message)) {
+        set({ error: "Your system blocked screen capture. Allow your browser under System Settings → Privacy & Security → Screen Recording, then restart it." });
+      }
+    } else if (n !== "AbortError") {
+      set({ error: n === "NotReadableError" ? "Couldn't read that screen or window — close other capture apps and try again." : "Screen sharing failed to start. Try another window or a lower stream quality." });
+    }
   }
 }
 
@@ -1906,6 +1960,20 @@ export async function updateSettings(patch: Partial<VoiceSettings>) {
   }
   if (inCall && patch.voiceQuality && patch.voiceQuality !== prev.voiceQuality) {
     for (const p of peers.values()) p.pc.getSenders().forEach((sn) => sn.track?.kind === "audio" && void tuneAudioSender(sn));
+  }
+
+  const liveScreen = get().localScreen;
+  if (inCall && liveScreen && patch.screenQuality && patch.screenQuality !== prev.screenQuality) {
+    const vt = liveScreen.getVideoTracks()[0];
+    try {
+      if (vt) {
+        await vt.applyConstraints(SCREEN_PRESETS[patch.screenQuality]);
+        vt.contentHint = patch.screenQuality === "1080p60" ? "motion" : "detail";
+      }
+    } catch {
+      /* keep the current capture size — bitrate still changes below */
+    }
+    for (const p of peers.values()) tunePeerVideo(p);
   }
 
   const cam = get().localCam;

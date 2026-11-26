@@ -85,6 +85,7 @@ async function sendApns(cfg: any, s: any, msg: { title: string; body: string; th
 }
 
 function preview(m: any) {
+  if (String(m.content ?? "").startsWith("nx1:")) return "🔒 Encrypted message";
   if (m.hidden) return "🙈 Hidden message";
   if (m.spoiler) return "⚠️ Spoiler";
   const t = String(m.attachment_type ?? "");

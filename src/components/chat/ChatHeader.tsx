@@ -20,6 +20,7 @@ import { useIsMobile } from "@/lib/useMobile";
 import BotsPanel from "./BotsPanel";
 import ChatSearch from "./ChatSearch";
 import SavedMessages from "./SavedMessages";
+import E2eeBadge from "./E2eeBadge";
 
 const WALLPAPER_MAX_BYTES = 2 * 1024 * 1024;
 
@@ -133,6 +134,7 @@ export default function ChatHeader({
           <div className="truncate font-semibold">
             {kind === "dm" && chat?.other_user_id ? <NameTag userId={chat.other_user_id} maxBadges={mobile ? 3 : 6} /> : title}
           </div>
+          {kind === "dm" && chat?.other_user_id && <E2eeBadge peerId={chat.other_user_id} />}
           {muted && <BellOff className="size-3.5 shrink-0 text-sub" aria-hidden />}
         </div>
         {subtitle && <div className="truncate text-xs">{subtitle}</div>}

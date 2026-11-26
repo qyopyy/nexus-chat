@@ -408,7 +408,7 @@ function MessageBubbleImpl({
                 !CAPSULE_RE.test(displayContent) &&
                 !WUMP_CARD_RE.test(displayContent) &&
                 !BUMP_PIN_RE.test(displayContent) &&
-                !displayContent.includes("/acetate/s/") && <LinkEmbed text={displayContent} mine={mine} />}
+                !displayContent.includes("/acetate/s/") && <LinkEmbed text={displayContent} mine={mine} message={m} />}
               {displayContent.includes("/v/") && !deleted && <VideoEmbed text={displayContent} />}
               {displayContent.includes("/acetate/s/") && !deleted && <AcetateEmbed text={displayContent} />}
               {displayContent.includes("play=") && !deleted && <GameInvite text={displayContent} />}

@@ -82,15 +82,22 @@ export default function AppearanceSection() {
     return () => clearTimeout(t);
   }, [css]);
 
-  async function uploadBg(f: File, kind: "image" | "video") {
+  async function uploadBg(file: File, kind: "image" | "video") {
     if (!me) return;
+    let f = file;
+    if (kind === "video") {
+      // .mov (iPhone) → .mp4 so the wallpaper plays in every browser
+      setUploading(true);
+      f = await (await import("@/lib/compressMedia")).ensureMp4(file);
+      setUploading(false);
+    }
     const max = kind === "video" ? 40 * 1024 * 1024 : 10 * 1024 * 1024;
     if (f.size > max) return toast(kind === "video" ? "Max 40 MB for video wallpapers" : "Max 10 MB", "error");
     const { malwareGate } = await import("@/lib/malwareGuard");
     if (await malwareGate(f, { fileName: f.name, context: kind === "video" ? "media" : "image" })) return;
     setUploading(true);
     const path = `${me}/background-${Date.now()}.${f.name.split(".").pop() || (kind === "video" ? "mp4" : "jpg")}`;
-    const { error } = await supabase.storage.from("avatars").upload(path, f, { contentType: f.type, upsert: true });
+    const { error } = await supabase.storage.from("avatars").upload(path, f, { contentType: f.type || (kind === "video" ? "video/mp4" : "image/jpeg"), upsert: true });
     setUploading(false);
     if (error) return toast(errorText(error), "error");
     const url = supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl;

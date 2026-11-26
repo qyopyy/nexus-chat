@@ -108,7 +108,7 @@ export type CompressVideoOpts = {
  * Re-encode video via canvas + MediaRecorder.
  * .mov / QuickTime / HEVC always become MP4 at Full HD (1920) @ up to 60fps.
  */
-export async function compressVideo(file: File | Blob, opts: CompressVideoOpts = {}): Promise<CompressedVideo> {
+async function compressVideoCore(file: File | Blob, opts: CompressVideoOpts = {}): Promise<CompressedVideo> {
   // Platform lock: never encode below Full HD 60fps policy (callers may still force re-encode).
   const maxEdge = Math.max(opts.maxEdge ?? FULL_HD_60.maxEdge, FULL_HD_60.maxEdge);
   const maxFps = Math.max(opts.maxFps ?? FULL_HD_60.maxFps, FULL_HD_60.maxFps);
@@ -292,6 +292,129 @@ export async function compressVideo(file: File | Blob, opts: CompressVideoOpts =
     v.load();
     URL.revokeObjectURL(srcUrl);
   }
+}
+
+// ---------------------------------------------------------------- MOV → MP4 (lossless remux)
+
+const isQuickTime = (type: string, name: string) => /quicktime|\.mov$|\.qt$/i.test(`${type} ${name}`);
+
+/** "avc" = H.264 (plays everywhere) · "hevc" = H.265 (Apple/Chrome only) · null = unknown. Looks for the codec tag in the file head + tail (where `moov` lives). */
+async function sniffCodec(file: Blob): Promise<"avc" | "hevc" | null> {
+  try {
+    const parts = [file.slice(0, Math.min(file.size, 2_000_000))];
+    if (file.size > 6_000_000) parts.push(file.slice(file.size - 4_000_000));
+    const text = await new Blob(parts).text().catch(() => "");
+    const raw = text || "";
+    if (/hvc1|hev1/.test(raw)) return "hevc";
+    if (/avc1|avc3/.test(raw)) return "avc";
+  } catch {
+    /* unknown */
+  }
+  return null;
+}
+
+function canPlayVideo(file: Blob): Promise<boolean> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement("video");
+    v.muted = true;
+    v.preload = "metadata";
+    const done = (ok: boolean) => {
+      v.removeAttribute("src");
+      v.load();
+      URL.revokeObjectURL(url);
+      resolve(ok);
+    };
+    v.onloadedmetadata = () => done(v.videoWidth > 0 && Number.isFinite(v.duration));
+    v.onerror = () => done(false);
+    setTimeout(() => done(v.readyState >= 1 && v.videoWidth > 0), 9000);
+    v.src = url;
+  });
+}
+
+/**
+ * Turn a QuickTime .mov into an .mp4 without re-encoding: MOV and MP4 share the same box format, so
+ * rewriting the `ftyp` brand in place (same byte length → every chunk offset stays valid) is enough.
+ * Instant, lossless, and works on multi-GB files because the rest of the file is never read.
+ * Returns null when the file isn't a remuxable QuickTime file or the result doesn't actually play.
+ */
+export async function remuxMovToMp4(file: Blob, name = "video.mov"): Promise<File | null> {
+  try {
+    const head = new Uint8Array(await file.slice(0, 4096).arrayBuffer());
+    if (head.length < 16) return null;
+    const dv = new DataView(head.buffer);
+    const size = dv.getUint32(0);
+    const tag = String.fromCharCode(head[4], head[5], head[6], head[7]);
+    if (tag !== "ftyp" || size < 16 || size > head.length || size % 4 !== 0) return null;
+    const out = head.slice(0, size);
+    const put = (at: number, t: string) => {
+      for (let i = 0; i < 4; i++) out[at + i] = t.charCodeAt(i);
+    };
+    put(8, "mp42"); // major brand
+    out[12] = out[13] = out[14] = out[15] = 0; // minor version
+    const slots = (size - 16) / 4;
+    const brands = ["isom", "mp42", "mp41", "iso2"];
+    for (let i = 0; i < slots; i++) put(16 + i * 4, brands[i % brands.length]);
+    const mp4Name = name.replace(/\.[^./\\]+$/, "") + ".mp4";
+    const mp4 = new File([out, file.slice(size)], mp4Name, { type: "video/mp4", lastModified: file instanceof File ? file.lastModified : Date.now() });
+    return (await canPlayVideo(mp4)) ? mp4 : null;
+  } catch {
+    return null;
+  }
+}
+
+async function mp4Result(mp4: File): Promise<CompressedVideo> {
+  const info = await probe(mp4);
+  return { blob: mp4, ...info, mime: "video/mp4", ext: "mp4", skipped: false };
+}
+
+/**
+ * Chat, Gram, Cloud, Drop, Studio — every upload goes through here.
+ * H.264 .mov → instant lossless MP4. HEVC .mov → re-encoded to H.264 MP4 (plays on every device),
+ * and if that can't run, remuxed to HEVC MP4 as a last resort. A .mov is never uploaded as-is when it can be avoided.
+ */
+export async function compressVideo(file: File | Blob, opts: CompressVideoOpts = {}): Promise<CompressedVideo> {
+  const name = file instanceof File ? file.name : "clip.mp4";
+  const mov = isQuickTime((file.type || "").toLowerCase(), name.toLowerCase());
+  if (!mov) return compressVideoCore(file, opts);
+
+  if (!opts.force) {
+    const codec = await sniffCodec(file);
+    if (codec !== "hevc") {
+      opts.onProgress?.("Converting MOV → MP4…", 0.1);
+      const mp4 = await remuxMovToMp4(file, name);
+      if (mp4) {
+        opts.onProgress?.("Converted MOV → MP4", 1);
+        return mp4Result(mp4);
+      }
+    }
+  }
+  let out: CompressedVideo | null = null;
+  let err: unknown = null;
+  try {
+    out = await compressVideoCore(file, opts);
+    if (!out.skipped) return out;
+  } catch (e) {
+    err = e;
+  }
+  const mp4 = await remuxMovToMp4(file, name);
+  if (mp4) return mp4Result(mp4);
+  if (out) return out;
+  throw err ?? new Error("Couldn't convert this video");
+}
+
+/** Convenience for plain upload paths: .mov in → .mp4 File out (anything else comes back untouched). */
+export async function ensureMp4(file: File, onStep?: CompressProgress): Promise<File> {
+  if (!isQuickTime((file.type || "").toLowerCase(), file.name.toLowerCase())) return file;
+  try {
+    const out = await compressVideo(file, { onProgress: onStep });
+    if (out.ext === "mp4" && out.blob !== file) {
+      return out.blob instanceof File ? out.blob : new File([out.blob], file.name.replace(/\.[^./\\]+$/, "") + ".mp4", { type: "video/mp4" });
+    }
+  } catch {
+    /* keep the original */
+  }
+  return file;
 }
 
 async function probe(file: Blob): Promise<{ w: number; h: number; dur: number; fps: number; poster: Blob | null }> {

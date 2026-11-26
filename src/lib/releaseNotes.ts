@@ -9,6 +9,22 @@ export const NEXUS_RELEASE: ReleaseNote = {
   version: "1.9.1",
   items: [
     {
+      title: "Encrypted DMs",
+      body: "Settings → Privacy & Safety → Encrypted DMs. Turn it on (both of you) and the text of one-to-one DMs is encrypted on your device — Nexus servers, notifications and backups only see scrambled text. Photos, files and groups aren't covered yet.",
+    },
+    {
+      title: "Edit link previews",
+      body: "On your own messages, tap the pencil on a link card to change its title, description or picture, or hide the preview entirely.",
+    },
+    {
+      title: ".mov → .mp4 everywhere",
+      body: "iPhone .mov videos are converted to .mp4 automatically in chat, Nexus-gram, Drop, Cloud, posts and wallpapers so they play for everyone.",
+    },
+    {
+      title: "Screen sharing, fixed",
+      body: "Clearer errors when sharing is blocked, sharper text while presenting, live quality changes and system audio that no longer gets echo-cancelled.",
+    },
+    {
       title: "Nexus Guard",
       body: "Me tab → Nexus Guard. Scan any link before you tap it, keep a 24/7 watchlist that messages you if a link turns dangerous, and see a protection score with ad-blocking DNS, IP hiding and iOS privacy steps.",
     },

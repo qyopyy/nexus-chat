@@ -191,7 +191,12 @@ export function PostComposer({ page, onPosted }: { page: ArtistPage; onPosted: (
         </div>
       )}
       <div className="mt-2 flex items-center gap-1">
-        <input ref={input} type="file" hidden accept="image/*,video/*,audio/*" onChange={(e) => (setFile(e.target.files?.[0] ?? null), (e.target.value = ""))} />
+        <input ref={input} type="file" hidden accept="image/*,video/*,audio/*" onChange={(e) => {
+            const f = e.target.files?.[0] ?? null;
+            e.target.value = "";
+            if (!f) return setFile(null);
+            void import("@/lib/compressMedia").then(({ ensureMp4 }) => ensureMp4(f)).then(setFile, () => setFile(f));
+          }} />
         <button onClick={() => input.current?.click()} className="grid size-9 place-items-center rounded-full text-sub hover:bg-hover hover:text-txt" title="Photo, video or audio">
           <ImagePlus className="size-5" />
         </button>

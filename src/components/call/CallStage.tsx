@@ -262,7 +262,7 @@ function CallControls() {
                 {quality === q.id && <span>●</span>}
               </button>
             ))}
-            <div className="px-2 pt-1 text-[11px] text-sub">Applies to your next share.</div>
+            <div className="px-2 pt-1 text-[11px] text-sub">Changes apply instantly while you share.</div>
           </div>
         )}
       </div>

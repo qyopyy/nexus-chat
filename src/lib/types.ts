@@ -257,6 +257,9 @@ export type ChatListItem = {
   member_count: number;
 };
 
+export type EmbedItem = { title?: string; description?: string; image?: string; hide?: boolean };
+export type EmbedOverrides = { off?: boolean; items?: Record<string, EmbedItem> };
+
 export type Message = {
   id: string;
   conversation_id: string;
@@ -277,6 +280,10 @@ export type Message = {
   hidden?: boolean;
   /** whole message (text + media) behind a spoiler cover */
   spoiler?: boolean;
+  /** author's edits to this message's link embeds */
+  embed?: EmbedOverrides | null;
+  /** set on this device only: the text was end-to-end encrypted ("ok") or can't be read here yet ("locked") */
+  e2ee?: "ok" | "locked";
   /** client-only: optimistic message not yet confirmed */
   pending?: boolean;
 };

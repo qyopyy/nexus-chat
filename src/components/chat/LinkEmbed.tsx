@@ -1,26 +1,32 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { extractUrls, fetchLinkPreview, hostLabel, type LinkPreview } from "@/lib/unfurl";
 import { proxiedImage } from "@/lib/netPrefs";
+import { safeEmbedImage } from "@/lib/embedEdit";
+import type { Message } from "@/lib/types";
+import EmbedEditor from "./EmbedEditor";
 
 /** Discord-style link embeds (OG image + SEO title/description) for private chats. */
-export default function LinkEmbed({ text, mine }: { text: string; mine?: boolean }) {
+export default function LinkEmbed({ text, mine, message }: { text: string; mine?: boolean; message?: Message }) {
   const urls = extractUrls(text, 2);
-  if (!urls.length) return null;
+  if (!urls.length || message?.embed?.off) return null;
   return (
     <div className="mt-2 flex w-full max-w-[340px] flex-col gap-2">
       {urls.map((u) => (
-        <EmbedCard key={u} url={u} mine={mine} />
+        <EmbedCard key={u} url={u} mine={mine} message={message} />
       ))}
     </div>
   );
 }
 
-function EmbedCard({ url, mine }: { url: string; mine?: boolean }) {
+function EmbedCard({ url, mine, message }: { url: string; mine?: boolean; message?: Message }) {
   const [preview, setPreview] = useState<LinkPreview | null | undefined>(undefined);
+  const [editing, setEditing] = useState(false);
+  const ov = message?.embed?.items?.[url];
+  const canEdit = !!mine && !!message && !message.pending && !message.id.startsWith("temp-");
 
   useEffect(() => {
     let live = true;
@@ -35,8 +41,38 @@ function EmbedCard({ url, mine }: { url: string; mine?: boolean }) {
   if (preview === undefined) {
     return <div className={cn("h-24 animate-pulse rounded-xl", mine ? "bg-white/10" : "bg-black/20")} />;
   }
-  if (!preview) return null;
+  if (!preview || ov?.hide) return null;
 
+  const base = preview;
+  const view: LinkPreview = {
+    ...base,
+    title: ov?.title ?? base.title,
+    description: ov?.description ?? base.description,
+    image: safeEmbedImage(ov?.image) ?? base.image,
+  };
+  return (
+    <div className="group/embed relative">
+      <EmbedBody preview={view} url={url} mine={mine} />
+      {canEdit && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditing(true);
+          }}
+          className="absolute top-1.5 right-1.5 grid size-7 place-items-center rounded-full bg-black/60 text-white opacity-0 transition group-hover/embed:opacity-100 focus:opacity-100 max-md:opacity-90"
+          aria-label="Edit embed"
+          title="Edit embed"
+        >
+          <Pencil className="size-3.5" />
+        </button>
+      )}
+      {editing && message && <EmbedEditor message={message} url={url} preview={base} onClose={() => setEditing(false)} />}
+    </div>
+  );
+}
+
+function EmbedBody({ preview, url, mine }: { preview: LinkPreview; url: string; mine?: boolean }) {
   if (preview.youtubeId) {
     return (
       <a

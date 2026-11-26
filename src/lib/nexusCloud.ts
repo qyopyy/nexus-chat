@@ -99,7 +99,11 @@ async function putFile(file: Blob, name: string, kind: CloudKind) {
 }
 
 export async function addCloudFiles(files: File[], kind: CloudKind) {
-  for (const file of files) await queueCloudFile(file, file.name, kind);
+  const { ensureMp4 } = await import("./compressMedia");
+  for (const raw of files) {
+    const file = await ensureMp4(raw);
+    await queueCloudFile(file, file.name, kind);
+  }
   await syncCloudNow();
 }
 

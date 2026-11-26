@@ -388,7 +388,9 @@ export async function loadMessages(convId: string) {
     .order("created_at", { ascending: false })
     .limit(PAGE);
   if (useChat.getState().conversationId !== convId) return;
-  const msgs = ((data ?? []) as Message[]).reverse();
+  const { decryptMessages } = await import("./e2ee");
+  const msgs = await decryptMessages(((data ?? []) as Message[]).reverse());
+  if (useChat.getState().conversationId !== convId) return;
   useChat.setState({ messages: msgs, loading: false, hasMore: msgs.length === PAGE });
   void loadTtl(convId);
   purgeExpired(convId);
@@ -414,7 +416,9 @@ export async function loadOlder() {
     .order("created_at", { ascending: false })
     .limit(PAGE);
   if (useChat.getState().conversationId !== convId) return;
-  const older = ((data ?? []) as Message[]).reverse();
+  const { decryptMessages } = await import("./e2ee");
+  const older = await decryptMessages(((data ?? []) as Message[]).reverse());
+  if (useChat.getState().conversationId !== convId) return;
   useChat.setState((s) => ({ messages: [...older, ...s.messages], loading: false, hasMore: older.length === PAGE }));
   await Promise.all([loadReactions(older.map((m) => m.id)), loadProfiles(older.map((m) => m.author_id))]);
 }
@@ -600,12 +604,21 @@ export async function sendMessage(convId: string, content: string, file?: File |
     if (localUrl) primeSignedUrl(attachment.attachment_url, localUrl);
   }
 
+  const out = await (await import("./e2ee")).prepareOutgoing(convId, me, text);
+  if (!out) {
+    dropTemp(tempId);
+    return;
+  }
+  if (out.encrypted && out.content.length > msgLimit(tier)) {
+    dropTemp(tempId);
+    return toast("Encrypted messages take extra space — this one is too long, please split it.", "error");
+  }
   const { data, error } = await supabase
     .from("messages")
     .insert({
       conversation_id: convId,
       author_id: me,
-      content: text,
+      content: out.content,
       reply_to_id: replyTo?.id ?? null,
       ...attachment,
       ...(effect ? { effect } : {}),
@@ -617,7 +630,7 @@ export async function sendMessage(convId: string, content: string, file?: File |
     dropTemp(tempId);
     return toast(errorText(error), "error");
   }
-  const real = data as Message;
+  const real = (out.encrypted ? { ...(data as Message), content: text, e2ee: "ok" as const } : (data as Message));
   useChat.setState((s) => {
     const already = s.messages.some((m) => m.id === real.id);
     return {
@@ -742,13 +755,22 @@ export async function editMessage(id: string, content: string) {
     return;
   }
   const prev = useChat.getState().messages.find((m) => m.id === id);
+  if (prev?.e2ee === "locked") return toast("Unlock encryption on this device before editing this message.", "error");
+  let wire = text;
+  if (prev?.e2ee === "ok") {
+    const { encryptText } = await import("./e2ee");
+    const w = await encryptText(prev.conversation_id, prev.author_id, text).catch(() => null);
+    if (!w) return toast("Couldn't encrypt the edit — not saved.", "error");
+    if (w.length > msgLimit(tier)) return toast("Encrypted messages take extra space — this edit is too long.", "error");
+    wire = w;
+  }
   const prevText = prev?.content ?? text;
   const prevEdited = prev?.edited_at ?? null;
   useChat.setState((s) => ({
     messages: s.messages.map((m) => (m.id === id ? { ...m, content: text, edited_at: new Date().toISOString() } : m)),
     editingId: null,
   }));
-  const { error } = await supabase.from("messages").update({ content: text, edited_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await supabase.from("messages").update({ content: wire, edited_at: new Date().toISOString() }).eq("id", id);
   if (error) {
     const back = restoreContent(prevText, true);
     if (back != null) {

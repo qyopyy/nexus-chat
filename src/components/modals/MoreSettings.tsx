@@ -11,6 +11,7 @@ import { roleRank } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import type { UserStatus } from "@/lib/types";
 import { H, Label, Select, Slider, Toggle } from "./settingsUi";
+import EncryptionSection from "./EncryptionSection";
 import { claimUsername, loadAliases, makePrimary, releaseUsername, useAliases } from "@/lib/usernames";
 import { NexusCredit, copyNexusAppLink } from "@/components/ui/NexusCredit";
 import { shareAppUrl } from "@/lib/seo";
@@ -229,6 +230,7 @@ export function PrivacySection() {
   return (
     <>
       <H>Privacy &amp; Safety</H>
+      <EncryptionSection />
       {!p ? (
         <div className="h-40 animate-pulse rounded-xl bg-side" />
       ) : (
