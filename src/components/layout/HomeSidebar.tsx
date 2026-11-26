@@ -2,7 +2,7 @@
 
 import { emojiPlain } from "@/lib/customEmoji";
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Disc3, Link2, Phone, Radio, Search, ShieldCheck, SquarePen, Users } from "lucide-react";
+import { ChevronDown, ChevronUp, Disc3, Gamepad2, Link2, Phone, Radio, Search, ShieldCheck, SquarePen, Users } from "lucide-react";
 import { openDistributionHub } from "@/components/distribution/DistributionPanelHub";
 import { useDistributionPanelEnabled } from "@/lib/distributionPanel";
 import { useApp, openModal } from "@/store/app";
@@ -166,6 +166,10 @@ export default function HomeSidebar() {
         <a href="/share" className="mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sub transition hover:bg-hover hover:text-txt">
           <Radio className="size-5 text-[#c6b8ff]" />
           <span className="flex-1 font-medium">Share &amp; Drop</span>
+        </a>
+        <a href="/playgta" className="mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sub transition hover:bg-hover hover:text-txt">
+          <Gamepad2 className="size-5 text-[#f59e0b]" />
+          <span className="flex-1 font-medium">PlayGTA</span>
         </a>
         <a href="/guard" className="mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sub transition hover:bg-hover hover:text-txt">
           <ShieldCheck className="size-5 text-[#34d399]" />
