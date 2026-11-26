@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import type { SoloScoreGame } from "@/lib/games";
 
-export type RoomGame = "streets" | "geo" | "four" | "flappy" | "classicstrike" | "globalstrike" | "beat";
+export type RoomGame = "streets" | "geo" | "four" | "flappy" | "classicstrike" | "globalstrike" | "beat" | "heroes";
 export type GameInvite = { id: string; from_id: string; game: RoomGame; code: string; created_at: string };
 
 /** Incoming score duel from a DM — schema-free, local-only. */

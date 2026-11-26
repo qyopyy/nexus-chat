@@ -220,7 +220,7 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
       window.history.replaceState(null, "", `/?bump=${encodeURIComponent(bump)}`);
       void import("@/lib/bump").then(({ openBump }) => openBump());
     } else if (play && /^[A-Za-z2-9]{6}$/.test(play)) {
-      joinGame(play, g === "geo" || g === "four" || g === "flappy" || g === "beat" || g === "classicstrike" || g === "globalstrike" ? g : "streets");
+      joinGame(play, g === "geo" || g === "four" || g === "flappy" || g === "beat" || g === "heroes" || g === "classicstrike" || g === "globalstrike" ? g : "streets");
       window.history.replaceState(null, "", "/");
     } else if (beatSong && /^[0-9a-f-]{36}$/i.test(beatSong)) {
       window.history.replaceState(null, "", "/");

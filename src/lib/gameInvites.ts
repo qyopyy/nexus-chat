@@ -16,6 +16,7 @@ export const GAME_NAMES: Record<RoomGame, { name: string; emoji: string; bg: str
   classicstrike: { name: "Classic Strike", emoji: "🔫", bg: "linear-gradient(135deg,#365314,#7c2d12)" },
   globalstrike: { name: "Global Strike", emoji: "🌐", bg: "linear-gradient(135deg,#0c4a6e,#c2410c)" },
   beat: { name: "Beat Battle", emoji: "🎤", bg: "linear-gradient(135deg,#aa00ff,#2a0b4a)" },
+  heroes: { name: "Cul-de-Sac Heroes", emoji: "🦸", bg: "linear-gradient(135deg,#7c5cff,#0d1424)" },
 };
 
 /** accepted friends, online ones first */

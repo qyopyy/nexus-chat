@@ -16,6 +16,7 @@ export const PLAY_LIST: { id: RoomGame; desc: string; players: string }[] = [
   { id: "geo", desc: "Guess where real photos were taken", players: "2–8" },
   { id: "flappy", desc: "Race through the pipes together", players: "2–8" },
   { id: "four", desc: "Classic four in a row", players: "2" },
+  { id: "heroes", desc: "Co-op turn-based hero tactics", players: "2–4" },
 ];
 
 function startGame(game: RoomGame) {

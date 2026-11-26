@@ -20,6 +20,7 @@ import GeoGuess from "./GeoGuess";
 import FourInRow from "./FourInRow";
 import SunsetBay from "./bay/SunsetBay";
 import BeatBattle from "./beat/BeatBattle";
+import Heroes from "./heroes/Heroes";
 import FlappyHappy from "./flappy/FlappyHappy";
 import Pinball from "./Pinball";
 import BrickBash from "./BrickBash";
@@ -58,6 +59,7 @@ const GAMES: { id: GameId; name: string; tag: string; desc: string; bg: string; 
     isNew: true,
   },
   { id: "beat", name: "Beat Battle", tag: "Rhythm battle · your mod", desc: "Hit the arrows on the beat in a sing-off — your mod's song “Sippin” with its original chart. Downscroll, botplay, import your own Psych charts.", bg: "radial-gradient(ellipse at 80% 20%,#aa00ff,#2a0b4a 55%,#0b0618)", emoji: "🎤", C: null, isNew: true },
+  { id: "heroes", name: "Cul-de-Sac Heroes", tag: "Co-op tactics · 1–4 players", desc: "Turn-based neighborhood defense — pick a kid hero, move, strike, heal and unleash ultimates against 5 waves and a Mega Mower boss. Solo squad or live co-op with friends.", bg: "linear-gradient(135deg,#7c5cff,#0d1424 60%,#ff8a3d)", emoji: "🦸", C: null, isNew: true },
   { id: "streets", name: "Neon Streets", tag: "Open-city driving", desc: "Open-world island city. Jobs, cash, cops — and play live with friends using an invite code.", bg: "linear-gradient(135deg,#ff2bd6,#2b0b5c)", emoji: "🚗", C: null },
   { id: "bay", name: "Sunset Bay", tag: "3D open world · 80s neon", desc: "Drive a neon coastal city in 3D — drifts, stunt jumps, hidden tapes and a ranked checkpoint rush.", bg: "linear-gradient(180deg,#2b1055,#ff4f9a 70%,#ffb347)", emoji: "🌴", C: null },
   { id: "geo", name: "GeoGuess", tag: "Real places · multiplayer", desc: "Real photos from around the world — pin where you think you are.", bg: "linear-gradient(135deg,#00c96b,#0b2a5c)", emoji: "🌍", C: null },
@@ -130,6 +132,7 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
   if (open === "beat") return <BeatBattle onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "bay") return <SunsetBay onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "geo") return <GeoGuess onBack={() => setOpen(null)} mobile={mobile} />;
+  if (open === "heroes") return <Heroes onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "four") return <FourInRow onBack={() => setOpen(null)} mobile={mobile} />;
   if (open === "flappy") return <FlappyHappy onBack={() => setOpen(null)} mobile={mobile} />;
   if (open) return <GameScreen id={open} onBack={() => setOpen(null)} mobile={mobile} />;

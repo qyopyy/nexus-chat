@@ -9,6 +9,10 @@ export const NEXUS_RELEASE: ReleaseNote = {
   version: "1.9.1",
   items: [
     {
+      title: "New game: Cul-de-Sac Heroes",
+      body: "Games → Cul-de-Sac Heroes. Turn-based co-op tactics: pick a kid hero, defend the street through 5 waves and a Mega Mower boss. Play a solo squad or 2–4 friends live with a room code.",
+    },
+    {
       title: "Encrypted DMs",
       body: "Settings → Privacy & Safety → Encrypted DMs. Turn it on (both of you) and the text of one-to-one DMs is encrypted on your device — Nexus servers, notifications and backups only see scrambled text. Photos, files and groups aren't covered yet.",
     },

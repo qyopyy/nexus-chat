@@ -92,7 +92,7 @@ export type CallLayout = "gallery" | "speaker";
 export type CallQuality = "good" | "ok" | "poor" | null;
 /** Play Together: one game room for the call (Global Strike, Neon Streets, GeoGuess …). */
 export type PlayState = { game: RoomGame; code: string; by: string; rev: number };
-const PLAY_GAMES: RoomGame[] = ["globalstrike", "classicstrike", "streets", "geo", "flappy", "four"];
+const PLAY_GAMES: RoomGame[] = ["globalstrike", "classicstrike", "streets", "geo", "flappy", "four", "heroes"];
 
 /** Watch Together: one shared video for everyone in the call. `pos` was the position at local time `t` (performance.now()). */
 export type WatchState = {
