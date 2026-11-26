@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as I from "./idle.ts";
-import * as K from "./market.ts";
-import * as M from "./miner.ts";
 import * as Lm from "./lemonade.ts";
 
 function seeded(seed: number) {
@@ -104,127 +102,6 @@ test("number formatting", () => {
   assert.equal(I.fmt(1e12), "1.00T");
   assert.equal(I.fmt(-1500), "-1.50K");
   assert.equal(I.fmt(Infinity), "∞");
-});
-
-/* ───── market ───── */
-test("market steps are deterministic, positive and respond to news", () => {
-  const start = Object.fromEntries(K.STOCKS.map((s) => [s.sym, s.start]));
-  const a = K.stepMarket(start, seeded(7));
-  const b = K.stepMarket(start, seeded(7));
-  assert.deepEqual(a, b);
-  for (const v of Object.values(a.prices)) assert.ok(v >= 0.5);
-  let p = start;
-  const rng = seeded(11);
-  for (let i = 0; i < 2000; i++) p = K.stepMarket(p, rng).prices;
-  for (const v of Object.values(p)) assert.ok(Number.isFinite(v) && v >= 0.5);
-  // force a news event
-  const forced = K.stepMarket(start, () => 0.0001, 1);
-  assert.ok(forced.event);
-});
-test("gaussian is roughly standard normal", () => {
-  const rng = seeded(3);
-  const xs = Array.from({ length: 20000 }, () => K.gaussian(rng));
-  const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
-  const sd = Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / xs.length);
-  assert.ok(Math.abs(mean) < 0.03);
-  assert.ok(Math.abs(sd - 1) < 0.03);
-});
-test("buying and selling shares", () => {
-  let p = K.newPortfolio(1000);
-  const r1 = K.buy(p, "NXS", 5, 100);
-  assert.ok(!K.isError(r1));
-  p = r1 as K.Portfolio;
-  assert.equal(p.cash, 1000 - 500 - 0.5);
-  assert.equal(p.positions.NXS.qty, 5);
-  p = K.buy(p, "NXS", 5, 80) as K.Portfolio;
-  assert.equal(p.positions.NXS.avg, 90);
-  assert.ok(K.isError(K.buy(p, "NXS", 1000, 100)));
-  assert.ok(K.isError(K.buy(p, "NXS", 0, 100)));
-  assert.ok(K.isError(K.buy(p, "NXS", 1.5, 100)));
-  assert.ok(K.isError(K.sell(p, "NXS", 11, 100)));
-  assert.ok(K.isError(K.sell(p, "AIAI", 1, 100)));
-  const s = K.sell(p, "NXS", 10, 110) as K.Portfolio;
-  assert.equal(s.positions.NXS, undefined);
-  assert.ok(s.realized > 190 && s.realized < 200); // (110-90)*10 minus fee
-  assert.ok(s.cash > p.cash + 1090);
-});
-test("net worth and max buyable", () => {
-  const p = K.buy(K.newPortfolio(1000), "BEAT", 4, 50) as K.Portfolio;
-  assert.equal(K.netWorth(p, { BEAT: 60 }), p.cash + 240);
-  assert.equal(K.maxBuyable(1000, 100), 9);
-  assert.equal(K.maxBuyable(1000, 0), 0);
-  assert.ok(K.maxBuyable(K.round2(100 * (1 + K.FEE_RATE)), 100) >= 1);
-});
-
-/* ───── miner ───── */
-test("miner economics", () => {
-  const s = M.newMiner(0);
-  assert.equal(M.hashPower(s), 1);
-  assert.ok(M.btcPerSecond(s) > 0);
-  assert.ok(M.costPerSecond(s) > 0);
-  const gpu = M.buyRig({ ...s, cash: 5000 }, "gpu")!;
-  assert.ok(M.hashPower(gpu) > M.hashPower(s));
-  assert.ok(M.powerKw(gpu) > M.powerKw(s));
-  assert.equal(M.buyRig(s, "gpu"), null); // can't afford
-  assert.equal(M.buyRig(s, "nope"), null);
-});
-test("halving and difficulty reduce income over time", () => {
-  assert.equal(M.rewardFactor(0), 1);
-  assert.equal(M.rewardFactor(M.HALVING_BLOCKS), 0.5);
-  assert.equal(M.rewardFactor(M.HALVING_BLOCKS * 2 + 5), 0.25);
-  assert.ok(M.difficulty(100) > M.difficulty(10));
-  const a = M.newMiner(0);
-  const b = { ...a, block: 500 };
-  assert.ok(M.btcPerSecond(b) < M.btcPerSecond(a));
-});
-test("upgrades stack and power savings are capped", () => {
-  let s = { ...M.newMiner(0), cash: 1e9 };
-  const base = M.hashPower(s);
-  s = M.buyUpgrade(s, "fans")!;
-  assert.ok(Math.abs(M.hashPower(s) - base * 1.08) < 1e-9);
-  assert.equal(M.buyUpgrade(s, "fans"), null);
-  const kw = M.powerKw(s);
-  s = M.buyUpgrade(s, "psu")!;
-  assert.ok(M.powerKw(s) < kw);
-  assert.equal(M.walletCap(s), 25);
-  s = M.buyUpgrade(s, "storage")!;
-  assert.equal(M.walletCap(s), 75);
-});
-test("stepping mines coins, pays power, respects the wallet cap", () => {
-  const s = { ...M.newMiner(0), counts: { farm: 5 }, cash: 0 };
-  const t = M.stepMiner(s, 10);
-  assert.ok(t.btc > 0 && t.cash < 0);
-  assert.ok(t.block > s.block);
-  const full = { ...s, btc: M.walletCap(s) };
-  assert.equal(M.stepMiner(full, 100).btc, M.walletCap(s));
-  assert.equal(M.stepMiner(s, 0), s);
-});
-test("selling coins", () => {
-  const s = { ...M.newMiner(0), btc: 2, price: 50000, cash: 0 };
-  const t = M.sellBtc(s, 1.5)!;
-  assert.equal(t.cash, 75000);
-  assert.equal(t.btc, 0.5);
-  assert.equal(M.sellBtc(s, 3), null);
-  assert.equal(M.sellBtc(s, 0), null);
-});
-test("price walk stays bounded and mean-reverts", () => {
-  const rng = seeded(5);
-  let p = M.START_PRICE;
-  let lo = Infinity;
-  let hi = 0;
-  for (let i = 0; i < 20000; i++) {
-    p = M.nextPrice(p, rng);
-    lo = Math.min(lo, p);
-    hi = Math.max(hi, p);
-  }
-  assert.ok(lo >= 3000 && hi <= 500000);
-  const calm = () => {
-    const seq = [0.5, 0.25, 0.5]; // zero-noise draw: cos(2π·0.25) = 0, no jolt
-    let i = 0;
-    return () => seq[i++ % 3];
-  };
-  assert.ok(M.nextPrice(400000, calm()) < 400000); // pulled back down
-  assert.ok(M.nextPrice(6000, calm()) > 6000); // pulled back up
 });
 
 /* ───── lemonade ───── */

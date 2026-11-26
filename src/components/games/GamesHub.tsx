@@ -236,7 +236,7 @@ export default function GamesHub({ mobile }: { mobile?: boolean }) {
 
           <section>
             <h2 className="mb-1 text-lg font-bold">Simulators &amp; idle</h2>
-            <p className="mb-3 text-sm text-sub">Bitcoin mining, stock trading and tycoon games that keep earning while you&apos;re away. Progress saves on this device.</p>
+            <p className="mb-3 text-sm text-sub">Bottle Run, crypto trading, PC mining rigs and tycoon games that keep earning while you&apos;re away. Progress saves on this device.</p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {SIM_GAMES.map((g) => (
                 <button key={g.id} onClick={() => setSimOpen(g.id)} className="group overflow-hidden rounded-2xl bg-side text-left transition hover:-translate-y-0.5">
