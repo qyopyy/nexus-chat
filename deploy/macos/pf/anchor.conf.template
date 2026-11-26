@@ -1,0 +1,27 @@
+# pf anchor for the service user "@SERVICE_USER@" (rendered by deploy/macos/pf-isolate.sh).
+# The service user may reach only the local services the server itself uses. Anything else
+# listening on this machine's loopback (databases, dev tools) stays out of reach of whatever runs
+# as that user, even if one of its programs were compromised. On the home network it may reach
+# only the console.
+#   @HTTP_PORT@ web server · 8554 RTSP · 8889 WHEP · 9997 MediaMTX API · @CHIAKI_INPUT_PORT@/udp chiaki-ng input
+#   8189/udp WebRTC media
+server_tcp = "{ @HTTP_PORT@ 8554 8889 9997 }"
+
+# Connections it opens to the server's own ports.
+pass out quick on lo0 proto tcp from any to any port $server_tcp user @SERVICE_USER@ keep state
+pass out quick on lo0 proto udp from any to any port @CHIAKI_INPUT_PORT@ user @SERVICE_USER@ keep state
+# Connections other users open to its listeners (e.g. the owner's status checks, a local browser).
+# The state created here lets the answers out; a packet the service user starts itself never
+# matches these rules, whatever source port it picks.
+pass in quick on lo0 proto tcp from any to any port $server_tcp keep state
+pass in quick on lo0 proto udp from any to any port 8189 keep state
+# Everything else on loopback: refused at once.
+block return out quick on lo0 proto { tcp udp } from any to any user @SERVICE_USER@
+
+# The home network: only the console (Remote Play), never the router or other devices. A viewer on
+# the LAN may still start WebRTC media with it (state from their first packet). The internet stays
+# reachable (STUN, viewers, the restream).
+pass out quick proto { tcp udp } from any to @CONSOLE_IP@ user @SERVICE_USER@ keep state
+pass in quick proto udp from any to any port 8189 keep state
+block return out quick proto { tcp udp } from any to { 10/8 172.16/12 192.168/16 169.254.0.0/16 100.64.0.0/10 fc00::/7 fe80::/10 } user @SERVICE_USER@
+block return out quick proto { tcp udp } from any to (@INTERFACE@:network) user @SERVICE_USER@

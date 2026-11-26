@@ -1,0 +1,60 @@
+# MediaMTX configuration: the patched chiaki-ng publishes the console's own H.264 + Opus over
+# RTSP (path "console"); browsers watch over WHEP, but only through the web server (/api/video),
+# which decides who may watch. Start with: bun run video
+# warn, not info: info logs every viewer's IP address (WebRTC candidates).
+logLevel: warn
+
+# Only this machine may read the console video: the web server (WHEP) and the restream (RTSP).
+# Any local process can read it; publishing needs a password (below).
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    ips: ['127.0.0.1', '::1']
+    permissions:
+      - action: read
+        path: console
+  # Publishing the console path and the control API need this user's password, so no other local
+  # process or web page (DNS rebinding) can replace the video. The hash below matches nothing: the
+  # installer sets the real one through MTX_AUTHINTERNALUSERS_1_PASS (keep this entry second) from
+  # the password it generates; chiaki-ng gets it in its environment.
+  - user: playgta-api
+    pass: sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+    ips: ['127.0.0.1', '::1']
+    permissions:
+      - action: api
+      - action: publish
+        path: console
+
+api: true
+apiAddress: 127.0.0.1:9997
+# No CORS: web pages cannot call the API from a browser.
+apiAllowOrigins: []
+
+# RTSP ingest for chiaki-ng's stream out: loopback only, RTP over TCP.
+rtsp: true
+rtspAddress: 127.0.0.1:8554
+rtspTransports: [tcp]
+rtspEncryption: 'no'
+
+# Unused protocols stay off. MoQ (MediaMTX 1.21+) is on by default and listens on every interface.
+rtmp: false
+hls: false
+srt: false
+moq: false
+playback: false
+
+webrtc: true
+# HTTP signaling (WHIP/WHEP) only on loopback.
+webrtcAddress: 127.0.0.1:8889
+# One UDP port for all media, so the firewall rules can allow exactly it.
+webrtcLocalUDPAddress: :8189
+# Host candidates from the primary network interface only. Adjust en0 for your machine.
+webrtcIPsFromInterfaces: true
+webrtcIPsFromInterfacesList: [en0]
+webrtcAdditionalHosts: [127.0.0.1]
+webrtcICEServers2:
+  - url: stun:stun.l.google.com:19302
+
+paths:
+  console: {}

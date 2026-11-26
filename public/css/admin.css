@@ -1,0 +1,19 @@
+h2 {
+  font-size: 16px;
+  margin: 24px 0 4px;
+}
+.muted {
+  color: var(--muted);
+  font-size: 14px;
+}
+button.primary {
+  font-weight: bold;
+}
+textarea {
+  width: 100%;
+  font: 14px / 1.4 ui-monospace, monospace;
+  padding: 8px;
+}
+#waiting li {
+  margin: 4px 0;
+}

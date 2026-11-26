@@ -1,0 +1,29 @@
+chiaki-ng patches and test harnesses
+====================================
+
+Everything in this directory is a derivative work of chiaki-ng
+(https://github.com/streetpea/chiaki-ng), the open-source PlayStation Remote
+Play client, which is itself a fork of chiaki. It is licensed under the GNU
+Affero General Public License, version 3 only, with the OpenSSL linking
+exception used by chiaki-ng (SPDX: LicenseRef-AGPL-3.0-only-OpenSSL). The full
+license text is in LICENSE in this directory.
+
+Copyright notices of chiaki-ng and its contributors apply to the code these
+patches modify. Additions in these patches: copyright (c) 2026 gtalab
+contributors, under the same license.
+
+Contents:
+  net-input.patch          controller input over a loopback UDP socket
+                           (CHIAKI_NET_INPUT_PORT) and keyframe requests
+  stream-out.patch         publishes the console's own H.264 + Opus stream over
+                           RTSP without re-encoding (CHIAKI_STREAM_OUT_URL)
+  prefer-openssl3.cmake    build helper used by scripts/build-chiaki.sh
+  test/                    black-box tests of both patches
+
+The patches apply to chiaki-ng commit 43728af2e639fecb8a7af1cd68c29820a40de973
+(see scripts/build-chiaki.sh). If you distribute a chiaki-ng build that includes
+them, or let users interact with it over a network, the AGPL requires you to
+offer the corresponding source code, including these patches.
+
+The rest of this repository (outside chiaki/) is MIT licensed and talks to the
+patched chiaki-ng only over a local UDP socket and RTSP, as a separate program.

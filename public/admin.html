@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>PlayGTA admin</title>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="stylesheet" href="/css/admin.css" />
+  </head>
+  <body>
+    <header>
+      <h1>PlayGTA admin</h1>
+      <p id="admin-status" role="status">Enter your admin token.</p>
+    </header>
+
+    <main>
+      <p class="muted">
+        Only reachable from this machine (http://localhost) and needs <code>ADMIN_TOKEN</code>. It is never exposed through a tunnel.
+      </p>
+      <form id="token-form">
+        <input id="token" type="password" autocomplete="off" placeholder="ADMIN_TOKEN" aria-label="Admin token" />
+        <button type="submit">Connect</button>
+      </form>
+
+      <section id="panel" hidden>
+        <h2>Line</h2>
+        <p id="now-playing">Nobody is playing.</p>
+        <p>
+          <button id="skip" type="button">Skip turn</button>
+          <button id="pause" type="button">Pause turns</button>
+          <button id="resume" type="button">Resume turns</button>
+        </p>
+        <ol id="waiting"></ol>
+
+        <h2>Money &amp; cheat macros</h2>
+        <p class="muted">
+          Plays a button sequence on the console, like an in-game cheat code, while players' input is paused. One step per line:
+          buttons joined with <code>+</code>, then milliseconds held (<code>-</code> = pause). Console buttons (PS, Create) are
+          never allowed.
+        </p>
+        <p>
+          <button id="money" type="button" class="primary">Unlimited money</button>
+          <button id="run-custom" type="button">Run the sequence below</button>
+          <button id="reset-macro" type="button">Reset to the preset</button>
+        </p>
+        <textarea id="macro-text" rows="14" spellcheck="false" aria-label="Macro steps"></textarea>
+        <p id="macro-note" class="muted"></p>
+      </section>
+    </main>
+
+    <script type="module" src="/js/admin.js"></script>
+  </body>
+</html>

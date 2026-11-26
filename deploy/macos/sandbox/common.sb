@@ -1,0 +1,43 @@
+;; Shared rules for the service jails (imported by server.sb, video.sb and tunnel.sb).
+;; Pragmatic Seatbelt profile: allow by default, then deny (the last matching rule wins):
+;;   - reading anything under /Users or /Volumes, except what each profile re-allows;
+;;   - writing anywhere, except a few device files;
+;;   - executing any program, except what each profile re-allows.
+;; Everything else stays allowed: reading the rest of the file system (/etc, /Library, /opt,
+;; /private/var...), network access not denied by a profile, Mach and IPC services. This limits
+;; what a compromised service can read from home folders, write and run; it is not a full jail.
+;; Parameters (sandbox-exec -D): REPO = repository root, HOME = the service user's home.
+(version 1)
+(allow default)
+
+;; Every ancestor directory of PATH, e.g. "/a/b/c" -> ("/a/b" "/a").
+(define (parent-dirs path)
+  (let find ((k (- (string-length path) 1)))
+    (cond ((< k 1) '())
+          ((char=? (string-ref path k) #\/)
+           (cons (substring path 0 k) (parent-dirs (substring path 0 k))))
+          (else (find (- k 1))))))
+
+(define (repo-path rel) (string-append (param "REPO") "/" rel))
+(define (config-path rel) (string-append (param "CONFIG_DIR") "/" rel))
+
+;; No personal files: home directories, /Users/Shared, mounted volumes.
+(deny file-read* (subpath "/Users") (subpath "/Volumes"))
+;; getcwd() needs to list the repo root; realpath() needs metadata of its ancestors only.
+(allow file-read-metadata file-read-data (literal (param "REPO")))
+(for-each (lambda (dir) (allow file-read-metadata (literal dir))) (parent-dirs (param "REPO")))
+(allow file-read* (literal (string-append (param "HOME") "/.CFUserTextEncoding")))
+
+;; No writes but a few device files. launchd opens the log files before exec, so logging through
+;; inherited descriptors needs no write permission.
+(deny file-write* (subpath "/"))
+(allow file-write* (literal "/dev/null") (literal "/dev/zero") (literal "/dev/dtracehelper"))
+
+;; No programs but the ones each profile allows explicitly.
+(deny process-exec*)
+;; No signals to, or inspection of, other processes; no launchd jobs, app launches or Apple events.
+(deny signal (target others))
+(deny process-info* (target others))
+(deny job-creation)
+(deny lsopen)
+(deny appleevent-send)

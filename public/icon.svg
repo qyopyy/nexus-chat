@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+  <title id="t">Gamepad</title>
+  <rect width="64" height="64" rx="14" fill="#0f172a"/>
+  <path d="M18 24h28a8 8 0 0 1 8 8v4a8 8 0 0 1-8 8c-3 0-5-2-7-4H25c-2 2-4 4-7 4a8 8 0 0 1-8-8v-4a8 8 0 0 1 8-8Z" fill="#2dd4bf"/>
+  <path d="M20 30v8M16 34h8" stroke="#0f172a" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="42" cy="31" r="2.5" fill="#0f172a"/>
+  <circle cx="47" cy="36" r="2.5" fill="#0f172a"/>
+</svg>

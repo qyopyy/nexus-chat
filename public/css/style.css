@@ -1,0 +1,291 @@
+:root {
+  color-scheme: light dark;
+  --fg: #1a1a1a;
+  --bg: #fff;
+  --muted: #666;
+  --line: #ccc;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e6e6e6;
+    --bg: #161616;
+    --muted: #999;
+    --line: #444;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+  font:
+    16px / 1.5 system-ui,
+    sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+h1 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+p {
+  margin: 8px 0;
+}
+#screen {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+#screen video,
+#screen canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+#video-status {
+  position: absolute;
+  inset: auto 0 0;
+  margin: 0;
+  padding: 4px 8px;
+  color: #fff;
+}
+#video-status:empty {
+  display: none;
+}
+form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+input,
+button {
+  font: inherit;
+  padding: 4px 10px;
+}
+#turn {
+  font-variant-numeric: tabular-nums;
+  font-weight: bold;
+}
+#help,
+#connection,
+footer {
+  color: var(--muted);
+  font-size: 14px;
+}
+footer {
+  margin-top: 24px;
+  border-top: 1px solid var(--line);
+}
+a {
+  color: inherit;
+}
+[hidden] {
+  display: none !important;
+}
+
+/* ---------- full screen button ---------- */
+#fs {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  background: rgb(0 0 0 / 55%);
+  font-size: 22px;
+  cursor: pointer;
+}
+#screen.fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  width: 100vw;
+  height: 100dvh;
+  aspect-ratio: auto;
+  display: grid;
+  place-items: center;
+  background: #000;
+}
+#screen.fullscreen video,
+#screen.fullscreen canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+html.has-fullscreen,
+html.has-fullscreen body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* ---------- on-screen controller (phones and tablets) ---------- */
+html.touch body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#touchpad {
+  position: relative;
+  height: 260px;
+  margin-top: 8px;
+  border-radius: 12px;
+  background: rgb(127 127 127 / 12%);
+  touch-action: none;
+  overflow: hidden;
+}
+#screen > #touchpad {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  height: auto;
+  margin: 0;
+  border-radius: 0;
+  background: none;
+}
+.pad-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  touch-action: none;
+}
+.pad-zone-left {
+  left: 0;
+  width: 42%;
+}
+.pad-zone-right {
+  right: 0;
+  width: 42%;
+}
+.stick-base {
+  position: absolute;
+  width: 112px;
+  height: 112px;
+  margin: -56px 0 0 -56px;
+  border-radius: 50%;
+  border: 2px solid rgb(255 255 255 / 45%);
+  background: rgb(0 0 0 / 25%);
+  pointer-events: none;
+}
+.stick-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 55%);
+  transform: translate(-50%, -50%);
+}
+.pad-group {
+  position: absolute;
+  z-index: 2;
+}
+.pad-btn {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 2px solid rgb(255 255 255 / 50%);
+  border-radius: 50%;
+  color: #fff;
+  background: rgb(0 0 0 / 40%);
+  font-size: 20px;
+  line-height: 1;
+  touch-action: none;
+}
+.pad-btn.on {
+  background: rgb(255 255 255 / 45%);
+  color: #000;
+}
+.pad-face {
+  right: 12px;
+  bottom: 12px;
+  width: 168px;
+  height: 168px;
+}
+.btn-triangle { left: 58px; top: 0; }
+.btn-square { left: 0; top: 58px; }
+.btn-circle { right: 0; top: 58px; }
+.btn-cross { left: 58px; bottom: 0; }
+.pad-shoulders {
+  inset: 8px 12px auto 12px;
+  height: 44px;
+}
+.pad-shoulders .pad-btn {
+  width: 64px;
+  height: 40px;
+  border-radius: 10px;
+  font-size: 14px;
+  top: 0;
+}
+.btn-l2 { left: 0; }
+.btn-l1 { left: 72px; }
+.btn-r1 { right: 72px; }
+.btn-r2 { right: 0; }
+.pad-dpad {
+  left: 12px;
+  bottom: 12px;
+  width: 120px;
+  height: 120px;
+  display: none;
+}
+.pad-dpad .pad-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.btn-up { left: 40px; top: 0; }
+.btn-left { left: 0; top: 40px; }
+.btn-right { right: 0; top: 40px; }
+.btn-down { left: 40px; bottom: 0; }
+.pad-small {
+  left: 50%;
+  bottom: 10px;
+  width: 150px;
+  height: 36px;
+  margin-left: -75px;
+}
+.pad-small .pad-btn {
+  width: 44px;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 13px;
+  top: 0;
+}
+.btn-l3 { left: 0; }
+.btn-options { left: 53px; }
+.btn-r3 { right: 0; }
+/* Full screen: the D-pad fits beside the left stick area, and the buttons get bigger touch targets. */
+#screen > #touchpad .pad-dpad {
+  display: block;
+  left: 12px;
+  top: 70px;
+  bottom: auto;
+}
+#screen.fullscreen #fs {
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+}
+#screen > #touchpad .pad-btn {
+  background: rgb(0 0 0 / 35%);
+}
+@media (orientation: portrait) {
+  #touchpad {
+    height: 300px;
+  }
+}

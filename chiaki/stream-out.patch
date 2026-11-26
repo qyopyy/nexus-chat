@@ -1,0 +1,974 @@
+diff --git a/gui/CMakeLists.txt b/gui/CMakeLists.txt
+index 58f3e2c..e706fab 100755
+--- a/gui/CMakeLists.txt
++++ b/gui/CMakeLists.txt
+@@ -32,6 +32,8 @@ set(SOURCE_FILES
+ 	src/sessionlog.cpp
+ 	include/settings.h
+ 	src/settings.cpp
++	include/streamout.h
++	src/streamout.cpp
+ 	include/host.h
+ 	src/host.cpp
+ 	res/resources.qrc
+@@ -101,6 +103,7 @@ target_link_libraries(placebo-libav-impl PkgConfig::LIBPLACEBO FFMPEG::avcodec F
+ target_link_libraries(chiaki PkgConfig::LIBPLACEBO placebo-libav-impl)
+ 
+ target_link_libraries(chiaki chiaki-lib)
++target_link_libraries(chiaki FFMPEG::avformat FFMPEG::avcodec FFMPEG::avutil)
+ if(CHIAKI_ENABLE_CLI)
+ 	add_definitions(-DCHIAKI_ENABLE_CLI)
+ 	target_link_libraries(chiaki chiaki-cli-lib)
+diff --git a/gui/include/streamout.h b/gui/include/streamout.h
+new file mode 100644
+index 0000000..76be027
+--- /dev/null
++++ b/gui/include/streamout.h
+@@ -0,0 +1,272 @@
++// SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
++
++#ifndef CHIAKI_STREAMOUT_H
++#define CHIAKI_STREAMOUT_H
++
++#include <chiaki/common.h>
++#include <chiaki/log.h>
++
++#include <algorithm>
++#include <atomic>
++#include <condition_variable>
++#include <climits>
++#include <cstdint>
++#include <deque>
++#include <functional>
++#include <mutex>
++#include <string>
++#include <thread>
++#include <vector>
++
++struct AVFormatContext;
++
++struct FrameClockConfig
++{
++	int64_t duration_num = 1000000, duration_den = 30; // frame duration = num / den µs
++	int64_t max_late_us = 300 * 1000;
++	int64_t steer_window_us = 2000 * 1000;
++	int64_t steer_deadband_us = 2000; // smaller sustained delays are left alone
++	int64_t steer_percent = 3; // largest upward step per frame, in percent of a frame
++};
++
++/**
++ * Presentation times for a stream of fixed-duration frames that carry a frame counter (the
++ * console's video frame index, or a count of audio frames).
++ *
++ * Stamping by arrival time bakes the network's jitter into the timestamps: a frame that is
++ * 120 ms late over Wi-Fi gets a timestamp 120 ms late, and the browser pauses on it even with
++ * a jitter buffer. This clock lays frames out by their counter instead,
++ *   pts = counter * duration + offset,
++ * so a late frame keeps its slot and lost frames leave a gap of the right size. The offset
++ * follows the earliest arrivals (pts never runs ahead of the arrival clock, which keeps
++ * MediaMTX's NTP estimate and A/V sync on one clock):
++ * - a frame that arrives before its slot moves the offset down to it at once;
++ * - when the earliest arrival of a whole window is later than its slot (the console's clock
++ *   runs slower than ours, or the route got slower) the offset steers up, a few percent of a
++ *   frame per frame;
++ * - a frame more than max_late_us behind its slot (a long stall, a restarted counter) re-anchors
++ *   the clock on it, so the delay this adds is bounded.
++ * Timestamps are strictly increasing. All times are in microseconds.
++ */
++class FrameClock
++{
++	public:
++		using Config = FrameClockConfig;
++
++		explicit FrameClock(const Config &config = Config()) : config(config) {}
++
++		void Reset() { *this = FrameClock(config); }
++
++		/** @param counter frame counter, increasing (a counter going back is treated as a restart) */
++		int64_t Stamp(int64_t counter, int64_t arrival_us)
++		{
++			if(started && counter + shift <= last_counter)
++				shift = last_counter + 1 - counter; // restarted counter: carry on after the last frame
++			counter += shift;
++			int64_t slot = counter * config.duration_num / config.duration_den;
++			int64_t raw = arrival_us - slot; // offset that would put this frame at its arrival time
++			if(!started)
++			{
++				started = true;
++				offset = target = raw;
++				window_start_us = arrival_us;
++				window_min = raw;
++				last_pts = INT64_MIN;
++			}
++			else if(raw < offset)
++				offset = target = raw; // early: our slots were late
++			else if(raw - offset > config.max_late_us)
++			{
++				offset = target = raw; // a long stall: give up on the old slots
++				resyncs++;
++			}
++
++			window_min = std::min(window_min, raw);
++			if(arrival_us - window_start_us >= config.steer_window_us)
++			{
++				if(window_min > offset + config.steer_deadband_us)
++					target = window_min; // even the earliest frames arrived late
++				window_start_us = arrival_us;
++				window_min = raw;
++			}
++			if(target > offset)
++			{
++				int64_t step = std::max<int64_t>(1, config.duration_num * config.steer_percent / (config.duration_den * 100));
++				offset = std::min({target, offset + step, raw});
++			}
++
++			int64_t pts = slot + offset;
++			if(pts <= last_pts)
++				pts = last_pts + 1;
++			last_pts = pts;
++			last_counter = counter;
++			return pts;
++		}
++
++		/** Times a frame was too late and the clock re-anchored. */
++		uint64_t Resyncs() const { return resyncs; }
++
++	private:
++		Config config;
++		bool started = false;
++		int64_t shift = 0, last_counter = 0;
++		int64_t offset = 0, target = 0;
++		int64_t window_start_us = 0, window_min = 0;
++		int64_t last_pts = 0;
++		uint64_t resyncs = 0;
++};
++
++/** Extends a 16-bit sequence number (the console's frame index) to 64 bits across wraparound. */
++class SeqUnwrapper16
++{
++	public:
++		int64_t Unwrap(uint16_t seq)
++		{
++			if(!started)
++			{
++				started = true;
++				value = seq;
++			}
++			else
++				value += (int16_t)(uint16_t)(seq - last);
++			last = seq;
++			return value;
++		}
++
++	private:
++		bool started = false;
++		uint16_t last = 0;
++		int64_t value = 0;
++};
++
++/**
++ * Forwards the console's own encoded stream to a local media server, without re-encoding.
++ *
++ * Disabled unless the CHIAKI_STREAM_OUT_URL environment variable is set, e.g.
++ *   CHIAKI_STREAM_OUT_URL=rtsp://127.0.0.1:8554/console
++ * The H.264 video samples and the raw Opus audio frames chiaki receives are published as-is
++ * over RTSP (RTP over TCP). Video is timestamped by the console's frame index and audio by its
++ * sample count (see FrameClock), so Wi-Fi jitter stays out of the timestamps and the browser's
++ * jitter buffer can absorb it; both clocks follow the arrival clock within
++ * FrameClockConfig::max_late_us, which keeps them in sync. Only H.264 is
++ * forwarded: browsers cannot reliably play HEVC over WebRTC, so an HEVC session logs a
++ * warning and publishes nothing.
++ *
++ * Push*() never blocks on the network: packets go to a small queue that a worker thread
++ * writes out. While the server is unreachable nothing is queued and the worker retries
++ * every second; when the queue overflows the oldest packets are dropped. After any gap the
++ * video resumes on the next keyframe, which is requested from the console through the
++ * request_idr callback (also every CHIAKI_STREAM_OUT_IDR_MS, default 10000, as a safety net:
++ * the server asks for keyframes on demand through NetInput, since each one costs a hitch).
++ */
++class StreamOut
++{
++	public:
++		using IdrRequest = std::function<void()>;
++
++		struct Options
++		{
++			std::string url;
++			ChiakiCodec codec = CHIAKI_CODEC_H264;
++			int width = 1920, height = 1080; // negotiated resolution (the muxer requires one)
++			int fps = 30;                    // negotiated frame rate: one frame index step
++			int idr_interval_ms = 10000;
++			size_t queue_max = 64;
++			int reconnect_ms = 1000;
++		};
++
++		struct Stats
++		{
++			uint64_t video_in = 0;        // samples handed to PushVideo (headers excluded)
++			uint64_t video_out = 0;       // video packets written to the server
++			uint64_t video_skipped = 0;   // dropped while waiting for a keyframe
++			uint64_t audio_out = 0;       // audio packets written to the server
++			uint64_t queue_dropped = 0;   // dropped because the queue was full
++			uint64_t connects = 0;        // successful connections
++			uint64_t idr_requests = 0;
++			uint64_t max_push_us = 0;     // slowest Push*() call
++			uint64_t video_resyncs = 0;   // video frames too late for their slot: clock re-anchored
++			uint64_t audio_resyncs = 0;   // same for audio
++			bool refused = false;         // stream is not H.264: nothing is published
++		};
++
++		/** @return nullptr unless CHIAKI_STREAM_OUT_URL is set. */
++		static StreamOut *FromEnvironment(ChiakiLog *log, ChiakiCodec codec, int width, int height, int fps, IdrRequest request_idr);
++
++		StreamOut(const Options &options, ChiakiLog *log, IdrRequest request_idr);
++		~StreamOut();
++		StreamOut(const StreamOut &) = delete;
++		StreamOut &operator=(const StreamOut &) = delete;
++
++		/**
++		 * Same arguments as ChiakiVideoSampleCallback, plus the console's index of this frame
++		 * (ChiakiVideoReceiver::frame_index_cur; negative = unknown: stamped by arrival).
++		 * Call from the video receiver thread.
++		 */
++		void PushVideo(const uint8_t *buf, size_t buf_size, int32_t frames_lost, bool frame_recovered, int32_t frame_index = -1);
++		/** Same values as the ChiakiAudioSink header callback. */
++		void SetAudioHeader(unsigned channels, unsigned rate, unsigned frame_size);
++		/** One raw Opus frame, as given to the ChiakiAudioSink frame callback (empty = lost). */
++		void PushAudio(const uint8_t *buf, size_t buf_size);
++
++		bool IsConnected() const { return connected.load(); }
++		Stats GetStats();
++
++		/** Exposed for tests. */
++		static bool IsH264Keyframe(const uint8_t *buf, size_t size);
++		static bool IsH264Header(const uint8_t *buf, size_t size);
++		static bool HasH264Slice(const uint8_t *buf, size_t size);
++
++	private:
++		struct Packet
++		{
++			bool video;
++			bool key;
++			int64_t arrival_us;
++			int64_t counter; // unwrapped video frame index or audio frame count; -1 = none
++			std::vector<uint8_t> data;
++		};
++
++		void Run();
++		bool Connect();
++		void Disconnect();
++		bool Write(Packet &packet);
++		void Enqueue(Packet &&packet);
++		void NotePushTime(int64_t started_us);
++		static int InterruptCb(void *opaque);
++
++		Options options;
++		ChiakiLog *log;
++		IdrRequest request_idr;
++
++		std::mutex mutex;
++		std::condition_variable cond;
++		std::deque<Packet> queue;
++		bool stop = false;
++		bool video_gap = false;          // a queued video packet was dropped
++		bool reconnect = false;          // stream parameters changed
++		std::vector<uint8_t> video_header; // SPS + PPS, Annex B
++		unsigned audio_channels = 0, audio_rate = 0, audio_frame_size = 0;
++		Stats stats;
++
++		std::atomic<bool> connected{false};
++		std::atomic<bool> want_keyframe{false};
++		std::atomic<bool> refused{false};
++		std::atomic<int64_t> deadline_us{0};
++		std::atomic<bool> timed_out{false}; // the interrupt callback cut a network operation short
++		int64_t last_idr_request_us = 0; // video thread only
++		int64_t last_keyframe_us = 0;    // video thread only
++		SeqUnwrapper16 frame_index_unwrap; // video thread only
++		int64_t audio_frames = 0;        // audio thread only: frames seen, lost ones included
++
++		// Worker thread only.
++		AVFormatContext *ctx = nullptr;
++		int video_index = -1, audio_index = -1;
++		int64_t base_us = -1, last_video_pts = -1, last_audio_pts = -1;
++		FrameClock video_clock, audio_clock;
++		bool need_keyframe = true;
++
++		std::thread worker;
++};
++
++#endif // CHIAKI_STREAMOUT_H
+diff --git a/gui/include/streamsession.h b/gui/include/streamsession.h
+index 6f59b78..581c9d2 100755
+--- a/gui/include/streamsession.h
++++ b/gui/include/streamsession.h
+@@ -148,6 +148,8 @@ struct MicBuf
+ 	uint32_t current_byte;
+ };
+ 
++class StreamOut;
++
+ class StreamSession : public QObject
+ {
+ 	friend class StreamSessionPrivate;
+@@ -166,6 +168,8 @@ class StreamSession : public QObject
+ 		ChiakiSession session;
+ 		ChiakiOpusDecoder opus_decoder;
+ 		ChiakiOpusEncoder opus_encoder;
++		StreamOut *stream_out = nullptr; // set when CHIAKI_STREAM_OUT_URL is
++		ChiakiAudioSink opus_sink;
+ 		bool connected;
+ 		bool muted;
+ 		bool mic_connected;
+diff --git a/gui/src/streamout.cpp b/gui/src/streamout.cpp
+new file mode 100644
+index 0000000..12a37da
+--- /dev/null
++++ b/gui/src/streamout.cpp
+@@ -0,0 +1,537 @@
++// SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
++
++#include "streamout.h"
++
++#include <cerrno>
++#include <chrono>
++#include <cstdlib>
++#include <cstring>
++
++extern "C" {
++#include <libavformat/avformat.h>
++#include <libavutil/channel_layout.h>
++#include <libavutil/error.h>
++#include <libavutil/mathematics.h>
++#include <libavutil/mem.h>
++}
++
++static const int64_t IDR_RETRY_US = 500 * 1000;     // re-ask for a keyframe while waiting for one
++static const int64_t CONNECT_TIMEOUT_US = 3000 * 1000;
++static const int64_t WRITE_TIMEOUT_US = 2000 * 1000;
++static const int64_t CLOSE_TIMEOUT_US = 500 * 1000;
++static const int64_t AUDIO_HEADER_WAIT_US = 1000 * 1000; // connect without audio if no header by then
++static const AVRational MICROSECONDS = {1, 1000000};
++
++enum { NAL_SLICE = 1, NAL_IDR = 5, NAL_SPS = 7, NAL_PPS = 8 };
++
++static std::string AvError(int err)
++{
++	char buf[AV_ERROR_MAX_STRING_SIZE] = {};
++	av_strerror(err, buf, sizeof(buf));
++	return buf;
++}
++
++static int64_t NowUs()
++{
++	return std::chrono::duration_cast<std::chrono::microseconds>(
++			std::chrono::steady_clock::now().time_since_epoch()).count();
++}
++
++/** Calls fn(nal_type) for each NAL unit of an Annex B buffer; stops early when fn returns true. */
++template<typename Fn> static bool AnyNal(const uint8_t *buf, size_t size, Fn fn)
++{
++	for(size_t i = 0; i + 3 < size; i++)
++	{
++		if(buf[i] == 0 && buf[i + 1] == 0 && buf[i + 2] == 1)
++		{
++			if(fn(buf[i + 3] & 0x1f))
++				return true;
++			i += 2;
++		}
++	}
++	return false;
++}
++
++bool StreamOut::IsH264Keyframe(const uint8_t *buf, size_t size)
++{
++	return AnyNal(buf, size, [](int t) { return t == NAL_IDR; });
++}
++
++bool StreamOut::IsH264Header(const uint8_t *buf, size_t size)
++{
++	return AnyNal(buf, size, [](int t) { return t == NAL_SPS; });
++}
++
++bool StreamOut::HasH264Slice(const uint8_t *buf, size_t size)
++{
++	// HEVC NAL headers are (type << 1), so read as H.264 they only give even types: an HEVC
++	// stream never shows the odd H.264 types 1 (slice), 5 (IDR) or 7 (SPS).
++	return AnyNal(buf, size, [](int t) { return t == NAL_SLICE || t == NAL_IDR; });
++}
++
++/** The URL without credentials ("rtsp://user:pass@host/path" -> "rtsp://host/path"), for logs. */
++static std::string LogUrl(const std::string &url)
++{
++	size_t scheme = url.find("://");
++	if(scheme == std::string::npos)
++		return url;
++	size_t at = url.find('@', scheme + 3);
++	size_t slash = url.find('/', scheme + 3);
++	if(at == std::string::npos || (slash != std::string::npos && at > slash))
++		return url;
++	return url.substr(0, scheme + 3) + url.substr(at + 1);
++}
++
++StreamOut *StreamOut::FromEnvironment(ChiakiLog *log, ChiakiCodec codec, int width, int height, int fps, IdrRequest request_idr)
++{
++	const char *url = getenv("CHIAKI_STREAM_OUT_URL");
++	if(!url || !*url)
++		return nullptr;
++	Options options;
++	options.url = url;
++	options.codec = codec;
++	if(width > 0 && height > 0)
++	{
++		options.width = width;
++		options.height = height;
++	}
++	if(fps > 0)
++		options.fps = fps;
++	if(const char *idr = getenv("CHIAKI_STREAM_OUT_IDR_MS"))
++		options.idr_interval_ms = atoi(idr);
++	if(options.url.rfind("rtsp://", 0) != 0)
++	{
++		CHIAKI_LOGE(log, "StreamOut: CHIAKI_STREAM_OUT_URL must be an rtsp:// URL, stream out disabled");
++		return nullptr;
++	}
++	return new StreamOut(options, log, std::move(request_idr));
++}
++
++StreamOut::StreamOut(const Options &options, ChiakiLog *log, IdrRequest request_idr)
++	: options(options), log(log), request_idr(std::move(request_idr))
++{
++	if(options.codec != CHIAKI_CODEC_H264)
++	{
++		CHIAKI_LOGW(log, "StreamOut: the session uses HEVC, but browsers need H.264. "
++				"Set chiaki-ng's video codec to H264 to publish the stream; nothing is published now.");
++		refused = true;
++		stats.refused = true;
++		return;
++	}
++	static std::once_flag network_init;
++	std::call_once(network_init, [] { avformat_network_init(); });
++	CHIAKI_LOGI(log, "StreamOut: publishing the console stream to %s", LogUrl(options.url).c_str());
++	worker = std::thread(&StreamOut::Run, this);
++}
++
++StreamOut::~StreamOut()
++{
++	{
++		std::lock_guard<std::mutex> lock(mutex);
++		stop = true;
++	}
++	cond.notify_all();
++	if(worker.joinable())
++		worker.join();
++}
++
++StreamOut::Stats StreamOut::GetStats()
++{
++	std::lock_guard<std::mutex> lock(mutex);
++	return stats;
++}
++
++void StreamOut::NotePushTime(int64_t started_us)
++{
++	uint64_t took = (uint64_t)(NowUs() - started_us);
++	std::lock_guard<std::mutex> lock(mutex);
++	if(took > stats.max_push_us)
++		stats.max_push_us = took;
++}
++
++void StreamOut::PushVideo(const uint8_t *buf, size_t buf_size, int32_t frames_lost, bool frame_recovered, int32_t frame_index)
++{
++	// frames_lost / frame_recovered need no handling here (lost frames still leave their gap in
++	// the timestamps, through frame_index): chiaki only passes on frames whose
++	// reference frames it delivered before (rewriting the reference when it recovered one), so
++	// the forwarded sequence decodes exactly like chiaki's own. Gaps this class causes itself
++	// (not connected, queue overflow) resume on a keyframe.
++	(void)frames_lost;
++	(void)frame_recovered;
++	if(refused || !buf_size)
++		return;
++	int64_t now = NowUs();
++
++	bool slice = HasH264Slice(buf, buf_size);
++	if(!slice)
++	{
++		if(!IsH264Header(buf, buf_size))
++		{
++			bool seen_header;
++			{
++				std::lock_guard<std::mutex> lock(mutex);
++				seen_header = !video_header.empty();
++			}
++			if(!seen_header)
++			{
++				CHIAKI_LOGW(log, "StreamOut: the video is not H.264 (HEVC?). Browsers need H.264: "
++						"set chiaki-ng's video codec to H264. Nothing is published.");
++				refused = true;
++				std::lock_guard<std::mutex> lock(mutex);
++				stats.refused = true;
++				cond.notify_all();
++			}
++			return;
++		}
++		// Stream header (SPS + PPS), sent by chiaki at start and on every profile switch.
++		std::vector<uint8_t> header(buf, buf + buf_size);
++		{
++			std::lock_guard<std::mutex> lock(mutex);
++			if(header != video_header)
++			{
++				if(!video_header.empty() && connected)
++					reconnect = true;
++				video_header = std::move(header);
++			}
++		}
++		cond.notify_all();
++		NotePushTime(now);
++		return;
++	}
++
++	bool key = IsH264Keyframe(buf, buf_size);
++	int64_t counter = frame_index >= 0 ? frame_index_unwrap.Unwrap((uint16_t)frame_index) : -1;
++	Packet packet{true, key, now, counter, {}};
++	{
++		std::lock_guard<std::mutex> lock(mutex);
++		stats.video_in++;
++		if(key && !IsH264Header(buf, buf_size))
++			packet.data = video_header; // keyframes carry SPS/PPS so any viewer can start there
++	}
++	packet.data.insert(packet.data.end(), buf, buf + buf_size);
++	if(key)
++		last_keyframe_us = now;
++
++	if(connected)
++	{
++		bool waiting = want_keyframe && now - last_idr_request_us >= IDR_RETRY_US;
++		bool periodic = options.idr_interval_ms > 0
++			&& now - std::max(last_keyframe_us, last_idr_request_us) >= (int64_t)options.idr_interval_ms * 1000;
++		if(waiting || periodic)
++		{
++			last_idr_request_us = now;
++			{
++				std::lock_guard<std::mutex> lock(mutex);
++				stats.idr_requests++;
++			}
++			if(request_idr)
++				request_idr();
++		}
++		Enqueue(std::move(packet));
++	}
++	NotePushTime(now);
++}
++
++void StreamOut::SetAudioHeader(unsigned channels, unsigned rate, unsigned frame_size)
++{
++	{
++		std::lock_guard<std::mutex> lock(mutex);
++		if(channels == audio_channels && rate == audio_rate && frame_size == audio_frame_size)
++			return;
++		if(audio_rate && connected)
++			reconnect = true;
++		audio_channels = channels;
++		audio_rate = rate;
++		audio_frame_size = frame_size;
++	}
++	cond.notify_all();
++}
++
++void StreamOut::PushAudio(const uint8_t *buf, size_t buf_size)
++{
++	int64_t counter = audio_frames++; // counted even while not publishing: the slots stay right
++	if(refused || !connected)
++		return;
++	int64_t now = NowUs();
++	Packet packet{false, true, now, counter, std::vector<uint8_t>(buf, buf + buf_size)};
++	Enqueue(std::move(packet));
++	NotePushTime(now);
++}
++
++void StreamOut::Enqueue(Packet &&packet)
++{
++	{
++		std::lock_guard<std::mutex> lock(mutex);
++		if(!connected)
++			return;
++		while(queue.size() >= options.queue_max)
++		{
++			if(queue.front().video)
++				video_gap = true;
++			queue.pop_front();
++			stats.queue_dropped++;
++		}
++		queue.push_back(std::move(packet));
++	}
++	cond.notify_all();
++}
++
++int StreamOut::InterruptCb(void *opaque)
++{
++	auto self = static_cast<StreamOut *>(opaque);
++	int64_t deadline = self->deadline_us.load();
++	if(deadline && NowUs() > deadline)
++	{
++		self->timed_out = true;
++		return 1;
++	}
++	std::lock_guard<std::mutex> lock(self->mutex);
++	return self->stop ? 1 : 0;
++}
++
++void StreamOut::Run()
++{
++	std::unique_lock<std::mutex> lock(mutex);
++	while(!stop)
++	{
++		// Wait for the video header (and briefly for the audio header).
++		cond.wait(lock, [this] { return stop || refused || !video_header.empty(); });
++		if(stop || refused)
++			break;
++		if(!audio_rate)
++			cond.wait_for(lock, std::chrono::microseconds(AUDIO_HEADER_WAIT_US), [this] { return stop || audio_rate; });
++		if(stop)
++			break;
++
++		reconnect = false;
++		lock.unlock();
++		bool ok = Connect();
++		lock.lock();
++		if(!ok)
++		{
++			cond.wait_for(lock, std::chrono::milliseconds(options.reconnect_ms), [this] { return stop; });
++			continue;
++		}
++		stats.connects++;
++		video_gap = false;
++		queue.clear();
++		connected = true;
++		want_keyframe = true;
++
++		while(!stop && !reconnect)
++		{
++			if(queue.empty())
++			{
++				cond.wait_for(lock, std::chrono::milliseconds(100));
++				continue;
++			}
++			Packet packet = std::move(queue.front());
++			queue.pop_front();
++			if(packet.video && video_gap)
++			{
++				video_gap = false;
++				need_keyframe = true;
++				want_keyframe = true;
++			}
++			lock.unlock();
++			bool written = Write(packet);
++			lock.lock();
++			if(!written)
++				break;
++		}
++
++		connected = false;
++		queue.clear();
++		lock.unlock();
++		Disconnect();
++		lock.lock();
++		if(!stop && !reconnect)
++			cond.wait_for(lock, std::chrono::milliseconds(options.reconnect_ms), [this] { return stop; });
++	}
++	connected = false;
++}
++
++bool StreamOut::Connect()
++{
++	std::vector<uint8_t> header;
++	unsigned channels, rate, frame_size;
++	{
++		std::lock_guard<std::mutex> lock(mutex);
++		header = video_header;
++		channels = audio_channels;
++		rate = audio_rate;
++		frame_size = audio_frame_size;
++	}
++
++	int err = avformat_alloc_output_context2(&ctx, nullptr, "rtsp", options.url.c_str());
++	if(err < 0 || !ctx)
++	{
++		CHIAKI_LOGE(log, "StreamOut: cannot create the RTSP muxer: %s", AvError(err).c_str());
++		ctx = nullptr;
++		return false;
++	}
++	ctx->interrupt_callback.callback = InterruptCb;
++	ctx->interrupt_callback.opaque = this;
++	ctx->max_delay = 0;
++	ctx->flags |= AVFMT_FLAG_FLUSH_PACKETS;
++
++	AVStream *video = avformat_new_stream(ctx, nullptr);
++	video->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
++	video->codecpar->codec_id = AV_CODEC_ID_H264;
++	video->codecpar->extradata = (uint8_t *)av_mallocz(header.size() + AV_INPUT_BUFFER_PADDING_SIZE);
++	memcpy(video->codecpar->extradata, header.data(), header.size());
++	video->codecpar->extradata_size = (int)header.size();
++	video->codecpar->width = options.width;
++	video->codecpar->height = options.height;
++	video->time_base = {1, 90000};
++	video_index = video->index;
++
++	audio_index = -1;
++	if(rate)
++	{
++		AVStream *audio = avformat_new_stream(ctx, nullptr);
++		audio->codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
++		audio->codecpar->codec_id = AV_CODEC_ID_OPUS;
++		audio->codecpar->sample_rate = (int)rate;
++		av_channel_layout_default(&audio->codecpar->ch_layout, (int)channels);
++		audio->time_base = {1, (int)rate};
++		audio_index = audio->index;
++	}
++
++	AVDictionary *opts = nullptr;
++	av_dict_set(&opts, "rtsp_transport", "tcp", 0);
++	av_dict_set(&opts, "pkt_size", "1400", 0); // fits WebRTC's MTU: MediaMTX forwards without re-packetizing
++	av_dict_set(&opts, "muxdelay", "0", 0);
++	av_dict_set(&opts, "muxpreload", "0", 0);
++	deadline_us = NowUs() + CONNECT_TIMEOUT_US;
++	err = avformat_write_header(ctx, &opts);
++	deadline_us = 0;
++	av_dict_free(&opts);
++	if(err < 0)
++	{
++		CHIAKI_LOGW(log, "StreamOut: cannot publish to %s (%s), retrying", LogUrl(options.url).c_str(), AvError(err).c_str());
++		avformat_free_context(ctx);
++		ctx = nullptr;
++		return false;
++	}
++	base_us = NowUs();
++	last_video_pts = -1;
++	last_audio_pts = -1;
++	FrameClock::Config video_config;
++	video_config.duration_den = options.fps > 0 ? options.fps : 30;
++	video_clock = FrameClock(video_config);
++	FrameClock::Config audio_config;
++	audio_config.duration_num = (int64_t)(frame_size ? frame_size : 480) * 1000000;
++	audio_config.duration_den = rate ? rate : 48000;
++	audio_clock = FrameClock(audio_config);
++	need_keyframe = true;
++	CHIAKI_LOGI(log, "StreamOut: publishing H.264%s to %s", audio_index >= 0 ? " + Opus" : "", LogUrl(options.url).c_str());
++	return true;
++}
++
++void StreamOut::Disconnect()
++{
++	if(!ctx)
++		return;
++	deadline_us = NowUs() + CLOSE_TIMEOUT_US;
++	av_write_trailer(ctx);
++	deadline_us = 0;
++	avformat_free_context(ctx);
++	ctx = nullptr;
++}
++
++bool StreamOut::Write(Packet &packet)
++{
++	int64_t at_us = std::max<int64_t>(0, packet.arrival_us - base_us);
++	int stream_index;
++	int64_t pts;
++	int64_t duration = 0;
++	if(packet.video)
++	{
++		if(need_keyframe && !packet.key)
++		{
++			std::lock_guard<std::mutex> lock(mutex);
++			stats.video_skipped++;
++			return true;
++		}
++		if(packet.key)
++		{
++			need_keyframe = false;
++			want_keyframe = false;
++		}
++		stream_index = video_index;
++		// By the console's frame index: Wi-Fi jitter stays out of the timestamps.
++		int64_t video_us = at_us;
++		if(packet.counter >= 0)
++		{
++			uint64_t resyncs = video_clock.Resyncs();
++			video_us = video_clock.Stamp(packet.counter, at_us);
++			if(video_clock.Resyncs() != resyncs)
++			{
++				std::lock_guard<std::mutex> lock(mutex);
++				stats.video_resyncs++;
++			}
++		}
++		pts = av_rescale_q(video_us, MICROSECONDS, ctx->streams[stream_index]->time_base);
++		if(pts <= last_video_pts)
++			pts = last_video_pts + 1;
++		last_video_pts = pts;
++	}
++	else
++	{
++		if(audio_index < 0)
++			return true;
++		// Opus frames have a fixed duration: stamp them by their count, on the same kind of clock
++		// as the video, so jitter in delivery does not reach the timestamps.
++		unsigned frame_size, rate;
++		{
++			std::lock_guard<std::mutex> lock(mutex);
++			frame_size = audio_frame_size;
++			rate = audio_rate;
++		}
++		int64_t frame_us = rate ? (int64_t)frame_size * 1000000 / rate : 10000;
++		uint64_t resyncs = audio_clock.Resyncs();
++		int64_t audio_us = audio_clock.Stamp(packet.counter, at_us);
++		if(audio_clock.Resyncs() != resyncs)
++		{
++			std::lock_guard<std::mutex> lock(mutex);
++			stats.audio_resyncs++;
++		}
++		if(packet.data.empty())
++			return true; // lost frame: keep its time slot empty
++		stream_index = audio_index;
++		AVRational tb = ctx->streams[stream_index]->time_base;
++		pts = av_rescale_q(audio_us, MICROSECONDS, tb);
++		if(pts <= last_audio_pts)
++			pts = last_audio_pts + 1; // the muxer refuses timestamps that do not increase
++		last_audio_pts = pts;
++		duration = av_rescale_q(frame_us, MICROSECONDS, tb);
++	}
++
++	AVPacket *pkt = av_packet_alloc();
++	pkt->data = packet.data.data();
++	pkt->size = (int)packet.data.size();
++	pkt->stream_index = stream_index;
++	pkt->pts = pkt->dts = pts;
++	pkt->duration = duration;
++	if(packet.key)
++		pkt->flags |= AV_PKT_FLAG_KEY;
++	timed_out = false;
++	deadline_us = NowUs() + WRITE_TIMEOUT_US;
++	int err = av_write_frame(ctx, pkt);
++	deadline_us = 0;
++	av_packet_free(&pkt);
++	if(err >= 0 && timed_out)
++		err = AVERROR(ETIMEDOUT); // the RTSP muxer drops TCP write errors: a stuck server only shows up here
++	if(err < 0)
++	{
++		CHIAKI_LOGW(log, "StreamOut: lost the connection to %s (%s), reconnecting", LogUrl(options.url).c_str(), AvError(err).c_str());
++		return false;
++	}
++	std::lock_guard<std::mutex> lock(mutex);
++	if(packet.video)
++		stats.video_out++;
++	else
++		stats.audio_out++;
++	return true;
++}
+diff --git a/gui/src/streamsession.cpp b/gui/src/streamsession.cpp
+index 8b76618..8739e5d 100755
+--- a/gui/src/streamsession.cpp
++++ b/gui/src/streamsession.cpp
+@@ -3,6 +3,7 @@
+ #include <streamsession.h>
+ #include <settings.h>
+ #include <controllermanager.h>
++#include <streamout.h>
+ 
+ #include <chiaki/base64.h>
+ #include <chiaki/streamconnection.h>
+@@ -358,6 +359,9 @@ static void SessionSetsuCb(SetsuEvent *event, void *user);
+ static void SessionSDeckCb(SDeckEvent *event, void *user);
+ #endif
+ static void FfmpegFrameCb(ChiakiFfmpegDecoder *decoder, void *user);
++static bool StreamOutVideoSampleCb(uint8_t *buf, size_t buf_size, int32_t frames_lost, bool frame_recovered, void *user);
++static void StreamOutAudioHeaderCb(ChiakiAudioHeader *header, void *user);
++static void StreamOutAudioFrameCb(uint8_t *buf, size_t buf_size, void *user);
+ 
+ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObject *parent)
+ 	: QObject(parent),
+@@ -561,6 +565,19 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
+ 	chiaki_opus_decoder_set_cb(&opus_decoder, AudioSettingsCb, AudioFrameCb, this);
+ 	ChiakiAudioSink audio_sink;
+ 	chiaki_opus_decoder_get_sink(&opus_decoder, &audio_sink);
++	stream_out = StreamOut::FromEnvironment(GetChiakiLog(),
++			chiaki_target_is_ps5(connect_info.target) ? connect_info.video_profile.codec : CHIAKI_CODEC_H264,
++			(int)connect_info.video_profile.width, (int)connect_info.video_profile.height,
++			(int)connect_info.video_profile.max_fps,
++			[this]() { chiaki_session_request_idr(&session); });
++	if(stream_out)
++	{
++		// Tap the raw Opus frames on their way to the decoder.
++		opus_sink = audio_sink;
++		audio_sink.user = this;
++		audio_sink.header_cb = StreamOutAudioHeaderCb;
++		audio_sink.frame_cb = StreamOutAudioFrameCb;
++	}
+ 	chiaki_session_set_audio_sink(&session, &audio_sink);
+ 	ChiakiAudioHeader audio_header;
+ 	chiaki_audio_header_set(&audio_header, 2, 16, MICROPHONE_SAMPLES * 100, MICROPHONE_SAMPLES);
+@@ -589,6 +606,8 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
+ #if CHIAKI_LIB_ENABLE_PI_DECODER
+ 	}
+ #endif
++	if(stream_out)
++		chiaki_session_set_video_sample_cb(&session, StreamOutVideoSampleCb, this);
+ 
+ 	chiaki_session_set_event_cb(&session, EventCb, this);
+ 
+@@ -747,6 +766,8 @@ StreamSession::~StreamSession()
+ 		chiaki_session_join(&session);
+ 	}
+ 	chiaki_session_fini(&session);
++	delete stream_out;
++	stream_out = nullptr;
+ 	chiaki_opus_decoder_fini(&opus_decoder);
+ 	chiaki_opus_encoder_fini(&opus_encoder);
+ #if CHIAKI_GUI_ENABLE_SPEEX
+@@ -2862,8 +2883,49 @@ class StreamSessionPrivate
+ 		static void HandleSDeckEvent(StreamSession *session, SDeckEvent *event)					{ session->HandleSDeckEvent(event); }
+ #endif
+ 		static void TriggerFfmpegFrameAvailable(StreamSession *session)							{ session->TriggerFfmpegFrameAvailable(); }
++
++		static bool StreamOutVideoSample(StreamSession *session, uint8_t *buf, size_t buf_size, int32_t frames_lost, bool frame_recovered)
++		{
++			// Called from chiaki_video_receiver_flush_frame, on the thread that owns the receiver:
++			// frame_index_cur is the index of this very frame.
++			ChiakiVideoReceiver *receiver = session->session.stream_connection.video_receiver;
++			session->stream_out->PushVideo(buf, buf_size, frames_lost, frame_recovered,
++					receiver ? receiver->frame_index_cur : -1);
++#if CHIAKI_LIB_ENABLE_PI_DECODER
++			if(session->pi_decoder)
++				return chiaki_pi_decoder_video_sample_cb(buf, buf_size, frames_lost, frame_recovered, session->pi_decoder);
++#endif
++			return chiaki_ffmpeg_decoder_video_sample_cb(buf, buf_size, frames_lost, frame_recovered, session->ffmpeg_decoder);
++		}
++
++		static void StreamOutAudioHeader(StreamSession *session, ChiakiAudioHeader *header)
++		{
++			session->stream_out->SetAudioHeader(header->channels, header->rate, header->frame_size);
++			session->opus_sink.header_cb(header, session->opus_sink.user);
++		}
++
++		static void StreamOutAudioFrame(StreamSession *session, uint8_t *buf, size_t buf_size)
++		{
++			session->stream_out->PushAudio(buf, buf_size);
++			session->opus_sink.frame_cb(buf, buf_size, session->opus_sink.user);
++		}
+ };
+ 
++static bool StreamOutVideoSampleCb(uint8_t *buf, size_t buf_size, int32_t frames_lost, bool frame_recovered, void *user)
++{
++	return StreamSessionPrivate::StreamOutVideoSample(reinterpret_cast<StreamSession *>(user), buf, buf_size, frames_lost, frame_recovered);
++}
++
++static void StreamOutAudioHeaderCb(ChiakiAudioHeader *header, void *user)
++{
++	StreamSessionPrivate::StreamOutAudioHeader(reinterpret_cast<StreamSession *>(user), header);
++}
++
++static void StreamOutAudioFrameCb(uint8_t *buf, size_t buf_size, void *user)
++{
++	StreamSessionPrivate::StreamOutAudioFrame(reinterpret_cast<StreamSession *>(user), buf, buf_size);
++}
++
+ static void AudioSettingsCb(uint32_t channels, uint32_t rate, void *user)
+ {
+ 	auto session = reinterpret_cast<StreamSession *>(user);

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="description" content="Take turns controlling a real console from your browser." />
+    <title>PlayGTA</title>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1 id="title">PlayGTA</h1>
+      <p id="connection" role="status">Connecting…</p>
+    </header>
+
+    <main>
+      <div id="screen">
+        <video id="live" playsinline autoplay muted hidden></video>
+        <canvas id="sim" width="640" height="360" aria-label="Simulated console" hidden></canvas>
+        <p id="video-status"></p>
+        <button id="fs" type="button" aria-label="Full screen">⛶</button>
+      </div>
+      <div id="touchpad" hidden aria-label="On-screen controller"></div>
+      <p><button id="unmute" type="button" hidden>Unmute</button></p>
+      <p id="restream" hidden>
+        <a id="restream-link" href="/" target="_blank" rel="noopener noreferrer">Watch the restream on Kick</a>
+      </p>
+
+      <section aria-label="Line">
+        <p id="status" aria-live="polite">Join the line to play.</p>
+        <p id="turn" role="timer" hidden></p>
+        <p id="line"></p>
+        <form id="join-form">
+          <input id="name" maxlength="20" autocomplete="off" placeholder="Your name" aria-label="Your name" />
+          <button id="join" type="submit">Join the line</button>
+        </form>
+        <p><button id="leave" type="button" hidden>Leave the line</button></p>
+        <p id="account" hidden><span id="account-name"></span> <button id="logout" type="button">Log out</button></p>
+      </section>
+
+      <p id="help"></p>
+    </main>
+
+    <footer>
+      <p><a href="https://gtalab.dev" target="_blank" rel="noopener noreferrer">PlayGTA by gtalab</a></p>
+    </footer>
+
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>

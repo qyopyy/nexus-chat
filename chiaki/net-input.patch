@@ -1,0 +1,279 @@
+diff --git a/gui/CMakeLists.txt b/gui/CMakeLists.txt
+index 7e777e1..58f3e2c 100755
+--- a/gui/CMakeLists.txt
++++ b/gui/CMakeLists.txt
+@@ -7,7 +7,7 @@ if(APPLE)
+ 	enable_language(OBJCXX)
+ endif()
+ 
+-find_package(Qt6 REQUIRED COMPONENTS Core Gui Concurrent Svg Qml Quick Widgets)
++find_package(Qt6 REQUIRED COMPONENTS Core Gui Concurrent Svg Qml Quick Widgets Network)
+ if(Qt6_VERSION VERSION_GREATER_EQUAL "6.10.0")
+ 	find_package(Qt6 REQUIRED COMPONENTS GuiPrivate)
+ endif()
+@@ -26,6 +26,8 @@ set(SOURCE_FILES
+ 	src/discoverymanager.cpp
+ 	include/streamsession.h
+ 	src/streamsession.cpp
++	include/netinput.h
++	src/netinput.cpp
+ 	include/sessionlog.h
+ 	src/sessionlog.cpp
+ 	include/settings.h
+@@ -104,7 +106,7 @@ if(CHIAKI_ENABLE_CLI)
+ 	target_link_libraries(chiaki chiaki-cli-lib)
+ endif()
+ 
+-target_link_libraries(chiaki Qt::Core Qt::Gui Qt::GuiPrivate Qt::Concurrent Qt::Svg Qt::Qml Qt::Quick Qt::Widgets)
++target_link_libraries(chiaki Qt::Core Qt::Gui Qt::GuiPrivate Qt::Concurrent Qt::Svg Qt::Qml Qt::Quick Qt::Widgets Qt::Network)
+ if (${Qt6DBus_FOUND} AND NOT WIN32)
+ 	target_link_libraries(chiaki Qt::DBus)
+ if (NOT APPLE)
+diff --git a/gui/include/netinput.h b/gui/include/netinput.h
+new file mode 100644
+index 0000000..7cfed33
+--- /dev/null
++++ b/gui/include/netinput.h
+@@ -0,0 +1,60 @@
++// SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
++
++#ifndef CHIAKI_NETINPUT_H
++#define CHIAKI_NETINPUT_H
++
++#include <chiaki/controller.h>
++
++#include <QElapsedTimer>
++#include <QObject>
++
++class QUdpSocket;
++class QTimer;
++
++/**
++ * Network controller input for remote "crowd play" setups.
++ *
++ * Disabled unless the CHIAKI_NET_INPUT_PORT environment variable is set. When enabled,
++ * it listens on 127.0.0.1 only for UDP datagrams carrying a full controller state as JSON:
++ *   {"v":1,"buttons":<ChiakiControllerButton mask>,"l2":0-255,"r2":0-255,
++ *    "lx":-32767..32767,"ly":...,"rx":...,"ry":...}
++ * Senders repeat the state periodically; if nothing arrives for NET_INPUT_TIMEOUT_MS
++ * the state falls back to idle, so a crashed sender never leaves a button held.
++ *
++ * {"request":"keyframe"} asks the console for a video keyframe (KeyframeRequested) and leaves
++ * the controller state alone; requests closer than NET_INPUT_KEYFRAME_MIN_MS are dropped.
++ */
++class NetInput : public QObject
++{
++	Q_OBJECT
++
++	public:
++		static constexpr int NET_INPUT_TIMEOUT_MS = 500;
++		/** Every keyframe makes the console skip a few frames: whoever sends, at most one per second. */
++		static constexpr int NET_INPUT_KEYFRAME_MIN_MS = 1000;
++
++		explicit NetInput(QObject *parent = nullptr);
++
++		bool IsEnabled() const { return socket != nullptr; }
++		ChiakiControllerState GetState() const { return state; }
++
++		/** @return false (leaving out untouched) when data is not a valid v1 packet. */
++		static bool ParsePacket(const QByteArray &data, ChiakiControllerState *out);
++		/** @return true when data is a {"request":"keyframe"} packet. */
++		static bool IsKeyframeRequest(const QByteArray &data);
++
++	signals:
++		void StateChanged();
++		void KeyframeRequested();
++
++	private:
++		void ReadPendingDatagrams();
++		void SetState(const ChiakiControllerState &new_state);
++
++		QUdpSocket *socket = nullptr;
++		QTimer *watchdog = nullptr;
++		QElapsedTimer last_keyframe_request;
++		ChiakiControllerState state;
++};
++
++#endif // CHIAKI_NETINPUT_H
+diff --git a/gui/include/streamsession.h b/gui/include/streamsession.h
+index 52439ce..6f59b78 100755
+--- a/gui/include/streamsession.h
++++ b/gui/include/streamsession.h
+@@ -30,6 +30,7 @@
+ #include "exception.h"
+ #include "sessionlog.h"
+ #include "controllermanager.h"
++#include "netinput.h"
+ #include "settings.h"
+ 
+ #include <QObject>
+@@ -220,6 +221,7 @@ class StreamSession : public QObject
+ 		bool rumble_haptics_on;
+ 		float PS_TOUCHPAD_MAX_X, PS_TOUCHPAD_MAX_Y;
+ 		ChiakiControllerState keyboard_state;
++		NetInput *net_input;
+ 		ChiakiControllerState touch_state;
+ 		QMap<int, uint8_t> touch_tracker;
+ 		int8_t mouse_touch_id;
+diff --git a/gui/src/netinput.cpp b/gui/src/netinput.cpp
+new file mode 100644
+index 0000000..5c6754a
+--- /dev/null
++++ b/gui/src/netinput.cpp
+@@ -0,0 +1,124 @@
++// SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
++
++#include "netinput.h"
++
++#include <QHostAddress>
++#include <QJsonDocument>
++#include <QJsonObject>
++#include <QNetworkDatagram>
++#include <QTimer>
++#include <QUdpSocket>
++#include <QtGlobal>
++
++// PS and Create (Share) never reach the console, whoever sends to the input port: they open the
++// console's own menus (home screen, capture and broadcast), outside the game. The server already
++// clears them; this also covers any other local process. Fixed at build time on purpose.
++static const uint32_t NET_INPUT_BLOCKED_BUTTONS = CHIAKI_CONTROLLER_BUTTON_PS | CHIAKI_CONTROLLER_BUTTON_SHARE;
++static const uint32_t NET_INPUT_DIGITAL_BUTTONS_MASK =
++	((1u << CHIAKI_CONTROLLER_BUTTONS_COUNT) - 1) & ~NET_INPUT_BLOCKED_BUTTONS;
++
++NetInput::NetInput(QObject *parent) : QObject(parent)
++{
++	chiaki_controller_state_set_idle(&state);
++
++	if(!qEnvironmentVariableIsSet("CHIAKI_NET_INPUT_PORT"))
++		return;
++
++	bool ok = false;
++	quint16 port = qEnvironmentVariable("CHIAKI_NET_INPUT_PORT").toUShort(&ok);
++	if(!ok || port == 0)
++	{
++		qWarning() << "NetInput: invalid CHIAKI_NET_INPUT_PORT, network input disabled";
++		return;
++	}
++
++	socket = new QUdpSocket(this);
++	if(!socket->bind(QHostAddress::LocalHost, port))
++	{
++		qWarning() << "NetInput: cannot bind 127.0.0.1:" << port << "-" << socket->errorString();
++		delete socket;
++		socket = nullptr;
++		return;
++	}
++	qInfo() << "NetInput: listening for controller input on 127.0.0.1:" << port;
++
++	watchdog = new QTimer(this);
++	watchdog->setSingleShot(true);
++	watchdog->setInterval(NET_INPUT_TIMEOUT_MS);
++	connect(watchdog, &QTimer::timeout, this, [this] {
++		ChiakiControllerState idle;
++		chiaki_controller_state_set_idle(&idle);
++		SetState(idle);
++	});
++	connect(socket, &QUdpSocket::readyRead, this, &NetInput::ReadPendingDatagrams);
++}
++
++bool NetInput::ParsePacket(const QByteArray &data, ChiakiControllerState *out)
++{
++	QJsonParseError error;
++	QJsonDocument doc = QJsonDocument::fromJson(data, &error);
++	if(error.error != QJsonParseError::NoError || !doc.isObject())
++		return false;
++
++	QJsonObject obj = doc.object();
++	if(obj.value("v").toInt() != 1)
++		return false;
++
++	auto axis = [&obj](const char *key) {
++		return static_cast<int16_t>(qBound(-32767, obj.value(key).toInt(), 32767));
++	};
++	auto trigger = [&obj](const char *key) {
++		return static_cast<uint8_t>(qBound(0, obj.value(key).toInt(), 255));
++	};
++
++	ChiakiControllerState parsed;
++	chiaki_controller_state_set_idle(&parsed);
++	parsed.buttons = static_cast<uint32_t>(obj.value("buttons").toInteger()) & NET_INPUT_DIGITAL_BUTTONS_MASK;
++	parsed.l2_state = trigger("l2");
++	parsed.r2_state = trigger("r2");
++	parsed.left_x = axis("lx");
++	parsed.left_y = axis("ly");
++	parsed.right_x = axis("rx");
++	parsed.right_y = axis("ry");
++	*out = parsed;
++	return true;
++}
++
++bool NetInput::IsKeyframeRequest(const QByteArray &data)
++{
++	QJsonParseError error;
++	QJsonDocument doc = QJsonDocument::fromJson(data, &error);
++	return error.error == QJsonParseError::NoError && doc.isObject()
++		&& doc.object().value("request").toString() == QStringLiteral("keyframe");
++}
++
++void NetInput::ReadPendingDatagrams()
++{
++	while(socket->hasPendingDatagrams())
++	{
++		QNetworkDatagram datagram = socket->receiveDatagram();
++		if(IsKeyframeRequest(datagram.data()))
++		{
++			if(!last_keyframe_request.isValid() || last_keyframe_request.elapsed() >= NET_INPUT_KEYFRAME_MIN_MS)
++			{
++				last_keyframe_request.start();
++				emit KeyframeRequested();
++			}
++			continue;
++		}
++		ChiakiControllerState parsed;
++		if(!ParsePacket(datagram.data(), &parsed))
++			continue;
++		watchdog->start();
++		SetState(parsed);
++	}
++}
++
++void NetInput::SetState(const ChiakiControllerState &new_state)
++{
++	ChiakiControllerState candidate = new_state;
++	if(chiaki_controller_state_equals(&state, &candidate))
++		return;
++	state = candidate;
++	emit StateChanged();
++}
+diff --git a/gui/src/streamsession.cpp b/gui/src/streamsession.cpp
+index 44d7a0e..8b76618 100755
+--- a/gui/src/streamsession.cpp
++++ b/gui/src/streamsession.cpp
+@@ -514,6 +514,9 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
+ 
+ 	chiaki_controller_state_set_idle(&keyboard_state);
+ 	chiaki_controller_state_set_idle(&touch_state);
++	net_input = new NetInput(this);
++	connect(net_input, &NetInput::StateChanged, this, &StreamSession::SendFeedbackState);
++	connect(net_input, &NetInput::KeyframeRequested, this, [this] { chiaki_session_request_idr(&session); });
+ 	touch_tracker=QMap<int, uint8_t>();
+ 	mouse_touch_id=-1;
+ 	dpad_touch_id =-1;
+@@ -1284,6 +1287,8 @@ void StreamSession::DpadSendFeedbackState()
+ 	chiaki_controller_state_or(&state, &state, &sdeck_state);
+ #endif
+ 	chiaki_controller_state_or(&state, &state, &keyboard_state);
++	ChiakiControllerState net_state = net_input->GetState();
++	chiaki_controller_state_or(&state, &state, &net_state);
+ 	chiaki_controller_state_or(&state, &state, &touch_state);
+ 
+ 	if(input_block)
+@@ -1340,6 +1345,8 @@ void StreamSession::SendFeedbackState()
+ 	chiaki_controller_state_or(&state, &state, &sdeck_state);
+ #endif
+ 	chiaki_controller_state_or(&state, &state, &keyboard_state);
++	ChiakiControllerState net_state = net_input->GetState();
++	chiaki_controller_state_or(&state, &state, &net_state);
+ 	chiaki_controller_state_or(&state, &state, &touch_state);
+ 
+ 	if(input_block)

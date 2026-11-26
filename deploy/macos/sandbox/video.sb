@@ -1,0 +1,15 @@
+;; Jail for MediaMTX: mediamtx mediamtx/mediamtx.yml
+;; Reads under /Users: mediamtx/ (its config) and its own binary. Writes: nothing. Execs: mediamtx
+;; only. Network: WebRTC needs UDP with viewers and STUN on the internet, so outbound network is
+;; open except TCP to local services and local Unix sockets other than DNS.
+;; Parameters: REPO, HOME, CONFIG_DIR, MEDIAMTX.
+(import (string-append (param "REPO") "/deploy/macos/sandbox/common.sb"))
+
+(allow file-read* (subpath (repo-path "mediamtx")))
+(allow process-exec* (literal (param "MEDIAMTX")))
+(allow file-read* (literal (param "MEDIAMTX")))
+(deny process-fork)
+(deny network-outbound (remote tcp "localhost:*"))
+;; No local Unix-domain services but mDNSResponder, for DNS.
+(deny network-outbound (remote unix-socket))
+(allow network-outbound (remote unix-socket (path-literal "/private/var/run/mDNSResponder")))

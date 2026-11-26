@@ -1,0 +1,44 @@
+;; Jail for the web server: bun --no-install --no-env-file --env-file=... src/main.ts
+;; Reads under /Users: src/, public/, node_modules/, package.json, tsconfig.json (Bun reads it to
+;; transpile), .env, and server.env and mediamtx-api.env in the config folder (the rest of the file
+;; system outside /Users and /Volumes stays readable). Writes: only state.json (and its .tmp).
+;; Execs: bun only (Homebrew's, or the official installer's under ~/.bun/bin, which is why the BUN
+;; binary itself is re-allowed for reading).
+;; Network: loopback only (its own port, chiaki-ng's UDP input, MediaMTX), plus HTTPS to any host
+;; when an online feature needs it (OUTBOUND_HTTPS=1: Kick login).
+;; Parameters: REPO, HOME, CONFIG_DIR, BUN, HTTP_PORT, CHIAKI_INPUT_PORT, OUTBOUND_HTTPS.
+(import (string-append (param "REPO") "/deploy/macos/sandbox/common.sb"))
+
+(allow file-read*
+  (subpath (repo-path "src"))
+  (subpath (repo-path "public"))
+  (subpath (repo-path "node_modules"))
+  (literal (repo-path "package.json"))
+  (literal (repo-path "tsconfig.json"))
+  (literal (repo-path ".env"))
+  (literal (config-path "server.env"))
+  (literal (config-path "mediamtx-api.env")))
+
+;; The saved state: written to state.json.tmp, then renamed over state.json.
+(allow file-read* file-write*
+  (literal (config-path "state.json"))
+  (literal (config-path "state.json.tmp")))
+(allow file-read-metadata (literal (param "CONFIG_DIR")))
+
+(allow file-read* (literal (param "BUN")))
+(allow process-exec* (literal (param "BUN")))
+(deny process-fork)
+
+(deny network*)
+;; "local ip" also matches outbound sockets, so it is used for bind/accept only.
+(allow network-bind (local ip "localhost:*"))
+(allow network-inbound (local ip (string-append "localhost:" (param "HTTP_PORT"))))
+(allow network-outbound
+  (remote ip (string-append "localhost:" (param "CHIAKI_INPUT_PORT")))
+  (remote ip "localhost:8889")
+  (remote ip "localhost:9997"))
+;; Seatbelt cannot filter by host name, so this is any HTTPS server, and only when needed.
+(if (equal? (param "OUTBOUND_HTTPS") "1")
+  (begin
+    (allow network-outbound (remote tcp "*:443"))
+    (allow network-outbound (literal "/private/var/run/mDNSResponder"))))

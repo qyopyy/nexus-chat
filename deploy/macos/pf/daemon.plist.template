@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Enables pf at boot with macOS's default ruleset and loads the service user's anchor
+  (@RULES@). Root-owned, inline command: nothing in the user-writable repository runs as root.
+  Failures are logged to /var/log/@LABEL@.log and make the job exit non-zero, never silently.
+  Installed and removed by deploy/macos/pf-isolate.sh.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>@LABEL@</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>/sbin/pfctl -q -f /etc/pf.conf &amp;&amp; /sbin/pfctl -q -a com.apple/@ANCHOR@ -f @RULES@ || { echo "$(date) could not load the pf anchor @ANCHOR@"; exit 1; }; /sbin/pfctl -q -e 2&gt;/dev/null; /sbin/pfctl -s info 2&gt;/dev/null | grep -q 'Status: Enabled' || { echo "$(date) pf is not enabled"; exit 1; }</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/var/log/@LABEL@.log</string>
+  <key>StandardErrorPath</key>
+  <string>/var/log/@LABEL@.log</string>
+</dict>
+</plist>

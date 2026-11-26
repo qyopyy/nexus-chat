@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- MediaMTX inside its Seatbelt jail. The API password reaches it only as a hash. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>@LABEL_PREFIX@.video</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/sandbox-exec</string>
+    <string>-D</string><string>REPO=@REPO@</string>
+    <string>-D</string><string>HOME=@HOME@</string>
+    <string>-D</string><string>CONFIG_DIR=@CONFIG_DIR@</string>
+    <string>-D</string><string>MEDIAMTX=@MEDIAMTX@</string>
+    <string>-f</string><string>@REPO@/deploy/macos/sandbox/video.sb</string>
+    <string>@MEDIAMTX@</string>
+    <string>@REPO@/mediamtx/mediamtx.yml</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>@SERVICE_PATH@</string>
+    <key>MTX_AUTHINTERNALUSERS_1_USER</key><string>@API_USER@</string>
+    <key>MTX_AUTHINTERNALUSERS_1_PASS</key><string>@API_PASS_HASH@</string>
+  </dict>
+  <key>WorkingDirectory</key>
+  <string>@REPO@</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>15</integer>
+  <key>ProcessType</key>
+  <string>Interactive</string>
+  <key>StandardOutPath</key>
+  <string>@LOG_DIR@/@NAME@.log</string>
+  <key>StandardErrorPath</key>
+  <string>@LOG_DIR@/@NAME@.log</string>
+</dict>
+</plist>

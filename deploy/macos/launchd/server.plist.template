@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The web server inside its Seatbelt jail. Settings: .env, then server.env and mediamtx-api.env.
+  Variables set here win over those files. Bun skips any of them that is missing and reads no other
+  .env file (no-env-file); it installs nothing at run time (no-install), and its transpiler cache,
+  which the jail could not write anyway, is off. TRUSTED_PROXY=cloudflare: the supported setup puts
+  the server behind the cloudflared agent, which marks every request with CF-Connecting-IP.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>@LABEL_PREFIX@.server</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/sandbox-exec</string>
+    <string>-D</string><string>REPO=@REPO@</string>
+    <string>-D</string><string>HOME=@HOME@</string>
+    <string>-D</string><string>CONFIG_DIR=@CONFIG_DIR@</string>
+    <string>-D</string><string>BUN=@BUN@</string>
+    <string>-D</string><string>HTTP_PORT=@HTTP_PORT@</string>
+    <string>-D</string><string>CHIAKI_INPUT_PORT=@CHIAKI_INPUT_PORT@</string>
+    <string>-D</string><string>OUTBOUND_HTTPS=@OUTBOUND_HTTPS@</string>
+    <string>-f</string><string>@REPO@/deploy/macos/sandbox/server.sb</string>
+    <string>@BUN@</string>
+    <string>--no-install</string>
+    <string>--no-env-file</string>
+    <string>--env-file=.env</string>
+    <string>--env-file=@CONFIG_DIR@/server.env</string>
+    <string>--env-file=@CONFIG_DIR@/mediamtx-api.env</string>
+    <string>src/main.ts</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>@SERVICE_PATH@</string>
+    <key>BUN_RUNTIME_TRANSPILER_CACHE_PATH</key><string>0</string>
+    <key>CONSOLE</key><string>chiaki</string>
+    <key>VIDEO</key><string>webrtc</string>
+    <key>STATE_FILE</key><string>@CONFIG_DIR@/state.json</string>
+    <key>TRUSTED_PROXY</key><string>cloudflare</string>
+  </dict>
+  <key>WorkingDirectory</key>
+  <string>@REPO@</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>15</integer>
+  <key>ProcessType</key>
+  <string>Interactive</string>
+  <key>StandardOutPath</key>
+  <string>@LOG_DIR@/@NAME@.log</string>
+  <key>StandardErrorPath</key>
+  <string>@LOG_DIR@/@NAME@.log</string>
+</dict>
+</plist>
