@@ -5,6 +5,7 @@ import { startInput } from './input.js';
 import { helpLine, layoutFor } from './keymap.js';
 import { formatClock, lineSummary, reconnectDelay, statusText, turnLeftMs, videoEligible } from './line-view.js';
 import { createTouchPad } from './touch-pad.js';
+import { blockZoomGestures, setupInstallHint } from './ios.js';
 import { StallWatch, WhepSession } from './video-player.js';
 
 const VIDEO_RETRY_MS = { offline: 3000, full: 10_000, error: 5000 };
@@ -342,6 +343,10 @@ async function boot() {
   const touch = createTouchPad($('touchpad'));
   document.documentElement.classList.toggle('touch', touch.enabled);
   const awake = keepAwake();
+  if (touch.enabled) {
+    blockZoomGestures();
+    setupInstallHint($('install-hint'));
+  }
   setupFullscreen({
     view: $('screen'),
     button: $('fs'),

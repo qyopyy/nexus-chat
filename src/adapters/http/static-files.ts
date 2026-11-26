@@ -11,11 +11,12 @@ const MIME: Record<string, string> = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
+  '.webmanifest': 'application/manifest+json',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
   '.txt': 'text/plain; charset=utf-8',
 };
-const COMPRESSIBLE = new Set(['.html', '.js', '.css', '.svg', '.txt']);
+const COMPRESSIBLE = new Set(['.html', '.js', '.css', '.svg', '.txt', '.webmanifest']);
 /** Browsers and proxies revalidate every load, so a deploy reaches everyone at once. */
 const REVALIDATE = 'private, no-cache';
 

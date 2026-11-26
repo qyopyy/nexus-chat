@@ -5,12 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="PlayGTA" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icon-180.png" />
     <meta name="description" content="Take turns controlling a real console from your browser." />
     <title>PlayGTA</title>
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/css/style.css" />
   </head>
   <body>
+    <p id="install-hint" hidden>
+      <span>Tap <b>Share</b> <span aria-hidden="true">⬆️</span> then <b>Add to Home Screen</b> to play full screen with joysticks.</span>
+      <button type="button" aria-label="Dismiss">✕</button>
+    </p>
+    <div id="rotate-hint">
+      <div>
+        <p>📱↻</p>
+        <p>Turn your phone sideways to play with the joysticks.</p>
+      </div>
+    </div>
     <header>
       <h1 id="title">PlayGTA</h1>
       <p id="connection" role="status">Connecting…</p>
