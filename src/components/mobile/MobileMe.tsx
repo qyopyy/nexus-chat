@@ -226,6 +226,7 @@ export default function MobileMe() {
 
       <div className="mx-4 mt-4 overflow-hidden rounded-2xl bg-side [&>button+button]:border-t [&>button+button]:border-white/[.05]">
         {row(<UserPen className="size-[18px]" />, "#5865f2", "Edit profile", () => openModal("settings", "account"))}
+        {row(<Shield className="size-[18px]" />, "#10b981", "Nexus Guard — link shield & 24/7 watch", () => window.location.assign("/guard"), <span className="mr-1 text-sm text-sub">Protect</span>)}
         {row(<Shield className="size-[18px]" />, "#23a55a", "Security & 2FA", () => openModal("settings", "account"), <span className="mr-1 text-sm text-sub">Authy · Flipper</span>)}
         {row(<Sparkles className="size-[18px]" />, "#eb459e", "Avatar & decorations", () => openModal("settings", "account"))}
         {row(<Palette className="size-[18px]" />, "#9b59b6", "Themes & appearance", () => openModal("settings", "appearance"))}

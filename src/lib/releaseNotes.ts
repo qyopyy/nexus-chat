@@ -9,6 +9,10 @@ export const NEXUS_RELEASE: ReleaseNote = {
   version: "1.9.1",
   items: [
     {
+      title: "Nexus Guard",
+      body: "Me tab → Nexus Guard. Scan any link before you tap it, keep a 24/7 watchlist that messages you if a link turns dangerous, and see a protection score with ad-blocking DNS, IP hiding and iOS privacy steps.",
+    },
+    {
       title: "Security keys for 2FA",
       body: "Settings → Account has a Security key option: link a Flipper Zero (U2F app), YubiKey or other hardware key as a second factor, next to Authy and passkeys. Existing accounts can turn it on there any time.",
     },
