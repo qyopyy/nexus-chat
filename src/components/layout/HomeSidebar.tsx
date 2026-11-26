@@ -163,9 +163,13 @@ export default function HomeSidebar() {
           {pending > 0 && <span className="rounded-full bg-dnd px-1.5 text-xs font-bold text-white">{pending}</span>}
         </button>
 
-        <a href="/drop/index.html" className="mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sub transition hover:bg-hover hover:text-txt">
+        <a href="/share" className="mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sub transition hover:bg-hover hover:text-txt">
           <Radio className="size-5 text-[#c6b8ff]" />
-          <span className="flex-1 font-medium">Nexus Drop</span>
+          <span className="flex-1 font-medium">Share &amp; Drop</span>
+        </a>
+        <a href="/phone" className="mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sub transition hover:bg-hover hover:text-txt">
+          <Phone className="size-5 text-[#c6b8ff]" />
+          <span className="flex-1 font-medium">Phone Link</span>
         </a>
 
         <a href="/presave/index.html" className="mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sub transition hover:bg-hover hover:text-txt">

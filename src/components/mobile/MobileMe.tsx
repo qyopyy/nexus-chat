@@ -117,6 +117,18 @@ export default function MobileMe() {
         </div>
       </div>
 
+      {/* Phone Link + Drop — always visible, one tap */}
+      <a href="/share" onClick={() => haptic.select()} className="mx-4 mt-4 block overflow-hidden rounded-3xl p-4 active:scale-[0.99]" style={{ background: "linear-gradient(135deg,#312e81,#1e1b4b 55%,#4c1d95)" }}>
+        <div className="flex items-center gap-3">
+          <span className="grid size-12 place-items-center rounded-2xl bg-black/25 text-2xl ring-1 ring-white/10">📲</span>
+          <div className="min-w-0 flex-1">
+            <div className="text-[20px] font-extrabold text-white">Phone Link &amp; Drop</div>
+            <div className="truncate text-[13px] text-white/70">Send files between devices · link your phone</div>
+          </div>
+          <ChevronRight className="size-5 shrink-0 text-white/60" />
+        </div>
+      </a>
+
       {/* Wump — first-class entry (web OTA, no new IPA/APK) */}
       <button
         type="button"
@@ -165,7 +177,7 @@ export default function MobileMe() {
         {row(<Users className="size-[18px]" />, "#2aabee", "Friends", () => useApp.setState({ mobileTab: "friends" }), pending > 0 ? <span className="rounded-full bg-dnd px-2 text-xs font-bold text-white">{pending}</span> : undefined)}
         {row(<LayoutDashboard className="size-[18px]" />, "#eb459e", "Studio — videos & music releases", () => useApp.setState({ hub: "studio" }))}
         {row(<Link2 className="size-[18px]" />, "#7963c7", "Pre-save links — unlimited campaigns", () => window.location.assign("/presave/index.html"))}
-        {row(<Radio className="size-[18px]" />, "#a78bfa", "Nexus Drop — share between devices", () => window.location.assign("/drop/index.html"))}
+        {row(<Radio className="size-[18px]" />, "#a78bfa", "Share & Drop — files between devices", () => window.location.assign("/share"))}
         {row(<Tv className="size-[18px]" />, "#9146ff", "Nexus Live — HD & 4K streams", () => openLiveHub())}
         {row(<Megaphone className="size-[18px]" />, "#1d9bf0", "Pulse — Twitter-style posts", () => openPulse())}
         {row(<Radio className="size-[18px]" />, "#ff2bd6", "Nexus Radio — listen & jam together", () => void openRadio())}
@@ -259,6 +271,9 @@ export default function MobileMe() {
         </a>
         <a href="/locator" className="flex w-full items-center px-4 py-3.5 text-[16px] font-semibold active:bg-white/[.06]">
           Locator
+        </a>
+        <a href="/share" className="flex w-full items-center px-4 py-3.5 text-[16px] font-semibold active:bg-white/[.06]">
+          Share &amp; Link (Drop)
         </a>
         <a href="/phone" className="flex w-full items-center px-4 py-3.5 text-[16px] font-semibold active:bg-white/[.06]">
           Phone Link

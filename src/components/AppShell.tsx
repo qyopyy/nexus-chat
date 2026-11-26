@@ -37,18 +37,6 @@ import "@/lib/prefs";
 import "@/lib/iphoneKit";
 import { startPush } from "@/lib/push";
 import { joinGame } from "@/store/games";
-import GamesHub from "@/components/games/GamesHub";
-import AppsHub from "@/components/apps/AppsHub";
-import DistributionPanelHub from "@/components/distribution/DistributionPanelHub";
-import BumpHub from "@/components/bump/BumpHub";
-import MusicHub from "./music/MusicHub";
-import VideosHub from "./videos/VideosHub";
-import Studio from "./studio/Studio";
-import UntitledHub from "./untitled/UntitledHub";
-import RadioHub from "./radio/RadioHub";
-import LiveHub from "./live/LiveHub";
-import PulseHub from "./pulse/PulseHub";
-import StaffDesk from "./staff/StaffDesk";
 import SiteNoticeBanner from "./staff/SiteNoticeBanner";
 import ReportDialog from "./ui/ReportDialog";
 import UpdateReadyPill from "./ui/UpdateReadyPill";
@@ -57,10 +45,25 @@ import { NEXUS_RELEASE } from "@/lib/releaseNotes";
 import MaintenanceGate from "./MaintenanceGate";
 import { useStudio, videosGo } from "@/store/studio";
 import { releaseByCode } from "@/lib/protect";
-import NexusGram from "./gram/NexusGram";
 import { getPost, openGram, useGram } from "@/lib/gram";
 import { openUntitled } from "@/lib/untitled";
 import { loadMyEmojis } from "@/lib/customEmoji";
+import { lazyHub } from "@/components/ui/lazyHub";
+
+const GamesHub = lazyHub(() => import("@/components/games/GamesHub"));
+const AppsHub = lazyHub(() => import("@/components/apps/AppsHub"));
+const DistributionPanelHub = lazyHub(() => import("@/components/distribution/DistributionPanelHub"));
+const BumpHub = lazyHub(() => import("@/components/bump/BumpHub"));
+const MusicHub = lazyHub(() => import("./music/MusicHub"));
+const VideosHub = lazyHub(() => import("./videos/VideosHub"));
+const Studio = lazyHub(() => import("./studio/Studio"));
+const UntitledHub = lazyHub(() => import("./untitled/UntitledHub"));
+const RadioHub = lazyHub(() => import("./radio/RadioHub"));
+const LiveHub = lazyHub(() => import("./live/LiveHub"));
+const PulseHub = lazyHub(() => import("./pulse/PulseHub"));
+const StaffDesk = lazyHub(() => import("./staff/StaffDesk"));
+const NexusGram = lazyHub(() => import("./gram/NexusGram"));
+
 
 export default function AppShell({ userId, initialVideo, initialRelease, initialGram, initialGramPost, initialGramContent, initialUntitled }: { userId: string; initialVideo?: string; initialRelease?: string; initialGram?: string; initialGramPost?: string; initialGramContent?: string; initialUntitled?: string }) {
   const spaceId = useApp((s) => s.spaceId);

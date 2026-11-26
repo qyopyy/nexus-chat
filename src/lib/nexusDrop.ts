@@ -81,7 +81,32 @@ export async function claimDrop(id: string) {
   if (error) throw new Error(errorText(error));
 }
 
+const isIosLike = () => typeof navigator !== "undefined" && (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+
+/** iPhone / iPad (Safari and the Nexus app): pop-up tabs are unreliable, so use the share sheet ("Save to Files", Photos, AirDrop) or a plain download. */
+async function saveDropIos(row: NexusDrop) {
+  const url = await openDrop(row);
+  if (row.bytes <= 50 * 1024 * 1024 && typeof navigator.share === "function" && typeof navigator.canShare === "function") {
+    try {
+      const blob = await (await fetch(url)).blob();
+      const file = new File([blob], row.name, { type: row.mime || blob.type || "application/octet-stream" });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: row.name });
+        await claimDrop(row.id);
+        return url;
+      }
+    } catch (error) {
+      if ((error as Error).name === "AbortError") throw new Error("Save cancelled. The file is still in your inbox.");
+      // any other failure (blocked share, fetch error): fall through to a normal download
+    }
+  }
+  window.location.assign(url);
+  await claimDrop(row.id);
+  return url;
+}
+
 export async function openAndClaimDrop(row: NexusDrop) {
+  if (isIosLike()) return saveDropIos(row);
   // Reserve the tab while this call still has the click's user activation.
   // The `noopener` window feature always returns null in modern browsers, so
   // detach the blank tab's opener ourselves before requesting the signed URL.

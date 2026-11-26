@@ -12,20 +12,23 @@ import MobileChats from "./MobileChats";
 import MobileSpaces from "./MobileSpaces";
 import MobileMe from "./MobileMe";
 import MobileCallBar from "./MobileCallBar";
-import GamesHub from "@/components/games/GamesHub";
-import AppsHub from "@/components/apps/AppsHub";
-import DistributionPanelHub from "@/components/distribution/DistributionPanelHub";
-import BumpHub from "@/components/bump/BumpHub";
-import MusicHub from "@/components/music/MusicHub";
-import VideosHub from "@/components/videos/VideosHub";
-import NexusGram from "@/components/gram/NexusGram";
-import UntitledHub from "@/components/untitled/UntitledHub";
-import RadioHub from "@/components/radio/RadioHub";
-import LiveHub from "@/components/live/LiveHub";
-import PulseHub from "@/components/pulse/PulseHub";
-import StaffDesk from "@/components/staff/StaffDesk";
 import SiteNoticeBanner from "@/components/staff/SiteNoticeBanner";
 import ChannelLockGate from "@/components/space/ChannelLockGate";
+import { lazyHub } from "@/components/ui/lazyHub";
+
+const GamesHub = lazyHub(() => import("@/components/games/GamesHub"));
+const AppsHub = lazyHub(() => import("@/components/apps/AppsHub"));
+const DistributionPanelHub = lazyHub(() => import("@/components/distribution/DistributionPanelHub"));
+const BumpHub = lazyHub(() => import("@/components/bump/BumpHub"));
+const MusicHub = lazyHub(() => import("@/components/music/MusicHub"));
+const VideosHub = lazyHub(() => import("@/components/videos/VideosHub"));
+const NexusGram = lazyHub(() => import("@/components/gram/NexusGram"));
+const UntitledHub = lazyHub(() => import("@/components/untitled/UntitledHub"));
+const RadioHub = lazyHub(() => import("@/components/radio/RadioHub"));
+const LiveHub = lazyHub(() => import("@/components/live/LiveHub"));
+const PulseHub = lazyHub(() => import("@/components/pulse/PulseHub"));
+const StaffDesk = lazyHub(() => import("@/components/staff/StaffDesk"));
+
 
 /** Phone layout: bottom tabs + push-style chat screen with swipe-from-edge to go back */
 export default function MobileShell() {

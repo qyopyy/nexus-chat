@@ -9,6 +9,14 @@ export const NEXUS_RELEASE: ReleaseNote = {
   version: "1.9.1",
   items: [
     {
+      title: "Share & Link, front and center",
+      body: "Phone Link and Drop now have their own page (Me tab → Phone Link & Drop, or the sidebar). Send a file to your other devices or a friend over any network, and tap Save on iPhone to put it in Files or Photos.",
+    },
+    {
+      title: "Faster to open",
+      body: "Studio, Games, Apps, Radio, Live and the other big screens now load when you open them instead of with the app, so Nexus starts quicker.",
+    },
+    {
       title: "Distribution panel",
       body: "Panel is in the sidebar, Apps, and Settings. It opens the music distribution dashboard in a new tab, or in the iPhone in-app browser so that sign-in stays there.",
     },
