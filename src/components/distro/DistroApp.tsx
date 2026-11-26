@@ -18,6 +18,8 @@ import {
   LogOut,
   Menu,
   MoreHorizontal,
+  Link2,
+  Music,
   PanelLeft,
   Plus,
   Receipt,
@@ -47,6 +49,8 @@ import Modals from "@/components/modals/Modals";
 import { Releases, Royalties, DistSettings } from "@/components/studio/Distribution";
 import { ManageReleases } from "@/components/studio/ReleaseHandoff";
 import ShieldStudio from "@/components/studio/ShieldStudio";
+import TikTokSound from "@/components/studio/TikTokSound";
+import InstagramLinks from "@/components/studio/InstagramLinks";
 import OrdersAdmin from "@/components/studio/OrdersAdmin";
 import { DxAnalytics, DxArtists, DxOverview, DxReleases, DxSettings, DxTools, DxEmbed } from "./DxPages";
 import type { DistRelease } from "@/lib/types";
@@ -61,6 +65,8 @@ export type DxSection =
   | "earnings"
   | "tools"
   | "shield"
+  | "tiktok-sound"
+  | "instagram-link"
   | "content-id"
   | "defender"
   | "takedowns"
@@ -78,6 +84,8 @@ const TITLES: Record<DxSection, string> = {
   earnings: "Earnings",
   tools: "Tools",
   shield: "Shield 360",
+  "tiktok-sound": "TikTok sounds",
+  "instagram-link": "Instagram links",
   "content-id": "Content ID",
   defender: "Profile Defender",
   takedowns: "Takedowns",
@@ -95,6 +103,8 @@ const ICONS: Record<DxSection, React.ComponentType<{ className?: string }>> = {
   earnings: Wallet,
   tools: Wrench,
   shield: Shield,
+  "tiktok-sound": Music,
+  "instagram-link": Link2,
   "content-id": Fingerprint,
   defender: ShieldCheck,
   takedowns: Receipt,
@@ -112,6 +122,8 @@ const FROM_STUDIO: Partial<Record<StudioSection, DxSection>> = {
   "live-catalog": "analytics",
   tools: "tools",
   shield: "shield",
+  "tiktok-sound": "tiktok-sound",
+  "instagram-link": "instagram-link",
   "content-id": "content-id",
   defender: "defender",
   takedowns: "takedowns",
@@ -382,6 +394,8 @@ function Workspace() {
             ))}
           </div>
         )}
+        {item("tiktok-sound")}
+        {item("instagram-link")}
         {item("shield")}
         {item("content-id")}
         {item("defender")}
@@ -482,6 +496,8 @@ function Workspace() {
             {section === "earnings" && <DxEmbed title="Earnings" sub="Royalties reported by the stores, by month, source and territory."><Royalties /></DxEmbed>}
             {section === "tools" && <DxTools go={go} />}
             {section === "shield" && <DxEmbed><ShieldStudio /></DxEmbed>}
+            {section === "tiktok-sound" && <DxEmbed><TikTokSound /></DxEmbed>}
+            {section === "instagram-link" && <DxEmbed><InstagramLinks /></DxEmbed>}
             {section === "content-id" && <LazySection name="content-id" />}
             {section === "defender" && <LazySection name="defender" />}
             {section === "takedowns" && <LazySection name="takedowns" />}

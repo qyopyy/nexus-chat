@@ -35,6 +35,8 @@ import {
 } from "@/lib/shield";
 import { checkStatus, clipFromFile, copyrightCheck } from "@/lib/audio";
 import { cn } from "@/lib/utils";
+import { ProPanel, ShieldCommand } from "./ShieldPro";
+import { creditsFromArtist } from "@/lib/shieldPro";
 import { buildCertificate } from "@/lib/certificate";
 import Avatar from "@/components/ui/Avatar";
 import NameTag from "@/components/ui/NameTag";
@@ -86,7 +88,7 @@ export default function ShieldStudio() {
       try {
         await registerWork(
           d.file,
-          { title: d.title.trim() || "Untitled", artist: d.artist.trim(), isrc: /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(d.isrc) ? d.isrc : undefined, upc: /^\d{12,14}$/.test(d.upc) ? d.upc : undefined, docs: d.docs, unlock_at: d.lockUntil ? new Date(`${d.lockUntil}T00:00:00`).toISOString() : null, allow_users: d.allow, keepFile: d.keep, block_where: d.tiktok ? [...ALL_WHERE] : ALL_WHERE.filter((x) => !(TIKTOK_WHERE as readonly string[]).includes(x)) },
+          { title: d.title.trim() || "Untitled", artist: d.artist.trim(), isrc: /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(d.isrc) ? d.isrc : undefined, upc: /^\d{12,14}$/.test(d.upc) ? d.upc : undefined, docs: d.docs, unlock_at: d.lockUntil ? new Date(`${d.lockUntil}T00:00:00`).toISOString() : null, allow_users: d.allow, keepFile: d.keep, credits: creditsFromArtist(d.artist), block_where: d.tiktok ? [...ALL_WHERE] : ALL_WHERE.filter((x) => !(TIKTOK_WHERE as readonly string[]).includes(x)) },
           (step) => patch(d.id, { step }),
         );
         patch(d.id, { done: true, error: undefined });
@@ -159,6 +161,8 @@ export default function ShieldStudio() {
           ))}
         </div>
       </div>
+
+      {works && works.some((x) => x.owner_id === me) && <ShieldCommand works={works.filter((x) => x.owner_id === me)} onChange={(x) => setWorks((ws) => (ws ?? []).map((y) => (y.id === x.id ? x : y)))} />}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className="space-y-4">
@@ -492,6 +496,7 @@ function WorkRow({ w, mine, blocked, onChange, onRemoved }: { w: ShieldWork; min
           )}
           {mine && <CodesRow w={w} onChange={onChange} />}
           {mine && <Switches w={w} onChange={onChange} />}
+          {mine && <ProPanel w={w} onChange={onChange} />}
           <AcrRow w={w} mine={mine} onChange={onChange} />
           <Docs w={w} mine={mine} />
           {mine && (

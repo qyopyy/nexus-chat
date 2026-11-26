@@ -6,6 +6,7 @@
 //   hash = f1(9 bits) | f2(9 bits) | Δt(6 bits), stored with the anchor's frame time.
 // Matching counts hashes that line up at the same time offset, so it survives re-encoding, volume changes and cuts.
 
+import { cleanCredits, type Credit } from "./shieldPro";
 import { supabase, errorText } from "./supabase";
 import { useApp, toast } from "@/store/app";
 import { clipFromMedia, decodeFile, decodeLimit, fft, resample } from "./audio";
@@ -214,6 +215,11 @@ export type ShieldWork = {
   block_where?: string[];
   notify_owner?: boolean;
   strict?: boolean;
+  credits?: Credit[];
+  meta_seal?: string | null;
+  sealed_at?: string | null;
+  platforms?: Record<string, string>;
+  allow_until?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -240,6 +246,38 @@ export async function updateWork(id: string, patch: Partial<ShieldWork>) {
   }
   return data as ShieldWork;
 }
+/** Seal title / artists / codes / audio hash with a server timestamp (tamper-evident) */
+export async function sealWork(id: string) {
+  const { data, error } = await supabase.rpc("shield_seal", { p_work: id });
+  if (error) {
+    toast(errorText(error), "error");
+    return null;
+  }
+  const row = (Array.isArray(data) ? data[0] : data) as { seal: string; sealed_at: string } | null;
+  return row ?? null;
+}
+export async function verifySeal(id: string) {
+  const { data } = await supabase.rpc("shield_verify", { p_work: id });
+  return data === true;
+}
+/** other Nexus registrations that share this ISRC / UPC / audio file (counts only) */
+export async function sealConflicts(id: string) {
+  const { data } = await supabase.rpc("shield_conflicts", { p_work: id });
+  return ((data ?? []) as { kind: "isrc" | "upc" | "audio"; n: number }[]).filter((x) => x.n > 0);
+}
+export type SealRow = { id: number; seal: string; created_at: string; snapshot: { title: string; artist: string | null; isrc: string | null; upc: string | null; sha256: string | null; credits: Credit[] } };
+export async function listSeals(workId: string) {
+  const { data } = await supabase.from("shield_seals").select("id,seal,created_at,snapshot").eq("work_id", workId).order("created_at", { ascending: false }).limit(20);
+  return (data ?? []) as SealRow[];
+}
+export const saveCredits = (id: string, credits: Credit[]) => {
+  const c = cleanCredits(credits);
+  const main = c.filter((x) => x.role === "Primary artist").map((x) => x.name);
+  const feat = c.filter((x) => x.role === "Featured artist").map((x) => x.name);
+  const artist = [main.join(", "), feat.length ? `feat. ${feat.join(", ")}` : ""].filter(Boolean).join(" ");
+  return updateWork(id, { credits: c, ...(artist ? { artist: artist.slice(0, 200) } : {}) });
+};
+
 export async function removeWork(w: ShieldWork) {
   await supabase.functions.invoke("audiocheck", { body: { action: "shield_remove", work_id: w.id } }).catch(() => null);
   const docs = await listDocs(w.id);
@@ -350,7 +388,7 @@ export async function removeDoc(d: ShieldDoc) {
 
 export type RegisterStep = { step: string; p: number };
 /** fingerprint the whole song, keep the original in the owner-only vault, lock it */
-export async function registerWork(file: File, meta: { title: string; artist?: string; isrc?: string; upc?: string; docs?: { file: File; kind: DocKind }[]; unlock_at?: string | null; allow_users?: string[]; keepFile: boolean; block_where?: string[] }, onStep: (s: RegisterStep) => void) {
+export async function registerWork(file: File, meta: { title: string; artist?: string; isrc?: string; upc?: string; docs?: { file: File; kind: DocKind }[]; unlock_at?: string | null; allow_users?: string[]; keepFile: boolean; block_where?: string[]; credits?: Credit[] }, onStep: (s: RegisterStep) => void) {
   const me = useApp.getState().userId!;
   onStep({ step: "Reading audio…", p: 0.02 });
   const buf = await decodeFile(file);
@@ -373,7 +411,7 @@ export async function registerWork(file: File, meta: { title: string; artist?: s
 
   const { data: w, error } = await supabase
     .from("shield_works")
-    .insert({ owner_id: me, title: meta.title.slice(0, 200), artist: meta.artist?.slice(0, 200) || null, isrc: meta.isrc || null, upc: meta.upc || null, unlock_at: meta.unlock_at || null, allow_users: meta.allow_users ?? [], ...(meta.block_where ? { block_where: meta.block_where } : {}), file_name: file.name.slice(0, 300), bytes: file.size, duration: buf.duration })
+    .insert({ owner_id: me, title: meta.title.slice(0, 200), artist: meta.artist?.slice(0, 200) || null, isrc: meta.isrc || null, upc: meta.upc || null, unlock_at: meta.unlock_at || null, allow_users: meta.allow_users ?? [], ...(meta.block_where ? { block_where: meta.block_where } : {}), ...(meta.credits?.length ? { credits: cleanCredits(meta.credits) } : {}), file_name: file.name.slice(0, 300), bytes: file.size, duration: buf.duration })
     .select()
     .single();
   if (error || !w) throw new Error(errorText(error));

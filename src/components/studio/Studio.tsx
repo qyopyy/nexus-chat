@@ -68,6 +68,8 @@ import MyVault from "@/components/protect/Vault";
 import ToolView, { IsrcTool, ToolsGrid, type ToolId } from "@/components/music/Tools";
 import TakedownShield from "@/components/music/TakedownShield";
 import ProfileClaims from "./ProfileClaims";
+import TikTokSound from "./TikTokSound";
+import InstagramLinks from "./InstagramLinks";
 import type { DistRelease, Video, VideoComment } from "@/lib/types";
 
 const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: string; staff?: boolean; reviewer?: boolean }[] = [
@@ -85,6 +87,8 @@ const NAV: { id: StudioSection; label: string; icon: React.ReactNode; group?: st
   { id: "claims", label: "Profile claims", icon: <BadgeCheck className="size-5" />, group: "Music distribution" },
   { id: "licenses", label: "Licenses", icon: <ScrollText className="size-5" />, group: "Music distribution" },
   { id: "tools", label: "Music tools", icon: <AudioWaveform className="size-5" />, group: "Music distribution" },
+  { id: "tiktok-sound", label: "TikTok sounds", icon: <Music className="size-5" />, group: "Music distribution" },
+  { id: "instagram-link", label: "Instagram links", icon: <Link2 className="size-5" />, group: "Music distribution" },
   { id: "shield", label: "Shield 360", icon: <ShieldCheck className="size-5" />, group: "Protection" },
   { id: "content-id", label: "Content ID", icon: <Fingerprint className="size-5" />, group: "Protection" },
   { id: "checkmark", label: "Verification", icon: <BadgeCheck className="size-5" />, group: "Protection" },
@@ -232,6 +236,8 @@ export default function Studio() {
             {section === "royalties" && <Royalties />}
             {section === "tools" && <StudioTools />}
             {section === "shield" && <ShieldStudio />}
+            {section === "tiktok-sound" && <TikTokSound />}
+            {section === "instagram-link" && <InstagramLinks />}
             {section === "isrc" && (
               <>
                 <H>ISRC codes</H>
