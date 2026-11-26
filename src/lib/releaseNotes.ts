@@ -9,6 +9,10 @@ export const NEXUS_RELEASE: ReleaseNote = {
   version: "1.9.1",
   items: [
     {
+      title: "Bulk takedowns",
+      body: "Studio → Takedowns → Bulk Spotify takedown. Paste many songs, tick the releases you want removed, or file against a whole artist profile — one notice covers everything. Notices are now written in calm, factual wording with a live strength check, and a tracker reminds you to follow up (day 7) or escalate (day 14). Search an ISRC to find the label, then email the platform with the label/distributor in CC (or write to them directly). Claim details and address are saved to your account.",
+    },
+    {
       title: "Spotify checkmark roadmap",
       body: "Studio → Checkmark. A step-by-step claim + verified-badge checklist: it auto-detects what your profile already has, shows how many steps remain, tracks the rest, and includes a pitch planner with deadlines.",
     },

@@ -60,6 +60,8 @@ import { NEED, gate, useCanReview } from "@/lib/premium";
 import ShieldStudio from "./ShieldStudio";
 import TakedownTool from "@/components/music/Takedown";
 import SpotifyTakedown from "@/components/music/SpotifyTakedown";
+import BulkTakedown from "@/components/music/BulkTakedown";
+import TakedownTracker from "@/components/music/TakedownTracker";
 import ContentId from "@/components/protect/ContentId";
 import Licenses, { LicensesCard } from "./Licenses";
 import Defender from "@/components/protect/Defender";
@@ -267,12 +269,18 @@ export default function Studio() {
                 <div className="mb-10">
                   <TakedownShield />
                 </div>
+                <div className="mb-8">
+                  <TakedownTracker />
+                </div>
                 <H>Takedown notices</H>
                 <p className="-mt-3 mb-4 text-sm text-sub">
                   Someone uploaded your music to Spotify, Apple Music, Deezer, YouTube Claim / Content ID, SoundCloud, TIDAL, Amazon Music, TikTok or Snapchat? Fill this in and send an official copyright notice in one go.
                 </p>
                 <div className="mb-6">
                   <SpotifyTakedown />
+                </div>
+                <div className="mb-6">
+                  <BulkTakedown />
                 </div>
                 <TakedownTool />
               </>

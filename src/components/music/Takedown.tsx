@@ -33,13 +33,12 @@ import {
   type Platform,
   type Takedown,
 } from "@/lib/takedown";
+import { hydrateContact } from "@/lib/takedownContacts";
+import { REASONS as REASON_LIST, buildStatement } from "@/lib/noticeCopy";
+import NoticeStrength from "./NoticeStrength";
+import DistributorNotify from "./DistributorNotify";
 
-const REASONS = [
-  ["Re-upload", "This release is an unauthorized re-upload of my recording. I own the master and composition and did not license it to the uploader."],
-  ["Sample / beat", "This release uses my recording (beat/sample) without a license or clearance. The matching section starts at about 0:00."],
-  ["Wrong artist", "This release was delivered to my artist profile but it is not my music. Please remove it from my profile."],
-  ["Impersonation", "This profile/release impersonates my artist name to mislead listeners and divert streams."],
-] as const;
+
 
 const inp = "w-full min-w-0 rounded-lg border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent";
 function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
@@ -89,6 +88,7 @@ export default function TakedownTool({ initial }: { initial?: Platform }) {
     void listWorks().then(setWorks);
     void listTakedowns().then(setHistory);
     void sendStatus().then(setSrv);
+    void hydrateContact().then((c) => c && setD((x) => (x.contact.name ? x : { ...x, contact: c, signature: x.signature || c.name })));
   }, []);
 
   const full: Draft = useMemo(() => ({ ...d, infringing: splitLinks(links) }), [d, links]);
@@ -267,8 +267,8 @@ export default function TakedownTool({ initial }: { initial?: Platform }) {
         <div>
           <span className="mb-1 block text-xs text-sub">Description * — what's infringing and why</span>
           <div className="mb-2 flex flex-wrap gap-1.5">
-            {REASONS.map(([k, v]) => (
-              <button key={k} type="button" onClick={() => set({ description: d.description ? `${d.description}\n${v}` : v })} className="rounded-full bg-hover px-3 py-1 text-xs font-semibold hover:bg-active">
+            {REASON_LIST.map(({ id, label: k }) => (
+              <button key={id} type="button" onClick={() => set({ description: buildStatement({ reason: id, owner: d.contact.company.trim() || d.contact.name.trim(), platform: PLATFORM[d.platform].name, count: splitLinks(links).length || 1, originalUrl: d.original_url ?? undefined }) })} className="rounded-full bg-hover px-3 py-1 text-xs font-semibold hover:bg-active">
                 + {k}
               </button>
             ))}
@@ -332,6 +332,8 @@ export default function TakedownTool({ initial }: { initial?: Platform }) {
 
       {/* actions */}
       <section className="space-y-3 rounded-2xl p-4 ring-2" style={{ boxShadow: `inset 0 0 0 2px ${P.color}55` }}>
+        <NoticeStrength draft={full} />
+        {full.work_title.trim() && full.infringing.length > 0 && <DistributorNotify draft={full} isrc={full.isrc} titles={`“${full.work_title.trim()}”`} />}
         {issues.length > 0 && <p className="text-xs text-idle">Still needed: {issues.join(" · ")}</p>}
         <div className="flex flex-wrap gap-2">
           {P.prefer === "form" ? (

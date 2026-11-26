@@ -6,6 +6,7 @@ import { BeatTool, ConvertTool, KaraokeTool, MasterTool, ScaleTool } from "./Too
 import VibeStudio from "./VibeStudio";
 import VisualizerMaker from "@/components/media/VisualizerMaker";
 import TakedownTool from "./Takedown";
+import BulkTakedown from "./BulkTakedown";
 import TakedownShield from "./TakedownShield";
 import { supabase, errorText } from "@/lib/supabase";
 import { NEED, gate, useMyTier } from "@/lib/premium";
@@ -80,7 +81,12 @@ export default function ToolView({ tool }: { tool: ToolId }) {
       </div>
       {tool === "isrc" && <IsrcTool />}
       {tool === "upc" && <UpcTool />}
-      {tool === "takedown" && <TakedownTool />}
+      {tool === "takedown" && (
+        <>
+          <BulkTakedown />
+          <TakedownTool />
+        </>
+      )}
       {tool === "protect" && <TakedownShield />}
       {tool === "analyzer" && <AnalyzerTool />}
       {tool === "copyright" && <AnalyzerTool copyrightFirst />}

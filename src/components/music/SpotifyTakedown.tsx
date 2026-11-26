@@ -22,6 +22,10 @@ import {
   type Contact,
   type Draft,
 } from "@/lib/takedown";
+import { hydrateContact } from "@/lib/takedownContacts";
+import { buildStatement } from "@/lib/noticeCopy";
+import NoticeStrength from "./NoticeStrength";
+import DistributorNotify from "./DistributorNotify";
 
 const inp = "w-full min-w-0 rounded-lg border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent";
 
@@ -39,6 +43,7 @@ export default function SpotifyTakedown() {
   const [contact, setContact] = useState<Contact>(() => loadContact());
   const [signature, setSignature] = useState(() => loadContact().name || "");
   const [original, setOriginal] = useState("");
+  const [pro, setPro] = useState(true);
   const [agree, setAgree] = useState([false, false, false]);
   const [srv, setSrv] = useState<{ configured: boolean; test: boolean; verified: string[] }>({ configured: false, test: false, verified: [] });
   const [codeFor, setCodeFor] = useState<string | null>(null);
@@ -47,6 +52,11 @@ export default function SpotifyTakedown() {
   useEffect(() => {
     void spotifyConfig().then((c) => setConfigured(c.configured));
     void sendStatus().then(setSrv);
+    void hydrateContact().then((c) => {
+      if (!c) return;
+      setContact((x) => (x.name ? x : c));
+      setSignature((s) => s || c.name);
+    });
   }, []);
 
   const draft: Draft | null = useMemo(() => {
@@ -59,12 +69,12 @@ export default function SpotifyTakedown() {
       upc: hit.upc,
       original_url: original.trim() || null,
       infringing: hit.infringing,
-      description: hit.description,
+      description: pro ? buildStatement({ reason: "reupload", owner: contact.company.trim() || contact.name.trim(), platform: "Spotify", count: 1, originalUrl: original }) + (hit.description ? `\n\nDetails: ${hit.description}` : "") : hit.description,
       contact,
       signature: signature.trim() || contact.name,
       shield_work: null,
     };
-  }, [hit, contact, signature, original]);
+  }, [hit, contact, signature, original, pro]);
 
   const issues = draft ? problems(draft) : ["Resolve a Spotify track first"];
   const ready = !!draft && issues.length === 0 && agree.every(Boolean);
@@ -265,6 +275,11 @@ export default function SpotifyTakedown() {
             ))}
           </div>
 
+          <label className="flex items-center gap-2 text-xs text-sub">
+            <input type="checkbox" checked={pro} onChange={(e) => setPro(e.target.checked)} /> Use professional wording (recommended)
+          </label>
+          <NoticeStrength draft={draft} />
+
           {issues.length > 0 && <p className="text-xs text-[#ff8a8c]">Still needed: {issues.join(" · ")}</p>}
 
           {codeFor ? (
@@ -297,6 +312,8 @@ export default function SpotifyTakedown() {
               </a>
             </div>
           )}
+
+          {draft && <DistributorNotify draft={draft} labels={[hit?.album?.label]} isrc={hit?.isrc} titles={`“${hit?.work_title ?? ""}”`} />}
 
           {draft && (
             <details className="rounded-xl bg-black/20 p-3 text-xs text-sub">
