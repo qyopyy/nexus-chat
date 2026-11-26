@@ -22,7 +22,9 @@ export type NexusDrop = {
 
 const MAX = 100 * 1024 * 1024;
 
-export async function sendDrop(file: File, toUsername?: string) {
+export async function sendDrop(input: File, toUsername?: string) {
+  const { ensureMp4 } = await import("./compressMedia");
+  const file = await ensureMp4(input);
   const me = useApp.getState().userId;
   if (!me) throw new Error("Sign in required");
   if (file.size <= 0 || file.size > MAX) throw new Error("Drops are limited to 100 MB");
