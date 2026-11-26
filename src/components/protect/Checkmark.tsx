@@ -8,6 +8,8 @@ import { addWatch, fmtNum, spotifyProfile, type SpotifyProfile } from "@/lib/pro
 import { linkbioMine, openLinkBio, publicLinkBioUrl } from "@/lib/linkbio";
 import { SOCIAL_VERIFY, SOCIAL_VERIFY_LIST, linkVerifyReadiness, type SocialVerifyPlatform } from "@/lib/linkVerify";
 import { cn } from "@/lib/utils";
+import SpotifyJourney from "./SpotifyJourney";
+import { parseArtistId } from "@/lib/spotifyJourney";
 
 const CLAIM = "https://artists.spotify.com/c/team/access/artist";
 
@@ -170,10 +172,11 @@ function SpotifyCheckmark() {
   const check = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!url.trim()) return;
+    if (!parseArtistId(url)) return toast("Paste an artist link (open.spotify.com/artist/…), a spotify:artist: URI or the 22-character ID", "error");
     setBusy(true);
     setSeen(null);
     try {
-      setP(await spotifyProfile(url.trim()));
+      setP(await spotifyProfile(`https://open.spotify.com/artist/${parseArtistId(url)!}`));
     } catch (err) {
       toast((err as Error).message, "error");
     }
@@ -209,6 +212,8 @@ function SpotifyCheckmark() {
           </button>
         </form>
       </div>
+
+      <SpotifyJourney profile={p} />
 
       {p && (
         <>

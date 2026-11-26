@@ -9,6 +9,10 @@ export const NEXUS_RELEASE: ReleaseNote = {
   version: "1.9.1",
   items: [
     {
+      title: "Spotify checkmark roadmap",
+      body: "Studio → Checkmark. A step-by-step claim + verified-badge checklist: it auto-detects what your profile already has, shows how many steps remain, tracks the rest, and includes a pitch planner with deadlines.",
+    },
+    {
       title: "New game: Cul-de-Sac Heroes",
       body: "Games → Cul-de-Sac Heroes. Turn-based co-op tactics: pick a kid hero, defend the street through 5 waves and a Mega Mower boss. Play a solo squad or 2–4 friends live with a room code.",
     },
