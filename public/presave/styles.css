@@ -734,3 +734,19 @@ dialog.preview-modal { width: min(1050px,calc(100vw - 28px)); max-height: calc(1
 .dns-table thead th { color: var(--muted); font-weight: 600; font-size: .75rem; letter-spacing: .04em; text-transform: uppercase; }
 .dns-table tbody tr:last-child th, .dns-table tbody tr:last-child td { border-bottom: 0; }
 .dns-table code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; overflow-wrap: anywhere; word-break: break-all; }
+
+/* Auto-scan (ISRC / UPC / Spotify URI → platform links) */
+.scan-panel { margin-bottom: 18px; padding: 14px; border: 1px solid #c6b8ff30; background: #c6b8ff08; border-radius: 12px; }
+.scan-row { display: flex; gap: 8px; }
+.scan-row .input { flex: 1; min-width: 0; }
+.scan-row .button { white-space: nowrap; }
+.scan-row .button svg { width: 16px; height: 16px; vertical-align: -3px; margin-right: 4px; }
+#scan-result:empty { display: none; }
+.scan-card { display: flex; gap: 12px; align-items: flex-start; margin-top: 12px; padding: 12px; border-radius: 10px; background: #ffffff0a; font-size: .875rem; line-height: 1.5; }
+.scan-card img { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; flex: none; }
+.scan-card strong { font-weight: 650; }
+.scan-miss { color: #ecc7c9; background: #e5a2a510; }
+.scan-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.scan-chip { padding: 4px 10px; border-radius: 999px; background: #c6b8ff22; color: inherit; font-size: .78rem; text-decoration: none; }
+.scan-chip:hover { background: #c6b8ff40; }
+@media (max-width: 520px) { .scan-row { flex-direction: column; } }

@@ -9,6 +9,14 @@ export const NEXUS_RELEASE: ReleaseNote = {
   version: "1.9.1",
   items: [
     {
+      title: "Security keys for 2FA",
+      body: "Settings → Account has a Security key option: link a Flipper Zero (U2F app), YubiKey or other hardware key as a second factor, next to Authy and passkeys. Existing accounts can turn it on there any time.",
+    },
+    {
+      title: "Pre-save auto-scan",
+      body: "Paste an ISRC, UPC, Spotify URI or any streaming link in a pre-save page and Nexus finds the release on Spotify, Apple Music, Deezer and more, then fills in your buttons.",
+    },
+    {
       title: "Share & Link, front and center",
       body: "Phone Link and Drop now have their own page (Me tab → Phone Link & Drop, or the sidebar). Send a file to your other devices or a friend over any network, and tap Save on iPhone to put it in Files or Photos.",
     },

@@ -50,3 +50,18 @@ export async function uploadArtwork(file, userId) {
   if (error) throw error;
   return client.storage.from('presave-artwork').getPublicUrl(path).data.publicUrl;
 }
+
+// Auto-scan a release by ISRC, UPC/EAN, Spotify URI or any streaming link (public edge function).
+export async function dspScan(query) {
+  if (!configured) throw new Error('The scan service has not been configured yet.');
+  let response;
+  try {
+    response = await fetch(config.supabaseUrl.replace(/\/$/, '') + '/functions/v1/dsp-scan', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', apikey: config.supabaseKey },
+      body: JSON.stringify({ query }), signal: AbortSignal.timeout(25000),
+    });
+  } catch { throw new Error('The scan service could not be reached. Try again in a moment.'); }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Scan failed. Please try again.');
+  return data;
+}

@@ -6,6 +6,8 @@ import { supabase, errorText } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { NexusCredit, copyNexusAppLink } from "@/components/ui/NexusCredit";
 import {
+  isSecurityKeyFactor,
+  SECURITY_KEY_PREFIX,
   mfaAuthenticatePasskeyFactor,
   mfaChallengeAndVerify,
   mfaListFactors,
@@ -125,7 +127,7 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
       if (mode === "mfa") {
         if (!mfaFactorId) throw new Error("No 2FA method available.");
         if (mfaIsPasskey) {
-          const ok = await mfaAuthenticatePasskeyFactor(mfaFactorId);
+          const ok = await mfaAuthenticatePasskeyFactor(mfaFactorId, isSecurityKeyFactor(activeMfa ?? {}));
           if (!ok) throw new Error("Passkey verification failed.");
         } else {
           if (mfaCode.trim().length < 6) throw new Error("Enter the 6-digit code from Authy or your authenticator app.");
@@ -272,7 +274,9 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
                 ? "It takes less than a minute."
                 : mode === "mfa"
                   ? mfaIsPasskey
-                    ? "Confirm with your linked passkey or security key."
+                    ? activeMfa && isSecurityKeyFactor(activeMfa)
+                      ? "Plug in or tap your security key (Flipper Zero, YubiKey…), then press Continue."
+                      : "Confirm with your linked passkey or security key."
                     : "Open Authy (or your authenticator) and enter the 6-digit code."
                   : "We'll email you a link to set a new one."}
           </p>
@@ -294,7 +298,9 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
                       {mfaFactors.map((f) => (
                         <option key={f.id} value={f.id} className="bg-black text-white">
                           {f.factor_type === "webauthn"
-                            ? `Passkey · ${f.friendly_name || "Security key"}`
+                            ? isSecurityKeyFactor(f)
+                              ? `Security key · ${(f.friendly_name ?? "").replace(SECURITY_KEY_PREFIX, "") || "Hardware key"}`
+                              : `Passkey · ${f.friendly_name || "Passkey"}`
                             : `Authy · ${f.friendly_name || "Authenticator"}`}
                         </option>
                       ))}

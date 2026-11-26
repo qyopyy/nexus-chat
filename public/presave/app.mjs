@@ -1,5 +1,5 @@
 import { escapeHtml as esc, safeUrl, spotifyUri, slugify, accentInk, localDateInput, releaseDate, campaignUrl, shareLink, pathSlug, countdownParts, newCampaign, validateCampaign, appearance, contrastRatio, THEME_DETAILS, APPEARANCE_DEFAULTS, ACCENTS } from './core.mjs';
-import { api, client, configured, needsMfa, uploadArtwork } from './auth.mjs';
+import { api, client, configured, needsMfa, uploadArtwork, dspScan } from './auth.mjs';
 
 const root = document.querySelector('#app');
 // index.html adds data-presave-root when it is served from /p/<slug> or a creator's own domain.
@@ -215,6 +215,7 @@ function editorHtml() {
       <label class="switch-label"><input type="checkbox" name="show_countdown" ${c.show_countdown ? 'checked' : ''}><span>Show the release countdown</span></label>
     </section>
     <section class="form-section"><div class="section-title"><span class="section-icon">${icon('link')}</span><div><h2>The destinations</h2><p>Bring fans one step closer.</p></div></div>
+      <div class="scan-panel"><label class="field"><span class="field-label">Auto-scan platforms</span><div class="scan-row"><input class="input" id="scan-query" placeholder="ISRC, UPC, spotify:track:… or any streaming link" maxlength="300" autocomplete="off" spellcheck="false"><button type="button" class="button button-secondary" data-action="dsp-scan">${icon('search')} Scan</button></div><span class="field-help">Paste an ISRC (track), UPC/EAN (album), Spotify URI or any streaming link. We find the release on Spotify, Apple Music, Deezer and more, then fill your buttons. Not live yet? Re-scan on release day.</span></label><div id="scan-result" role="status" aria-live="polite"></div></div>
       ${inputField('Spotify release URL or URI', 'spotify_uri', c.spotify_uri, { max: 300, placeholder: 'https://open.spotify.com/album/…', help: 'Use the exact track or album assigned by your distributor. The recording locks after the first fan authorizes it. Duplicate the campaign to use a different recording.' })}
       <div class="info-panel">${icon('info')}<p>${state.service?.spotify_configured ? 'Spotify is connected. Fans can authorize within 179 days of release.' : 'Spotify pre-saving is not connected yet. You can design and publish pages with destination links; Spotify authorization becomes available when the service is connected.'}</p></div>
       <div class="section-heading"><h3>More destinations</h3><span class="field-help">Up to 12 buttons per page</span></div><p class="field-help">These buttons open links. They do not automatically save to a music library.</p>
@@ -645,7 +646,7 @@ document.addEventListener('input', (event) => {
     state.search = event.target.value; state.page = 1;
     clearTimeout(searchTimer); searchTimer = setTimeout(loadCampaigns, 300); return;
   }
-  if (event.target.closest('#campaign-form') && event.target.type !== 'file') {
+  if (event.target.closest('#campaign-form') && event.target.type !== 'file' && event.target.id !== 'scan-query') {
     if (event.target.name === 'slug') state.slugEdited = true;
     if (event.target.name === 'theme' && event.target.value !== 'custom') {
       const selected = THEME_DETAILS.find((theme) => theme.id === event.target.value);
@@ -683,6 +684,57 @@ document.addEventListener('change', async (event) => {
     document.querySelector('#save-status').textContent = 'You have unsaved changes.';
   } catch (error) { if (status.isConnected) status.textContent = error.message; }
   finally { state.uploading = false; input.disabled = false; input.value = ''; }
+});
+
+
+function scanResultHtml(r) {
+  if (!r.found) return `<div class="scan-card scan-miss">${esc(r.message || 'Nothing found.')}</div>`;
+  const chips = r.links.map((l) => `<a class="scan-chip" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)}</a>`).join('');
+  const missing = (r.search_links || []).map((l) => esc(l.label)).join(', ');
+  const codes = [r.isrc && 'ISRC ' + r.isrc, r.upc && 'UPC ' + r.upc, r.release_date].filter(Boolean).map(esc).join(' · ');
+  return `<div class="scan-card">${r.artwork ? `<img src="${esc(safeUrl(r.artwork))}" alt="" width="56" height="56" referrerpolicy="no-referrer">` : ''}<div><strong>${esc(r.title || 'Release found')}</strong>${r.artist ? ` <span>— ${esc(r.artist)}</span>` : ''}<div class="field-help">${codes}</div><div class="scan-chips">${chips}</div>${missing ? `<div class="field-help">Not matched automatically: ${missing}. Add them by hand or re-scan once live.</div>` : ''}<div class="field-help">Filled in for you — review, then save.</div></div></div>`;
+}
+
+function applyScan(r) {
+  readForm();
+  const d = state.draft, form = document.querySelector('#campaign-form');
+  if (r.spotify_uri && !spotifyUri(d.spotify_uri)) { d.spotify_uri = r.spotify_uri; form.elements.spotify_uri.value = r.spotify_uri; }
+  if (!d.title && r.title) { d.title = r.title; form.elements.title.value = r.title; }
+  if (!d.artist && r.artist) { d.artist = r.artist; form.elements.artist.value = r.artist; }
+  if (!d.artwork_url && safeUrl(r.artwork)) { d.artwork_url = safeUrl(r.artwork); form.elements.artwork_url.value = d.artwork_url; }
+  const known = new Set(d.links.map((l) => l.url));
+  d.links = d.links.filter((l) => l.label || l.url);
+  for (const l of r.links) {
+    if (l.platform === 'spotify' || known.has(l.url) || d.links.length >= 12) continue;
+    const existing = d.links.find((x) => x.label.toLowerCase() === l.label.toLowerCase());
+    if (existing) { if (!existing.url) existing.url = l.url; } else d.links.push({ label: l.label, url: l.url });
+  }
+  document.querySelector('#links-list').innerHTML = d.links.map(linkRow).join('');
+  document.querySelector('[data-action="add-link"]').disabled = d.links.length >= 12;
+  state.dirty = true; readForm(); updatePreview();
+  const status = document.querySelector('#save-status'); if (status) status.textContent = 'You have unsaved changes.';
+}
+
+async function runScan(button) {
+  const input = document.querySelector('#scan-query'), out = document.querySelector('#scan-result');
+  const query = input.value.trim() || state.draft?.spotify_uri || '';
+  if (!query) { out.innerHTML = '<div class="scan-card scan-miss">Enter an ISRC, UPC, Spotify URI or link first.</div>'; return; }
+  if (!input.value) input.value = query;
+  button.disabled = true; out.innerHTML = '<div class="scan-card">Scanning streaming platforms…</div>';
+  try {
+    const r = await dspScan(query);
+    out.innerHTML = scanResultHtml(r);
+    if (r.found) applyScan(r);
+  } catch (error) { out.innerHTML = `<div class="scan-card scan-miss">${esc(error.message)}</div>`; }
+  finally { button.disabled = false; }
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.target.id === 'scan-query' && event.key === 'Enter') { event.preventDefault(); void runScan(document.querySelector('[data-action="dsp-scan"]')); }
+});
+document.addEventListener('paste', (event) => {
+  if (event.target.id !== 'scan-query') return;
+  setTimeout(() => void runScan(document.querySelector('[data-action="dsp-scan"]')), 50);
 });
 
 document.addEventListener('click', async (event) => {
@@ -760,6 +812,7 @@ document.addEventListener('click', async (event) => {
         readForm(); state.draft.links.splice(Number(target.dataset.index), 1); state.dirty = true;
         document.querySelector('#links-list').innerHTML = state.draft.links.map(linkRow).join('');
         document.querySelector('[data-action="add-link"]').disabled = false; updatePreview(); break;
+      case 'dsp-scan': await runScan(target); break;
       case 'preview-only': toast('This is a live design preview. Publish your page to share it with fans.'); break;
       case 'copy-text': await copyText(target.dataset.text || ''); break;
       case 'domain-reload': await loadDomain(); break;

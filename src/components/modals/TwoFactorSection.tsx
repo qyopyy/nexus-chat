@@ -2,13 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { Fingerprint, KeyRound, ShieldCheck, ShieldOff } from "lucide-react";
+import { Fingerprint, KeyRound, ShieldCheck, ShieldOff, Usb } from "lucide-react";
 import {
   mfaAuthenticatePasskeyFactor,
   mfaChallengeAndVerify,
   mfaEnrollTotp,
   mfaListFactors,
   mfaRegisterPasskeyFactor,
+  mfaRegisterSecurityKey,
+  isSecurityKeyFactor,
+  SECURITY_KEY_PREFIX,
   mfaUnenroll,
   mfaVerifyEnrollment,
   passkeyDelete,
@@ -34,6 +37,7 @@ export default function TwoFactorSection() {
   const [disableId, setDisableId] = useState<string | null>(null);
   const [disableCode, setDisableCode] = useState("");
   const [passkeyName, setPasskeyName] = useState("");
+  const [keyName, setKeyName] = useState("Flipper Zero");
   const supportsWebAuthn = webAuthnSupported();
 
   const refresh = useCallback(async () => {
@@ -117,6 +121,26 @@ export default function TwoFactorSection() {
     await refresh();
   }
 
+  async function linkSecurityKey() {
+    if (!supportsWebAuthn) return;
+    setBusy(true);
+    await mfaRegisterSecurityKey(keyName);
+    setBusy(false);
+    await refresh();
+  }
+
+  async function removeSecurityKey(factor: MfaFactor) {
+    setBusy(true);
+    const proved = await mfaAuthenticatePasskeyFactor(factor.id, true);
+    if (!proved) {
+      setBusy(false);
+      return;
+    }
+    await mfaUnenroll(factor.id);
+    setBusy(false);
+    await refresh();
+  }
+
   async function linkAccountPasskey() {
     if (!supportsWebAuthn) return;
     setBusy(true);
@@ -133,6 +157,8 @@ export default function TwoFactorSection() {
     await refresh();
   }
 
+  const securityKeys = webauthnFactors.filter(isSecurityKeyFactor);
+  const plainPasskeys = webauthnFactors.filter((f) => !isSecurityKeyFactor(f));
   const totpOn = totpFactors.length > 0;
   const any2fa = totpOn || webauthnFactors.length > 0;
 
@@ -144,7 +170,7 @@ export default function TwoFactorSection() {
           <div className="text-sm font-bold">Two-factor authentication</div>
         </div>
         <p className="mb-3 text-xs text-sub">
-          Link Authy (or Google Authenticator / 1Password) for a 6-digit code after your password, or a passkey / security key as a second factor.
+          Protect your account with Authy (or Google Authenticator / 1Password), a passkey, or a hardware security key like a Flipper Zero or YubiKey. Existing accounts can turn it on here any time.
         </p>
 
         {loading ? (
@@ -250,7 +276,7 @@ export default function TwoFactorSection() {
                 <Fingerprint className="size-3.5" /> Passkey as 2FA
               </div>
               <p className="text-xs text-sub">Use Face ID, Touch ID, Windows Hello, or a security key after your password.</p>
-              {webauthnFactors.map((f) => (
+              {plainPasskeys.map((f) => (
                 <div key={f.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-side px-3 py-2">
                   <div className="min-w-0 flex-1 text-sm font-semibold">{f.friendly_name || "Passkey"}</div>
                   <button
@@ -283,6 +309,53 @@ export default function TwoFactorSection() {
               ) : (
                 <p className="text-xs text-sub">This browser doesn&apos;t support passkeys.</p>
               )}
+            </div>
+
+            {/* Hardware security key (Flipper Zero / YubiKey) */}
+            <div className="space-y-2 border-t border-white/5 pt-3">
+              <div className="flex items-center gap-2 text-xs font-bold tracking-wide text-sub uppercase">
+                <Usb className="size-3.5" /> Security key · Flipper Zero / YubiKey
+              </div>
+              <p className="text-xs text-sub">
+                Use a hardware key as your second factor. On a Flipper Zero open <b>Apps → USB → U2F</b>, connect it by USB, then press Link and tap OK on the Flipper when it asks.
+              </p>
+              {securityKeys.map((f) => (
+                <div key={f.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-side px-3 py-2">
+                  <Usb className="size-4 text-ok" />
+                  <div className="min-w-0 flex-1 text-sm font-semibold">{(f.friendly_name ?? "").replace(SECURITY_KEY_PREFIX, "") || "Hardware key"}</div>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void removeSecurityKey(f)}
+                    className="rounded-md bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-dnd/30 disabled:opacity-40"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              {supportsWebAuthn ? (
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    value={keyName}
+                    onChange={(e) => setKeyName(e.target.value.slice(0, 48))}
+                    placeholder="Key name — e.g. Flipper Zero"
+                    className="min-w-0 flex-1 rounded-md bg-side px-3 py-2 text-sm outline-none ring-accent focus:ring-1"
+                  />
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void linkSecurityKey()}
+                    className="rounded-md bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent-2 disabled:opacity-40"
+                  >
+                    Link security key
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-sub">This browser doesn&apos;t support security keys.</p>
+              )}
+              <p className="text-[11px] text-sub">
+                Works on desktop Chrome, Edge, Safari and Firefox over USB. iPhone/iPad: only keys iOS supports (USB-C / NFC YubiKey); a Flipper Zero may not be recognised on iOS, so keep Authy as a backup. Link two methods so you can&apos;t get locked out.
+              </p>
             </div>
           </div>
         )}

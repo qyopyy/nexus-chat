@@ -30,6 +30,15 @@ function rp() {
   return { rpId, rpOrigins: [window.location.origin] };
 }
 
+/** Hardware keys (Flipper Zero U2F, YubiKey, Titan…) are stored as WebAuthn factors with this name prefix. */
+export const SECURITY_KEY_PREFIX = "Security key: ";
+export const isSecurityKeyFactor = (f: Pick<MfaFactor, "friendly_name">) => (f.friendly_name ?? "").startsWith(SECURITY_KEY_PREFIX);
+
+type WebauthnLoose = {
+  register: (p: unknown, overrides?: unknown) => Promise<{ data: unknown; error: { message?: string } | null }>;
+  authenticate: (p: unknown, overrides?: unknown, req?: unknown) => Promise<{ data: unknown; error: { message?: string } | null }>;
+};
+
 export async function mfaAssurance() {
   const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   if (error) return null;
@@ -121,13 +130,41 @@ export async function mfaRegisterPasskeyFactor(friendlyName = "Passkey") {
   }
 }
 
-/** Complete an MFA challenge with a linked WebAuthn / passkey factor. */
-export async function mfaAuthenticatePasskeyFactor(factorId: string) {
+/**
+ * Register a roaming hardware security key (Flipper Zero U2F app, YubiKey, Titan…) as a 2FA factor.
+ * Hardware keys can't do resident keys or on-device PIN/biometrics, so we ask for a cross-platform
+ * authenticator, discourage user verification and skip attestation.
+ */
+export async function mfaRegisterSecurityKey(label = "Flipper Zero") {
   try {
-    const { data, error } = await supabase.auth.mfa.webauthn.authenticate({
-      factorId,
-      webauthn: rp(),
-    });
+    const api = supabase.auth.mfa.webauthn as unknown as WebauthnLoose;
+    const { data, error } = await api.register(
+      { friendlyName: SECURITY_KEY_PREFIX + (label.trim().slice(0, 48) || "Hardware key"), webauthn: rp() },
+      {
+        authenticatorSelection: { authenticatorAttachment: "cross-platform", residentKey: "discouraged", userVerification: "discouraged" },
+        attestation: "none",
+      },
+    );
+    if (error) {
+      toast(errorText(error) || "Couldn't register security key", "error");
+      return false;
+    }
+    toast("Security key linked for 2FA", "success");
+    return !!data;
+  } catch (e) {
+    toast(errorText(e) || "Security key registration cancelled", "error");
+    return false;
+  }
+}
+
+/** Complete an MFA challenge with a linked WebAuthn / passkey factor. */
+export async function mfaAuthenticatePasskeyFactor(factorId: string, securityKey = false) {
+  try {
+    const api = supabase.auth.mfa.webauthn as unknown as WebauthnLoose;
+    const { data, error } = await api.authenticate(
+      { factorId, webauthn: rp() },
+      securityKey ? { userVerification: "discouraged" } : undefined,
+    );
     if (error) {
       toast(errorText(error) || "Passkey verification failed", "error");
       return false;
