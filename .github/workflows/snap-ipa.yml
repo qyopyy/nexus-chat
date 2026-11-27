@@ -1,0 +1,160 @@
+name: Nexus Snap iOS app (.ipa)
+
+# Standalone NexusSnap.ipa (bundle hu.qyopy.snap) — Sideloadly / AltStore.
+# Opens https://nexusproject.cc/snap/app — built-in camera, saves to the Nexus Drive vault, instant share link.
+# Independent of Nexus / Wump / Link / Browser IPA workflows.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Nexus Snap web entry URL (leave empty for production /snap/app)"
+        required: false
+  push:
+    branches: [main]
+    paths:
+      - "mobile-snap/**"
+      - ".github/workflows/snap-ipa.yml"
+      - ".github/scripts/fix-ios-framework-ids.sh"
+  pull_request:
+    paths:
+      - "mobile-snap/**"
+      - ".github/workflows/snap-ipa.yml"
+      - ".github/scripts/fix-ios-framework-ids.sh"
+
+permissions:
+  contents: write
+
+jobs:
+  snap-ipa:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: mobile-snap
+    env:
+      SNAP_URL: ${{ github.event.inputs.url || vars.SNAP_URL || 'https://nexusproject.cc/snap/app' }}
+      NEXUS_URL: ${{ github.event.inputs.url || vars.SNAP_URL || 'https://nexusproject.cc/snap/app' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Capacitor
+        run: npm install --no-audit --no-fund
+
+      - name: Create iOS project
+        run: |
+          echo "Nexus Snap app will open: $SNAP_URL"
+          npx cap add ios
+          npx cap sync ios
+          ls ios/App
+
+      - name: Icon and app settings
+        run: |
+          PLIST=ios/App/App/Info.plist
+          pb() { /usr/libexec/PlistBuddy -c "$1" "$PLIST" 2>/dev/null || true; }
+          pb "Set :CFBundleDisplayName Nexus Snap"
+          pb "Add :CFBundleDisplayName string Nexus Snap"
+          pb "Add :ITSAppUsesNonExemptEncryption bool false"
+          pb "Add :UIStatusBarStyle string UIStatusBarStyleLightContent"
+          pb "Add :UIViewControllerBasedStatusBarAppearance bool false"
+          pb "Add :NSCameraUsageDescription string Nexus Snap uses the camera to take photos you save to your Nexus Drive and share."
+          pb "Set :NSCameraUsageDescription Nexus Snap uses the camera to take photos you save to your Nexus Drive and share."
+          pb "Add :NSPhotoLibraryAddUsageDescription string Save photos you take with Nexus Snap to your Photos."
+          pb "Add :NSMicrophoneUsageDescription string Nexus Snap uses the microphone to record sound in your videos."
+          pb "Add :NSLocationWhenInUseUsageDescription string Nexus Snap uses your rough location only to show people nearby for Nexus Drop. It is never stored."
+          pb "Set :NSLocationWhenInUseUsageDescription Nexus Snap uses your rough location only to show people nearby for Nexus Drop. It is never stored."
+          pb "Set :NSMicrophoneUsageDescription Nexus Snap uses the microphone to record sound in your videos."
+          pb "Set :UIUserInterfaceStyle Dark"
+          pb "Add :UIUserInterfaceStyle string Dark"
+          pb "Set :CFBundleShortVersionString 1.${GITHUB_RUN_NUMBER}"
+          pb "Add :CFBundleShortVersionString string 1.${GITHUB_RUN_NUMBER}"
+          pb "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}"
+          pb "Add :CFBundleVersion string ${GITHUB_RUN_NUMBER}"
+
+          test -f resources/icon-1024.png
+          ICONSET=ios/App/App/Assets.xcassets/AppIcon.appiconset
+          mkdir -p "$ICONSET"
+          cp resources/AppIcon.Contents.json "$ICONSET/Contents.json"
+          python3 - <<'PY'
+          import json, subprocess, sys
+          from pathlib import Path
+          src = Path("resources/icon-1024.png")
+          if not src.is_file():
+              sys.exit("missing resources/icon-1024.png")
+          iconset = Path("ios/App/App/Assets.xcassets/AppIcon.appiconset")
+          # Drop Capacitor/default placeholders so only our generated icons remain
+          for old in iconset.glob("*.png"):
+              old.unlink()
+          data = json.loads((iconset / "Contents.json").read_text())
+          for img in data["images"]:
+              w, h = img["size"].split("x")
+              scale = int(img["scale"].replace("x", ""))
+              px = int(round(float(w) * scale))
+              out = iconset / img["filename"]
+              subprocess.check_call(["sips", "-z", str(px), str(px), str(src), "--out", str(out)], stdout=subprocess.DEVNULL)
+              print(out.name, px)
+          missing = [i["filename"] for i in data["images"] if not (iconset / i["filename"]).is_file()]
+          if missing:
+              sys.exit(f"icon generation incomplete: {missing}")
+          print(f"AppIcon set ready ({len(data['images'])} sizes) from {src}")
+          PY
+          # Keep www splash/icon in sync for Cap web assets
+          cp resources/icon-1024.png www/icon-512.png 2>/dev/null || true
+          ls -la ios/App/App/Assets.xcassets/AppIcon.appiconset | head -30
+
+      - name: Build (unsigned)
+        run: |
+          cd ios/App
+          # Do NOT pass PRODUCT_BUNDLE_IDENTIFIER — it stamps every framework with the
+          # same id (Sideloadly DuplicateIdentifier). Capacitor appId sets the App target.
+          if [ -d App.xcworkspace ]; then TARGET="-workspace App.xcworkspace"; else TARGET="-project App.xcodeproj"; fi
+          xcodebuild $TARGET -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/App.xcarchive" archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            MARKETING_VERSION="1.${GITHUB_RUN_NUMBER}" CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
+            | tail -40
+          test -d build/App.xcarchive/Products/Applications/App.app
+
+      - name: Package IPA
+        run: |
+          cd ios/App
+          APP=build/App.xcarchive/Products/Applications/App.app
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier hu.qyopy.snap" "$APP/Info.plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string hu.qyopy.snap" "$APP/Info.plist"
+          # Confirm home-screen icon assets were compiled into the .app
+          if ! find "$APP" -iname '*AppIcon*' | head -5 | grep -q .; then
+            echo "::warning::No AppIcon assets found inside .app — icon may show blank on device"
+            find "$APP" -name '*.png' | head -20 || true
+          else
+            echo "AppIcon present in .app:"
+            find "$APP" -iname '*AppIcon*' | head -10
+          fi
+          bash "$GITHUB_WORKSPACE/.github/scripts/fix-ios-framework-ids.sh" "$APP"
+          rm -rf Payload && mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qry ../../NexusSnap.ipa Payload
+          ls -lh ../../NexusSnap.ipa
+          unzip -l ../../NexusSnap.ipa | grep -i 'AppIcon\|Payload/App.app' | head -20
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NexusSnap-ipa
+          path: mobile-snap/NexusSnap.ipa
+
+      - name: Publish release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="snap-ios-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" NexusSnap.ipa --repo "$GITHUB_REPOSITORY" \
+            --title "Nexus Snap iOS build ${GITHUB_RUN_NUMBER}" \
+            --notes "Standalone **Nexus Snap** IPA (bundle \`hu.qyopy.snap\`).
+
+          Install with Sideloadly / AltStore using your Apple ID.
+          Opens: ${SNAP_URL}
+
+          Separate from Nexus / Wump / Link / Browser. The camera UI updates on web deploy."
