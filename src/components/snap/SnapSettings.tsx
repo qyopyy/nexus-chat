@@ -108,7 +108,8 @@ export default function SnapSettings({ onClose }: { onClose: () => void }) {
           <Switch label="Tap to focus" hint="Tap the picture to focus and set exposure" on={p.tapFocus} onChange={(v) => set("tapFocus", v)} />
           <Switch label="Exposure slider" hint="Brightness slider after you tap (if your camera allows it)" on={p.exposureSlider} onChange={(v) => set("exposureSlider", v)} />
           <Switch label="Hold to lock focus" hint="Press and hold the picture to lock focus and exposure" on={p.focusLock} onChange={(v) => set("focusLock", v)} />
-          <Switch label="Pinch to zoom" on={p.pinchZoom} onChange={(v) => set("pinchZoom", v)} />
+          <Switch label="Pinch and wheel zoom" hint="Smooth pinch on the phone, mouse wheel on a computer" on={p.pinchZoom} onChange={(v) => set("pinchZoom", v)} />
+          <Switch label="Zoom buttons and dial" hint="Lens buttons (.5 1× 2 3 5) with a ruler dial you can drag, like the iPhone camera" on={p.zoomControl} onChange={(v) => set("zoomControl", v)} />
           <Switch label="Double-tap to flip camera" on={p.doubleTapFlip} onChange={(v) => set("doubleTapFlip", v)} />
           <Switch label="Level guide" hint="A line that turns green when the phone is straight" on={p.levelGuide} onChange={(v) => void toggleLevel(v)} />
           <Choice label="Grid" value={p.gridStyle} options={GRID_STYLES.map((g) => [g, g[0].toUpperCase() + g.slice(1)])} onChange={(v) => set("gridStyle", v)} />

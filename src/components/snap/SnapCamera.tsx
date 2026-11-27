@@ -41,6 +41,8 @@ import SnapGallery from "./SnapGallery";
 import SnapShareSheet from "./SnapShareSheet";
 import { roundPosition, sendText, snapNote, type GridStyle, type SnapPrefs } from "@/lib/snapPrefs";
 import { getPrefs, setLastGeo, setPrefs, usePrefs } from "@/lib/snapPrefsStore";
+import { SnapZoom } from "./SnapZoom";
+import { DIGITAL_ZOOM, clampZoom, digitalCrop, easeZoom, wheelFactor } from "@/lib/snapZoom";
 import { constraintLadder, effectiveQualityKey, isCompactHeight, isLevel, pinchDistance, pinchZoom, rollFromGravity, tapToVideoPoint, upgradeTo, type DeviceInfo } from "@/lib/snapDevice";
 import { shutterClick, timerBeep } from "@/lib/snapAudio";
 import SnapSettings from "./SnapSettings";
@@ -176,8 +178,16 @@ export default function SnapCamera({
   const [flashOn, setFlashOn] = useState(() => store.get("snap.flash") === "1");
   const [torchOk, setTorchOk] = useState(false);
   const [screenLight, setScreenLight] = useState(false);
-  const [zoomCaps, setZoomCaps] = useState<{ min: number; max: number; step: number } | null>(null);
+  const [zoomCaps, setZoomCaps] = useState<{ min: number; max: number; step: number; digital?: boolean } | null>(null);
   const [zoom, setZoom] = useState(1);
+  const capsRef = useRef<{ min: number; max: number; step: number; digital?: boolean } | null>(null);
+  const zoomNow = useRef(1);
+  const zoomTarget = useRef(1);
+  const zoomLoop = useRef<number | null>(null);
+  const zoomShown = useRef({ v: 1, t: 0 });
+  const zoomLock = useRef(false);
+  const hwZoom = useRef<{ busy: boolean; pending: number | null }>({ busy: false, pending: null });
+  const zoomBoxRef = useRef<HTMLDivElement>(null);
   const [mirror, setMirror] = useState(() => store.get("snap.mirror") === "1");
   const [overlay, setOverlay] = useState(() => overlayKey(store.get("snap.overlay")));
   const [caption, setCaption] = useState("");
@@ -360,10 +370,19 @@ export default function SnapCamera({
         const up = upgradeTo(qq, track.getSettings(), caps);
         if (up) void track.applyConstraints({ width: { ideal: up.width }, height: { ideal: up.height } }).catch(() => undefined);
         setTorchOk(!!caps.torch);
-        setZoomCaps(caps.zoom && caps.zoom.max > caps.zoom.min ? { min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step || 0.1 } : null);
-        setZoom(caps.zoom?.min ?? 1);
+        // real lens zoom where the camera has it; otherwise zoom the picture digitally (iPhone web views)
+        const hw = caps.zoom && caps.zoom.max > caps.zoom.min ? { min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step || 0.01 } : null;
+        const zc = hw ?? { ...DIGITAL_ZOOM, step: 0.01, digital: true };
+        capsRef.current = zc;
+        setZoomCaps(zc);
+        const cur = hw ? Number((track.getSettings() as { zoom?: number }).zoom) : 1;
+        const first = clampZoom(Number.isFinite(cur) && cur > 0 ? cur : Math.max(1, zc.min), zc);
+        zoomNow.current = first;
+        zoomTarget.current = first;
+        paintZoom(first, true);
       } catch {
         setTorchOk(false);
+        capsRef.current = null;
         setZoomCaps(null);
       }
       const v = videoRef.current;
@@ -437,11 +456,62 @@ export default function SnapCamera({
     void track.applyConstraints({ advanced: [{ torch: flashOn && mode === "video" } as MediaTrackConstraintSet] }).catch(() => undefined);
   }, [flashOn, torchOk, mode, ready]);
 
-  const applyZoom = (z: number) => {
-    setZoom(z);
-    const track = streamRef.current?.getVideoTracks()[0];
-    void track?.applyConstraints({ advanced: [{ zoom: z } as MediaTrackConstraintSet] }).catch(() => undefined);
+  // ---- zoom: one glide engine for pinch, the lens chips, the dial, the slider and the mouse wheel
+  function paintZoom(z: number, force = false) {
+    const caps = capsRef.current;
+    if (caps?.digital) {
+      const el = zoomBoxRef.current;
+      if (el) el.style.transform = z > 1.0005 ? `scale(${z})` : "";
+    } else if (caps) {
+      const h = hwZoom.current;
+      if (h.busy) h.pending = z;
+      else {
+        h.busy = true;
+        const track = streamRef.current?.getVideoTracks()[0];
+        const done = () => {
+          h.busy = false;
+          if (h.pending !== null) {
+            const next = h.pending;
+            h.pending = null;
+            paintZoom(next);
+          }
+        };
+        if (track) void track.applyConstraints({ advanced: [{ zoom: z } as MediaTrackConstraintSet] }).then(done, done);
+        else done();
+      }
+    }
+    // the readout re-renders at ~30 per second so the glide stays light
+    const now = performance.now();
+    if (force || now - zoomShown.current.t > 33 || Math.abs(z - zoomShown.current.v) > 0.5) {
+      zoomShown.current = { v: z, t: now };
+      setZoom(z);
+    }
+  }
+  const runZoom = () => {
+    if (zoomLoop.current !== null) return;
+    let last = performance.now();
+    const tick = (t: number) => {
+      const next = easeZoom(zoomNow.current, zoomTarget.current, Math.min(64, t - last));
+      last = t;
+      zoomNow.current = next;
+      const arrived = next === zoomTarget.current;
+      paintZoom(next, arrived);
+      zoomLoop.current = arrived ? null : requestAnimationFrame(tick);
+    };
+    zoomLoop.current = requestAnimationFrame(tick);
   };
+  const applyZoom = (z: number) => {
+    const caps = capsRef.current;
+    if (!caps || zoomLock.current) return;
+    zoomTarget.current = clampZoom(z, caps);
+    runZoom();
+  };
+  useEffect(
+    () => () => {
+      if (zoomLoop.current !== null) cancelAnimationFrame(zoomLoop.current);
+    },
+    [],
+  );
 
   // ---- tap to focus, hold to lock, pinch to zoom, double-tap to flip
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -506,7 +576,7 @@ export default function SnapCamera({
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
       if (gest.current?.hold) clearTimeout(gest.current.hold);
-      gest.current = { t: 0, x: 0, y: 0, moved: true, held: false, pinch: { d: pinchDistance(a, b) || 1, z: zoom } };
+      gest.current = { t: 0, x: 0, y: 0, moved: true, held: false, pinch: { d: pinchDistance(a, b) || 1, z: zoomTarget.current } };
       return;
     }
     if (pointers.current.size > 2) return;
@@ -675,7 +745,8 @@ export default function SnapCamera({
     } else {
       const v = videoRef.current;
       if (!v || !ready || !v.videoWidth) return;
-      const c = cropRect(v.videoWidth, v.videoHeight, ratioDef.r);
+      const c0 = cropRect(v.videoWidth, v.videoHeight, ratioDef.r);
+      const c = capsRef.current?.digital ? digitalCrop(c0.sx, c0.sy, c0.sw, c0.sh, zoomNow.current) : c0;
       const { w, h } = fitWithin(c.sw, c.sh, q.maxEdge);
       cv = document.createElement("canvas");
       cv.width = w;
@@ -736,6 +807,7 @@ export default function SnapCamera({
     const av = avatarOn ? avatarRef.current : null;
     const stream = streamRef.current;
     const v = videoRef.current;
+    zoomLock.current = false;
     if (av ? !avatarReady : !stream || !v || !ready) return;
     if (typeof MediaRecorder === "undefined") {
       toast("Video recording isn't supported in this browser. Update it, or use the photo mode.", "error");
@@ -751,8 +823,9 @@ export default function SnapCamera({
       if (rs.silent) toast("Microphone is blocked, recording without sound.");
     } else if (!stream || !v) {
       return;
-    } else if (!needsCanvasPipeline(effect, ratio)) {
+    } else if (!needsCanvasPipeline(effect, ratio) && !(capsRef.current?.digital && zoomNow.current > 1.001)) {
       source = stream;
+      zoomLock.current = !!capsRef.current?.digital; // a raw stream can't be zoomed digitally mid-recording
     } else {
       source = stream;
       const c = cropRect(v.videoWidth, v.videoHeight, ratioDef.r);
@@ -767,7 +840,8 @@ export default function SnapCamera({
         if (effect !== "none" && !canFilter) toast("Effects on video need a newer browser. Recording without the effect.");
         const draw = () => {
           if (canFilter) ctx.filter = css;
-          ctx.drawImage(v, c.sx, c.sy, c.sw, c.sh, 0, 0, cv.width, cv.height);
+          const k = capsRef.current?.digital ? digitalCrop(c.sx, c.sy, c.sw, c.sh, zoomNow.current) : c;
+          ctx.drawImage(v, k.sx, k.sy, k.sw, k.sh, 0, 0, cv.width, cv.height);
           rafRef.current = requestAnimationFrame(draw);
         };
         draw();
@@ -1001,19 +1075,35 @@ export default function SnapCamera({
         <>
           <div ref={stageRef} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#0a0a10]">
             <div ref={boxRef} className="relative overflow-hidden bg-black" style={box && box.w ? { width: box.w, height: box.h } : { width: "100%", height: "100%" }}>
-              <video
-                ref={videoRef}
-                playsInline
-                muted
-                autoPlay
-                className={cn("h-full w-full object-cover", mirrored && "-scale-x-100", avatarOn && "hidden")}
-                style={{ filter: fx.css === "none" ? undefined : fx.css }}
-              />
+              <div ref={zoomBoxRef} className={cn("absolute inset-0 origin-center will-change-transform", avatarOn && "hidden")}>
+                <video
+                  ref={videoRef}
+                  playsInline
+                  muted
+                  autoPlay
+                  className={cn("h-full w-full object-cover", mirrored && "-scale-x-100")}
+                  style={{ filter: fx.css === "none" ? undefined : fx.css }}
+                />
+              </div>
               {avatarOn && (
                 <SnapAvatarStage ref={avatarRef} cfg={avCfg} sceneKey={scene} bg={bg} ratio={ratioDef.r} longEdge={Math.min(q.maxEdge, 1920)} fxCss={fx.css} onReady={setAvatarReady} />
               )}
               <PreviewDeco overlay={overlay} caption={caption} sticker={sticker} grid={grid && !avatarOn && prefs.gridStyle !== "off" ? prefs.gridStyle : null} />
-              {gestureOn && <div className="absolute inset-0 z-[5] touch-none" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel} />}
+              {gestureOn && (
+                <div
+                  className="absolute inset-0 z-[5] touch-none"
+                  onPointerDown={onDown}
+                  onPointerMove={onMove}
+                  onPointerUp={onUp}
+                  onPointerCancel={onCancel}
+                  onWheel={(e) => {
+                    if (prefsRef.current.pinchZoom) applyZoom(zoomTarget.current * wheelFactor(e.deltaY));
+                  }}
+                />
+              )}
+              {zoomCaps && gestureOn && prefs.zoomControl && (
+                <SnapZoom range={zoomCaps} zoom={zoom} onTarget={applyZoom} disabled={recording && zoomLock.current} haptics={prefs.haptics} />
+              )}
               {ring && (
                 <span className="pointer-events-none absolute z-[6] -translate-x-1/2 -translate-y-1/2" style={{ left: ring.x, top: ring.y }}>
                   <span className={cn("block size-16 rounded-full border-2", ring.locked ? "border-amber-300" : "border-yellow-300")} />
@@ -1021,7 +1111,7 @@ export default function SnapCamera({
                 </span>
               )}
               {showEv && focusCaps.exposure && prefs.exposureSlider && (
-                <div className="absolute inset-x-6 bottom-3 z-[7] flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 text-xs">
+                <div className={cn("absolute inset-x-6 z-[7] flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 text-xs", zoomCaps && prefs.zoomControl ? "bottom-16" : "bottom-3")}>
                   <span aria-hidden>☀</span>
                   <input type="range" min={focusCaps.exposure.min} max={focusCaps.exposure.max} step={focusCaps.exposure.step} value={ev} onChange={(e) => applyEv(Number(e.target.value))} className="w-full accent-yellow-300" aria-label="Brightness" />
                 </div>

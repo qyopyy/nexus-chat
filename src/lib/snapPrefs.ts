@@ -11,6 +11,7 @@ export type SnapPrefs = {
   exposureSlider: boolean;
   focusLock: boolean;
   pinchZoom: boolean;
+  zoomControl: boolean;
   doubleTapFlip: boolean;
   shutterSound: boolean;
   timerBeep: boolean;
@@ -52,6 +53,7 @@ export const DEFAULT_PREFS: SnapPrefs = {
   exposureSlider: true,
   focusLock: true,
   pinchZoom: true,
+  zoomControl: true,
   doubleTapFlip: true,
   shutterSound: false,
   timerBeep: true,
