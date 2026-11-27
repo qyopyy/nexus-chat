@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit } from "@/lib/apiGuard";
 import { linkSecurityHeaders } from "@/lib/linkProtect";
+import { artistSiteResponse } from "@/lib/artistSiteServer";
 import { renderLinkBio, linkBioNotFound, type PublicLinkBio } from "@/lib/linkbioPage";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     /* network */
   }
   if (!data) {
+    // /bio/martin → the artist website of the Nexus artist page with that handle
+    const artist = await artistSiteResponse(req, name, true);
+    if (artist) return artist;
     return new NextResponse(linkBioNotFound(name, base), {
       status: 404,
       headers: linkSecurityHeaders({ "Content-Type": "text/html; charset=utf-8" }),

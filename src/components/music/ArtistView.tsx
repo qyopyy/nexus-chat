@@ -76,6 +76,9 @@ export default function ArtistView({ spotifyId, handle }: { spotifyId?: string; 
               {artist?.followers != null && <span> · {fmtNum(artist.followers)} Spotify followers</span>}
             </div>
             {!!artist?.genres.length && <div className="mt-1 text-xs text-sub capitalize">{artist.genres.slice(0, 4).join(" · ")}</div>}
+            {(page?.spotify_id || artist?.id) && (
+              <a href={`/bio/artist/${page?.handle || page?.spotify_id || artist?.id}`} target="_blank" rel="noreferrer" className="mt-2 inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold hover:bg-white/20">Open artist website ↗</a>
+            )}
           </div>
         </div>
         <div className="relative flex flex-wrap justify-center gap-2 px-4 sm:justify-start">

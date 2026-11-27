@@ -9,6 +9,10 @@ export const NEXUS_RELEASE: ReleaseNote = {
   version: "1.9.1",
   items: [
     {
+      title: "Artist website",
+      body: "Every artist profile now has a public website at /bio/artist/<handle or Spotify ID>. It shows only this year's releases (pulled from Spotify, so it updates by itself), a verified checkmark for verified artists, and Listen-everywhere links for 16 streaming services plus lyrics and info sources. Open it from the artist page.",
+    },
+    {
       title: "Bulk takedowns",
       body: "Studio → Takedowns → Bulk Spotify takedown. Paste many songs, tick the releases you want removed, or file against a whole artist profile — one notice covers everything. Notices are now written in calm, factual wording with a live strength check, and a tracker reminds you to follow up (day 7) or escalate (day 14). Search an ISRC to find the label, then email the platform with the label/distributor in CC (or write to them directly). Claim details and address are saved to your account.",
     },
