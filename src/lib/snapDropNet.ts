@@ -98,7 +98,7 @@ export async function acceptToDrive(row: NexusDrop): Promise<VaultFile> {
 // ------------------------------------------------------------------ sending
 /**
  * Nexus Drop to one person (`user` null = your own other screens). First choice is the Drop inbox. If that can't
- * deliver, the Snap is already in your Nexus Drive, so it goes as a Drive link in their DM instead.
+ * deliver, the Snap is already in your Nexus Drive, so it goes into their DM as a normal attachment instead.
  */
 export async function dropTo(user: SnapUser | null, file: File, vault: VaultFile, expiresInHours: number | null): Promise<DropStatus> {
   if (!me()) throw new Error("Sign in first.");
@@ -109,7 +109,7 @@ export async function dropTo(user: SnapUser | null, file: File, vault: VaultFile
     const msg = e instanceof Error ? e.message : "";
     if (!user || isHardDropError(msg)) throw e instanceof Error ? e : new Error("Couldn't send.");
   }
-  await sendSnapToUser(user, vault, expiresInHours);
+  await sendSnapToUser(user, vault, expiresInHours, file);
   return "link";
 }
 

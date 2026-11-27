@@ -170,7 +170,7 @@ export default function SnapDrop({ file, expiry, getFile, onClose, z }: { file: 
         <a href="/drop/index.html" target="_blank" rel="noopener" className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white/10 py-3 text-sm font-semibold hover:bg-white/20">
           <Wifi className="size-4" /> Direct room (same Wi-Fi)
         </a>
-        <p className="text-[11px] leading-snug text-white/50">Already saved in your Nexus Drive. If a Drop can&apos;t be delivered, they get the Drive link in your chat instead.</p>
+        <p className="text-[11px] leading-snug text-white/50">Already saved in your Nexus Drive. If a Drop can&apos;t be delivered, it goes into their chat as a normal photo or video instead.</p>
       </div>
     </Sheet>
   );

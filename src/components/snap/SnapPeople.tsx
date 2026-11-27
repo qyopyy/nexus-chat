@@ -9,7 +9,7 @@ import type { SnapUser } from "@/lib/snapShare";
 import SnapFace from "./SnapFace";
 import { Sheet } from "./SnapUi";
 
-/** Find Nexus people by username. Pick one and your next Snap goes to them (Nexus Drop, with a Drive link as backup). */
+/** Find Nexus people by username. Pick one and your next Snap goes to them (Nexus Drop, with a normal chat attachment as backup). */
 export default function SnapPeople({ onClose, onPick, current }: { onClose: () => void; onPick: (u: SnapUser) => void; current: SnapUser | null }) {
   const me = useApp((s) => s.userId);
   const [q, setQ] = useState("");

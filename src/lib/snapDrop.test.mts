@@ -74,7 +74,7 @@ test("nearbyFromPresence filters, dedupes, drops me, sorts, only keeps https ava
 
 test("status labels name the person and stay silent when idle", () => {
   assert.match(statusLabel("sent", "Amy"), /Amy.*Nexus Drop inbox/);
-  assert.match(statusLabel("link", "Amy"), /Drive link/);
+  assert.match(statusLabel("link", "Amy"), /chat/);
   assert.equal(statusLabel("sending", "Amy"), "Sending…");
   assert.equal(statusLabel("error", "Amy"), "Couldn't send");
   assert.equal(statusLabel("idle", "Amy"), "");

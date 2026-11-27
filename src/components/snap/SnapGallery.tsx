@@ -3,10 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, Copy, Download, MessageSquarePlus, Play, Radar, Send, Sparkles, Trash2, UserPlus } from "lucide-react";
 import { toast, useApp, conversationTitle } from "@/store/app";
-import { sendMessage } from "@/lib/data";
 import { listVault, removeVault, uploadVault, vaultUrl, type VaultFile } from "@/lib/protect";
-import { SNAP_EFFECTS, SNAP_FOLDER, applyEffect, effectByKey, formatDuration, isVideoMime, snapFileName, snapShareText } from "@/lib/snap";
-import { snapLink } from "@/lib/snapShare";
+import { SNAP_EFFECTS, SNAP_FOLDER, applyEffect, effectByKey, formatDuration, isVideoMime, snapFileName } from "@/lib/snap";
+import { snapLink, sendSnapToChat } from "@/lib/snapShare";
 import { cn } from "@/lib/utils";
 import SnapShareSheet from "./SnapShareSheet";
 import SnapDrop from "./SnapDrop";
@@ -189,8 +188,7 @@ function Viewer({
   };
   const sendLink = async (convId: string) => {
     try {
-      const l = await snapLink(f, expiry);
-      await sendMessage(convId, snapShareText(l, video ? "video" : "image"));
+      await sendSnapToChat(convId, f, expiry);
       toast("Sent", "success");
       setPicker(false);
     } catch (e) {

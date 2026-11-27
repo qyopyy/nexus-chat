@@ -5,7 +5,7 @@
 //  - "Nearby": people who switch it on join a realtime room named after their ~1 km map cell (a geohash). Everyone
 //    also listens to the 8 cells around, so people either side of a cell edge still see each other. Nearby only
 //    discovers people; it never carries files.
-//  - If the Drop can't be delivered (too big, inbox unavailable), the Snap goes as a Nexus Drive link in their DM.
+//  - If the Drop can't be delivered (too big, inbox unavailable), the Snap goes into their DM as a normal attachment.
 
 const B32 = "0123456789bcdefghjkmnpqrstuvwxyz";
 
@@ -130,7 +130,7 @@ export function statusLabel(s: DropStatus, who: string): string {
     case "sent":
       return `In ${who}'s Nexus Drop inbox ✓`;
     case "link":
-      return `Sent as a Drive link in ${who}'s chat`;
+      return `Sent in ${who}'s chat`;
     case "error":
       return "Couldn't send";
     default:
