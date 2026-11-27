@@ -2,6 +2,7 @@
 
 import { supabase, errorText } from "./supabase";
 import { toast } from "@/store/app";
+import { TRUST_KEY, forget, isTrusted, parseTrust, trust, type TrustMap } from "@/lib/mfaTrust";
 
 export type MfaFactor = {
   id: string;
@@ -45,10 +46,46 @@ export async function mfaAssurance() {
   return data;
 }
 
-/** True when password sign-in succeeded but an AAL2 challenge is still required. */
+function readTrust(): TrustMap {
+  try {
+    return parseTrust(localStorage.getItem(TRUST_KEY), Date.now());
+  } catch {
+    return {};
+  }
+}
+function writeTrust(m: TrustMap) {
+  try {
+    if (Object.keys(m).length) localStorage.setItem(TRUST_KEY, JSON.stringify(m));
+    else localStorage.removeItem(TRUST_KEY);
+  } catch {
+    /* private mode: remembered until the app closes at most */
+  }
+}
+async function currentUserId(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user?.id ?? null;
+}
+
+/** Skip the two-factor prompt on this device for 30 days (call after a successful check). */
+export async function mfaTrustThisDevice() {
+  const id = await currentUserId();
+  if (id) writeTrust(trust(readTrust(), id, Date.now()));
+}
+export async function mfaForgetThisDevice() {
+  writeTrust(forget(readTrust(), await currentUserId()));
+}
+/** When this device's 30 days end for the signed-in account (ms), or null if it isn't remembered. */
+export async function mfaTrustedUntil(): Promise<number | null> {
+  const id = await currentUserId();
+  const until = id ? readTrust()[id] : 0;
+  return until && until > Date.now() ? until : null;
+}
+
+/** True when password sign-in succeeded but an AAL2 challenge is still required (and this device isn't remembered). */
 export async function mfaNeedsChallenge() {
   const aal = await mfaAssurance();
-  return !!aal && aal.currentLevel === "aal1" && aal.nextLevel === "aal2";
+  if (!aal || aal.currentLevel !== "aal1" || aal.nextLevel !== "aal2") return false;
+  return !isTrusted(readTrust(), await currentUserId(), Date.now());
 }
 
 export async function mfaListFactors() {

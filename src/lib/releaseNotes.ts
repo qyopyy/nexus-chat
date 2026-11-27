@@ -6,11 +6,15 @@ export type ReleaseNote = {
 
 export const NEXUS_RELEASE: ReleaseNote = {
   app: "Nexus",
-  version: "1.9.1",
+  version: "1.9.2",
   items: [
     {
+      title: "Remember this device for 30 days",
+      body: "When Nexus asks for your 2FA code you can tick Remember this device. That phone or computer skips the code for 30 days. Skip it on a shared device; Snap settings has a button to forget it.",
+    },
+    {
       title: "Nexus Snap",
-      body: "A built-in camera for photos and videos, front and back. Tap the camera in the chat box, open Snap from Apps, or use /snap (also a separate Nexus Snap iPhone app). Pick quality, ratio and effects, browse everything in the gallery, and send any snap to another Nexus user by username or email. Everything is saved to your Nexus Drive vault (folder Snap) with a nexusproject.cc link, ready to copy, share or send in any chat. New: self-timer, flash, grid, zoom, captions, stickers and frames, and a full-body V-Avatar (your own, now with legs and shoes) that stands in 999 / Ksubi scenes or your own background picture, for photos and videos. Voice messages with a live Voice Memos style waveform, sent back and forth as normal Nexus voice messages. Smoother avatar face tracking. Nexus Drop: AirDrop style sending to any Nexus phone (it lands in their Nexus Drop inbox), to people nearby who switch Nearby on for 10 minutes, to your own other screens, or through the phone share sheet; if a Drop cannot be delivered the Drive link goes to their chat. Sign in with your Nexus account or Apple.",
+      body: "A built-in camera for photos and videos, front and back. Tap the camera in the chat box, open Snap from Apps, or use /snap (also a separate Nexus Snap iPhone app). Pick quality, ratio and effects, browse everything in the gallery, and send any snap to another Nexus user by username or email. Everything is saved to your Nexus Drive vault (folder Snap) with a nexusproject.cc link, ready to copy, share or send in any chat. New: self-timer, flash, grid, zoom, captions, stickers and frames, and a full-body V-Avatar (your own, now with legs and shoes) that stands in 999 / Ksubi scenes or your own background picture, for photos and videos. Voice messages with a live Voice Memos style waveform, sent back and forth as normal Nexus voice messages. Smoother avatar face tracking. Nexus Drop: AirDrop style sending to any Nexus phone (it lands in their Nexus Drop inbox), to people nearby who switch Nearby on for 10 minutes, to your own other screens, or through the phone share sheet; if a Drop cannot be delivered the Drive link goes to their chat. Tap to focus, hold to lock, pinch to zoom and double-tap to flip; automatic resolution for every phone; a Back button instead of the logout button; and Settings with privacy, location and screen lock. Sign in with your Nexus account or Apple. Newest: a new Snap app icon, your @username and photo on the camera, Find people to snap straight to them, and Profile sounds: pick a Spotify song to show on your profile for 24 hours (48 hours for VIP, moderators and admins).",
     },
     {
       title: "Artist website",

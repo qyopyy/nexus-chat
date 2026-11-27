@@ -27,6 +27,7 @@ import { useIsMobile } from "@/lib/useMobile";
 import { cn } from "@/lib/utils";
 import { BorderRing, EffectCanvas, themeBg } from "@/components/profile/ProfileFx";
 import { NowPlayingCard, liveNow } from "@/components/profile/NowPlaying";
+import ProfileSound from "@/components/profile/ProfileSound";
 import { usePrefs } from "@/lib/prefs";
 import { loadAliases, useAliases } from "@/lib/usernames";
 const NO_ALIASES: string[] = [];
@@ -266,6 +267,8 @@ export function CardBody({ userId }: { userId: string }) {
             />
           </div>
         )}
+
+        <ProfileSound userId={userId} />
 
         <ProfileMutuals userId={userId} />
 

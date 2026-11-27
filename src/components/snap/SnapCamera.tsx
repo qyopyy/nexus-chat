@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Check, Copy, Download, Grid3x3, Images, Link2, MessageSquarePlus, Mic, MicOff, PersonStanding, Radar, RefreshCw, RotateCcw, Send, Share2, Shirt, SlidersHorizontal, Sparkles, Timer, Trash2, Type, UserPlus, Video, X, Zap, ZapOff } from "lucide-react";
+import { Camera, Check, ChevronLeft, Copy, Download, Grid3x3, Images, Link2, MessageSquarePlus, Mic, MicOff, PersonStanding, Radar, RefreshCw, RotateCcw, Search, Send, Settings as SettingsIcon, Share2, Shirt, SlidersHorizontal, Sparkles, Timer, Trash2, Type, UserPlus, Video, X, Zap, ZapOff } from "lucide-react";
 import { toast, useApp, conversationTitle, openModal } from "@/store/app";
 import { sendMessage } from "@/lib/data";
 import { createShare, removeVault, shareLink, uploadVault, type VaultFile, type VaultShare } from "@/lib/protect";
@@ -9,12 +9,10 @@ import {
   SNAP_EFFECTS,
   SNAP_EXPIRY,
   SNAP_FOLDER,
-  SNAP_MAX_VIDEO_MS,
   SNAP_QUALITY,
   SNAP_RATIOS,
   applyEffect,
   baseMime,
-  cameraConstraints,
   cameraErrorMessage,
   cropRect,
   effectByKey,
@@ -41,12 +39,63 @@ import SnapAvatarEditor from "./SnapAvatarEditor";
 import SnapAvatarStage, { type AvatarHandle } from "./SnapAvatarStage";
 import SnapGallery from "./SnapGallery";
 import SnapShareSheet from "./SnapShareSheet";
+import { roundPosition, sendText, snapNote, type GridStyle, type SnapPrefs } from "@/lib/snapPrefs";
+import { getPrefs, setLastGeo, setPrefs, usePrefs } from "@/lib/snapPrefsStore";
+import { constraintLadder, effectiveQualityKey, isCompactHeight, isLevel, pinchDistance, pinchZoom, rollFromGravity, tapToVideoPoint, upgradeTo, type DeviceInfo } from "@/lib/snapDevice";
+import { shutterClick, timerBeep } from "@/lib/snapAudio";
+import SnapSettings from "./SnapSettings";
+import SnapProfile from "./SnapProfile";
+import SnapPeople from "./SnapPeople";
+import SnapFace from "./SnapFace";
+import { dropTo } from "@/lib/snapDropNet";
+import { statusLabel } from "@/lib/snapDrop";
+import type { SnapUser } from "@/lib/snapShare";
 import SnapDrop from "./SnapDrop";
 import SnapVoice from "./SnapVoice";
 import { Act, Sheet, copyText } from "./SnapUi";
 
 type Mode = "photo" | "video";
 type Shot = { file: File; url: string; video: boolean; durationMs: number | null };
+type FocusCaps = { focusModes: string[]; exposureModes: string[]; exposure: { min: number; max: number; step: number } | null };
+
+function locate(mode: SnapPrefs["geoTag"]): Promise<{ lat: number; lng: number } | null> {
+  if (mode === "off" || typeof navigator === "undefined" || !navigator.geolocation) return Promise.resolve(null);
+  return new Promise((res) =>
+    navigator.geolocation.getCurrentPosition(
+      (p) => res(roundPosition(p.coords.latitude, p.coords.longitude, mode)),
+      () => res(null),
+      { timeout: 4000, maximumAge: 120000, enableHighAccuracy: mode === "precise" },
+    ),
+  );
+}
+
+function downloadFile(file: File) {
+  try {
+    const u = URL.createObjectURL(file);
+    const a = document.createElement("a");
+    a.href = u;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 4000);
+  } catch {
+    /* best effort */
+  }
+}
+
+function readDevice(): DeviceInfo {
+  const n = (typeof navigator !== "undefined" ? navigator : {}) as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean; effectiveType?: string } };
+  return {
+    screenW: typeof screen !== "undefined" ? screen.width : 390,
+    screenH: typeof screen !== "undefined" ? screen.height : 844,
+    dpr: typeof window !== "undefined" ? window.devicePixelRatio || 1 : 2,
+    memoryGb: n.deviceMemory,
+    cores: n.hardwareConcurrency,
+    saveData: n.connection?.saveData,
+    effectiveType: n.connection?.effectiveType,
+  };
+}
 type Saved = { vault: VaultFile; share: VaultShare; link: string };
 
 const store = {
@@ -84,6 +133,7 @@ export default function SnapCamera({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);
   const rafRef = useRef(0);
@@ -92,8 +142,29 @@ export default function SnapCamera({
   const avatarRef = useRef<AvatarHandle>(null);
   const micRef = useRef<(() => void) | null>(null);
 
-  const [mode, setMode] = useState<Mode>("photo");
-  const [facing, setFacing] = useState<Facing>("environment");
+  const prefs = usePrefs();
+  const prefsRef = useRef<SnapPrefs>(prefs);
+  prefsRef.current = prefs;
+  const [mode, setMode] = useState<Mode>(() => getPrefs().startMode);
+  const [facing, setFacing] = useState<Facing>(() => getPrefs().startFacing);
+  const [dev] = useState<DeviceInfo>(readDevice);
+  const [compact, setCompact] = useState(() => typeof window !== "undefined" && isCompactHeight(window.innerHeight));
+  const [settings, setSettings] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [peopleOpen, setPeopleOpen] = useState(false);
+  const [target, setTarget] = useState<SnapUser | null>(null);
+  const [sendingTo, setSendingTo] = useState(false);
+  const myProfile = useApp((st) => (st.userId ? st.profiles[st.userId] : undefined));
+  const [ring, setRing] = useState<{ x: number; y: number; locked: boolean; k: number } | null>(null);
+  const [focusCaps, setFocusCaps] = useState<FocusCaps>({ focusModes: [], exposureModes: [], exposure: null });
+  const [ev, setEv] = useState(0);
+  const [showEv, setShowEv] = useState(false);
+  const [roll, setRoll] = useState<number | null>(null);
+  const [delArmed, setDelArmed] = useState(false);
+  const saveSeq = useRef(0);
+  const geoRef = useRef<{ lat: number; lng: number } | null>(null);
+  const ringTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const evTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [quality, setQuality] = useState(() => qualityByKey(store.get("snap.quality")).key);
   const [ratio, setRatio] = useState(() => ratioByKey(store.get("snap.ratio")).key);
   const [effect, setEffect] = useState(() => effectByKey(store.get("snap.effect")).key);
@@ -137,7 +208,8 @@ export default function SnapCamera({
   const [drop, setDrop] = useState(false);
   const [flash, setFlash] = useState(false);
 
-  const q = qualityByKey(quality);
+  const qKey = effectiveQualityKey(quality, prefs.autoQuality, prefs.dataSaver, dev);
+  const q = qualityByKey(qKey);
   const ratioDef = ratioByKey(ratio);
   const fx = effectByKey(effect);
   const recording = recMs !== null;
@@ -233,14 +305,28 @@ export default function SnapCamera({
         return;
       }
       const qq = qualityByKey(qk);
+      // ask for the best size first, then ease off (some phones refuse an exact size) before giving up
+      const open = async (audio: boolean) => {
+        let last: unknown = null;
+        for (const c of constraintLadder(f, qq, audio)) {
+          try {
+            return await navigator.mediaDevices.getUserMedia(c);
+          } catch (e) {
+            last = e;
+            const n = (e as { name?: string } | null)?.name;
+            if (n === "NotAllowedError" || n === "SecurityError" || n === "NotFoundError") break;
+          }
+        }
+        throw last;
+      };
       let s: MediaStream | null = null;
       try {
-        s = await navigator.mediaDevices.getUserMedia(cameraConstraints(f, qq, withAudio));
+        s = await open(withAudio);
       } catch (e) {
         if (withAudio) {
           // no microphone (or blocked): still let people record silent video
           try {
-            s = await navigator.mediaDevices.getUserMedia(cameraConstraints(f, qq, false));
+            s = await open(false);
             setNoMic(true);
           } catch (e2) {
             setErr(cameraErrorMessage(e2, window.isSecureContext));
@@ -253,7 +339,26 @@ export default function SnapCamera({
       }
       streamRef.current = s;
       try {
-        const caps = (s.getVideoTracks()[0]?.getCapabilities?.() ?? {}) as { torch?: boolean; zoom?: { min: number; max: number; step?: number } };
+        const track = s.getVideoTracks()[0];
+        const caps = (track?.getCapabilities?.() ?? {}) as {
+          torch?: boolean;
+          zoom?: { min: number; max: number; step?: number };
+          focusMode?: string[];
+          exposureMode?: string[];
+          exposureCompensation?: { min: number; max: number; step?: number };
+          width?: { max?: number };
+          height?: { max?: number };
+        };
+        const ec = caps.exposureCompensation;
+        setFocusCaps({
+          focusModes: Array.isArray(caps.focusMode) ? caps.focusMode : [],
+          exposureModes: Array.isArray(caps.exposureMode) ? caps.exposureMode : [],
+          exposure: ec && ec.max > ec.min ? { min: ec.min, max: ec.max, step: ec.step || 0.5 } : null,
+        });
+        setEv(0);
+        // the first ask can come back smaller than the camera can really do: use the full size for this quality
+        const up = upgradeTo(qq, track.getSettings(), caps);
+        if (up) void track.applyConstraints({ width: { ideal: up.width }, height: { ideal: up.height } }).catch(() => undefined);
         setTorchOk(!!caps.torch);
         setZoomCaps(caps.zoom && caps.zoom.max > caps.zoom.min ? { min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step || 0.1 } : null);
         setZoom(caps.zoom?.min ?? 1);
@@ -274,9 +379,56 @@ export default function SnapCamera({
   // (re)start the camera when the side, mode or quality changes
   useEffect(() => {
     if (shot || gallery || voice || avatarOn) return;
-    void start(facing, mode === "video", quality);
+    void start(facing, mode === "video", qKey);
     return stop;
-  }, [facing, mode, quality, shot, gallery, voice, avatarOn, start, stop]);
+  }, [facing, mode, qKey, shot, gallery, voice, avatarOn, start, stop]);
+
+  // short screens (iPhone SE, split view, landscape) get tighter controls
+  useEffect(() => {
+    const on = () => setCompact(isCompactHeight(window.innerHeight));
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+
+  // keep the screen on while the camera is open
+  useEffect(() => {
+    if (!prefs.keepAwake) return;
+    type Lock = { release: () => Promise<void> };
+    const wl = (navigator as unknown as { wakeLock?: { request: (t: "screen") => Promise<Lock> } }).wakeLock;
+    if (!wl) return;
+    let lock: Lock | null = null;
+    let dead = false;
+    const get = () =>
+      void wl
+        .request("screen")
+        .then((l) => (dead ? void l.release().catch(() => undefined) : (lock = l)))
+        .catch(() => undefined);
+    get();
+    const onVis = () => document.visibilityState === "visible" && get();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      dead = true;
+      document.removeEventListener("visibilitychange", onVis);
+      void lock?.release().catch(() => undefined);
+    };
+  }, [prefs.keepAwake]);
+
+  // level guide: roll angle from the accelerometer
+  useEffect(() => {
+    if (!prefs.levelGuide || shot || avatarOn) {
+      setRoll(null);
+      return;
+    }
+    const on = (e: DeviceMotionEvent) => {
+      const g = e.accelerationIncludingGravity;
+      if (!g || g.x == null || g.y == null) return;
+      // iPhones and Androids report gravity with opposite signs; folding it makes "upright" 0 on both
+      const s = g.y < 0 ? -1 : 1;
+      setRoll(rollFromGravity(g.x * s, Math.abs(g.y)));
+    };
+    window.addEventListener("devicemotion", on);
+    return () => window.removeEventListener("devicemotion", on);
+  }, [prefs.levelGuide, shot, avatarOn]);
 
   // torch (back camera lamp) follows the flash button
   useEffect(() => {
@@ -289,6 +441,131 @@ export default function SnapCamera({
     setZoom(z);
     const track = streamRef.current?.getVideoTracks()[0];
     void track?.applyConstraints({ advanced: [{ zoom: z } as MediaTrackConstraintSet] }).catch(() => undefined);
+  };
+
+  // ---- tap to focus, hold to lock, pinch to zoom, double-tap to flip
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gest = useRef<{ t: number; x: number; y: number; moved: boolean; held: boolean; pinch?: { d: number; z: number }; hold?: ReturnType<typeof setTimeout> } | null>(null);
+  const lastTap = useRef(0);
+  const lockedRef = useRef(false);
+
+  const setFocusModes = (track: MediaStreamTrack, focus: string, exposure: string, poi?: { x: number; y: number }) => {
+    const adv: Record<string, unknown> = {};
+    if (poi) adv.pointsOfInterest = [poi];
+    if (focusCaps.focusModes.includes(focus)) adv.focusMode = focus;
+    if (focusCaps.exposureModes.includes(exposure)) adv.exposureMode = exposure;
+    if (Object.keys(adv).length) void track.applyConstraints({ advanced: [adv as MediaTrackConstraintSet] }).catch(() => undefined);
+  };
+
+  const focusAt = (cx: number, cy: number, lock: boolean) => {
+    const el = boxRef.current;
+    const v = videoRef.current;
+    if (!el || !v) return;
+    const r = el.getBoundingClientRect();
+    const px = cx - r.left;
+    const py = cy - r.top;
+    lockedRef.current = lock;
+    setRing({ x: px, y: py, locked: lock, k: Date.now() });
+    if (ringTimer.current) clearTimeout(ringTimer.current);
+    if (!lock) ringTimer.current = setTimeout(() => setRing(null), 1500);
+    if (prefsRef.current.exposureSlider && focusCaps.exposure) {
+      setShowEv(true);
+      if (evTimer.current) clearTimeout(evTimer.current);
+      evTimer.current = setTimeout(() => setShowEv(false), 4000);
+    }
+    if (prefsRef.current.haptics) {
+      try {
+        navigator.vibrate?.(lock ? 25 : 8);
+      } catch {
+        /* not supported */
+      }
+    }
+    const track = streamRef.current?.getVideoTracks()[0];
+    const pt = tapToVideoPoint(px, py, r.width, r.height, v.videoWidth, v.videoHeight, facing === "user");
+    if (!track || !pt) return;
+    // one focus pass at the tapped spot; then either stay (lock) or go back to automatic
+    setFocusModes(track, "single-shot", "continuous", pt);
+    setTimeout(() => setFocusModes(track, lock ? "manual" : "continuous", lock ? "manual" : "continuous"), 900);
+  };
+
+  const unlockFocus = () => {
+    lockedRef.current = false;
+    setRing(null);
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (track) setFocusModes(track, "continuous", "continuous");
+  };
+
+  const gestureOn = !avatarOn && ready && !err;
+  const onDown = (e: React.PointerEvent) => {
+    try {
+      (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      if (gest.current?.hold) clearTimeout(gest.current.hold);
+      gest.current = { t: 0, x: 0, y: 0, moved: true, held: false, pinch: { d: pinchDistance(a, b) || 1, z: zoom } };
+      return;
+    }
+    if (pointers.current.size > 2) return;
+    const g: NonNullable<typeof gest.current> = { t: Date.now(), x: e.clientX, y: e.clientY, moved: false, held: false };
+    if (prefsRef.current.tapFocus && prefsRef.current.focusLock) {
+      g.hold = setTimeout(() => {
+        if (gest.current === g && !g.moved) {
+          g.held = true;
+          focusAt(g.x, g.y, true);
+        }
+      }, 550);
+    }
+    gest.current = g;
+  };
+  const onMove = (e: React.PointerEvent) => {
+    if (!pointers.current.has(e.pointerId)) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const g = gest.current;
+    if (!g) return;
+    if (pointers.current.size === 2 && g.pinch) {
+      if (prefsRef.current.pinchZoom && zoomCaps) {
+        const [a, b] = [...pointers.current.values()];
+        applyZoom(pinchZoom(g.pinch.z, pinchDistance(a, b) / g.pinch.d, zoomCaps.min, zoomCaps.max));
+      }
+    } else if (Math.hypot(e.clientX - g.x, e.clientY - g.y) > 10) {
+      g.moved = true;
+      if (g.hold) clearTimeout(g.hold);
+    }
+  };
+  const onUp = (e: React.PointerEvent) => {
+    const had = pointers.current.delete(e.pointerId);
+    const g = gest.current;
+    if (pointers.current.size === 0) gest.current = null;
+    if (!had || !g) return;
+    if (g.hold) clearTimeout(g.hold);
+    if (g.moved || g.pinch || g.held) return;
+    const now = Date.now();
+    if (prefsRef.current.doubleTapFlip && !recording && now - lastTap.current < 320) {
+      lastTap.current = 0;
+      setFacing((f) => (f === "user" ? "environment" : "user"));
+      return;
+    }
+    lastTap.current = now;
+    if (!prefsRef.current.tapFocus) return;
+    if (lockedRef.current) unlockFocus();
+    focusAt(e.clientX, e.clientY, false);
+  };
+  const onCancel = (e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId);
+    if (gest.current?.hold) clearTimeout(gest.current.hold);
+    if (pointers.current.size === 0) gest.current = null;
+  };
+
+  const applyEv = (v: number) => {
+    setEv(v);
+    const track = streamRef.current?.getVideoTracks()[0];
+    void track?.applyConstraints({ advanced: [{ exposureCompensation: v } as MediaTrackConstraintSet] }).catch(() => undefined);
+    if (evTimer.current) clearTimeout(evTimer.current);
+    evTimer.current = setTimeout(() => setShowEv(false), 4000);
   };
 
   const pickBgImage = async (f: File) => {
@@ -328,24 +605,29 @@ export default function SnapCamera({
   );
 
   const save = useCallback(
-    async (file: File, durationMs: number | null) => {
+    async (file: File, durationMs: number | null, geo: { lat: number; lng: number } | null) => {
+      const seq = ++saveSeq.current;
+      const live = () => seq === saveSeq.current; // false once you went back or took another shot
       setPhase("saving");
       setProgress(0);
       setFailMsg("");
       setSaved(null);
       try {
-        const vault = await uploadVault(file, SNAP_FOLDER, setProgress, {
+        const vault = await uploadVault(file, SNAP_FOLDER, (p) => live() && setProgress(p), {
           kind: file.type.startsWith("video/") ? "video" : "artwork",
-          note: "Nexus Snap",
+          note: snapNote(geo),
           duration_ms: durationMs,
           original: true,
         });
-        const share = await createShare(vault.id, { expiresInHours: expiry, maxDownloads: null, password: "", download: true });
+        const pr = prefsRef.current;
+        const share = await createShare(vault.id, { expiresInHours: expiry, maxDownloads: pr.maxDownloads || null, password: "", download: pr.linkDownload });
         const link = shareLink(share);
+        if (!live()) return;
         setSaved({ vault, share, link });
         setPhase("done");
-        void copyText(link).then((ok) => ok && toast("Link copied", "success"));
+        if (pr.autoCopyLink) void copyText(link).then((ok) => ok && toast("Link copied", "success"));
       } catch (e) {
+        if (!live()) return;
         setFailMsg(e instanceof Error ? e.message : "Couldn't save to your vault.");
         setPhase("failed");
       }
@@ -353,13 +635,29 @@ export default function SnapCamera({
     [expiry],
   );
 
+  /** where the shot was taken (only when location tags are on), then save */
+  const begin = useCallback(
+    async (file: File, durationMs: number | null) => {
+      const seq = saveSeq.current + 1;
+      setPhase("saving");
+      const geo = await locate(prefsRef.current.geoTag);
+      if (seq !== saveSeq.current + 1) return; // went back while locating
+      geoRef.current = geo;
+      setLastGeo(geo);
+      await save(file, durationMs, geo);
+    },
+    [save],
+  );
+
   const finish = useCallback(
     (file: File, video: boolean, durationMs: number | null) => {
       stop();
       setShot({ file, url: URL.createObjectURL(file), video, durationMs });
-      void save(file, durationMs);
+      if (prefsRef.current.downloadCopy) downloadFile(file);
+      if (prefsRef.current.autoSave) void begin(file, durationMs);
+      else setPhase("idle");
     },
-    [stop, save],
+    [stop, begin],
   );
 
   const takePhoto = useCallback(() => {
@@ -403,12 +701,17 @@ export default function SnapCamera({
     }
     const when = new Date();
     if (hasDeco({ overlay, caption, sticker })) decorate(ctx, cv.width, cv.height, { overlay, caption, sticker, when });
-    setFlash(true);
-    setTimeout(() => setFlash(false), 160);
-    try {
-      navigator.vibrate?.(15);
-    } catch {
-      /* not supported */
+    if (prefsRef.current.screenFlash && !prefsRef.current.reduceMotion) {
+      setFlash(true);
+      setTimeout(() => setFlash(false), 160);
+    }
+    if (prefsRef.current.shutterSound) shutterClick();
+    if (prefsRef.current.haptics) {
+      try {
+        navigator.vibrate?.(15);
+      } catch {
+        /* not supported */
+      }
     }
     cv.toBlob(
       (blob) => {
@@ -513,15 +816,17 @@ export default function SnapCamera({
     recRef.current = rec;
     rec.start(1000);
     setRecMs(0);
-    try {
-      navigator.vibrate?.(20);
-    } catch {
-      /* not supported */
+    if (prefsRef.current.haptics) {
+      try {
+        navigator.vibrate?.(20);
+      } catch {
+        /* not supported */
+      }
     }
     tickRef.current = setInterval(() => {
       const ms = Date.now() - t0;
       setRecMs(ms);
-      if (ms >= SNAP_MAX_VIDEO_MS) stopRecording();
+      if (ms >= prefsRef.current.maxVideoSec * 1000) stopRecording();
     }, 250);
   }, [avatarOn, avatarReady, ready, effect, ratio, ratioDef.r, q.videoH, q.videoBps, fx.css, facing, finish, stopRecording]);
 
@@ -561,6 +866,7 @@ export default function SnapCamera({
     if (timer <= 0) return void run();
     let n = timer;
     setCountdown(n);
+    if (prefsRef.current.timerBeep) timerBeep();
     cdRef.current = setInterval(() => {
       n -= 1;
       if (n <= 0) {
@@ -568,11 +874,18 @@ export default function SnapCamera({
         cdRef.current = null;
         setCountdown(null);
         void run();
-      } else setCountdown(n);
+      } else {
+        setCountdown(n);
+        if (prefsRef.current.timerBeep) timerBeep(n === 1);
+      }
     }, 1000);
   };
 
   const retake = () => {
+    saveSeq.current++; // an upload still running no longer touches the screen
+    geoRef.current = null;
+    setLastGeo(null);
+    setDelArmed(false);
     setShot(null);
     setSaved(null);
     setPhase("idle");
@@ -581,6 +894,12 @@ export default function SnapCamera({
   };
 
   const discard = async () => {
+    if (prefsRef.current.confirmDelete && !delArmed) {
+      setDelArmed(true);
+      setTimeout(() => setDelArmed(false), 3500);
+      return;
+    }
+    setDelArmed(false);
     if (saved) await removeVault(saved.vault).catch(() => undefined);
     toast("Deleted from your vault");
     retake();
@@ -603,10 +922,23 @@ export default function SnapCamera({
 
   const sendHere = async (convId: string, asLink: boolean) => {
     if (!shot) return;
-    await sendMessage(convId, asLink && saved ? snapShareText(saved.link, shot.video ? "video" : "image") : "", asLink ? null : shot.file);
+    await sendMessage(convId, asLink && saved ? sendText(snapShareText(saved.link, shot.video ? "video" : "image"), geoRef.current, prefsRef.current.locationInSend) : "", asLink ? null : shot.file);
     toast("Sent", "success");
     setPicker(false);
     onClose?.();
+  };
+
+  const sendToTarget = async () => {
+    if (!target || !saved || !shot) return;
+    setSendingTo(true);
+    try {
+      const st = await dropTo(target, shot.file, saved.vault, expiry);
+      toast(statusLabel(st, target.display_name || target.username), "success");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't send.", "error");
+    } finally {
+      setSendingTo(false);
+    }
   };
 
   const attachAndClose = (f: File) => {
@@ -614,6 +946,8 @@ export default function SnapCamera({
     onClose?.();
   };
 
+  const shutterOuter = prefs.bigShutter ? "size-[92px]" : compact ? "size-[62px]" : "size-[76px]";
+  const shutterInner = prefs.bigShutter ? "size-[68px]" : compact ? "size-[44px]" : "size-14";
   const chats = useApp((s) => s.chatList);
   const state = useApp.getState();
   const mirrored = facing === "user";
@@ -621,11 +955,17 @@ export default function SnapCamera({
   return (
     <div className="fixed inset-0 z-[90] flex flex-col bg-black text-white">
       <div className="pointer-events-none absolute inset-0 z-30 bg-white transition-opacity duration-150" style={{ opacity: flash ? 0.85 : 0 }} />
-      <header className="relative z-20 flex items-center gap-2 px-3 pb-2 pt-safe-3">
-        {onClose && (
+      <header className={cn("relative z-20 flex items-center gap-2 px-3 pt-safe-3", compact ? "pb-1" : "pb-2")}>
+        {shot ? (
+          <button type="button" onClick={retake} aria-label="Back" className="grid size-10 place-items-center rounded-full bg-white/10 hover:bg-white/20">
+            <ChevronLeft className="size-6" />
+          </button>
+        ) : onClose ? (
           <button type="button" onClick={onClose} aria-label="Close" className="grid size-10 place-items-center rounded-full bg-white/10 hover:bg-white/20">
             <X className="size-5" />
           </button>
+        ) : (
+          <span className="size-10" />
         )}
         <div className="flex-1 text-center text-sm font-extrabold tracking-wide">
           {recording ? (
@@ -633,6 +973,11 @@ export default function SnapCamera({
               <span className="size-2 animate-pulse rounded-full bg-white" />
               {formatDuration(recMs ?? 0)}
             </span>
+          ) : !shot && myProfile ? (
+            <button type="button" onClick={() => setProfileOpen(true)} aria-label="Your profile" className="inline-flex max-w-full items-center gap-2 rounded-full bg-white/10 py-1 pl-1 pr-3 hover:bg-white/20">
+              <SnapFace url={myProfile.avatar_url} name={myProfile.display_name || myProfile.username} color={myProfile.avatar_color} size={28} />
+              <span className="truncate text-xs font-bold">@{myProfile.username}</span>
+            </button>
           ) : (
             "NEXUS SNAP"
           )}
@@ -655,7 +1000,7 @@ export default function SnapCamera({
       {!shot ? (
         <>
           <div ref={stageRef} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#0a0a10]">
-            <div className="relative overflow-hidden bg-black" style={box && box.w ? { width: box.w, height: box.h } : { width: "100%", height: "100%" }}>
+            <div ref={boxRef} className="relative overflow-hidden bg-black" style={box && box.w ? { width: box.w, height: box.h } : { width: "100%", height: "100%" }}>
               <video
                 ref={videoRef}
                 playsInline
@@ -667,20 +1012,43 @@ export default function SnapCamera({
               {avatarOn && (
                 <SnapAvatarStage ref={avatarRef} cfg={avCfg} sceneKey={scene} bg={bg} ratio={ratioDef.r} longEdge={Math.min(q.maxEdge, 1920)} fxCss={fx.css} onReady={setAvatarReady} />
               )}
-              <PreviewDeco overlay={overlay} caption={caption} sticker={sticker} grid={grid && !avatarOn} />
+              <PreviewDeco overlay={overlay} caption={caption} sticker={sticker} grid={grid && !avatarOn && prefs.gridStyle !== "off" ? prefs.gridStyle : null} />
+              {gestureOn && <div className="absolute inset-0 z-[5] touch-none" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel} />}
+              {ring && (
+                <span className="pointer-events-none absolute z-[6] -translate-x-1/2 -translate-y-1/2" style={{ left: ring.x, top: ring.y }}>
+                  <span className={cn("block size-16 rounded-full border-2", ring.locked ? "border-amber-300" : "border-yellow-300")} />
+                  {ring.locked && <span className="absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded bg-amber-300 px-1.5 py-0.5 text-[10px] font-extrabold text-black">AE/AF LOCK</span>}
+                </span>
+              )}
+              {showEv && focusCaps.exposure && prefs.exposureSlider && (
+                <div className="absolute inset-x-6 bottom-3 z-[7] flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 text-xs">
+                  <span aria-hidden>☀</span>
+                  <input type="range" min={focusCaps.exposure.min} max={focusCaps.exposure.max} step={focusCaps.exposure.step} value={ev} onChange={(e) => applyEv(Number(e.target.value))} className="w-full accent-yellow-300" aria-label="Brightness" />
+                </div>
+              )}
+              {roll !== null && (
+                <div className="pointer-events-none absolute inset-x-0 top-1/2 z-[4] flex justify-center">
+                  <span className={cn("h-0.5 w-2/3 rounded", isLevel(roll) ? "bg-emerald-400" : "bg-white/70")} style={{ transform: `rotate(${-roll}deg)` }} />
+                </div>
+              )}
               {countdown !== null && (
                 <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
                   <span className="text-[120px] font-black leading-none drop-shadow-[0_4px_24px_rgba(0,0,0,.8)]">{countdown}</span>
                 </div>
               )}
-              {!avatarOn && <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-bold">{facing === "user" ? "FRONT" : "BACK"}</span>}
+              {target && (
+                <button type="button" onClick={() => setTarget(null)} aria-label={`Stop sending to ${target.username}`} className="absolute left-1/2 top-2 z-[8] -translate-x-1/2 whitespace-nowrap rounded-full bg-emerald-400 px-3 py-1 text-[11px] font-extrabold text-black">
+                  To @{target.username} ✕
+                </button>
+              )}
+              {!avatarOn && prefs.cameraBadge && <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-bold">{facing === "user" ? "FRONT" : "BACK"}</span>}
               {noMic && mode === "video" && (
                 <span className="pointer-events-none absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-bold">
                   <MicOff className="size-3" /> No sound
                 </span>
               )}
             </div>
-            <div className="absolute right-2 top-3 z-10 flex flex-col gap-2">
+            <div className={cn("absolute top-3 z-10 flex flex-col", prefs.leftHanded ? "left-2" : "right-2", compact ? "gap-1.5" : "gap-2")}>
               {!avatarOn && (
                 <Tool label={flashOn ? "Flash on" : "Flash off"} on={flashOn} onClick={pick.flash}>
                   {flashOn ? <Zap className="size-5" /> : <ZapOff className="size-5" />}
@@ -708,6 +1076,12 @@ export default function SnapCamera({
                   <Shirt className="size-5" />
                 </Tool>
               )}
+              <Tool label="Find people" on={peopleOpen || !!target} onClick={() => !recording && setPeopleOpen(true)}>
+                <Search className="size-5" />
+              </Tool>
+              <Tool label="Settings" on={settings} onClick={() => !recording && setSettings(true)}>
+                <SettingsIcon className="size-5" />
+              </Tool>
             </div>
             {err && !avatarOn && (
               <div className="absolute inset-0 grid place-items-center bg-[#0a0a10] p-8 text-center">
@@ -715,7 +1089,7 @@ export default function SnapCamera({
                   <Camera className="mx-auto size-10 text-white/50" />
                   <p className="text-sm text-white/80">{err}</p>
                   <div className="flex flex-wrap justify-center gap-2">
-                    <button type="button" onClick={() => void start(facing, mode === "video", quality)} className="rounded-full bg-white px-4 py-2 text-sm font-bold text-black">
+                    <button type="button" onClick={() => void start(facing, mode === "video", qKey)} className="rounded-full bg-white px-4 py-2 text-sm font-bold text-black">
                       Try again
                     </button>
                     <label className="cursor-pointer rounded-full bg-white/15 px-4 py-2 text-sm font-bold">
@@ -738,7 +1112,7 @@ export default function SnapCamera({
             )}
           </div>
 
-          <div className="relative z-20 px-4 pb-safe-2 pt-3">
+          <div className={cn("relative z-20 px-4 pb-safe-2", compact ? "pt-1.5" : "pt-3")}>
             {panel === "effects" && (
               <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 text-[11px]">
                 {SNAP_EFFECTS.map((e) => (
@@ -780,8 +1154,19 @@ export default function SnapCamera({
             {panel === "settings" && (
               <div className="mb-3 space-y-2 rounded-2xl bg-white/5 p-3 text-[11px]">
                 <Row label="Quality">
+                  <Chip on={prefs.autoQuality && !prefs.dataSaver} onClick={() => setPrefs({ autoQuality: true, dataSaver: false })} disabled={recording}>
+                    Auto
+                  </Chip>
                   {SNAP_QUALITY.map((o) => (
-                    <Chip key={o.key} on={quality === o.key} onClick={() => pick.quality(o.key)} disabled={recording}>
+                    <Chip
+                      key={o.key}
+                      on={!prefs.autoQuality && !prefs.dataSaver && quality === o.key}
+                      onClick={() => {
+                        setPrefs({ autoQuality: false, dataSaver: false });
+                        pick.quality(o.key);
+                      }}
+                      disabled={recording}
+                    >
                       {o.label}
                     </Chip>
                   ))}
@@ -817,7 +1202,7 @@ export default function SnapCamera({
             )}
 
             {!recording && (
-              <div className="mb-3 flex items-center justify-center gap-1 text-xs font-bold">
+              <div className={cn("flex items-center justify-center gap-1 text-xs font-bold", compact ? "mb-1.5" : "mb-3")}>
                 {(["photo", "video"] as Mode[]).map((m) => (
                   <button key={m} type="button" onClick={() => setMode(m)} className={cn("inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 capitalize", mode === m ? "bg-white text-black" : "text-white/70")}>
                     {m === "photo" ? <Camera className="size-3.5" /> : <Video className="size-3.5" />}
@@ -827,13 +1212,13 @@ export default function SnapCamera({
               </div>
             )}
 
-            <div className="mb-2 flex items-center justify-between">
+            <div className={cn("flex items-center justify-between", compact ? "mb-1" : "mb-2", prefs.leftHanded && "flex-row-reverse")}>
               <button type="button" onClick={() => setGallery(true)} disabled={recording} aria-label="Gallery" className="grid size-12 place-items-center rounded-2xl bg-white/10 hover:bg-white/20 disabled:opacity-40">
                 <Images className="size-6" />
               </button>
               {mode === "photo" ? (
-                <button type="button" onClick={shoot} disabled={avatarOn ? !avatarReady : !ready} aria-label={countdown !== null ? "Cancel timer" : "Take photo"} className="grid size-[76px] place-items-center rounded-full border-4 border-white transition active:scale-90 disabled:opacity-40">
-                  <span className="size-14 rounded-full bg-white" />
+                <button type="button" onClick={shoot} disabled={avatarOn ? !avatarReady : !ready} aria-label={countdown !== null ? "Cancel timer" : "Take photo"} className={cn("grid place-items-center rounded-full border-4 border-white transition active:scale-90 disabled:opacity-40", shutterOuter)}>
+                  <span className={cn("rounded-full bg-white", shutterInner)} />
                 </button>
               ) : (
                 <button
@@ -841,9 +1226,9 @@ export default function SnapCamera({
                   onClick={shoot}
                   disabled={avatarOn ? !avatarReady : !ready}
                   aria-label={recording ? "Stop recording" : "Start recording"}
-                  className="grid size-[76px] place-items-center rounded-full border-4 border-white transition active:scale-90 disabled:opacity-40"
+                  className={cn("grid place-items-center rounded-full border-4 border-white transition active:scale-90 disabled:opacity-40", shutterOuter)}
                 >
-                  <span className={cn("bg-rose-600 transition-all", recording ? "size-7 rounded-md" : "size-14 rounded-full")} />
+                  <span className={cn("bg-rose-600 transition-all", recording ? "size-7 rounded-md" : cn("rounded-full", shutterInner))} />
                 </button>
               )}
               <div className="flex gap-1.5">
@@ -855,11 +1240,13 @@ export default function SnapCamera({
                 </button>
               </div>
             </div>
-            <p className="text-center text-[11px] text-white/45">
-              {avatarOn ? "Avatar · " : ""}
-              {q.label} · {ratioDef.label}
-              {effect !== "none" ? ` · ${fx.label}` : ""} · saved to your Nexus Drive
-            </p>
+            {prefs.showHints && !compact && (
+              <p className="text-center text-[11px] text-white/45">
+                {avatarOn ? "Avatar · " : ""}
+                {prefs.dataSaver ? "Data saver" : prefs.autoQuality ? `Auto ${q.label}` : q.label} · {ratioDef.label}
+                {effect !== "none" ? ` · ${fx.label}` : ""} · {prefs.autoSave ? "saved to your Nexus Drive" : "not saved until you tap Save"}
+              </p>
+            )}
           </div>
         </>
       ) : (
@@ -894,10 +1281,18 @@ export default function SnapCamera({
                   </button>
                 </div>
               )}
+              {phase === "idle" && !saved && (
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 text-xs text-white/70">Not saved yet</span>
+                  <button type="button" onClick={() => void begin(shot.file, shot.durationMs)} className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-black">
+                    Save to Nexus Drive
+                  </button>
+                </div>
+              )}
               {phase === "failed" && (
                 <div className="space-y-2">
                   <p className="text-xs text-rose-300">Couldn&apos;t save to your vault: {failMsg}</p>
-                  <button type="button" onClick={() => void save(shot.file, shot.durationMs)} className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-black">
+                  <button type="button" onClick={() => void save(shot.file, shot.durationMs, geoRef.current)} className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-black">
                     Try again
                   </button>
                 </div>
@@ -907,7 +1302,8 @@ export default function SnapCamera({
               <Act icon={<RotateCcw className="size-5" />} label="Retake" onClick={retake} />
               <Act icon={<Share2 className="size-5" />} label="Share link" onClick={() => void shareSheet()} disabled={!saved} />
               <Act icon={<UserPlus className="size-5" />} label="To a user" onClick={() => setToUser(true)} disabled={!saved} />
-              <Act icon={<Radar className="size-5" />} label="Nexus Drop" onClick={() => setDrop(true)} disabled={!saved} />
+              {target && <Act icon={<Send className="size-5" />} label={sendingTo ? "Sending…" : `To @${target.username}`.slice(0, 14)} onClick={() => void sendToTarget()} disabled={!saved || sendingTo} />}
+              {prefs.showDropButton && <Act icon={<Radar className="size-5" />} label="Nexus Drop" onClick={() => setDrop(true)} disabled={!saved} />}
               {chatId ? (
                 <Act icon={<Send className="size-5" />} label="Send here" onClick={() => void sendHere(chatId, false)} />
               ) : (
@@ -928,7 +1324,7 @@ export default function SnapCamera({
                   Download
                 </a>
               )}
-              <Act icon={<Trash2 className="size-5" />} label="Delete" onClick={() => void discard()} disabled={!saved} />
+              <Act icon={<Trash2 className="size-5" />} label={delArmed ? "Tap again" : "Delete"} onClick={() => void discard()} disabled={!saved} />
             </div>
           </div>
         </>
@@ -966,6 +1362,19 @@ export default function SnapCamera({
           onClose={() => setEditor(false)}
         />
       )}
+      {settings && <SnapSettings onClose={() => setSettings(false)} />}
+      {profileOpen && <SnapProfile onClose={() => setProfileOpen(false)} />}
+      {peopleOpen && (
+        <SnapPeople
+          current={target}
+          onClose={() => setPeopleOpen(false)}
+          onPick={(u) => {
+            setTarget(u);
+            setPeopleOpen(false);
+            toast(`Your next Snap goes to @${u.username}`);
+          }}
+        />
+      )}
       {voice && <SnapVoice onClose={() => setVoice(false)} chatId={chatId} />}
       {gallery && <SnapGallery onClose={() => setGallery(false)} expiry={expiry} chatId={chatId} onAttachFile={onAttach ? attachAndClose : undefined} />}
     </div>
@@ -991,20 +1400,18 @@ function Chip({ on, onClick, disabled, children }: { on: boolean; onClick: () =>
 
 function Tool({ label, on, onClick, children }: { label: string; on: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button type="button" onClick={onClick} aria-label={label} aria-pressed={on} className={cn("grid size-10 place-items-center rounded-full backdrop-blur", on ? "bg-white text-black" : "bg-black/45 text-white hover:bg-black/60")}>
+    <button type="button" onClick={onClick} aria-label={label} aria-pressed={on} className={cn("grid size-10 place-items-center rounded-full backdrop-blur max-[380px]:size-9", on ? "bg-white text-black" : "bg-black/45 text-white hover:bg-black/60")}>
       {children}
     </button>
   );
 }
 
 /** what the photo will look like: caption bar, sticker, frame and grid drawn over the live preview (burned in at capture) */
-function PreviewDeco({ overlay, caption, sticker, grid }: { overlay: string; caption: string; sticker: string; grid: boolean }) {
+function PreviewDeco({ overlay, caption, sticker, grid }: { overlay: string; caption: string; sticker: string; grid: GridStyle | null }) {
   const cap = cleanCaption(caption);
   return (
     <div className="pointer-events-none absolute inset-0">
-      {grid && (
-        <div className="absolute inset-0 opacity-40" style={{ backgroundImage: "linear-gradient(to right, transparent 33.2%, #fff 33.3%, transparent 33.5%, transparent 66.5%, #fff 66.6%, transparent 66.8%), linear-gradient(to bottom, transparent 33.2%, #fff 33.3%, transparent 33.5%, transparent 66.5%, #fff 66.6%, transparent 66.8%)" }} />
-      )}
+      {grid && <div className="absolute inset-0 opacity-40" style={{ backgroundImage: gridImage(grid) }} />}
       {(overlay === "vignette" || overlay === "film") && <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.5) 100%)" }} />}
       {overlay === "polaroid" && (
         <>
@@ -1019,4 +1426,20 @@ function PreviewDeco({ overlay, caption, sticker, grid }: { overlay: string; cap
       {cap && <div className="absolute inset-x-0 top-[76%] bg-black/60 px-2 py-1.5 text-center text-sm font-bold">{cap}</div>}
     </div>
   );
+}
+
+const line = (dir: "right" | "bottom", at: number) => `linear-gradient(to ${dir}, transparent ${at - 0.15}%, #fff ${at}%, transparent ${at + 0.15}%)`;
+
+/** CSS background for each grid style (thirds, centre cross, golden ratio, diagonals) */
+function gridImage(style: GridStyle): string {
+  switch (style) {
+    case "center":
+      return [line("right", 50), line("bottom", 50)].join(",");
+    case "golden":
+      return [line("right", 38.2), line("right", 61.8), line("bottom", 38.2), line("bottom", 61.8)].join(",");
+    case "diagonal":
+      return "linear-gradient(to top right, transparent 49.8%, #fff 50%, transparent 50.2%), linear-gradient(to bottom right, transparent 49.8%, #fff 50%, transparent 50.2%)";
+    default:
+      return [line("right", 33.3), line("right", 66.6), line("bottom", 33.3), line("bottom", 66.6)].join(",");
+  }
 }

@@ -12,6 +12,7 @@ import {
   mfaChallengeAndVerify,
   mfaListFactors,
   mfaNeedsChallenge,
+  mfaTrustThisDevice,
   signInWithPasskey,
   webAuthnSupported,
   type MfaFactor,
@@ -73,6 +74,7 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
   const [mfaFactors, setMfaFactors] = useState<MfaFactor[]>([]);
   const [mfaCode, setMfaCode] = useState("");
+  const [rememberDevice, setRememberDevice] = useState(true);
   const honeypot = useRef<HTMLInputElement>(null);
   const passkeysOk = webAuthnSupported();
 
@@ -134,6 +136,7 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
           const ok = await mfaChallengeAndVerify(mfaFactorId, mfaCode.trim());
           if (!ok) throw new Error("Invalid authenticator code.");
         }
+        if (rememberDevice) await mfaTrustThisDevice();
         window.history.replaceState(null, "", "/");
       } else if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
@@ -320,6 +323,13 @@ export default function AuthScreen({ initialMode = "login" }: { initialMode?: Au
                     maxLength={6}
                   />
                 )}
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm">
+                  <input type="checkbox" checked={rememberDevice} onChange={(e) => setRememberDevice(e.target.checked)} className="mt-0.5 size-4 accent-[var(--accent,#6d5efc)]" />
+                  <span>
+                    <b className="block text-white">Remember this device for 30 days</b>
+                    <span className="block text-xs text-white/50">Skip this check on this device. Don&apos;t tick it on a shared phone or computer.</span>
+                  </span>
+                </label>
               </>
             ) : (
               <Field
