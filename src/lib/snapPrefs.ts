@@ -12,6 +12,7 @@ export type SnapPrefs = {
   focusLock: boolean;
   pinchZoom: boolean;
   zoomControl: boolean;
+  nativeCamera: boolean;
   doubleTapFlip: boolean;
   shutterSound: boolean;
   timerBeep: boolean;
@@ -54,6 +55,7 @@ export const DEFAULT_PREFS: SnapPrefs = {
   focusLock: true,
   pinchZoom: true,
   zoomControl: true,
+  nativeCamera: false,
   doubleTapFlip: true,
   shutterSound: false,
   timerBeep: true,

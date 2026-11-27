@@ -43,6 +43,7 @@ import { roundPosition, sendText, snapNote, type GridStyle, type SnapPrefs } fro
 import { getPrefs, setLastGeo, setPrefs, usePrefs } from "@/lib/snapPrefsStore";
 import { SnapZoom } from "./SnapZoom";
 import { DIGITAL_ZOOM, clampZoom, digitalCrop, easeZoom, wheelFactor } from "@/lib/snapZoom";
+import { isIOSDevice, streamIsDead } from "@/lib/snapDevice";
 import { constraintLadder, effectiveQualityKey, isCompactHeight, isLevel, pinchDistance, pinchZoom, rollFromGravity, tapToVideoPoint, upgradeTo, type DeviceInfo } from "@/lib/snapDevice";
 import { shutterClick, timerBeep } from "@/lib/snapAudio";
 import SnapSettings from "./SnapSettings";
@@ -149,6 +150,8 @@ export default function SnapCamera({
   prefsRef.current = prefs;
   const [mode, setMode] = useState<Mode>(() => getPrefs().startMode);
   const [facing, setFacing] = useState<Facing>(() => getPrefs().startFacing);
+  const [isIos, setIsIos] = useState(false);
+  const nativeRef = useRef<HTMLInputElement>(null);
   const [dev] = useState<DeviceInfo>(readDevice);
   const [compact, setCompact] = useState(() => typeof window !== "undefined" && isCompactHeight(window.innerHeight));
   const [settings, setSettings] = useState(false);
@@ -408,6 +411,27 @@ export default function SnapCamera({
     window.addEventListener("resize", on);
     return () => window.removeEventListener("resize", on);
   }, []);
+
+  useEffect(() => {
+    setIsIos(isIOSDevice(navigator.userAgent, navigator.platform, navigator.maxTouchPoints));
+  }, []);
+
+  // iOS stops the camera when another app (like the iPhone Camera) takes it. Bring it back when we return.
+  useEffect(() => {
+    if (shot || gallery || voice || avatarOn) return;
+    const back = () => {
+      if (document.visibilityState !== "visible" || recording) return;
+      if (streamRef.current && streamIsDead(streamRef.current.getVideoTracks()[0])) void start(facing, mode === "video", qKey);
+    };
+    document.addEventListener("visibilitychange", back);
+    window.addEventListener("focus", back);
+    window.addEventListener("pageshow", back);
+    return () => {
+      document.removeEventListener("visibilitychange", back);
+      window.removeEventListener("focus", back);
+      window.removeEventListener("pageshow", back);
+    };
+  }, [shot, gallery, voice, avatarOn, recording, facing, mode, qKey, start]);
 
   // keep the screen on while the camera is open
   useEffect(() => {
@@ -756,6 +780,8 @@ export default function SnapCamera({
         toast("Couldn't take the photo. Try again.", "error");
         return;
       }
+      cx.imageSmoothingEnabled = true;
+      cx.imageSmoothingQuality = "high"; // crisper when the picture is scaled down or digitally zoomed
       if (mirror && facing === "user") {
         cx.translate(w, 0);
         cx.scale(-1, 1);
@@ -929,8 +955,14 @@ export default function SnapCamera({
     takePhoto();
   }, [mode, flashOn, torchOk, facing, avatarOn, startRecording, takePhoto]);
 
+  /** iPhone: hand the shot to the real Camera app (its own focus, zoom, HDR, Night mode and lenses). */
+  const nativeOn = isIos && prefs.nativeCamera && !avatarOn;
   const shoot = () => {
     if (recording) return stopRecording();
+    if (nativeOn) {
+      nativeRef.current?.click();
+      return;
+    }
     if (cdRef.current) {
       clearInterval(cdRef.current);
       cdRef.current = null;
@@ -1202,6 +1234,18 @@ export default function SnapCamera({
             )}
           </div>
 
+          <input
+            ref={nativeRef}
+            type="file"
+            accept={mode === "video" ? "video/*" : "image/*"}
+            capture={facing === "user" ? "user" : "environment"}
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) finish(f, f.type.startsWith("video/") || /\.(mov|mp4|m4v)$/i.test(f.name), null);
+            }}
+          />
           <div className={cn("relative z-20 px-4 pb-safe-2", compact ? "pt-1.5" : "pt-3")}>
             {panel === "effects" && (
               <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 text-[11px]">
@@ -1333,6 +1377,7 @@ export default function SnapCamera({
             {prefs.showHints && !compact && (
               <p className="text-center text-[11px] text-white/45">
                 {avatarOn ? "Avatar · " : ""}
+                {nativeOn ? "Opens the iPhone Camera · " : ""}
                 {prefs.dataSaver ? "Data saver" : prefs.autoQuality ? `Auto ${q.label}` : q.label} · {ratioDef.label}
                 {effect !== "none" ? ` · ${fx.label}` : ""} · {prefs.autoSave ? "saved to your Nexus Drive" : "not saved until you tap Save"}
               </p>

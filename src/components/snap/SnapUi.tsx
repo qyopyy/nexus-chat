@@ -31,10 +31,11 @@ export function Act({ icon, label, onClick, disabled }: { icon: React.ReactNode;
   );
 }
 
-export function Sheet({ title, onClose, children, z = "z-40" }: { title: string; onClose: () => void; children: React.ReactNode; z?: string }) {
+/** `peek` keeps the sheet short and the backdrop light so you can watch the picture change while you pick. */
+export function Sheet({ title, onClose, children, z = "z-40", peek = false }: { title: string; onClose: () => void; children: React.ReactNode; z?: string; peek?: boolean }) {
   return (
-    <div className={`absolute inset-0 ${z} flex flex-col justify-end bg-black/60`} onClick={onClose}>
-      <div className="max-h-[80%] overflow-y-auto rounded-t-3xl bg-[#14141c] pb-safe-2" onClick={(e) => e.stopPropagation()}>
+    <div className={`absolute inset-0 ${z} flex flex-col justify-end ${peek ? "bg-black/10" : "bg-black/60"}`} onClick={onClose}>
+      <div className={`${peek ? "max-h-[50%]" : "max-h-[80%]"} overflow-y-auto rounded-t-3xl bg-[#14141c] pb-safe-2`} onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-center justify-between bg-[#14141c] px-4 py-3">
           <b>{title}</b>
           <button type="button" onClick={onClose} aria-label="Close" className="grid size-8 place-items-center rounded-full bg-white/10">

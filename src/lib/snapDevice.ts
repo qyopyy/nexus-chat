@@ -30,6 +30,16 @@ export function effectiveQualityKey(chosen: string, auto: boolean, dataSaver: bo
   return chosen === "standard" || chosen === "max" ? chosen : "high";
 }
 
+/** iPhone / iPad (iPadOS reports itself as a Mac with a touch screen). */
+export function isIOSDevice(ua: string, platform = "", touchPoints = 0): boolean {
+  return /iPhone|iPad|iPod/i.test(ua) || (platform === "MacIntel" && touchPoints > 1);
+}
+
+/** A camera stream that has died (iOS stops it when another app, like the iPhone Camera, uses the camera). */
+export function streamIsDead(track: { readyState?: string; muted?: boolean } | null | undefined): boolean {
+  return !track || track.readyState !== "live" || track.muted === true;
+}
+
 /** Short screens (iPhone SE, split view, landscape) get tighter controls. */
 export const isCompactHeight = (h: number) => h > 0 && h < 700;
 

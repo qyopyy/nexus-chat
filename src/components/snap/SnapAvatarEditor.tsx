@@ -4,7 +4,8 @@ import { useState } from "react";
 import { ImagePlus, Trash2 } from "lucide-react";
 import { toast } from "@/store/app";
 import { updateMyProfile } from "@/lib/data";
-import { PANTS, SHOES, SWATCH, type VAvatar } from "@/lib/vavatar";
+import { OPTIONS, PANTS, SHOES, SWATCH, type VAvatar } from "@/lib/vavatar";
+import { OUTFIT_LOOKS, applyLook, pieceLabel, wearsLook } from "@/lib/snapOutfits";
 import { CUSTOM_SCENE, PANTS_COLORS, PANTS_LABEL, SCENES, SHOES_LABEL, SHOE_COLORS, legsOf } from "@/lib/snapAvatar";
 import { cn } from "@/lib/utils";
 import { Sheet } from "./SnapUi";
@@ -59,7 +60,7 @@ export default function SnapAvatarEditor({
     }
   };
   return (
-    <Sheet title="Full-body avatar" onClose={onClose} z="z-50">
+    <Sheet title="Full-body avatar" onClose={onClose} z="z-50" peek>
       <div className="px-4 pb-5">
         <p className="text-xs text-white/55">Uses the V-Avatar you already have on Nexus. Pick where it stands and what it wears below the waist.</p>
         <Title>Background</Title>
@@ -104,6 +105,39 @@ export default function SnapAvatarEditor({
           </div>
         )}
 
+        <Title>Ready-made outfits</Title>
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1" role="list" aria-label="Ready-made outfits">
+          {OUTFIT_LOOKS.map((o) => {
+            const on = wearsLook(cfg, o);
+            return (
+              <button
+                key={o.key}
+                type="button"
+                role="listitem"
+                onClick={() => onCfg(applyLook(cfg, o))}
+                aria-pressed={on}
+                className={cn("flex w-[76px] shrink-0 flex-col items-center gap-1 rounded-2xl border-2 bg-white/5 px-1 py-2 text-[10px] font-bold", on ? "border-white" : "border-transparent")}
+              >
+                <span className="relative grid h-12 w-9 place-items-start justify-items-center" aria-hidden>
+                  <span className="size-6 rounded-md" style={{ background: String(o.look.shirtColor ?? "#444") }} />
+                  <span className="-mt-0.5 h-4 w-5 rounded-b-md" style={{ background: String(o.look.pantsColor ?? "#444") }} />
+                  <span className="absolute bottom-0 h-2 w-7 rounded-full" style={{ background: String(o.look.shoesColor ?? "#fff") }} />
+                </span>
+                <span aria-hidden>{o.emoji}</span>
+                <span className="w-full truncate text-center text-white/85">{o.name}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <Title>Top</Title>
+        <div className="flex flex-wrap gap-1.5">
+          {OPTIONS.shirt.map((v) => (
+            <Chip key={v} on={cfg.shirt === v} onClick={() => onCfg({ ...cfg, shirt: v })}>
+              {pieceLabel(v)}
+            </Chip>
+          ))}
+        </div>
         <Title>Pants</Title>
         <div className="flex flex-wrap gap-1.5">
           {PANTS.map((p) => (
@@ -128,6 +162,43 @@ export default function SnapAvatarEditor({
         </div>
         <Title>Top colour</Title>
         <Sw colors={SWATCH.cloth} value={cfg.shirtColor} onPick={(c) => onCfg({ ...cfg, shirtColor: c })} />
+        <Title>Hat</Title>
+        <div className="flex flex-wrap gap-1.5">
+          {OPTIONS.hat.map((v) => (
+            <Chip key={v} on={cfg.hat === v} onClick={() => onCfg({ ...cfg, hat: v })}>
+              {pieceLabel(v)}
+            </Chip>
+          ))}
+        </div>
+        {cfg.hat !== "none" && (
+          <div className="mt-2">
+            <Sw colors={SWATCH.cloth} value={cfg.hatColor} onPick={(c) => onCfg({ ...cfg, hatColor: c })} />
+          </div>
+        )}
+        <Title>Glasses</Title>
+        <div className="flex flex-wrap gap-1.5">
+          {OPTIONS.eyewear.map((v) => (
+            <Chip key={v} on={cfg.eyewear === v} onClick={() => onCfg({ ...cfg, eyewear: v })}>
+              {pieceLabel(v)}
+            </Chip>
+          ))}
+        </div>
+        <Title>Chain</Title>
+        <div className="flex flex-wrap gap-1.5">
+          {OPTIONS.chain.map((v) => (
+            <Chip key={v} on={cfg.chain === v} onClick={() => onCfg({ ...cfg, chain: v })}>
+              {pieceLabel(v)}
+            </Chip>
+          ))}
+        </div>
+        <Title>Extras</Title>
+        <div className="flex flex-wrap gap-1.5">
+          {OPTIONS.extra.map((v) => (
+            <Chip key={v} on={cfg.extra === v} onClick={() => onCfg({ ...cfg, extra: v })}>
+              {pieceLabel(v)}
+            </Chip>
+          ))}
+        </div>
         <Title>Hair colour</Title>
         <Sw colors={SWATCH.hair} value={cfg.hairColor} onPick={(c) => onCfg({ ...cfg, hairColor: c })} />
 
