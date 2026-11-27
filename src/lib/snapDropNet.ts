@@ -12,6 +12,7 @@ import { claimDrop, incomingDrops, openDrop, sendDrop, type NexusDrop } from "@/
 import { uploadVault, type VaultFile } from "@/lib/protect";
 import { SNAP_FOLDER } from "@/lib/snap";
 import { sendSnapToUser, type SnapUser } from "@/lib/snapShare";
+import { getPrefs } from "@/lib/snapPrefsStore";
 import { cellTopic, dropCell, geohashAround, isHardDropError, nearbyFromPresence, type DropStatus, type NearbyPerson } from "@/lib/snapDrop";
 
 /** Like iOS "Everyone for 10 minutes": being visible switches itself off. */
@@ -43,7 +44,7 @@ async function refreshIncoming() {
     const fresh = rows.some((r) => !known.has(r.id));
     known = new Set(rows.map((r) => r.id));
     useDrop.setState({ incoming: rows.filter((r) => !dismissed.has(r.id)) });
-    if (fresh) haptic.success();
+    if (fresh && getPrefs().haptics) haptic.success();
   } catch {
     /* the inbox is best effort here; the Phone Link panel shows real errors */
   }
@@ -211,5 +212,5 @@ export async function setNearby(on: boolean) {
   if (relocate) clearInterval(relocate);
   if (offTimer) clearTimeout(offTimer);
   relocate = setInterval(() => void joinCells().catch(() => {}), RELOCATE_MS);
-  offTimer = setTimeout(() => void setNearby(false), NEARBY_MS);
+  offTimer = setTimeout(() => void setNearby(false), getPrefs().nearbyMinutes * 60_000);
 }

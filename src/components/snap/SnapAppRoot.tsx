@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { LogOut } from "lucide-react";
 import { supabase, isConfigured } from "@/lib/supabase";
 import { startLiveUpdates } from "@/lib/liveUpdate";
 import { useRealtime } from "@/lib/realtime";
@@ -14,6 +13,8 @@ import SetupScreen from "@/components/SetupScreen";
 import Toasts from "@/components/ui/Toasts";
 import SnapCamera from "./SnapCamera";
 import SnapDropReceiver from "./SnapDropReceiver";
+import SnapLock from "./SnapLock";
+import { usePrefs } from "@/lib/snapPrefsStore";
 
 /** Standalone Nexus Snap shell (`/snap` and `/snap/app`, the Snap IPA): camera first, same Nexus account and vault. */
 export default function SnapAppRoot() {
@@ -22,6 +23,7 @@ export default function SnapAppRoot() {
   const [needsMfa, setNeedsMfa] = useState(false);
   const bootstrapped = useApp((s) => s.bootstrapped);
   const userId = session?.user?.id ?? null;
+  const prefs = usePrefs();
 
   useEffect(() => startLiveUpdates(), []);
   // incoming chat messages (voice replies) while Snap is the whole app
@@ -88,16 +90,8 @@ export default function SnapAppRoot() {
   return (
     <>
       <SnapCamera />
-      <button
-        type="button"
-        aria-label="Sign out"
-        onClick={() => void supabase.auth.signOut()}
-        className="fixed left-3 top-3 z-[95] grid size-10 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20"
-        style={{ marginTop: "env(safe-area-inset-top)" }}
-      >
-        <LogOut className="size-4" />
-      </button>
-      <SnapDropReceiver />
+      {prefs.receiveDrops && <SnapDropReceiver />}
+      <SnapLock lockOn={prefs.appLock} veilOn={prefs.privacyScreen} />
       <Toasts />
     </>
   );

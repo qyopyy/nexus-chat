@@ -8,6 +8,7 @@ import type { VaultFile } from "@/lib/protect";
 import type { SnapUser } from "@/lib/snapShare";
 import { canShareFile, isShareCancel, statusLabel, type DropStatus } from "@/lib/snapDrop";
 import { dropTo, setNearby, useDrop } from "@/lib/snapDropNet";
+import { usePrefs } from "@/lib/snapPrefsStore";
 import { Sheet } from "./SnapUi";
 
 type Person = SnapUser & { avatar: string | null; near: boolean };
@@ -27,6 +28,7 @@ function Face({ p }: { p: Person }) {
  * around just get the link in chat.
  */
 export default function SnapDrop({ file, expiry, getFile, onClose, z }: { file: VaultFile; expiry: number | null; getFile: () => Promise<File>; onClose: () => void; z?: string }) {
+  const mins = usePrefs().nearbyMinutes;
   const nearbyOn = useDrop((s) => s.nearbyOn);
   const locating = useDrop((s) => s.locating);
   const error = useDrop((s) => s.error);
@@ -109,7 +111,7 @@ export default function SnapDrop({ file, expiry, getFile, onClose, z }: { file: 
           </span>
           <span className="min-w-0 flex-1">
             <b className="block text-sm">{nearbyOn ? "Nearby is on" : "Find people nearby"}</b>
-            <span className="block text-[11px] text-white/60">{nearbyOn ? "Others around you can see you and send to you for 10 minutes." : "Uses your rough location (about 1 km) for 10 minutes. Nothing is stored."}</span>
+            <span className="block text-[11px] text-white/60">{nearbyOn ? `Others around you can see you and send to you for ${mins} minutes.` : `Uses your rough location (about 1 km) for ${mins} minutes. Nothing is stored.`}</span>
           </span>
           <span className={`h-6 w-11 shrink-0 rounded-full p-0.5 transition-colors ${nearbyOn ? "bg-emerald-400" : "bg-white/25"}`}>
             <span className={`block size-5 rounded-full bg-white transition-transform ${nearbyOn ? "translate-x-5" : ""}`} />

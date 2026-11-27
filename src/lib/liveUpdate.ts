@@ -90,6 +90,24 @@ function armChunkReload() {
   };
 }
 
+/** "Check for updates" button: reloads into the newest web build when there is one. */
+export async function checkForUpdateNow(): Promise<"updated" | "latest" | "offline"> {
+  const v = await fetchVersion();
+  if (!v?.build) return "offline";
+  let prev: string | null = null;
+  try {
+    prev = localStorage.getItem(KEY);
+    localStorage.setItem(KEY, v.build);
+  } catch {
+    /* private mode */
+  }
+  if (prev && prev !== v.build) {
+    reloadNow();
+    return "updated";
+  }
+  return "latest";
+}
+
 export function startLiveUpdates() {
   if (typeof window === "undefined") return () => {};
 

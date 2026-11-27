@@ -4,12 +4,15 @@ import { createShare, shareLink, type VaultFile } from "@/lib/protect";
 import { isMissingRpc, isVideoMime, parseRecipient, snapShareText } from "@/lib/snap";
 import { searchUsers } from "@/lib/music";
 import { useApp } from "@/store/app";
+import { sendText } from "@/lib/snapPrefs";
+import { getLastGeo, getPrefs } from "@/lib/snapPrefsStore";
 
 export type SnapUser = { id: string; username: string; display_name: string | null };
 
 /** A fresh share link for a vault file (`expiresInHours` null = never expires). */
 export async function snapLink(file: VaultFile, expiresInHours: number | null): Promise<string> {
-  const s = await createShare(file.id, { expiresInHours, maxDownloads: null, password: "", download: true });
+  const pr = getPrefs();
+  const s = await createShare(file.id, { expiresInHours, maxDownloads: pr.maxDownloads || null, password: "", download: pr.linkDownload });
   return shareLink(s);
 }
 
@@ -42,7 +45,7 @@ export async function sendSnapToUser(user: SnapUser, file: VaultFile, expiresInH
   const { data, error } = await supabase.rpc("get_or_create_dm", { p_user: user.id });
   if (error || !data) throw new Error(error?.message || "Couldn't open a chat with them.");
   const convId = data as string;
-  await sendMessage(convId, snapShareText(link, isVideoMime(file.mime) ? "video" : "image"));
+  await sendMessage(convId, sendText(snapShareText(link, isVideoMime(file.mime) ? "video" : "image"), getLastGeo(), getPrefs().locationInSend));
   void refreshChatList();
   return { convId, link };
 }
