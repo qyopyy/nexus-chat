@@ -2,7 +2,8 @@
 
 import { usePrefs } from "@/lib/prefs";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Bold, FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Strikethrough, Timer, Trash2, Type, Underline, Wand2, X } from "lucide-react";
+import dynamic from "next/dynamic";
+import { Bold, Camera, FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Strikethrough, Timer, Trash2, Type, Underline, Wand2, X } from "lucide-react";
 import { useApp, conversationTitle, toast } from "@/store/app";
 import { useChat } from "@/store/chat";
 import { TTL_OPTIONS, runBotCommand, sendMessage, setTtl, type SendMode } from "@/lib/data";
@@ -20,6 +21,8 @@ import { DictateButton, ScheduledBar } from "./ScheduleMessage";
 import AttachEditor, { shouldOpenAttachEditor } from "./AttachEditor";
 import { FORMAT_COLORS, VANISH_PICKS, wrapSelection } from "@/lib/chatFormat";
 import { charCountLabel, composerPlaceholder, editingEscape, extraFilesNote, firstDroppedFile, limitTone, overLimit, safeDraft, trimDraft } from "@/lib/hundred";
+
+const SnapCamera = dynamic(() => import("@/components/snap/SnapCamera"), { ssr: false });
 
 /** Supabase Pro — everyone gets 1 GB per file; premium up to 5 GB (bucket cap). */
 const MAX_FREE = 1024 * 1024 * 1024;
@@ -75,6 +78,7 @@ export default function Composer({
   const [levels, setLevels] = useState<number[]>(() => Array(28).fill(0.1));
   const [editOpen, setEditOpen] = useState(false);
   const [fmtOpen, setFmtOpen] = useState(false);
+  const [snapOpen, setSnapOpen] = useState(false);
   const [colorOpen, setColorOpen] = useState(false);
   const [vanishOpen, setVanishOpen] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
@@ -446,6 +450,9 @@ export default function Composer({
             <button onClick={() => fileInput.current?.click()} className="grid size-11 shrink-0 place-items-center rounded-full text-sub transition hover:text-txt active:scale-90" title="Attach image, audio, or file">
               <Paperclip className="size-[22px]" />
             </button>
+            <button onClick={() => setSnapOpen(true)} className="grid size-11 shrink-0 place-items-center rounded-full text-sub transition hover:text-txt active:scale-90" title="Camera (Nexus Snap) — saved to your Drive vault with a link" aria-label="Open camera">
+              <Camera className="size-[22px]" />
+            </button>
             <ComposerPlus conversationId={conversationId} />
 
             <div className="flex min-h-11 min-w-0 flex-1 flex-col rounded-[22px] border border-white/[.06] bg-side">
@@ -732,6 +739,8 @@ export default function Composer({
         </div>
         <p className="px-2 pt-2 pb-1 text-center text-xs text-sub">Tip: hold the send button to pick an effect. Words like “congrats” or “happy birthday” trigger one automatically.</p>
       </Sheet>
+
+      {snapOpen && <SnapCamera chatId={conversationId} onClose={() => setSnapOpen(false)} onAttach={(f) => setFile(f)} />}
 
       {file && editOpen && shouldOpenAttachEditor(file) && (
         <AttachEditor

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   Activity,
   AppWindow,
+  Camera,
   Calculator,
   Music2,
   NotebookPen,
@@ -42,6 +43,7 @@ import { useApp } from "@/store/app";
 import { studioGo } from "@/store/studio";
 import { cn } from "@/lib/utils";
 import ImageStudio from "./ImageStudio";
+import SnapCamera from "@/components/snap/SnapCamera";
 import PdfEditor from "./PdfEditor";
 import MusicCheck from "./MusicCheck";
 import QrMaker from "./QrMaker";
@@ -75,6 +77,7 @@ import { openDistributionHub } from "@/components/distribution/DistributionPanel
 import { useDistributionPanelEnabled } from "@/lib/distributionPanel";
 
 type ToolId =
+  | "snap"
   | "bump"
   | "browser"
   | "linkbio"
@@ -122,6 +125,15 @@ const TOOLS: {
   iconSrc?: string;
   Icon: LucideIcon;
 }[] = [
+  {
+    id: "snap",
+    name: "Nexus Snap",
+    tag: "Camera · Drive vault · instant link",
+    desc: "Built-in camera. Every photo is saved to your Nexus Drive vault and gets a nexusproject.cc link instantly. Also a separate iPhone app.",
+    bg: "linear-gradient(135deg,#ff3b4e,#7a0a1c 55%,#0a0204)",
+    emoji: "📸",
+    Icon: Camera,
+  },
   {
     id: "bump",
     name: "Wump",
@@ -466,6 +478,18 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
       </div>
     );
   }
+  if (tool === "snap") {
+    return (
+      <div className="flex h-full min-h-0 flex-col items-center justify-center gap-4 bg-[#07060f] p-6 text-center">
+        <div className="grid size-20 place-items-center rounded-3xl text-4xl" style={{ background: "linear-gradient(135deg,#ff3b4e,#7a0a1c 55%,#0a0204)" }}>📸</div>
+        <h2 className="text-xl font-extrabold">Nexus Snap</h2>
+        <p className="max-w-sm text-sm text-sub">Take a photo. It goes straight into your Nexus Drive vault (folder “Snap”) and you get a nexusproject.cc link right away.</p>
+        <SnapLauncher />
+        <button onClick={backToGrid} className="text-sm text-sub hover:text-txt">Back</button>
+        <a href="/snap" className="text-xs text-sub underline">Open Snap full screen on the web</a>
+      </div>
+    );
+  }
   if (tool === "linkbio") {
     return (
       <div className="flex h-full min-h-0 flex-col bg-[#07060f]">
@@ -659,5 +683,15 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function SnapLauncher() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button onClick={() => setOpen(true)} className="rounded-full bg-accent px-6 py-3 font-bold text-white">Open camera</button>
+      {open && <SnapCamera onClose={() => setOpen(false)} />}
+    </>
   );
 }

@@ -1,0 +1,7 @@
+Nexus Snap IPA — separate Sideloadly / AltStore build (bundle hu.qyopy.snap).
+Loads https://nexusproject.cc/snap/app live: built-in camera, photos are saved to your Nexus Drive vault
+(folder "Snap") and get a nexusproject.cc/s/<token> link right away.
+Independent of the Nexus / Wump / Link / Browser IPAs. Rebuild only when the Capacitor config, permissions or icon change.
+
+Trigger: Actions → "Nexus Snap iOS app (.ipa)" → Run workflow, or push to mobile-snap/**.
+Icon: resources/icon-1024.png (expanded into a full AppIcon set by the workflow).

@@ -27,6 +27,7 @@ export const ROLE_PERKS: Perk[] = [
   { id: "pulse_long", title: "Longer Pulse posts", blurb: "Up to 400 characters instead of 280.", minRank: 1 },
   { id: "genre_pins", title: "More genre pins", blurb: "Pin up to 12 music genres for For you ranking.", minRank: 1 },
   { id: "story_48", title: "48-hour stories anytime", blurb: "Always unlock the longer story window.", minRank: 1 },
+  { id: "unlimited_storage", title: "Unlimited storage", blurb: "No storage cap in Acetate or your Nexus Drive.", minRank: 1 },
   { id: "vip_flair", title: "VIP name flair", blurb: "Diamond role color next to your name everywhere.", minRank: 1 },
   // Moderator
   { id: "gram_admin", title: "NexusGram moderation", blurb: "Reports queue, remove posts, overview stats.", minRank: 2 },

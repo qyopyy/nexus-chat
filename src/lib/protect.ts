@@ -118,7 +118,7 @@ export async function uploadVault(
   file: File,
   folder: string,
   onProgress?: (p: number) => void,
-  meta?: { kind?: VaultKind; artist?: string; title?: string; note?: string; duration_ms?: number | null },
+  meta?: { kind?: VaultKind; artist?: string; title?: string; note?: string; duration_ms?: number | null; /** store exactly as given (already encoded at the quality the user picked) */ original?: boolean },
 ) {
   const id = crypto.randomUUID();
   let upload: Blob = file;
@@ -126,7 +126,9 @@ export async function uploadVault(
   let uploadMime = file.type || "application/octet-stream";
   // Media: compress to Full HD 60fps (video) / high-quality image before vault store
   try {
-    if (file.type.startsWith("video/") || /\.(mp4|mov|webm|mkv|m4v)$/i.test(file.name)) {
+    if (meta?.original) {
+      /* keep the camera's own quality */
+    } else if (file.type.startsWith("video/") || /\.(mp4|mov|webm|mkv|m4v)$/i.test(file.name)) {
       onProgress?.(0.02);
       const { compressVideo, FULL_HD_60 } = await import("./compressMedia");
       const out = await compressVideo(file, { ...FULL_HD_60 });

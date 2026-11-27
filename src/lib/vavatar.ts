@@ -54,6 +54,10 @@ export type Outfit =
 export type Extra = "none" | "catEars" | "headphones" | "halo" | "horns" | "bow" | "crown" | "flowerCrown" | "butterflies" | "wings" | "mask";
 export type Hat = "none" | "cap" | "backcap" | "beanie" | "bucket" | "durag" | "bandana" | "tam" | "headband";
 export type Eyewear = "none" | "glasses" | "shades" | "round" | "rimless" | "heart" | "visor";
+export const PANTS = ["jeans", "baggy", "joggers", "shorts", "slim"] as const;
+export const SHOES = ["sneakers", "highs", "boots", "slides"] as const;
+export type Pants = (typeof PANTS)[number];
+export type Shoes = (typeof SHOES)[number];
 export type VAvatar = {
   v: 1;
   body: "masc" | "fem";
@@ -94,6 +98,11 @@ export type VAvatar = {
   grillz: "none" | "gold" | "silver" | "iced";
   bg: "galaxy" | "sunset" | "sakura" | "neon" | "mint" | "room" | "solid" | "green";
   bgColor: string;
+  /** full-body look (Nexus Snap): legs and shoes. Optional, older saves use the defaults. */
+  pants?: Pants;
+  pantsColor?: string;
+  shoes?: Shoes;
+  shoesColor?: string;
 };
 
 export const DEFAULT_AVATAR: VAvatar = {
@@ -257,6 +266,10 @@ export function normalizeAvatar(x: unknown): VAvatar {
     grillz: one("grillz"),
     bg: one("bg"),
     bgColor: col("bgColor"),
+    pants: (PANTS as readonly string[]).includes(o.pants as string) ? (o.pants as Pants) : undefined,
+    pantsColor: typeof o.pantsColor === "string" && HEX.test(o.pantsColor) ? o.pantsColor : undefined,
+    shoes: (SHOES as readonly string[]).includes(o.shoes as string) ? (o.shoes as Shoes) : undefined,
+    shoesColor: typeof o.shoesColor === "string" && HEX.test(o.shoesColor) ? o.shoesColor : undefined,
   };
 }
 
@@ -3181,9 +3194,10 @@ function marks(g: G, cfg: VAvatar) {
 }
 
 /** draw one frame. `mirror`: false = canvas already behaves like a mirror (we mirror the pose instead) */
-export function drawAvatar(g: G, cfg: VAvatar, p: Pose, W: number, H: number, t: number) {
-  g.drawImage(background(cfg, W, H), 0, 0);
-  const s = (H * 0.48) / 250;
+export type AvatarLayout = { /** skip the built-in background (caller paints its own scene) */ noBg?: boolean; /** size multiplier, 1 = bust */ k?: number; /** vertical position of the head centre (fraction of H) */ cy?: number };
+export function drawAvatar(g: G, cfg: VAvatar, p: Pose, W: number, H: number, t: number, layout?: AvatarLayout) {
+  if (!layout?.noBg) g.drawImage(background(cfg, W, H), 0, 0);
+  const s = ((H * 0.48) / 250) * (layout?.k ?? 1);
   const breathe = Math.sin(t * 1.7) * 2.2;
   const yaw = Math.max(-1, Math.min(1, p.yaw));
   const pitch = Math.max(-1, Math.min(1, p.pitch));
@@ -3192,7 +3206,7 @@ export function drawAvatar(g: G, cfg: VAvatar, p: Pose, W: number, H: number, t:
   const dy = pitch * 14;
 
   g.save();
-  g.translate(W / 2, H * 0.43);
+  g.translate(W / 2, H * (layout?.cy ?? 0.43));
   g.scale(s, s);
 
   const headTransform = () => {
@@ -3389,6 +3403,102 @@ function poseFrom(res: FaceResult): Pose | null {
   };
 }
 
+// ------------------------------------------------------------------ pose smoothing
+// One Euro filter (Casiez et al.): heavy smoothing when you hold still (no jitter), almost none when you move
+// fast (no lag). Detections arrive at ~15-30 Hz, the avatar is drawn at 24-30 fps, so on top of the filter we
+// glide between the last two filtered poses (one detection of delay) instead of stepping.
+export class OneEuro {
+  private x: number | null = null;
+  private dx = 0;
+  private t = 0;
+  private minCutoff: number;
+  private beta: number;
+  private dCutoff: number;
+  constructor(minCutoff: number, beta: number, dCutoff = 1) {
+    this.minCutoff = minCutoff;
+    this.beta = beta;
+    this.dCutoff = dCutoff;
+  }
+  private static alpha(cutoff: number, dt: number) {
+    const tau = 1 / (2 * Math.PI * cutoff);
+    return 1 / (1 + tau / dt);
+  }
+  filter(v: number, tMs: number): number {
+    if (this.x === null) {
+      this.x = v;
+      this.t = tMs;
+      return v;
+    }
+    const dt = Math.max(0.001, (tMs - this.t) / 1000);
+    this.t = tMs;
+    const rate = (v - this.x) / dt;
+    this.dx += OneEuro.alpha(this.dCutoff, dt) * (rate - this.dx);
+    const cutoff = this.minCutoff + this.beta * Math.abs(this.dx);
+    this.x += OneEuro.alpha(cutoff, dt) * (v - this.x);
+    return this.x;
+  }
+  reset() {
+    this.x = null;
+    this.dx = 0;
+  }
+}
+
+/** per-channel filter strength: [minCutoff Hz, beta]. Blinks and the mouth must stay snappy, head and gaze can be silkier. */
+export const POSE_FILTER: Record<keyof Pose, [number, number]> = {
+  yaw: [1.3, 1.6],
+  pitch: [1.3, 1.6],
+  roll: [1.2, 1.2],
+  blinkL: [9, 0.5],
+  blinkR: [9, 0.5],
+  mouth: [4.5, 1.2],
+  smile: [2, 0.4],
+  gazeX: [2.5, 1],
+  gazeY: [2.5, 1],
+  brow: [2.2, 0.5],
+};
+
+export class PoseSmoother {
+  private f: Record<keyof Pose, OneEuro>;
+  private prev: Pose | null = null;
+  private next: Pose | null = null;
+  private nextT = 0;
+  private gap = 66;
+  constructor() {
+    this.f = {} as Record<keyof Pose, OneEuro>;
+    for (const k of Object.keys(POSE_FILTER) as (keyof Pose)[]) this.f[k] = new OneEuro(POSE_FILTER[k][0], POSE_FILTER[k][1]);
+  }
+  /** a fresh detection (tMs = when it arrived) */
+  push(p: Pose, tMs: number) {
+    const out = { ...p };
+    for (const k of Object.keys(this.f) as (keyof Pose)[]) out[k] = this.f[k].filter(p[k], tMs);
+    if (this.next) {
+      const g = tMs - this.nextT;
+      if (g > 4 && g < 400) this.gap += (g - this.gap) * 0.25; // running average of the detection interval
+    }
+    this.prev = this.next ?? out;
+    this.next = out;
+    this.nextT = tMs;
+  }
+  /** pose to draw at time tMs */
+  sample(tMs: number, fallback: Pose): Pose {
+    if (!this.next || !this.prev) return fallback;
+    const a = Math.max(0, Math.min(1, (tMs - this.nextT) / this.gap));
+    const out = { ...this.next };
+    for (const k of Object.keys(out) as (keyof Pose)[]) out[k] = this.prev[k] + (this.next[k] - this.prev[k]) * a;
+    return out;
+  }
+  /** face lost / switched to idle: restart from where the avatar currently is */
+  reset(cur: Pose) {
+    for (const k of Object.keys(this.f) as (keyof Pose)[]) this.f[k].reset();
+    this.prev = { ...cur };
+    this.next = { ...cur };
+    this.nextT = 0;
+  }
+  get ready() {
+    return !!this.next;
+  }
+}
+
 // ------------------------------------------------------------------ live engine (preview + calls)
 export type AvatarEngine = {
   canvas: HTMLCanvasElement;
@@ -3402,7 +3512,7 @@ export type AvatarEngine = {
  * Animates the avatar. With `camera` it tracks your face; otherwise (or until the face model loads, or when
  * no face is visible) it lip-syncs to `level()` (mic loudness) with idle blinking & sway.
  */
-export function startAvatar(opts: { cfg: VAvatar; width: number; height: number; camera: boolean; cameraId?: string; level?: () => number; onMode?: (m: "loading" | "face" | "voice") => void }): AvatarEngine {
+export function startAvatar(opts: { cfg: VAvatar; width: number; height: number; camera: boolean; cameraId?: string; /** custom renderer (Nexus Snap full body); default is the bust */ render?: (g: G, cfg: VAvatar, p: Pose, W: number, H: number, t: number) => void; level?: () => number; onMode?: (m: "loading" | "face" | "voice") => void }): AvatarEngine {
   const mobile = isMobileDevice();
   const canvas = document.createElement("canvas");
   canvas.width = opts.width;
@@ -3426,6 +3536,8 @@ export function startAvatar(opts: { cfg: VAvatar; width: number; height: number;
   let nextBlink = performance.now() + 2500;
   let blinkUntil = 0;
   let stream: MediaStream | null = null;
+  const smoother = new PoseSmoother();
+  let lastFrame = performance.now();
 
   if (opts.camera) {
     void (async () => {
@@ -3462,7 +3574,7 @@ export function startAvatar(opts: { cfg: VAvatar; width: number; height: number;
   const t0 = performance.now();
   let lastVideoTime = -1;
   let nextDetect = 0;
-  const minGap = mobile ? 66 : 33; // face analysis ≤15 fps on phones, ≤30 on computers
+  const minGap = mobile ? 50 : 25; // face analysis ≤20 fps on phones, ≤40 on computers
   const frame = () => {
     if (stopped) return;
     const now = performance.now();
@@ -3478,6 +3590,7 @@ export function startAvatar(opts: { cfg: VAvatar; width: number; height: number;
         const p = poseFrom(res);
         if (p) {
           target = p;
+          smoother.push(p, now);
           lastFace = now;
           setMode("face");
         }
@@ -3508,10 +3621,18 @@ export function startAvatar(opts: { cfg: VAvatar; width: number; height: number;
         brow: lvl * 0.3,
       };
     }
-    // smoothing (fast for blinks/mouth, softer for head)
-    const k: Record<keyof Pose, number> = { yaw: 0.35, pitch: 0.35, roll: 0.35, blinkL: 0.7, blinkR: 0.7, mouth: 0.6, smile: 0.3, gazeX: 0.4, gazeY: 0.4, brow: 0.35 };
-    for (const key of Object.keys(k) as (keyof Pose)[]) cur[key] += (target[key] - cur[key]) * k[key];
-    drawAvatar(g, cfg, cur, canvas.width, canvas.height, t);
+    // frame-rate independent easing toward the target; tracked faces use the One Euro filter + interpolation instead
+    const dt = Math.min(0.1, Math.max(0.001, (now - lastFrame) / 1000));
+    lastFrame = now;
+    if (tracking && smoother.ready) {
+      const sm = smoother.sample(now, cur);
+      for (const key of Object.keys(sm) as (keyof Pose)[]) cur[key] = sm[key];
+    } else {
+      const rate: Record<keyof Pose, number> = { yaw: 12, pitch: 12, roll: 12, blinkL: 60, blinkR: 60, mouth: 45, smile: 14, gazeX: 14, gazeY: 14, brow: 14 };
+      for (const key of Object.keys(rate) as (keyof Pose)[]) cur[key] += (target[key] - cur[key]) * (1 - Math.exp(-dt * rate[key]));
+      smoother.reset(cur);
+    }
+    (opts.render ?? drawAvatar)(g, cfg, cur, canvas.width, canvas.height, t);
   };
   // self-scheduling timer (not rAF, so calls keep streaming in background tabs). Unlike setInterval it
   // never queues up frames on a slow phone — the next frame waits until this one is finished.

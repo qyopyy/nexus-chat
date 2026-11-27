@@ -50,6 +50,7 @@ function appleReturnPath() {
   if (path.startsWith("/untitled/app")) return "/untitled/app";
   if (path.startsWith("/acetate")) return "/acetate/app";
   if (path.startsWith("/bio")) return "/bio/app";
+  if (path.startsWith("/snap")) return "/snap/app";
   if (path.startsWith("/browser")) return "/browser/app";
   return "/";
 }

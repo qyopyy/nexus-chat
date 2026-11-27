@@ -9,6 +9,10 @@ export const NEXUS_RELEASE: ReleaseNote = {
   version: "1.9.1",
   items: [
     {
+      title: "Nexus Snap",
+      body: "A built-in camera for photos and videos, front and back. Tap the camera in the chat box, open Snap from Apps, or use /snap (also a separate Nexus Snap iPhone app). Pick quality, ratio and effects, browse everything in the gallery, and send any snap to another Nexus user by username or email. Everything is saved to your Nexus Drive vault (folder Snap) with a nexusproject.cc link, ready to copy, share or send in any chat. New: self-timer, flash, grid, zoom, captions, stickers and frames, and a full-body V-Avatar (your own, now with legs and shoes) that stands in 999 / Ksubi scenes or your own background picture, for photos and videos. Voice messages with a live Voice Memos style waveform, sent back and forth as normal Nexus voice messages. Smoother avatar face tracking. Nexus Drop: AirDrop style sending to any Nexus phone (it lands in their Nexus Drop inbox), to people nearby who switch Nearby on for 10 minutes, to your own other screens, or through the phone share sheet; if a Drop cannot be delivered the Drive link goes to their chat. Sign in with your Nexus account or Apple.",
+    },
+    {
       title: "Artist website",
       body: "Every artist profile now has a public website at /bio/artist/<handle or Spotify ID>. It shows only this year's releases (pulled from Spotify, so it updates by itself), a verified checkmark for verified artists, and Listen-everywhere links for 16 streaming services plus lyrics and info sources. Open it from the artist page.",
     },
