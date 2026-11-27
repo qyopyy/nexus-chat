@@ -3,7 +3,6 @@
 // The Snap settings, kept on this device. Components read them with usePrefs(); plain code with getPrefs().
 
 import { useSyncExternalStore } from "react";
-import { isIOSDevice } from "@/lib/snapDevice";
 import { DEFAULT_PREFS, PREFS_KEY, parsePrefs, serializePrefs, type SnapPrefs } from "@/lib/snapPrefs";
 
 export const PIN_KEY = "snap.pin";
@@ -17,11 +16,7 @@ export const setLastGeo = (g: { lat: number; lng: number } | null) => {
 
 function load(): SnapPrefs {
   try {
-    const raw = localStorage.getItem(PREFS_KEY);
-    const p = parsePrefs(raw);
-    // iPhones use the real Camera app until the person says otherwise
-    if (!raw?.includes('"nativeCamera"') && isIOSDevice(navigator.userAgent, navigator.platform, navigator.maxTouchPoints)) return { ...p, nativeCamera: true };
-    return p;
+    return parsePrefs(localStorage.getItem(PREFS_KEY));
   } catch {
     return DEFAULT_PREFS;
   }
