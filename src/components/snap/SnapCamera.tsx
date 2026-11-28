@@ -44,6 +44,8 @@ import { getPrefs, setLastGeo, setPrefs, usePrefs } from "@/lib/snapPrefsStore";
 import { SnapZoom } from "./SnapZoom";
 import { drawEnhanced, ENHANCE_FROM_ZOOM } from "@/lib/snapEnhance";
 import { drawStamp } from "@/lib/snapStamp";
+import { useLiveMap } from "@/lib/liveConfig";
+import { snapLimits, withSnapLimits } from "@/lib/liveConfigCore";
 import { DIGITAL_ZOOM, clampZoom, digitalCrop, easeZoom, wheelFactor } from "@/lib/snapZoom";
 import { isIOSDevice, streamIsDead } from "@/lib/snapDevice";
 import { constraintLadder, effectiveQualityKey, isCompactHeight, isLevel, pinchDistance, pinchZoom, rollFromGravity, tapToVideoPoint, upgradeTo, type DeviceInfo } from "@/lib/snapDevice";
@@ -147,7 +149,10 @@ export default function SnapCamera({
   const avatarRef = useRef<AvatarHandle>(null);
   const micRef = useRef<(() => void) | null>(null);
 
-  const prefs = usePrefs();
+  const ownPrefs = usePrefs();
+  const liveMap = useLiveMap(); // owner limits from the server, follow in real time
+  const limits = snapLimits(liveMap);
+  const prefs = useMemo(() => withSnapLimits(ownPrefs, liveMap), [ownPrefs, liveMap]);
   const prefsRef = useRef<SnapPrefs>(prefs);
   prefsRef.current = prefs;
   const [mode, setMode] = useState<Mode>(() => getPrefs().startMode);
@@ -1089,6 +1094,24 @@ export default function SnapCamera({
   return (
     <div className="fixed inset-0 z-[90] flex flex-col bg-black text-white">
       <div className="pointer-events-none absolute inset-0 z-30 bg-white transition-opacity duration-150" style={{ opacity: flash ? 0.85 : 0 }} />
+      {limits.notice && (
+        <div role="status" className="pointer-events-none absolute inset-x-0 top-0 z-[34] mx-auto mt-safe-3 w-fit max-w-[92%] rounded-full bg-amber-400/95 px-3 py-1 text-center text-xs font-bold text-black shadow-lg">
+          {limits.notice}
+        </div>
+      )}
+      {!limits.enabled && (
+        <div role="alert" className="absolute inset-0 z-[36] grid place-items-center bg-black/95 p-8 text-center">
+          <div>
+            <div className="text-lg font-extrabold">Snap camera is paused</div>
+            <p className="mt-2 text-sm text-white/70">{limits.notice || "It will come back in a moment. This screen opens by itself when it does."}</p>
+            {onClose && (
+              <button type="button" onClick={onClose} className="mt-5 rounded-full bg-white/15 px-5 py-2 text-sm font-bold hover:bg-white/25">
+                Close
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       <header className={cn("relative z-20 flex items-center gap-2 px-3 pt-safe-3", compact ? "pb-1" : "pb-2")}>
         {shot ? (
           <button type="button" onClick={retake} aria-label="Back" className="grid size-10 place-items-center rounded-full bg-white/10 hover:bg-white/20">

@@ -10,6 +10,8 @@ import { useChat } from "@/store/chat";
 import { TTL_OPTIONS, runBotCommand, sendMessage, setTtl, type SendMode } from "@/lib/data";
 import { MSG_LIMIT_FREE, MSG_LIMIT_PREMIUM, NEED, gate, msgLimit, myTier, useMyTier } from "@/lib/premium";
 import { sendLive, sendTyping } from "@/lib/realtime";
+import { startLiveConfig, useLive } from "@/lib/liveConfig";
+import { liveGet } from "@/lib/liveConfigCore";
 import { EFFECTS, playEffect, type EffectKind } from "@/lib/effects";
 import { haptic } from "@/lib/haptics";
 import { cn, formatBytes } from "@/lib/utils";
@@ -28,7 +30,6 @@ const SnapCamera = dynamic(() => import("@/components/snap/SnapCamera"), { ssr: 
 /** Supabase Pro — everyone gets 1 GB per file; premium up to 5 GB (bucket cap). */
 const MAX_FREE = 1024 * 1024 * 1024;
 const MAX_PREMIUM = 5 * 1024 * 1024 * 1024;
-const MAX_VOICE_SECONDS = 300;
 
 function voiceMime() {
   if (typeof MediaRecorder === "undefined") return null;
@@ -50,6 +51,7 @@ export default function Composer({
   setFile: (f: File | null) => void;
 }) {
   const me = useApp((s) => s.userId);
+  useEffect(() => startLiveConfig(), []);
   const title = useApp((s) => conversationTitle(s, conversationId));
   const kind = useApp((s) => s.convKinds[conversationId]);
   const replyTo = useChat((s) => s.replyTo);
@@ -269,7 +271,7 @@ export default function Composer({
         setLevels((l) => [...l.slice(1), level]);
         const secs = Math.floor((Date.now() - r.started) / 1000);
         setRecSecs(secs);
-        if (secs >= MAX_VOICE_SECONDS) void finishRecording();
+        if (secs >= liveGet<number>(useLive.getState().map, "nexus.max_voice_sec")) void finishRecording();
       }
       raf = requestAnimationFrame(loop);
     };

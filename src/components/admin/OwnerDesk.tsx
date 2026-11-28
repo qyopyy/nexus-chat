@@ -1,5 +1,6 @@
 "use client";
 
+import LiveControl from "./LiveControl";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase, errorText } from "@/lib/supabase";
@@ -264,6 +265,9 @@ export default function OwnerDesk({ userId }: { userId?: string }) {
 
         {tab === "Flags" && overview && (
           <section className="mt-4 space-y-4">
+            <Panel title="Live Control">
+              <LiveControl />
+            </Panel>
             <Panel title="Kill switches">
               <FlagRow label="Phone Link" on={overview.flags.phone_link} set={(v) => setOverview({ ...overview, flags: { ...overview.flags, phone_link: v } })} />
               <FlagRow label="Locator" on={overview.flags.locator} set={(v) => setOverview({ ...overview, flags: { ...overview.flags, locator: v } })} />
