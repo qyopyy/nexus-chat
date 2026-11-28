@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Check, ChevronLeft, Copy, Download, Grid3x3, Images, Link2, MessageSquarePlus, Mic, MicOff, PersonStanding, Radar, RefreshCw, RotateCcw, Search, Send, Settings as SettingsIcon, Share2, Shirt, SlidersHorizontal, Sparkles, Timer, Trash2, Type, UserPlus, Video, X, Zap, ZapOff } from "lucide-react";
+import { Camera, Check, ChevronLeft, Copy, Download, Grid3x3, Images, Lightbulb, Link2, MessageSquarePlus, Mic, MicOff, PersonStanding, Radar, RefreshCw, RotateCcw, Search, Send, Settings as SettingsIcon, Share2, Shirt, SlidersHorizontal, Sparkles, Timer, Trash2, Type, UserPlus, Video, X, Zap, ZapOff } from "lucide-react";
 import { toast, useApp, conversationTitle, openModal } from "@/store/app";
 import { sendMessage } from "@/lib/data";
 import { createShare, removeVault, shareLink, uploadVault, type VaultFile, type VaultShare } from "@/lib/protect";
@@ -73,6 +73,10 @@ import { shutterClick, timerBeep } from "@/lib/snapAudio";
 import SnapSettings from "./SnapSettings";
 import SnapProfile from "./SnapProfile";
 import SnapPeople from "./SnapPeople";
+import { CameraNudge, StreakChip } from "./SnapSocial";
+import { AutoTip, TipsSheet } from "./SnapTips";
+import { tipForMode } from "@/lib/snapSocial";
+import { recordSnap, startReminders } from "@/lib/snapSocialNet";
 import SnapFace from "./SnapFace";
 import { dropTo } from "@/lib/snapDropNet";
 import { statusLabel } from "@/lib/snapDrop";
@@ -184,6 +188,8 @@ export default function SnapCamera({
   const [settings, setSettings] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
+  const [tipsOpen, setTipsOpen] = useState(false);
+  useEffect(() => startReminders(), []);
   const [target, setTarget] = useState<SnapUser | null>(null);
   const [sendingTo, setSendingTo] = useState(false);
   const myProfile = useApp((st) => (st.userId ? st.profiles[st.userId] : undefined));
@@ -269,6 +275,7 @@ export default function SnapCamera({
   const stickerCorner = flags.stickers ? stickerCornerRaw : "tr";
   const capShown = effectiveCaption(caption, flags);
   const fx = effectByKeyAll(effect);
+  const tip = tipForMode({ mode, facing, avatar: avatarOn, timer, flash: flashOn });
   const recording = recMs !== null;
 
   const pick = {
@@ -836,6 +843,7 @@ export default function SnapCamera({
   const finish = useCallback(
     (file: File, video: boolean, durationMs: number | null) => {
       stop();
+      recordSnap();
       setShot({ file, url: URL.createObjectURL(file), video, durationMs });
       if (prefsRef.current.downloadCopy) downloadFile(file);
       if (prefsRef.current.autoSave) void begin(file, durationMs);
@@ -1220,10 +1228,13 @@ export default function SnapCamera({
               {formatDuration(recMs ?? 0)}
             </span>
           ) : !shot && myProfile ? (
-            <button type="button" onClick={() => setProfileOpen(true)} aria-label="Your profile" className="inline-flex max-w-full items-center gap-2 rounded-full bg-white/10 py-1 pl-1 pr-3 hover:bg-white/20">
-              <SnapFace url={myProfile.avatar_url} name={myProfile.display_name || myProfile.username} color={myProfile.avatar_color} size={28} />
-              <span className="truncate text-xs font-bold">@{myProfile.username}</span>
-            </button>
+            <span className="inline-flex max-w-full items-center gap-1.5">
+              <button type="button" onClick={() => setProfileOpen(true)} aria-label="Your profile" className="inline-flex min-w-0 items-center gap-2 rounded-full bg-white/10 py-1 pl-1 pr-3 hover:bg-white/20">
+                <SnapFace url={myProfile.avatar_url} name={myProfile.display_name || myProfile.username} color={myProfile.avatar_color} size={28} />
+                <span className="truncate text-xs font-bold">@{myProfile.username}</span>
+              </button>
+              <StreakChip onClick={() => setProfileOpen(true)} />
+            </span>
           ) : (
             "NEXUS SNAP"
           )}
@@ -1338,6 +1349,9 @@ export default function SnapCamera({
                   <Shirt className="size-5" />
                 </Tool>
               )}
+              <Tool label="How to capture" on={tipsOpen} onClick={() => !recording && setTipsOpen(true)}>
+                <Lightbulb className="size-5" />
+              </Tool>
               <Tool label="Find people" on={peopleOpen || !!target} onClick={() => !recording && setPeopleOpen(true)}>
                 <Search className="size-5" />
               </Tool>
@@ -1707,6 +1721,13 @@ export default function SnapCamera({
         />
       )}
       {settings && <SnapSettings onClose={() => setSettings(false)} />}
+      {!shot && !recording && !avatarOn && (
+        <div className="pointer-events-none absolute inset-x-3 z-30 space-y-2" style={{ top: "calc(env(safe-area-inset-top) + 64px)" }}>
+          <AutoTip tip={tip} enabled={prefs.showHints && !panel && !profileOpen && !peopleOpen && !tipsOpen && !settings} onMore={() => setTipsOpen(true)} />
+          <CameraNudge />
+        </div>
+      )}
+      {tipsOpen && <TipsSheet initial={tip.key} onClose={() => setTipsOpen(false)} />}
       {profileOpen && <SnapProfile onClose={() => setProfileOpen(false)} />}
       {peopleOpen && (
         <SnapPeople

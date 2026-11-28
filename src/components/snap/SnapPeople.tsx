@@ -1,26 +1,50 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Music2, Search } from "lucide-react";
+import { Loader2, Music2, Search, UserCheck, UserPlus } from "lucide-react";
 import { useApp } from "@/store/app";
-import { getSounds, searchPeople, type Person } from "@/lib/snapSoundsNet";
-import { cleanPeopleQuery, type Sound } from "@/lib/snapSounds";
+import { getSounds } from "@/lib/snapSoundsNet";
+import type { Sound } from "@/lib/snapSounds";
+import { cleanSearch } from "@/lib/snapSocial";
+import { followUser, loadBlocks, myFollowing, searchUsers, type SocialPerson } from "@/lib/snapSocialNet";
 import type { SnapUser } from "@/lib/snapShare";
 import SnapFace from "./SnapFace";
+import SnapPerson from "./SnapSocial";
 import { Sheet } from "./SnapUi";
 
 /** Find Nexus people by username. Pick one and your next Snap goes to them (Nexus Drop, with a normal chat attachment as backup). */
 export default function SnapPeople({ onClose, onPick, current }: { onClose: () => void; onPick: (u: SnapUser) => void; current: SnapUser | null }) {
   const me = useApp((s) => s.userId);
   const [q, setQ] = useState("");
-  const [list, setList] = useState<Person[]>([]);
+  const [list, setList] = useState<SocialPerson[]>([]);
+  const [following, setFollowing] = useState<Set<string>>(new Set());
+  const [open, setOpen] = useState<string | null>(null);
   const [sounds, setSounds] = useState<Record<string, Sound>>({});
   const [busy, setBusy] = useState(false);
   const [empty, setEmpty] = useState(false);
   const seq = useRef(0);
 
+  useEffect(() => void loadBlocks(), []);
+
+  const toggle = async (id: string) => {
+    const on = !following.has(id);
+    setFollowing((f) => {
+      const n = new Set(f);
+      if (on) n.add(id);
+      else n.delete(id);
+      return n;
+    });
+    if (!(await followUser(id, on)))
+      setFollowing((f) => {
+        const n = new Set(f);
+        if (on) n.delete(id);
+        else n.add(id);
+        return n;
+      });
+  };
+
   useEffect(() => {
-    const s = cleanPeopleQuery(q);
+    const s = cleanSearch(q);
     const my = ++seq.current;
     if (!s) {
       setList([]);
@@ -31,14 +55,17 @@ export default function SnapPeople({ onClose, onPick, current }: { onClose: () =
     }
     setBusy(true);
     const t = setTimeout(() => {
-      void searchPeople(s)
+      void searchUsers(s)
         .then(async (r) => {
           if (my !== seq.current) return;
           const people = r.filter((x) => x.id !== me);
           setList(people);
           setEmpty(people.length === 0);
-          const snd = await getSounds(people.map((x) => x.id));
-          if (my === seq.current) setSounds(snd);
+          const [snd, fol] = await Promise.all([getSounds(people.map((x) => x.id)), myFollowing(people.map((x) => x.id))]);
+          if (my === seq.current) {
+            setSounds(snd);
+            setFollowing(fol);
+          }
         })
         .finally(() => my === seq.current && setBusy(false));
     }, 250);
@@ -54,11 +81,11 @@ export default function SnapPeople({ onClose, onPick, current }: { onClose: () =
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by username"
-            aria-label="Search by username"
+            placeholder="Search name or username"
+            aria-label="Search name or username"
             autoCapitalize="none"
             autoCorrect="off"
-            maxLength={33}
+            maxLength={40}
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-white/40"
           />
           {busy && <Loader2 className="size-4 animate-spin text-white/50" />}
@@ -68,12 +95,13 @@ export default function SnapPeople({ onClose, onPick, current }: { onClose: () =
             Your next Snap goes to <b className="text-white">@{current.username}</b>. Pick someone else to change it.
           </p>
         )}
-        {empty && !busy && <p className="px-1 text-sm text-white/55">Nobody with that username.</p>}
+        {empty && !busy && <p className="px-1 text-sm text-white/55">Nobody found. Try another name or username.</p>}
         <ul className="space-y-1">
           {list.map((p) => {
             const s = sounds[p.id];
             return (
               <li key={p.id} className="flex items-center gap-3 rounded-2xl p-2 hover:bg-white/5">
+                <button type="button" onClick={() => setOpen(p.username)} aria-label={`Open @${p.username}`} className="flex min-w-0 flex-1 items-center gap-3 text-left">
                 <SnapFace url={p.avatar_url} name={p.display_name || p.username} color={p.avatar_color} size={44} />
                 <div className="min-w-0 flex-1">
                   <b className="block truncate text-sm">{p.display_name || p.username}</b>
@@ -88,6 +116,15 @@ export default function SnapPeople({ onClose, onPick, current }: { onClose: () =
                     </span>
                   )}
                 </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void toggle(p.id)}
+                  aria-label={following.has(p.id) ? `Unfollow @${p.username}` : `Follow @${p.username}`}
+                  className={`grid size-8 shrink-0 place-items-center rounded-full ${following.has(p.id) ? "bg-white/10 text-white" : "bg-white/20 text-white"}`}
+                >
+                  {following.has(p.id) ? <UserCheck className="size-4" /> : <UserPlus className="size-4" />}
+                </button>
                 <button
                   type="button"
                   onClick={() => onPick({ id: p.id, username: p.username, display_name: p.display_name })}
@@ -100,6 +137,7 @@ export default function SnapPeople({ onClose, onPick, current }: { onClose: () =
           })}
         </ul>
       </div>
+      {open && <SnapPerson username={open} onClose={() => setOpen(null)} onSnapTo={onPick} />}
     </Sheet>
   );
 }

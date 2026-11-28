@@ -5,7 +5,11 @@ import { Loader2, Music2, Search, Trash2 } from "lucide-react";
 import { toast, useApp } from "@/store/app";
 import { clearMySound, getSounds, searchTracks, setMySound } from "@/lib/snapSoundsNet";
 import { cleanQuery, embedUrl, soundHours, timeLeftLabel, type Sound, type SoundPick } from "@/lib/snapSounds";
-import SnapFace from "./SnapFace";
+import type { GramProfile } from "@/lib/gram";
+import { loadSnapProfile } from "@/lib/snapSocialNet";
+import { cleanBio } from "@/lib/snapSocial";
+import { Counts, PeopleListSheet, PictureEditor, ReminderPanel } from "./SnapSocial";
+import SnapPerson from "./SnapSocial";
 import { Sheet } from "./SnapUi";
 
 /** Your Nexus Snap profile: picture, username and the Spotify sound on your profile (24 hours, 48 for VIP and staff). */
@@ -21,6 +25,19 @@ export default function SnapProfile({ onClose }: { onClose: () => void }) {
   const [err, setErr] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const seq = useRef(0);
+  const [mine, setMine] = useState<GramProfile | null>(null);
+  const [list, setList] = useState<"followers" | "following" | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+
+  // follower / following counts (re-read when the sheet closes a list, so new follows show up)
+  useEffect(() => {
+    if (!p?.username) return;
+    let live = true;
+    void loadSnapProfile(p.username).then((r) => live && setMine(r));
+    return () => {
+      live = false;
+    };
+  }, [p?.username, list, open]);
 
   useEffect(() => {
     if (!me) return;
@@ -85,13 +102,15 @@ export default function SnapProfile({ onClose }: { onClose: () => void }) {
   return (
     <Sheet title="Your profile" onClose={onClose} z="z-[60]">
       <div className="space-y-4 px-4 pb-4">
-        <div className="flex items-center gap-3">
-          <SnapFace url={p?.avatar_url} name={p?.display_name || p?.username} color={p?.avatar_color} size={56} />
-          <div className="min-w-0">
-            <b className="block truncate text-base">{p?.display_name || p?.username || "You"}</b>
-            <span className="block truncate text-sm text-white/55">@{p?.username ?? "…"}</span>
-          </div>
+        <PictureEditor name={p?.display_name || p?.username || "You"} url={p?.avatar_url} color={p?.avatar_color} />
+        <div className="min-w-0">
+          <b className="block truncate text-base">{p?.display_name || p?.username || "You"}</b>
+          <span className="block truncate text-sm text-white/55">@{p?.username ?? "…"}</span>
+          {cleanBio(p?.bio) && <span className="mt-1 block text-sm text-white/75">{cleanBio(p?.bio)}</span>}
         </div>
+        <Counts posts={mine?.posts} followers={mine?.followers ?? 0} following={mine?.following ?? 0} onFollowers={() => setList("followers")} onFollowing={() => setList("following")} />
+
+        <ReminderPanel />
 
         <section className="space-y-2">
           <h3 className="text-[11px] font-bold uppercase tracking-widest text-white/45">Sound on your profile</h3>
@@ -153,6 +172,8 @@ export default function SnapProfile({ onClose }: { onClose: () => void }) {
           </ul>
         </section>
       </div>
+      {list && me && <PeopleListSheet userId={me} which={list} onClose={() => setList(null)} onOpen={(u) => (setList(null), setOpen(u))} />}
+      {open && <SnapPerson username={open} onClose={() => setOpen(null)} />}
     </Sheet>
   );
 }
