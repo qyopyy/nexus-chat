@@ -1,0 +1,48 @@
+{
+  "name": "nexus-snap-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Nexus Snap desktop shell (Windows .exe + macOS .dmg). Loads /snap/app live: webcam photos and videos go to your Nexus Drive with an instant share link.",
+  "main": "main.js",
+  "author": "Nexus",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "hu.qyopy.snap.desktop",
+    "productName": "Nexus Snap",
+    "copyright": "Copyright © Nexus",
+    "directories": { "output": "dist" },
+    "files": ["main.js", "icon.png"],
+    "extraMetadata": { "main": "main.js" },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "artifactName": "NexusSnap-Setup-${version}.${ext}"
+    },
+    "portable": { "artifactName": "NexusSnap-Portable-${version}.exe" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true },
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],
+      "category": "public.app-category.photography",
+      "artifactName": "NexusSnap-${version}-mac-${arch}.${ext}",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "extendInfo": {
+        "NSCameraUsageDescription": "Nexus Snap uses the camera to take photos and videos you save to your Nexus Drive and share.",
+        "NSMicrophoneUsageDescription": "Nexus Snap uses the microphone for video sound and voice messages."
+      }
+    },
+    "dmg": { "artifactName": "NexusSnap-${version}-mac-${arch}.dmg" }
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  }
+}

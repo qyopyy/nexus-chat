@@ -17,6 +17,7 @@ export type StudioSection =
   | "tools"
   | "shield"
   | "tiktok-sound"
+  | "instagram-link"
   | "takedowns"
   | "content-id"
   | "defender"
