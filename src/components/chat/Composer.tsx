@@ -440,7 +440,7 @@ export default function Composer({
             </button>
           </div>
         ) : (
-          <div className="relative flex items-end gap-1.5">
+          <div className="relative flex flex-wrap items-end gap-1.5 min-[521px]:flex-nowrap">
             <input
               ref={fileInput}
               type="file"
@@ -460,7 +460,7 @@ export default function Composer({
             </button>
             <ComposerPlus conversationId={conversationId} />
 
-            <div className="flex min-h-11 min-w-0 flex-1 flex-col rounded-[22px] border border-white/[.06] bg-side">
+            <div className="flex min-h-11 min-w-[11rem] flex-1 flex-col rounded-[22px] border border-white/[.06] bg-side max-[520px]:order-first max-[520px]:basis-full">
               {fmtOpen && (
                 <div className="flex flex-wrap items-center gap-0.5 border-b border-white/[.06] px-1.5 pt-1.5 pb-1">
                   <FmtBtn title="Bold ** **" onClick={() => applyWrap("**", "**")}><Bold className="size-3.5" /></FmtBtn>
@@ -585,7 +585,7 @@ export default function Composer({
                   e.preventDefault();
                   setEffects(true);
                 }}
-                className="grid size-11 shrink-0 animate-pop place-items-center rounded-full bg-accent text-white shadow-lg shadow-accent/25 transition active:scale-90"
+                className={cn("grid size-11 shrink-0 animate-pop place-items-center rounded-full bg-accent text-white shadow-lg shadow-accent/25 transition active:scale-90 max-[520px]:order-2", !timerAllowed && "max-[520px]:ml-auto")}
                 title="Send (hold for effects)"
               >
                 <SendHorizontal className="size-5" />
@@ -593,7 +593,7 @@ export default function Composer({
             ) : (
               <button
                 onClick={() => void startRecording()}
-                className="grid size-11 shrink-0 place-items-center rounded-full bg-side text-sub transition hover:text-accent active:scale-90"
+                className={cn("grid size-11 shrink-0 place-items-center rounded-full bg-side text-sub transition hover:text-accent active:scale-90 max-[520px]:order-2", !timerAllowed && "max-[520px]:ml-auto")}
                 title="Record a voice message"
               >
                 <Mic className="size-[22px]" />
@@ -603,7 +603,7 @@ export default function Composer({
               <button
                 onClick={() => setTimerOpen(true)}
                 className={cn(
-                  "relative grid size-11 shrink-0 place-items-center rounded-full transition active:scale-90",
+                  "relative grid size-11 shrink-0 place-items-center rounded-full transition active:scale-90 max-[520px]:order-1 max-[520px]:ml-auto",
                   ttl ? "bg-accent/20 text-accent" : "bg-side text-sub hover:text-accent",
                 )}
                 title={ttl ? `Messages disappear after ${TTL_OPTIONS.find((o) => o.secs === ttl)?.label}` : "Disappearing messages"}
