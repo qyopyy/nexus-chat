@@ -245,7 +245,7 @@ export function openLinkBio() {
 
 /** Sideloadly / AltStore releases for the standalone Nexus Link IPA. */
 export function linkBioIpaReleasesUrl() {
-  return "https://github.com/qyopyy/nexus-chat/releases?q=Nexus+Link+iOS&expanded=true";
+  return "/ipa#link";
 }
 
 export function publicLinkBioUrl(username: string) {

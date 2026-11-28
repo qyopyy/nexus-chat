@@ -5,7 +5,6 @@ import { Globe, Monitor, Smartphone, TabletSmartphone } from "lucide-react";
 import SiteFrame from "./SiteFrame";
 import Reveal from "./Reveal";
 
-const RELEASES = "https://github.com/qyopyy/nexus-chat/releases";
 
 type Os = "ios" | "android" | "windows" | "mac" | "other";
 function detect(): Os {
@@ -20,9 +19,9 @@ function detect(): Os {
 
 const OPTIONS: { os: Os; icon: React.ReactNode; name: string; note: string; href: string; cta: string; color: string }[] = [
   { os: "ios", icon: <TabletSmartphone className="size-7" />, name: "iPhone & iPad", note: "Beta through Apple TestFlight — one tap to join.", href: "/testflight", cta: "Join the beta", color: "#ffffff" },
-  { os: "android", icon: <Smartphone className="size-7" />, name: "Android", note: "Download the APK from the latest release and open it.", href: RELEASES, cta: "Download APK", color: "#36d39a" },
-  { os: "windows", icon: <Monitor className="size-7" />, name: "Windows", note: "Desktop app (.exe) with notifications and tray icon.", href: RELEASES, cta: "Download for Windows", color: "#00c2ff" },
-  { os: "mac", icon: <Monitor className="size-7" />, name: "macOS", note: "Desktop app (.dmg) for Apple silicon and Intel.", href: RELEASES, cta: "Download for Mac", color: "#c0c0c8" },
+  { os: "android", icon: <Smartphone className="size-7" />, name: "Android", note: "Download the APK from the latest release and open it.", href: "/api/ipa/file?kind=android", cta: "Download APK", color: "#36d39a" },
+  { os: "windows", icon: <Monitor className="size-7" />, name: "Windows", note: "Desktop app (.exe) with notifications and tray icon.", href: "/api/ipa/file?kind=windows", cta: "Download for Windows", color: "#00c2ff" },
+  { os: "mac", icon: <Monitor className="size-7" />, name: "macOS", note: "Desktop app (.dmg) for Apple silicon and Intel.", href: "/api/ipa/file?kind=mac", cta: "Download for Mac", color: "#c0c0c8" },
   { os: "other", icon: <Globe className="size-7" />, name: "Web", note: "Works in any modern browser — install it as an app from the menu.", href: "/login", cta: "Open Nexus", color: "#8b5cff" },
 ];
 
@@ -46,6 +45,9 @@ export default function DownloadPage() {
         <div className="site-rise mt-2 text-sm text-white/45" style={{ animationDelay: "220ms" }}>
           Recommended for your device · {mine.name}
         </div>
+        <a href="/ipa" className="site-rise mt-3 inline-block text-sm font-semibold text-white/70 underline underline-offset-4" style={{ animationDelay: "260ms" }}>
+          All app downloads, including iPhone .ipa files
+        </a>
       </section>
 
       <section className="mx-auto mt-14 grid max-w-5xl gap-3 px-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-3">

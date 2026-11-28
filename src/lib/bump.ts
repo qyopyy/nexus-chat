@@ -134,7 +134,7 @@ export function openBump() {
 
 /** Latest standalone Bump IPA releases (Sideloadly / AltStore). */
 export function bumpIpaReleasesUrl() {
-  return "https://github.com/qyopyy/nexus-chat/releases?q=Wump+iOS&expanded=true";
+  return "/ipa#wump";
 }
 
 /** Friendly wave DM (no extra tables). */

@@ -228,7 +228,7 @@ export function DxOverview({ go, releases }: { go: (s: DxSection, rel?: string |
         <ul className="space-y-2 text-[14px] text-[var(--dx-sub)]">
           <li>
             Distro on iPhone is a Sideloadly build.{" "}
-            <a href="https://github.com/qyopyy/nexus-chat/releases?q=Distro+iOS&expanded=true" target="_blank" rel="noopener noreferrer" className="text-white underline underline-offset-2">
+            <a href="/ipa#distro" className="text-white underline underline-offset-2">
               Get Distro.ipa
             </a>
             .

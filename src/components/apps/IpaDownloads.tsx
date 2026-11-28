@@ -2,15 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AlertTriangle, Download, ExternalLink, ShieldCheck, Smartphone } from "lucide-react";
-import {
-  NEXUS_APPSTORE_APPS_WORKFLOW_URL,
-  NEXUS_CAPGO_APP_URL,
-  fetchLatestIpa,
-  ipaReleasesUrl,
-  type IpaKind,
-  type LatestIpa,
-  IPA_KIND_META,
-} from "@/lib/ipaDownloads";
+import { fetchLatestAll, ipaReleasesUrl, type IpaKind, type LatestIpa, IPA_KIND_META } from "@/lib/ipaDownloads";
 import { cn } from "@/lib/utils";
 
 const SIGNED_KINDS: IpaKind[] = ["appstore", "wump-appstore", "browser-appstore", "link-appstore"];
@@ -23,12 +15,9 @@ export default function IpaDownloads({ compact }: { compact?: boolean }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const kinds: IpaKind[] = [...SIGNED_KINDS, ...SIDELOAD_KINDS];
-      const entries = await Promise.all(kinds.map(async (k) => [k, await fetchLatestIpa(k)] as const));
-      if (cancelled) return;
-      const next: Partial<Record<IpaKind, LatestIpa | null>> = {};
-      for (const [k, v] of entries) next[k] = v;
-      setLatest(next);
+      const r = await fetchLatestAll();
+      if (cancelled || !r.ok) return;
+      setLatest(r.builds as Partial<Record<IpaKind, LatestIpa | null>>);
     })();
     return () => {
       cancelled = true;
@@ -52,13 +41,8 @@ export default function IpaDownloads({ compact }: { compact?: boolean }) {
             Sideloadly for devices · App Store signed for Transporter (embedded.mobileprovision)
           </p>
         </div>
-        <a
-          href={NEXUS_CAPGO_APP_URL}
-          target="_blank"
-          rel="noreferrer"
-          className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold", compact ? "bg-white/10 text-sub" : "bg-white/10 text-white/70")}
-        >
-          Capgo <ExternalLink className="size-3" />
+        <a href="/ipa" className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold", compact ? "bg-accent/15 text-accent" : "bg-white/10 text-white/70")}>
+          Downloads site <ExternalLink className="size-3" />
         </a>
       </div>
 
@@ -72,25 +56,19 @@ export default function IpaDownloads({ compact }: { compact?: boolean }) {
           <AlertTriangle className="size-3.5 shrink-0" />
           Transporter error 90174? (Nexus / Wump / Browser / Link)
         </div>
-        You dropped an unsigned Sideloadly IPA. Use an App Store signed build below, or run{" "}
-        <a href={NEXUS_APPSTORE_APPS_WORKFLOW_URL} target="_blank" rel="noreferrer" className="underline underline-offset-2">
-          iOS App Store apps (signed)
-        </a>{" "}
-        (pick wump / nexus / browser / link). Sideloadly builds omit embedded.mobileprovision on purpose.
+        You dropped an unsigned Sideloadly IPA. Use an App Store signed build below. Sideloadly builds omit embedded.mobileprovision on purpose.
       </div>
 
       <ul className="mb-3 space-y-1.5">
         {SIGNED_KINDS.map((kind) => {
           const meta = IPA_KIND_META[kind];
           const hit = latest[kind];
-          const href = hit?.url || NEXUS_APPSTORE_APPS_WORKFLOW_URL;
+          const href = hit?.url || "/ipa#" + kind;
           return (
             <li key={kind}>
               <a
                 href={href}
-                target="_blank"
-                rel="noreferrer"
-                className={cn(
+                                className={cn(
                   "flex items-center gap-3 rounded-xl px-2.5 py-2.5 transition ring-1",
                   compact ? "bg-ok/10 ring-ok/30 hover:bg-ok/15" : "bg-emerald-500/10 ring-emerald-400/25 hover:bg-emerald-500/15",
                 )}
@@ -101,7 +79,7 @@ export default function IpaDownloads({ compact }: { compact?: boolean }) {
                 <span className="min-w-0 flex-1">
                   <span className={cn("block truncate text-sm font-semibold", compact ? "text-txt" : "text-white")}>{meta.label}</span>
                   <span className={cn("block truncate text-[10px]", compact ? "text-sub" : "text-white/55")}>
-                    {hit ? `${hit.tag} · ${hit.name}` : `Run signed workflow · ${meta.bundleId}`}
+                    {hit ? `${hit.tag} · ${hit.name}` : `Not published yet · ${meta.bundleId}`}
                   </span>
                 </span>
                 <ExternalLink className={cn("size-3.5 shrink-0", compact ? "text-sub" : "text-white/40")} />
@@ -120,9 +98,7 @@ export default function IpaDownloads({ compact }: { compact?: boolean }) {
             <li key={kind}>
               <a
                 href={href}
-                target="_blank"
-                rel="noreferrer"
-                className={cn(
+                                className={cn(
                   "flex items-center gap-3 rounded-xl px-2.5 py-2.5 transition",
                   compact ? "hover:bg-hover" : "hover:bg-white/10",
                 )}

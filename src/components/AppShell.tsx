@@ -91,6 +91,20 @@ export default function AppShell({ userId, initialVideo, initialRelease, initial
     })();
   }, [userId]);
 
+  // lets the Nexus browser extension (clipboard sync, "send this tab", Pass autofill) talk to this tab
+  useEffect(() => {
+    if (!bootstrapped) return;
+    let off = () => {};
+    let gone = false;
+    void import("@/lib/extBridge").then((m) => {
+      if (!gone) off = m.installExtBridge();
+    });
+    return () => {
+      gone = true;
+      off();
+    };
+  }, [bootstrapped]);
+
   useRealtime(bootstrapped ? userId : null);
   useHandsetReporter(bootstrapped ? userId : null);
   useEffect(() => {

@@ -5,7 +5,7 @@ import { STORE_PAGES } from "@/lib/distroSeo";
 /** Static sitemap — public marketing + share surfaces. Dynamic profiles/posts are linked via OG pages. */
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
-  const paths = ["/", "/features", "/download", "/about", "/contact", "/login", "/register", "/bio", "/bio/app", "/bio/qyopy", "/distro", ...STORE_PAGES.map((x) => `/distro/${x.slug}`)];
+  const paths = ["/", "/features", "/download", "/ipa", "/about", "/contact", "/login", "/register", "/bio", "/bio/app", "/bio/qyopy", "/distro", ...STORE_PAGES.map((x) => `/distro/${x.slug}`)];
   return paths.map((path) => ({
     url: `${SITE.url}${path === "/" ? "" : path}`,
     lastModified: now,

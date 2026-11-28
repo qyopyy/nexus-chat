@@ -731,7 +731,7 @@ function EditDialog({ f, onClose, onSaved }: { f: VaultFile; onClose: () => void
   );
 }
 
-function ShareDialog({ f, shares, onClose, onChange }: { f: VaultFile; shares: VaultShare[]; onClose: () => void; onChange: () => void }) {
+export function ShareDialog({ f, shares, onClose, onChange }: { f: VaultFile; shares: VaultShare[]; onClose: () => void; onChange: () => void }) {
   const [exp, setExp] = useState<number | null>(168);
   const [max, setMax] = useState("");
   const [pw, setPw] = useState("");

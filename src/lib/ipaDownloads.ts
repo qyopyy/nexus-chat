@@ -1,8 +1,7 @@
 /** GitHub release search links for Sideloadly / AltStore IPAs. */
-export const NEXUS_IPA_RELEASES_URL =
-  "https://github.com/qyopyy/nexus-chat/releases?q=Nexus+iOS&expanded=true";
-export const NEXUS_APPSTORE_IPA_RELEASES_URL =
-  "https://github.com/qyopyy/nexus-chat/releases?q=App+Store+IPA&expanded=true";
+// The GitHub repo is private, so visitors are sent to our own downloads page instead of github.com.
+export const NEXUS_IPA_RELEASES_URL = "/ipa#nexus";
+export const NEXUS_APPSTORE_IPA_RELEASES_URL = "/ipa#appstore";
 export const NEXUS_APPSTORE_WORKFLOW_URL =
   "https://github.com/qyopyy/nexus-chat/actions/workflows/ipa-appstore.yml";
 export const NEXUS_APPSTORE_APPS_WORKFLOW_URL =
@@ -103,8 +102,7 @@ export const IPA_KIND_META: Record<
 };
 
 export function ipaReleasesUrl(kind: IpaKind) {
-  const q = encodeURIComponent(IPA_KIND_META[kind].query);
-  return `https://github.com/qyopyy/nexus-chat/releases?q=${q}&expanded=true`;
+  return `/ipa#${kind}`;
 }
 
 export type LatestIpa = {
@@ -115,9 +113,27 @@ export type LatestIpa = {
   publishedAt: string | null;
   htmlUrl: string;
   transporterOk?: boolean;
+  version?: string;
+  size?: number;
+  notes?: string;
+  file?: string;
 };
 
-/** Client helper — hits our API which reads public GitHub Releases. */
+/** Newest build for every app in one request (platform builds included). */
+export type LatestAll = { builds: Partial<Record<IpaKind | "android" | "windows" | "mac", LatestIpa | null>>; checkedAt: string };
+export type LatestAllResult = ({ ok: true } & LatestAll) | { ok: false; message: string };
+export async function fetchLatestAll(): Promise<LatestAllResult> {
+  try {
+    const r = await fetch("/api/ipa/all", { cache: "no-store" });
+    const j = (await r.json()) as Partial<LatestAll> & { message?: string };
+    if (!r.ok || !j.builds) return { ok: false, message: j.message ?? "Could not load downloads." };
+    return { ok: true, builds: j.builds, checkedAt: j.checkedAt ?? new Date().toISOString() };
+  } catch {
+    return { ok: false, message: "No connection. Try again." };
+  }
+}
+
+/** Client helper: our API reads the releases with a server-side token, so the repo itself can stay private. */
 export async function fetchLatestIpa(kind: IpaKind = "nexus"): Promise<LatestIpa | null> {
   try {
     const r = await fetch(`/api/ipa/latest?kind=${kind}`, { cache: "no-store" });

@@ -20,5 +20,5 @@ export function openBrowser() {
 }
 
 export function browserIpaReleasesUrl() {
-  return "https://github.com/qyopyy/nexus-chat/releases?q=Browser+iOS&expanded=true";
+  return "/ipa#browser";
 }
