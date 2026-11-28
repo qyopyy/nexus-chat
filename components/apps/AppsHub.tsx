@@ -5,6 +5,7 @@ import {
   Activity,
   AppWindow,
   Camera,
+  Clipboard,
   Calculator,
   Music2,
   NotebookPen,
@@ -57,6 +58,7 @@ import JsonLab from "./JsonLab";
 import TokenGen from "./TokenGen";
 import PassApp from "./PassApp";
 import DriveApp from "./DriveApp";
+import ClipApp from "./ClipApp";
 import Base64Lab from "./Base64Lab";
 import UpcGenerator from "./UpcGenerator";
 import PitchSheet from "./PitchSheet";
@@ -105,6 +107,7 @@ type ToolId =
   | "token"
   | "pass"
   | "drive"
+  | "clip"
   | "base64"
   | "focus"
   | "units"
@@ -329,6 +332,15 @@ const TOOLS: {
     bg: "linear-gradient(135deg,#fee75c,#5c4b0b)",
     emoji: "{}",
     Icon: Braces,
+  },
+  {
+    id: "clip",
+    name: "Nexus Clip",
+    tag: "Clipboard sync · handoff",
+    desc: "Copy on one device, paste on another. End-to-end encrypted history, pinned snippets, secrets that vanish after 60 seconds, and a Handoff tray for pages and videos.",
+    bg: "linear-gradient(135deg,#0ea5e9,#4c1d95)",
+    emoji: "📋",
+    Icon: Clipboard,
   },
   {
     id: "drive",
@@ -558,6 +570,7 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
   if (tool === "metronome") return <Metronome mobile={mobile} onBack={backToGrid} />;
   if (tool === "bpm") return <BpmTap mobile={mobile} onBack={backToGrid} />;
   if (tool === "json") return <JsonLab mobile={mobile} onBack={backToGrid} />;
+  if (tool === "clip") return <ClipApp mobile={mobile} onBack={backToGrid} />;
   if (tool === "drive") return <DriveApp mobile={mobile} onBack={backToGrid} />;
   if (tool === "pass") return <PassApp mobile={mobile} onBack={backToGrid} />;
   if (tool === "token") return <TokenGen mobile={mobile} onBack={backToGrid} />;

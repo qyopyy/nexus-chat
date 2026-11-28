@@ -70,7 +70,7 @@ function shell() {
       </div>
     </aside>
     <div class="workspace">
-      <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong>${viewName}</strong></div><div class="topbar-actions"><a href="https://github.com/qyopyy/nexus-chat" target="_blank" rel="noopener noreferrer" class="source-link">Nexus by qyopyy</a>${state.user ? '<span class="account-detail">Creator workspace</span>' : button('Sign in', 'signin', 'secondary')}</div></header>
+      <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong>${viewName}</strong></div><div class="topbar-actions"><a href="/" class="source-link">Nexus by qyopyy</a>${state.user ? '<span class="account-detail">Creator workspace</span>' : button('Sign in', 'signin', 'secondary')}</div></header>
       <main class="main" id="main" tabindex="-1"></main>
     </div>
   </div>`;

@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Nexus Bridge",
+  "description": "Send tabs and clipboard to your other devices, and fill Nexus Pass logins. Holds no passwords or keys itself.",
+  "version": "1.0.0",
+  "minimum_chrome_version": "109",
+  "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" },
+  "action": { "default_title": "Nexus Bridge", "default_popup": "popup.html", "default_icon": { "16": "icon16.png", "48": "icon48.png" } },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "permissions": ["storage", "contextMenus", "clipboardRead", "offscreen", "activeTab", "scripting", "alarms"],
+  "host_permissions": ["https://nexusproject.cc/*", "https://*.nexusproject.cc/*"],
+  "content_scripts": [
+    { "matches": ["https://nexusproject.cc/*", "https://*.nexusproject.cc/*"], "js": ["content-nexus.js"], "run_at": "document_start" },
+    { "matches": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"], "exclude_matches": ["https://nexusproject.cc/*", "https://*.nexusproject.cc/*"], "js": ["content-fill.js"], "run_at": "document_idle" }
+  ]
+}
