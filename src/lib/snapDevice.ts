@@ -56,7 +56,8 @@ export function targetSize(q: SnapQuality, caps?: Caps): { w: number; h: number 
 /** First try: the quality's size. Second try (after an OverconstrainedError): just the camera side. Last try: anything. */
 export function constraintLadder(f: Facing, q: SnapQuality, withAudio: boolean): MediaStreamConstraints[] {
   const t = targetSize(q);
-  const audio = withAudio ? { echoCancellation: true, noiseSuppression: true } : false;
+  // studio-grade microphone: 48 kHz, stereo where the phone has it (front and back camera alike)
+  const audio = withAudio ? { echoCancellation: true, noiseSuppression: true, channelCount: { ideal: 2 }, sampleRate: { ideal: 48000 } } : false;
   return [
     { video: { facingMode: { ideal: f }, width: { ideal: t.w }, height: { ideal: t.h }, frameRate: { ideal: 30, max: 60 } }, audio },
     { video: { facingMode: { ideal: f } }, audio },

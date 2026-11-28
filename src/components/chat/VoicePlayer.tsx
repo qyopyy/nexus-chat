@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
+import { isFlat, parseVoiceName } from "@/lib/voiceWave";
 
 const BARS = 36;
 const cache = new Map<string, { peaks: number[]; duration: number }>();
@@ -36,6 +37,8 @@ async function analyse(url: string) {
     }
     const max = Math.max(...peaks, 0.0001);
     const res = { peaks: peaks.map((p) => Math.max(0.12, p / max)), duration: audio.duration };
+    // a silent or broken decode must not be shown or remembered as the waveform
+    if (isFlat(res.peaks) || !isFinite(res.duration) || res.duration <= 0) throw new Error("flat waveform");
     cache.set(url, res);
     return res;
   } finally {
@@ -45,28 +48,40 @@ async function analyse(url: string) {
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
-export default function VoicePlayer({ url, mine, seed }: { url: string; mine: boolean; seed: string }) {
+export default function VoicePlayer({ url, mine, seed, name }: { url: string; mine: boolean; seed: string; name?: string | null }) {
+  const baked = parseVoiceName(name);
   const audio = useRef<HTMLAudioElement | null>(null);
-  const [peaks, setPeaks] = useState<number[]>(() => cache.get(url)?.peaks ?? seeded(seed));
-  const [duration, setDuration] = useState(cache.get(url)?.duration ?? 0);
+  const [peaks, setPeaks] = useState<number[]>(() => baked?.peaks ?? cache.get(url)?.peaks ?? seeded(seed));
+  const [duration, setDuration] = useState(baked?.duration ?? cache.get(url)?.duration ?? 0);
   const [pos, setPos] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [rate, setRate] = useState(1);
   const bar = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // new voice messages already carry their waveform, so there is nothing to wait for
+    if (baked) return;
     let alive = true;
-    analyse(url)
-      .then((r) => {
-        if (!alive) return;
-        setPeaks(r.peaks);
-        if (isFinite(r.duration)) setDuration(r.duration);
-      })
-      .catch(() => {});
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const run = () =>
+      analyse(url)
+        .then((r) => {
+          if (!alive) return;
+          setPeaks(r.peaks);
+          if (isFinite(r.duration)) setDuration(r.duration);
+        })
+        .catch(() => {
+          // right after upload the file may not be readable yet: try again a few times
+          if (alive && ++tries < 4) timer = setTimeout(run, 1200 * tries);
+        });
+    void run();
     return () => {
       alive = false;
+      if (timer) clearTimeout(timer);
     };
-  }, [url]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, !!baked]);
 
   useEffect(() => () => audio.current?.pause(), []);
 

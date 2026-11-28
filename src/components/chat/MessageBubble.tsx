@@ -77,7 +77,7 @@ function Attachment({ m, mine }: { m: Message; mine: boolean }) {
   if (isVoice(m)) {
     return (
       <div className="flex min-w-0 items-center gap-1">
-        <VoicePlayer url={url} mine={mine} seed={m.id} />
+        <VoicePlayer url={url} mine={mine} seed={m.id} name={m.attachment_name} />
         <AttachDownloadButton
           url={url}
           name={name.endsWith(".webm") || name.endsWith(".m4a") || name.endsWith(".ogg") ? name : `${name}.webm`}

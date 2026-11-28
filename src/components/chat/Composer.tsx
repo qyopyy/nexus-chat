@@ -1,5 +1,6 @@
 "use client";
 
+import { downsamplePeaks, voiceName } from "@/lib/voiceWave";
 import { usePrefs } from "@/lib/prefs";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
@@ -37,7 +38,7 @@ function voiceMime() {
   return "";
 }
 
-type Rec = { recorder: MediaRecorder; stream: MediaStream; chunks: Blob[]; started: number; ctx: AudioContext; analyser: AnalyserNode; mime: string; quality: "" | "HD" | "Studio" };
+type Rec = { recorder: MediaRecorder; stream: MediaStream; chunks: Blob[]; started: number; ctx: AudioContext; analyser: AnalyserNode; mime: string; quality: "" | "HD" | "Studio"; peaks: number[] };
 
 export default function Composer({
   conversationId,
@@ -222,21 +223,22 @@ export default function Composer({
       return;
     }
     try {
-      // Lighting+: HD voice (256 kbps, 48 kHz) · Studio mode: raw stereo 320 kbps for singing & instruments
+      // Every voice message records at 510 kbps (the top of what Opus does), 48 kHz, stereo where the mic has it.
+      // Studio mode also turns the voice filters off for raw singing & instruments.
       const hdv = myTier() >= NEED.hdVoice;
       const studio = hdv && usePrefs.getState().studioVoice;
       const audio: MediaTrackConstraints = studio
         ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 2 }, sampleRate: { ideal: 48000 } }
-        : { echoCancellation: true, noiseSuppression: true, ...(hdv ? { sampleRate: { ideal: 48000 } } : {}) };
+        : { echoCancellation: true, noiseSuppression: true, channelCount: { ideal: 2 }, sampleRate: { ideal: 48000 } };
       const stream = await navigator.mediaDevices.getUserMedia({ audio });
-      const bps = studio ? 320_000 : hdv ? 256_000 : 192_000;
+      const bps = 510_000;
       const recorder = mime ? new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: bps }) : new MediaRecorder(stream);
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = new Ctx();
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
       ctx.createMediaStreamSource(stream).connect(analyser);
-      const r: Rec = { recorder, stream, chunks: [], started: Date.now(), ctx, analyser, mime: recorder.mimeType || mime || "audio/webm", quality: studio ? "Studio" : hdv ? "HD" : "" };
+      const r: Rec = { recorder, stream, chunks: [], started: Date.now(), ctx, analyser, mime: recorder.mimeType || mime || "audio/webm", quality: studio ? "Studio" : hdv ? "HD" : "", peaks: [] };
       recorder.ondataavailable = (e) => e.data.size && r.chunks.push(e.data);
       recorder.start(250);
       rec.current = r;
@@ -262,7 +264,9 @@ export default function Composer({
         r.analyser.getByteTimeDomainData(buf);
         let peak = 0;
         for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
-        setLevels((l) => [...l.slice(1), Math.max(0.08, Math.min(1, peak / 64))]);
+        const level = Math.max(0.08, Math.min(1, peak / 64));
+        r.peaks.push(level);
+        setLevels((l) => [...l.slice(1), level]);
         const secs = Math.floor((Date.now() - r.started) / 1000);
         setRecSecs(secs);
         if (secs >= MAX_VOICE_SECONDS) void finishRecording();
@@ -305,7 +309,8 @@ export default function Composer({
     const type = r.mime.split(";")[0];
     const ext = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
     const blob = new Blob(r.chunks, { type });
-    const f = new File([blob], `voice-${Date.now()}.${ext}`, { type });
+    // the waveform and length travel in the file name, so the sent bubble draws instantly (see voiceWave.ts)
+    const f = new File([blob], voiceName(Date.now(), secs, downsamplePeaks(r.peaks), ext), { type });
     haptic.success();
     void sendMessage(conversationId, "", f, null);
   }

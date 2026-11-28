@@ -21,9 +21,9 @@ import {
   peaksFromChannel,
   pickAudioMime,
   rmsLevel,
-  voiceFileName,
 } from "@/lib/snapVoice";
 import { cn } from "@/lib/utils";
+import { downsamplePeaks, isFlat, parseVoiceName, voiceName } from "@/lib/voiceWave";
 import SnapWave from "./SnapWave";
 import { Sheet } from "./SnapUi";
 
@@ -46,6 +46,7 @@ function analyse(key: string, url: string): Promise<{ peaks: number[]; duration:
       try {
         const audio = await ctx.decodeAudioData(buf);
         const res = { peaks: peaksFromChannel(audio.getChannelData(0), barsForDuration(audio.duration)), duration: audio.duration };
+        if (isFlat(res.peaks)) return null; // a silent or broken decode is not a waveform, and is not remembered
         peakCache.set(key, res);
         return res;
       } finally {
@@ -64,23 +65,36 @@ function Bubble({ m, mine }: { m: Message; mine: boolean }) {
   const { url } = useSignedUrl(m.attachment_url);
   const audio = useRef<HTMLAudioElement | null>(null);
   const pos = useRef(0);
-  const [peaks, setPeaks] = useState<number[]>(() => peakCache.get(m.id)?.peaks ?? []);
-  const [duration, setDuration] = useState(peakCache.get(m.id)?.duration ?? 0);
+  const baked = parseVoiceName(m.attachment_name);
+  const [peaks, setPeaks] = useState<number[]>(() => peakCache.get(m.id)?.peaks ?? baked?.peaks ?? []);
+  const [duration, setDuration] = useState(peakCache.get(m.id)?.duration ?? baked?.duration ?? 0);
   const [on, setOn] = useState(false);
   const [, force] = useState(0);
 
   useEffect(() => {
-    if (!url) return;
+    // new voice messages already carry their waveform: nothing to wait for, nothing to redraw
+    if (!url || baked) return;
     let live = true;
-    void analyse(m.id, url).then((r) => {
-      if (!live || !r) return;
-      setPeaks(r.peaks);
-      setDuration((d) => d || r.duration);
-    });
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const run = () =>
+      void analyse(m.id, url).then((r) => {
+        if (!live) return;
+        if (!r) {
+          // a message that was only just uploaded may not be readable yet: try again a few times
+          if (++tries < 4) timer = setTimeout(run, 1200 * tries);
+          return;
+        }
+        setPeaks(r.peaks);
+        setDuration((d) => d || r.duration);
+      });
+    run();
     return () => {
       live = false;
+      if (timer) clearTimeout(timer);
     };
-  }, [url, m.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, m.id, !!baked]);
 
   useEffect(
     () => () => {
@@ -280,7 +294,7 @@ export default function SnapVoice({ onClose, chatId }: { onClose: () => void; ch
     const fmt = pickAudioMime((m) => MediaRecorder.isTypeSupported(m));
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: { ideal: 2 }, sampleRate: { ideal: 48000 } } });
     } catch {
       toast("Allow the microphone for Nexus to record a voice message.", "error");
       return;
@@ -294,7 +308,7 @@ export default function SnapVoice({ onClose, chatId }: { onClose: () => void; ch
     ctx.createMediaStreamSource(stream).connect(analyser);
     let mr: MediaRecorder;
     try {
-      mr = new MediaRecorder(stream, fmt ? { mimeType: fmt.mime, audioBitsPerSecond: 128_000 } : undefined);
+      mr = new MediaRecorder(stream, fmt ? { mimeType: fmt.mime, audioBitsPerSecond: 510_000 } : undefined);
     } catch {
       stream.getTracks().forEach((t) => t.stop());
       void ctx.close();
@@ -423,7 +437,7 @@ export default function SnapVoice({ onClose, chatId }: { onClose: () => void; ch
     if (!take || !convId || sending) return;
     setSending(true);
     try {
-      const file = new File([take.blob], voiceFileName(new Date(), take.ext), { type: baseMime(take.blob.type) });
+      const file = new File([take.blob], voiceName(Date.now(), take.ms / 1000, downsamplePeaks(take.peaks), take.ext), { type: baseMime(take.blob.type) });
       await sendMessage(convId, "", file);
       if (saveCopy) {
         void uploadVault(file, "Snap Voice", undefined, { kind: "file", note: "Nexus Snap voice message", duration_ms: take.ms, original: true }).catch(() => undefined);

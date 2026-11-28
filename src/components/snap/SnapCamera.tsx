@@ -42,6 +42,7 @@ import SnapShareSheet from "./SnapShareSheet";
 import { roundPosition, sendText, snapNote, type GridStyle, type SnapPrefs } from "@/lib/snapPrefs";
 import { getPrefs, setLastGeo, setPrefs, usePrefs } from "@/lib/snapPrefsStore";
 import { SnapZoom } from "./SnapZoom";
+import { drawEnhanced, ENHANCE_FROM_ZOOM } from "@/lib/snapEnhance";
 import { DIGITAL_ZOOM, clampZoom, digitalCrop, easeZoom, wheelFactor } from "@/lib/snapZoom";
 import { isIOSDevice, streamIsDead } from "@/lib/snapDevice";
 import { constraintLadder, effectiveQualityKey, isCompactHeight, isLevel, pinchDistance, pinchZoom, rollFromGravity, tapToVideoPoint, upgradeTo, type DeviceInfo } from "@/lib/snapDevice";
@@ -771,7 +772,10 @@ export default function SnapCamera({
       if (!v || !ready || !v.videoWidth) return;
       const c0 = cropRect(v.videoWidth, v.videoHeight, ratioDef.r);
       const c = capsRef.current?.digital ? digitalCrop(c0.sx, c0.sy, c0.sw, c0.sh, zoomNow.current) : c0;
-      const { w, h } = fitWithin(c.sw, c.sh, q.maxEdge);
+      const digitalZoomed = !!capsRef.current?.digital && zoomNow.current >= ENHANCE_FROM_ZOOM;
+      const enhance = digitalZoomed && prefsRef.current.zoomEnhance;
+      // enhanced zoom shots keep the un-zoomed picture size; the extra pixels come from the upscale + sharpening
+      const { w, h } = enhance ? fitWithin(c0.sw, c0.sh, q.maxEdge) : fitWithin(c.sw, c.sh, q.maxEdge);
       cv = document.createElement("canvas");
       cv.width = w;
       cv.height = h;
@@ -780,14 +784,18 @@ export default function SnapCamera({
         toast("Couldn't take the photo. Try again.", "error");
         return;
       }
-      cx.imageSmoothingEnabled = true;
-      cx.imageSmoothingQuality = "high"; // crisper when the picture is scaled down or digitally zoomed
-      if (mirror && facing === "user") {
-        cx.translate(w, 0);
-        cx.scale(-1, 1);
+      if (enhance) {
+        drawEnhanced(v, c, cx, w, h, zoomNow.current, mirror && facing === "user");
+      } else {
+        cx.imageSmoothingEnabled = true;
+        cx.imageSmoothingQuality = "high"; // crisper when the picture is scaled down
+        if (mirror && facing === "user") {
+          cx.translate(w, 0);
+          cx.scale(-1, 1);
+        }
+        cx.drawImage(v, c.sx, c.sy, c.sw, c.sh, 0, 0, w, h);
+        cx.setTransform(1, 0, 0, 1, 0, 0);
       }
-      cx.drawImage(v, c.sx, c.sy, c.sw, c.sh, 0, 0, w, h);
-      cx.setTransform(1, 0, 0, 1, 0, 0);
     }
     const ctx = cv.getContext("2d");
     if (!ctx) return;
@@ -880,7 +888,7 @@ export default function SnapCamera({
     }
     let rec: MediaRecorder;
     try {
-      rec = new MediaRecorder(source, fmt ? { mimeType: fmt.mime, videoBitsPerSecond: q.videoBps } : { videoBitsPerSecond: q.videoBps });
+      rec = new MediaRecorder(source, fmt ? { mimeType: fmt.mime, videoBitsPerSecond: q.videoBps, audioBitsPerSecond: 510_000 } : { videoBitsPerSecond: q.videoBps, audioBitsPerSecond: 510_000 });
     } catch {
       try {
         rec = new MediaRecorder(source);

@@ -537,8 +537,8 @@ export async function sendMessage(convId: string, content: string, file?: File |
         }
       } else if (/^audio\//.test(file.type) || /\.(wav|mp3|aac|m4a|ogg|opus|flac)$/i.test(file.name) || /voice|recording/i.test(file.name)) {
         const { processChatAudio, isEditableAudio } = await import("./attachAudio");
-        if (hd) {
-          // HD voice & music: keep the original recording / file bit-for-bit
+        if (hd || /^voice-/i.test(file.name)) {
+          // Voice messages and HD music: keep the original recording bit-for-bit (a voice message is recorded at 510 kbps)
           contentType = file.type || contentType;
         } else if (isEditableAudio(file) || /^audio\//.test(file.type)) {
           const out = await processChatAudio(file, { compress: true, bitrate: 96_000 });
