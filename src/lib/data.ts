@@ -784,7 +784,12 @@ export async function editMessage(id: string, content: string) {
 
 export async function deleteMessage(id: string) {
   const prev = useChat.getState().messages.find((m) => m.id === id)?.deleted_at ?? null;
-  useChat.setState((s) => ({ messages: s.messages.map((m) => (m.id === id ? { ...m, deleted_at: new Date().toISOString() } : m)) }));
+  const me = get().userId;
+  const myRole = me ? useApp.getState().profiles[me]?.site_role : undefined;
+  const staff = ["owner", "admin", "moderator"].includes(myRole ?? "");
+  useChat.setState((s) => ({
+    messages: s.messages.map((m) => (m.id === id ? { ...m, deleted_at: new Date().toISOString(), ...(staff && m.author_id !== me ? { deleted_by: me, deleted_by_role: myRole } : {}) } : m)),
+  }));
   // RPC lets moderators remove other people's messages too (and logs it)
   const { error } = await supabase.rpc("mod_delete_message", { p_id: id });
   if (error) {

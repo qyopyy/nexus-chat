@@ -271,6 +271,9 @@ export type Message = {
   attachment_type: string | null;
   edited_at: string | null;
   deleted_at: string | null;
+  /** set when staff removed it: who, and their role at the time (server-written) */
+  deleted_by?: string | null;
+  deleted_by_role?: string | null;
   created_at: string;
   /** full-screen effect: confetti | hearts | fireworks | lasers | balloons | snow */
   effect?: string | null;

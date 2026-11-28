@@ -7,6 +7,7 @@ import { openReport } from "@/lib/adminTools";
 import { usePrefs } from "@/lib/prefs";
 import { useApp, openProfileCard, toast } from "@/store/app";
 import { roleRank } from "@/lib/theme";
+import { removedBy } from "@/lib/deletedBy";
 import NameTag from "@/components/ui/NameTag";
 import { useChat } from "@/store/chat";
 import { deleteMessage, editMessage, parseForwarded, toggleReaction } from "@/lib/data";
@@ -208,6 +209,7 @@ function MessageBubbleImpl({
   const lastTap = useRef(0);
 
   const deleted = !!m.deleted_at;
+  const removed = removedBy(m);
   const interactive = !deleted && !m.pending && !editing;
   const voice = isVoice(m);
   const jumbo = usePrefs((s) => s.jumboEmoji);
@@ -366,7 +368,13 @@ function MessageBubbleImpl({
           )}
 
           {deleted ? (
-            <span className="text-sm italic opacity-60">Message deleted</span>
+            removed ? (
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-dnd/15 px-2 py-1 text-sm font-medium text-dnd" data-testid="removed-by">
+                <span aria-hidden>{removed.icon}</span>Message deleted · {removed.text.replace("Removed by ", "by ")}
+              </span>
+            ) : (
+              <span className="text-sm italic opacity-60">Message deleted</span>
+            )
           ) : editing ? (
             <InlineEditor message={m} />
           ) : (
