@@ -15,6 +15,7 @@
 import { supabase } from "./supabase";
 import { toast, useApp } from "@/store/app";
 import type { Message } from "./types";
+import { cleanAutoLock, lockoutLeft, parseBlob, shouldAutoLock, shouldWipe, unwrapWithPin, validPin, wrapWithPin } from "./e2eePin";
 
 export const E2EE_PREFIX = "nx1:";
 export const isEncryptedText = (s: string | null | undefined) => !!s && s.startsWith(E2EE_PREFIX);
@@ -405,3 +406,117 @@ export async function prepareOutgoing(convId: string, authorId: string, text: st
 export const WIRE_OVERHEAD = E2EE_PREFIX.length;
 /** characters of wire text produced by `bytes` of plaintext */
 export const wireLength = (bytes: number) => WIRE_OVERHEAD + Math.ceil(((bytes + 28) * 4) / 3);
+
+
+// ------------------------------------------------------------------ PIN quick unlock + auto-lock (this device only)
+const pinKeyName = () => `nx-e2ee-quickpin:${myId()}`;
+const failKeyName = () => `nx-e2ee-quickpin-fails:${myId()}`;
+const autoKeyName = () => `nx-e2ee-autolock:${myId()}`;
+
+export const hasE2eePin = () => {
+  try {
+    return !!parseBlob(localStorage.getItem(pinKeyName()));
+  } catch {
+    return false;
+  }
+};
+
+function readFails(): { n: number; at: number } {
+  try {
+    const o = JSON.parse(localStorage.getItem(failKeyName()) || "null") as { n?: number; at?: number } | null;
+    return { n: Math.max(0, Number(o?.n) || 0), at: Number(o?.at) || 0 };
+  } catch {
+    return { n: 0, at: 0 };
+  }
+}
+/** Seconds the keypad still has to wait (0 = ready). */
+export const e2eePinWait = () => Math.ceil(lockoutLeft(readFails().n, readFails().at, Date.now()) / 1000);
+
+/** Set (or change) the PIN. Needs the passphrase once, to read the key; the PIN copy never leaves this device. */
+export async function enableE2eePin(pass: string, pin: string) {
+  const id = myId();
+  if (!id) throw new Error("not signed in");
+  if (!validPin(pin)) throw new Error("PIN must be 4 to 8 digits");
+  const { data, error } = await supabase.from("e2ee_key_backups").select("*").eq("user_id", id).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Turn on encrypted DMs first");
+  const row = data as { salt: string; iv: string; wrapped: string; iterations: number };
+  if (row.iterations < 200_000) throw new Error("Backup uses a weak setting — reset encryption");
+  const base = await crypto.subtle.importKey("raw", bs(enc.encode(pass.normalize("NFKC"))), "PBKDF2", false, ["deriveKey"]);
+  const wk = await crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt: bs(unb64(row.salt)), iterations: row.iterations }, base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+  let priv: string;
+  try {
+    priv = dec.decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: bs(unb64(row.iv)), additionalData: bs(enc.encode(id)) }, wk, bs(unb64(row.wrapped))));
+  } catch {
+    throw new Error("Wrong passphrase");
+  }
+  const blob = await wrapWithPin(pin, priv, id);
+  localStorage.setItem(pinKeyName(), JSON.stringify(blob));
+  localStorage.removeItem(failKeyName());
+  emit();
+}
+
+export function disableE2eePin() {
+  try {
+    localStorage.removeItem(pinKeyName());
+    localStorage.removeItem(failKeyName());
+  } catch {
+    /* ignore */
+  }
+  emit();
+}
+
+/** Open the lock with the PIN. Throws a plain sentence on a wrong PIN, a wait, or a wipe. */
+export async function unlockE2eeWithPin(pin: string) {
+  const id = myId();
+  if (!id) throw new Error("not signed in");
+  const blob = parseBlob(localStorage.getItem(pinKeyName()));
+  if (!blob) throw new Error("No PIN is set on this device — use your passphrase");
+  const f = readFails();
+  const wait = Math.ceil(lockoutLeft(f.n, f.at, Date.now()) / 1000);
+  if (wait > 0) throw new Error(`Too many tries. Wait ${wait} seconds.`);
+  const secret = await unwrapWithPin(pin, blob, id);
+  if (!secret) {
+    const n = f.n + 1;
+    if (shouldWipe(n)) {
+      disableE2eePin();
+      throw new Error("Too many wrong PINs. The PIN was removed — unlock with your passphrase.");
+    }
+    localStorage.setItem(failKeyName(), JSON.stringify({ n, at: Date.now() }));
+    throw new Error(n >= 5 && n % 5 === 0 ? "Wrong PIN. Wait 30 seconds." : `Wrong PIN (${MAX_TRIES - n} tries left)`);
+  }
+  const priv = JSON.parse(secret) as JsonWebKey;
+  await keepLocal(priv, pubOnly(priv));
+  localStorage.removeItem(failKeyName());
+  return fingerprint(pubOnly(priv));
+}
+const MAX_TRIES = 10;
+
+// auto-lock: forget the key on this device after the app was hidden this many minutes
+export const e2eeAutoLock = () => {
+  try {
+    return cleanAutoLock(Number(localStorage.getItem(autoKeyName())));
+  } catch {
+    return 0;
+  }
+};
+export const setE2eeAutoLock = (m: number) => {
+  try {
+    localStorage.setItem(autoKeyName(), String(cleanAutoLock(m)));
+  } catch {
+    /* ignore */
+  }
+};
+let autoStarted = false;
+export function startE2eeAutoLock() {
+  if (autoStarted || typeof document === "undefined") return;
+  autoStarted = true;
+  let hiddenAt: number | null = null;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") hiddenAt = Date.now();
+    else {
+      if (shouldAutoLock(e2eeAutoLock(), hiddenAt, Date.now())) void lockE2ee();
+      hiddenAt = null;
+    }
+  });
+}

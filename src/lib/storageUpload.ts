@@ -17,6 +17,8 @@ export type StorageUploadOpts = {
   upsert?: boolean;
   timeoutMs?: number;
   onProgress?: (ratio: number) => void;
+  /** Abort the request; the promise rejects with an Error named "AbortError". */
+  signal?: AbortSignal;
 };
 
 export async function xhrStorageUpload(opts: StorageUploadOpts): Promise<void> {
@@ -31,8 +33,14 @@ export async function xhrStorageUpload(opts: StorageUploadOpts): Promise<void> {
     .join("/");
   const type = opts.contentType || opts.blob.type || "application/octet-stream";
 
+  if (opts.signal?.aborted) throw Object.assign(new Error("Cancelled"), { name: "AbortError" });
   await new Promise<void>((res, rej) => {
     const x = new XMLHttpRequest();
+    const onAbort = () => {
+      x.abort();
+      rej(Object.assign(new Error("Cancelled"), { name: "AbortError" }));
+    };
+    opts.signal?.addEventListener("abort", onAbort, { once: true });
     x.open("POST", `${base}/storage/v1/object/${encodeURIComponent(opts.bucket)}/${encoded}`);
     x.setRequestHeader("Authorization", `Bearer ${token}`);
     x.setRequestHeader("apikey", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "");
@@ -43,6 +51,7 @@ export async function xhrStorageUpload(opts: StorageUploadOpts): Promise<void> {
       if (e.lengthComputable && opts.onProgress) opts.onProgress(e.loaded / e.total);
     };
     x.onload = () => {
+      opts.signal?.removeEventListener("abort", onAbort);
       if (x.status >= 200 && x.status < 300) return res();
       let msg = `Upload failed (${x.status})`;
       try {
@@ -53,8 +62,14 @@ export async function xhrStorageUpload(opts: StorageUploadOpts): Promise<void> {
       }
       rej(new Error(msg));
     };
-    x.onerror = () => rej(new Error("Network error while uploading — check your connection and try again"));
-    x.ontimeout = () => rej(new Error("Upload timed out — try a smaller file"));
+    x.onerror = () => {
+      opts.signal?.removeEventListener("abort", onAbort);
+      rej(new Error("Network error while uploading — check your connection and try again"));
+    };
+    x.ontimeout = () => {
+      opts.signal?.removeEventListener("abort", onAbort);
+      rej(new Error("Upload timed out — try a smaller file"));
+    };
     x.timeout = opts.timeoutMs ?? 5 * 60 * 1000;
     x.send(opts.blob);
   });

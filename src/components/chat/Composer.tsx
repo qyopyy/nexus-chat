@@ -1,10 +1,9 @@
 "use client";
 
-import { downsamplePeaks, voiceName } from "@/lib/voiceWave";
 import { usePrefs } from "@/lib/prefs";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
-import { Bold, Camera, FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Strikethrough, Timer, Trash2, Type, Underline, Wand2, X } from "lucide-react";
+import { Bold, Camera, FileText, Mic, Paperclip, Pencil, Reply, SendHorizontal, Smile, Sparkles, Strikethrough, Timer, Type, Underline, Wand2, X } from "lucide-react";
 import { useApp, conversationTitle, toast } from "@/store/app";
 import { useChat } from "@/store/chat";
 import { TTL_OPTIONS, runBotCommand, sendMessage, setTtl, type SendMode } from "@/lib/data";
@@ -12,6 +11,7 @@ import { MSG_LIMIT_FREE, MSG_LIMIT_PREMIUM, NEED, gate, msgLimit, myTier, useMyT
 import { sendLive, sendTyping } from "@/lib/realtime";
 import { startLiveConfig, useLive } from "@/lib/liveConfig";
 import { liveGet } from "@/lib/liveConfigCore";
+import { startE2eeAutoLock } from "@/lib/e2ee";
 import { EFFECTS, playEffect, type EffectKind } from "@/lib/effects";
 import { haptic } from "@/lib/haptics";
 import { cn, formatBytes } from "@/lib/utils";
@@ -19,6 +19,7 @@ import EmojiPicker from "@/components/ui/EmojiPicker";
 import { withCustomEmojis } from "@/lib/customEmoji";
 import Sheet from "@/components/ui/Sheet";
 import { isVoice } from "./MessageBubble";
+import VoiceRecorder from "./VoiceRecorder";
 import { ComposerPlus } from "./Extras";
 import { DictateButton, ScheduledBar } from "./ScheduleMessage";
 import AttachEditor, { shouldOpenAttachEditor } from "./AttachEditor";
@@ -31,16 +32,6 @@ const SnapCamera = dynamic(() => import("@/components/snap/SnapCamera"), { ssr: 
 const MAX_FREE = 1024 * 1024 * 1024;
 const MAX_PREMIUM = 5 * 1024 * 1024 * 1024;
 
-function voiceMime() {
-  if (typeof MediaRecorder === "undefined") return null;
-  for (const t of ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"]) {
-    if (MediaRecorder.isTypeSupported(t)) return t;
-  }
-  return "";
-}
-
-type Rec = { recorder: MediaRecorder; stream: MediaStream; chunks: Blob[]; started: number; ctx: AudioContext; analyser: AnalyserNode; mime: string; quality: "" | "HD" | "Studio"; peaks: number[] };
-
 export default function Composer({
   conversationId,
   file,
@@ -51,7 +42,10 @@ export default function Composer({
   setFile: (f: File | null) => void;
 }) {
   const me = useApp((s) => s.userId);
-  useEffect(() => startLiveConfig(), []);
+  useEffect(() => {
+    startLiveConfig();
+    startE2eeAutoLock();
+  }, []);
   const title = useApp((s) => conversationTitle(s, conversationId));
   const kind = useApp((s) => s.convKinds[conversationId]);
   const replyTo = useChat((s) => s.replyTo);
@@ -73,12 +67,11 @@ export default function Composer({
   const [effect, setEffect] = useState<EffectKind | null>(null);
   const [mode, setMode] = useState<SendMode>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [recording, setRecording] = useState(false);
-  const [recQuality, setRecQuality] = useState<Rec["quality"]>("");
-  const [recSecs, setRecSecs] = useState(0);
+  const [recCtx, setRecCtx] = useState<AudioContext | null>(null);
+  const [recQuality, setRecQuality] = useState<"" | "HD" | "Studio">("");
+  const recording = !!recCtx;
   const tier = useMyTier();
   const limit = msgLimit(tier);
-  const [levels, setLevels] = useState<number[]>(() => Array(28).fill(0.1));
   const [editOpen, setEditOpen] = useState(false);
   const [fmtOpen, setFmtOpen] = useState(false);
   const [snapOpen, setSnapOpen] = useState(false);
@@ -86,16 +79,7 @@ export default function Composer({
   const [vanishOpen, setVanishOpen] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  const rec = useRef<Rec | null>(null);
-  useEffect(() => {
-    return () => {
-      const r = rec.current;
-      if (!r) return;
-      r.stream.getTracks().forEach((t) => t.stop());
-      void r.ctx.close().catch(() => {});
-    };
-  }, []);
-  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = useRef(false);
   const skipAutoEdit = useRef(false);
 
@@ -170,8 +154,8 @@ export default function Composer({
     el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
   }, [text]);
 
-  // stop recording if the chat changes / unmounts
-  useEffect(() => () => cancelRecording(), [conversationId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a recording belongs to one chat: leaving it discards it (the recorder cleans up when it unmounts)
+  useEffect(() => () => setRecCtx(null), [conversationId]);
 
   function submit(withEffect: EffectKind | null = effect) {
     if (!text.trim() && !file) return;
@@ -218,101 +202,30 @@ export default function Composer({
   }
 
   // ---------------------------------------------------------------- voice messages
-  async function startRecording() {
-    const mime = voiceMime();
-    if (mime === null || !navigator.mediaDevices?.getUserMedia) {
+  // The AudioContext is created right here, inside the tap: phones only wake audio from a real tap, and a sleeping context
+  // is what made the live waveform sit flat. The recorder bar itself lives in VoiceRecorder.tsx.
+  function beginRecording() {
+    if (recCtx) return;
+    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       toast("Voice messages aren't supported in this browser.", "error");
       return;
     }
     try {
-      // Every voice message records at 510 kbps (the top of what Opus does), 48 kHz, stereo where the mic has it.
-      // Studio mode also turns the voice filters off for raw singing & instruments.
-      const hdv = myTier() >= NEED.hdVoice;
-      const studio = hdv && usePrefs.getState().studioVoice;
-      const audio: MediaTrackConstraints = studio
-        ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 2 }, sampleRate: { ideal: 48000 } }
-        : { echoCancellation: true, noiseSuppression: true, channelCount: { ideal: 2 }, sampleRate: { ideal: 48000 } };
-      const stream = await navigator.mediaDevices.getUserMedia({ audio });
-      const bps = 510_000;
-      const recorder = mime ? new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: bps }) : new MediaRecorder(stream);
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = new Ctx();
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      ctx.createMediaStreamSource(stream).connect(analyser);
-      const r: Rec = { recorder, stream, chunks: [], started: Date.now(), ctx, analyser, mime: recorder.mimeType || mime || "audio/webm", quality: studio ? "Studio" : hdv ? "HD" : "", peaks: [] };
-      recorder.ondataavailable = (e) => e.data.size && r.chunks.push(e.data);
-      recorder.start(250);
-      rec.current = r;
-      setRecQuality(r.quality);
-      setRecording(true);
-      setRecSecs(0);
+      void ctx.resume?.();
+      const hdv = myTier() >= NEED.hdVoice;
+      setRecQuality(hdv && usePrefs.getState().studioVoice ? "Studio" : hdv ? "HD" : "");
+      setRecCtx(ctx);
       haptic.medium();
     } catch {
-      toast("Microphone permission is needed for voice messages.", "error");
+      toast("Couldn't start the microphone.", "error");
     }
   }
 
-  useEffect(() => {
-    if (!recording) return;
-    const buf = new Uint8Array(128);
-    let raf = 0;
-    let lastPush = 0;
-    const loop = (t: number) => {
-      const r = rec.current;
-      if (!r) return;
-      if (t - lastPush > 90) {
-        lastPush = t;
-        r.analyser.getByteTimeDomainData(buf);
-        let peak = 0;
-        for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
-        const level = Math.max(0.08, Math.min(1, peak / 64));
-        r.peaks.push(level);
-        setLevels((l) => [...l.slice(1), level]);
-        const secs = Math.floor((Date.now() - r.started) / 1000);
-        setRecSecs(secs);
-        if (secs >= liveGet<number>(useLive.getState().map, "nexus.max_voice_sec")) void finishRecording();
-      }
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [recording]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function teardown(r: Rec) {
-    r.stream.getTracks().forEach((t) => t.stop());
-    void r.ctx.close();
-    rec.current = null;
-    setRecording(false);
-    setLevels(Array(28).fill(0.1));
-  }
-
-  function cancelRecording() {
-    const r = rec.current;
-    if (!r) return;
-    r.recorder.onstop = null;
-    if (r.recorder.state !== "inactive") r.recorder.stop();
-    teardown(r);
-  }
-
-  async function finishRecording() {
-    const r = rec.current;
-    if (!r) return;
-    const secs = (Date.now() - r.started) / 1000;
-    await new Promise<void>((res) => {
-      r.recorder.onstop = () => res();
-      r.recorder.stop();
-    });
-    teardown(r);
-    if (secs < 0.8) {
-      toast("Hold on a little longer to record", "info");
-      return;
-    }
-    const type = r.mime.split(";")[0];
-    const ext = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
-    const blob = new Blob(r.chunks, { type });
-    // the waveform and length travel in the file name, so the sent bubble draws instantly (see voiceWave.ts)
-    const f = new File([blob], voiceName(Date.now(), secs, downsamplePeaks(r.peaks), ext), { type });
+  function recordingDone(f: File | null) {
+    setRecCtx(null);
+    if (!f) return;
     haptic.success();
     void sendMessage(conversationId, "", f, null);
   }
@@ -321,7 +234,6 @@ export default function Composer({
   const placeholder = editingId || replyTo ? composerPlaceholder(!!editingId, !!replyTo) : kind === "text" ? `Message #${title}` : kind === "dm" ? `Message ${title}` : "Message";
   const canSend = (!!text.trim() || !!file) && !overLimit(text.length, limit);
   const chosen = EFFECTS.find((e) => e.id === effect);
-  const mm = `${Math.floor(recSecs / 60)}:${String(recSecs % 60).padStart(2, "0")}`;
 
   return (
     <div className="composer shrink-0 bg-wall px-2 pt-1.5 pb-safe-2 sm:px-6 sm:pb-3">
@@ -414,35 +326,17 @@ export default function Composer({
             </span>
           </div>
         )}
-        {recording ? (
-          <div className="flex animate-fade items-center gap-2">
-            <button onClick={cancelRecording} className="grid size-11 shrink-0 place-items-center rounded-full text-dnd active:scale-90" aria-label="Discard recording">
-              <Trash2 className="size-[22px]" />
-            </button>
-            <div className="flex h-11 min-w-0 flex-1 items-center gap-3 rounded-full bg-side px-4">
-              <span className="size-2.5 shrink-0 animate-pulse rounded-full bg-dnd" />
-              <span className="w-10 shrink-0 text-[15px] font-semibold tabular-nums">{mm}</span>
-              {recQuality && (
-                <span className="shrink-0 rounded-md bg-[#ffd400]/15 px-1.5 py-0.5 text-[10px] font-black tracking-wide text-[#ffd400]" title={recQuality === "Studio" ? "Studio voice · stereo 320 kbps, no noise filter" : "HD voice · 256 kbps"}>
-                  ⚡ {recQuality}
-                </span>
-              )}
-              <div className="flex h-6 min-w-0 flex-1 items-center justify-end gap-[3px] overflow-hidden">
-                {levels.map((l, i) => (
-                  <span key={i} className="w-[3px] shrink-0 rounded-full bg-accent transition-[height] duration-75" style={{ height: `${Math.round(l * 100)}%` }} />
-                ))}
-              </div>
-            </div>
-            <button
-              onClick={() => void finishRecording()}
-              className="grid size-11 shrink-0 animate-pop place-items-center rounded-full bg-accent text-white shadow-lg shadow-accent/30 active:scale-90"
-              aria-label="Send voice message"
-            >
-              <SendHorizontal className="size-5" />
-            </button>
-          </div>
+        {recCtx ? (
+          <VoiceRecorder
+            ctx={recCtx}
+            studio={recQuality === "Studio"}
+            badge={recQuality}
+            maxSec={liveGet<number>(useLive.getState().map, "nexus.max_voice_sec")}
+            onDone={recordingDone}
+            onError={(m) => toast(m, m.startsWith("Hold on") ? "info" : "error")}
+          />
         ) : (
-          <div className="relative flex flex-wrap items-end gap-1.5 min-[521px]:flex-nowrap">
+          <div className="relative flex items-end gap-1.5">
             <input
               ref={fileInput}
               type="file"
@@ -454,15 +348,26 @@ export default function Composer({
                 e.target.value = "";
               }}
             />
-            <button onClick={() => fileInput.current?.click()} className="grid size-11 shrink-0 place-items-center rounded-full text-sub transition hover:text-txt active:scale-90" title="Attach image, audio, or file">
+            <button onClick={() => fileInput.current?.click()} className="grid size-11 shrink-0 place-items-center rounded-full text-sub transition hover:text-txt active:scale-90 max-[520px]:hidden" title="Attach image, audio, or file">
               <Paperclip className="size-[22px]" />
             </button>
-            <button onClick={() => setSnapOpen(true)} className="grid size-11 shrink-0 place-items-center rounded-full text-sub transition hover:text-txt active:scale-90" title="Camera (Nexus Snap) — saved to your Drive vault with a link" aria-label="Open camera">
+            <button onClick={() => setSnapOpen(true)} className="grid size-11 shrink-0 place-items-center rounded-full text-sub transition hover:text-txt active:scale-90 max-[520px]:hidden" title="Camera (Nexus Snap) — saved to your Drive vault with a link" aria-label="Open camera">
               <Camera className="size-[22px]" />
             </button>
-            <ComposerPlus conversationId={conversationId} />
+            <ComposerPlus
+              conversationId={conversationId}
+              phoneItems={(item) => (
+                <>
+                  {item("📎", "Attach", "Photo, video, audio or a file", () => fileInput.current?.click())}
+                  {item("📷", "Camera", "Nexus Snap, saved to your Drive", () => setSnapOpen(true))}
+                  {item("✨", "Send with effect", "Confetti, hidden message, spoiler", () => setEffects(true))}
+                  {item("🅰️", "Text formatting", "Bold, colors, spoiler, vanish", () => setFmtOpen((v) => !v))}
+                  {timerAllowed && item("⏱", "Disappearing messages", ttl ? `On: ${TTL_OPTIONS.find((o) => o.secs === ttl)?.label}` : "Off", () => setTimerOpen(true))}
+                </>
+              )}
+            />
 
-            <div className="flex min-h-11 min-w-[11rem] flex-1 flex-col rounded-[22px] border border-white/[.06] bg-side max-[520px]:order-first max-[520px]:basis-full">
+            <div className="flex min-h-11 min-w-0 flex-1 flex-col rounded-[22px] border border-white/[.06] bg-side">
               {fmtOpen && (
                 <div className="flex flex-wrap items-center gap-0.5 border-b border-white/[.06] px-1.5 pt-1.5 pb-1">
                   <FmtBtn title="Bold ** **" onClick={() => applyWrap("**", "**")}><Bold className="size-3.5" /></FmtBtn>
@@ -527,12 +432,14 @@ export default function Composer({
                   }}
                   className="max-h-[180px] min-h-11 min-w-0 flex-1 resize-none bg-transparent py-[11px] pl-4 text-[16px] leading-[22px] outline-none placeholder:text-sub md:text-[15px]"
                 />
-                <DictateButton
-                  onText={(t) => {
-                    setText((x) => (x.trim() ? `${x.trimEnd()} ${t}` : t));
-                    area.current?.focus();
-                  }}
-                />
+                <div className="contents max-[520px]:hidden">
+                  <DictateButton
+                    onText={(t) => {
+                      setText((x) => (x.trim() ? `${x.trimEnd()} ${t}` : t));
+                      area.current?.focus();
+                    }}
+                  />
+                </div>
                 {limitTone(text.length, limit) !== "ok" && (
                   <span className={cn("mb-2 shrink-0 text-[10px] font-semibold tabular-nums", limitTone(text.length, limit) === "over" ? "text-dnd" : "text-sub")} aria-live="polite">
                     {charCountLabel(text.length, limit)}
@@ -541,12 +448,12 @@ export default function Composer({
                 <button
                   type="button"
                   onClick={() => setFmtOpen((v) => !v)}
-                  className={cn("mb-1 grid size-9 shrink-0 place-items-center rounded-full transition active:scale-90", fmtOpen ? "text-accent" : "text-sub hover:text-accent")}
+                  className={cn("mb-1 grid size-9 shrink-0 place-items-center rounded-full transition active:scale-90 max-[520px]:hidden", fmtOpen ? "text-accent" : "text-sub hover:text-accent")}
                   title="Text formatting"
                 >
                   <Type className="size-5" />
                 </button>
-                <button onClick={() => setEffects(true)} className={cn("grid size-9 shrink-0 place-items-center rounded-full transition active:scale-90 mb-1", effect ? "text-accent" : "text-sub hover:text-accent")} title="Send with effect">
+                <button onClick={() => setEffects(true)} className={cn("grid size-9 shrink-0 place-items-center rounded-full transition active:scale-90 mb-1 max-[520px]:hidden", effect ? "text-accent" : "text-sub hover:text-accent")} title="Send with effect">
                   <Sparkles className="size-5" />
                 </button>
                 <div className="relative mb-1 hidden sm:block">
@@ -587,15 +494,15 @@ export default function Composer({
                   e.preventDefault();
                   setEffects(true);
                 }}
-                className={cn("grid size-11 shrink-0 animate-pop place-items-center rounded-full bg-accent text-white shadow-lg shadow-accent/25 transition active:scale-90 max-[520px]:order-2", !timerAllowed && "max-[520px]:ml-auto")}
+                className={cn("grid size-11 shrink-0 animate-pop place-items-center rounded-full bg-accent text-white shadow-lg shadow-accent/25 transition active:scale-90 ")}
                 title="Send (hold for effects)"
               >
                 <SendHorizontal className="size-5" />
               </button>
             ) : (
               <button
-                onClick={() => void startRecording()}
-                className={cn("grid size-11 shrink-0 place-items-center rounded-full bg-side text-sub transition hover:text-accent active:scale-90 max-[520px]:order-2", !timerAllowed && "max-[520px]:ml-auto")}
+                onClick={beginRecording}
+                className={cn("grid size-11 shrink-0 place-items-center rounded-full bg-side text-sub transition hover:text-accent active:scale-90 ")}
                 title="Record a voice message"
               >
                 <Mic className="size-[22px]" />
@@ -605,7 +512,7 @@ export default function Composer({
               <button
                 onClick={() => setTimerOpen(true)}
                 className={cn(
-                  "relative grid size-11 shrink-0 place-items-center rounded-full transition active:scale-90 max-[520px]:order-1 max-[520px]:ml-auto",
+                  "relative grid size-11 shrink-0 place-items-center rounded-full transition active:scale-90 max-[520px]:hidden",
                   ttl ? "bg-accent/20 text-accent" : "bg-side text-sub hover:text-accent",
                 )}
                 title={ttl ? `Messages disappear after ${TTL_OPTIONS.find((o) => o.secs === ttl)?.label}` : "Disappearing messages"}

@@ -39,10 +39,16 @@ export default function PhoneLink() {
   const [dropUser, setDropUser] = useState("");
   const mine = thisDeviceId();
   const seenPing = useRef<string | null>(null);
+  const seenDrops = useRef<Set<string> | null>(null);
   const refreshDrops = useCallback(async (isActive: () => boolean = () => true) => {
     try {
       const incoming = await incomingDrops();
       if (isActive()) {
+        if (seenDrops.current) {
+          const fresh = incoming.filter((d) => !seenDrops.current!.has(d.id));
+          if (fresh.length) toast(fresh.length === 1 ? `New drop: ${fresh[0].name}` : `${fresh.length} new drops waiting`, "info");
+        }
+        seenDrops.current = new Set(incoming.map((d) => d.id));
         setDrops(incoming);
         setDropError(null);
       }

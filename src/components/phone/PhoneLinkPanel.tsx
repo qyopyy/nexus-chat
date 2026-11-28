@@ -9,7 +9,8 @@ import { useApp, toast } from "@/store/app";
 import { isPhoneDevice, platformLabel, thisDeviceId, type Handset } from "@/lib/handset";
 import { deviceHistory, myDevices, setDeviceFlags } from "@/lib/locator";
 import { freshIso } from "@/lib/syncMath";
-import { incomingDrops, openAndClaimDrop, sendDrop, type NexusDrop } from "@/lib/nexusDrop";
+import DropCenter from "@/components/share/DropCenter";
+import { enqueue } from "@/lib/dropHub";
 import {
   DEFAULT_GRANT,
   listClipboard,
@@ -30,7 +31,6 @@ import {
 } from "@/lib/phoneLink";
 import { refreshChatList, sendMessage } from "@/lib/data";
 import { loadFeatureFlags, featureFlags } from "@/lib/featureFlags";
-import { fmtBytes } from "@/lib/acetateAudio";
 import { useAcetatePlayer } from "@/lib/acetatePlayer";
 
 type Ping = { id: string; status: string; created_at: string } | null;
@@ -48,7 +48,6 @@ export default function PhoneLinkPanel() {
   const [inbox, setInbox] = useState<HandsetInbox[]>([]);
   const [clips, setClips] = useState<ClipboardItem[]>([]);
   const [notices, setNotices] = useState<DeviceNotice[]>([]);
-  const [drops, setDrops] = useState<NexusDrop[]>([]);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [grant, setGrant] = useState<HandsetGrant | null>(null);
   const [lostNote, setLostNote] = useState("");
@@ -63,8 +62,8 @@ export default function PhoneLinkPanel() {
 
   async function refresh() {
     // One unavailable service must not hide the other device tools.
-    const results = await Promise.allSettled([myDevices(), listInbox(), listNotices(), incomingDrops(), listClipboard()]);
-    const [devices, inboxResult, noticesResult, dropsResult, clipsResult] = results;
+    const results = await Promise.allSettled([myDevices(), listInbox(), listNotices(), listClipboard()]);
+    const [devices, inboxResult, noticesResult, clipsResult] = results;
     if (devices.status === "fulfilled") {
       const list = devices.value;
       setRows(list);
@@ -73,9 +72,8 @@ export default function PhoneLinkPanel() {
     }
     if (inboxResult.status === "fulfilled") setInbox(inboxResult.value);
     if (noticesResult.status === "fulfilled") setNotices(noticesResult.value);
-    if (dropsResult.status === "fulfilled") setDrops(dropsResult.value);
     if (clipsResult.status === "fulfilled") setClips(clipsResult.value);
-    const labels = ["Devices", "Phone inbox", "Notifications", "Drop inbox", "Clipboard"];
+    const labels = ["Devices", "Phone inbox", "Notifications", "Clipboard"];
     const errors = results.flatMap((result, index) => result.status === "rejected" ? [`${labels[index]}: ${errorText(result.reason)}`] : []);
     setRefreshError(errors.length ? errors.join(" · ") : null);
   }
@@ -100,7 +98,6 @@ export default function PhoneLinkPanel() {
         .on("postgres_changes", { event: "*", schema: "public", table: "nexus_handset_commands", filter: `user_id=eq.${id}` }, () => {
           void supabase.from("nexus_handset_commands").select("id, status, kind, created_at").eq("user_id", id).eq("kind", "ping").order("created_at", { ascending: false }).limit(1).maybeSingle().then(({ data: row }) => setPing((row as Ping) ?? null));
         })
-        .on("postgres_changes", { event: "*", schema: "public", table: "nexus_drops" }, () => void refresh())
         .subscribe();
     }).catch((error: unknown) => { if (live) setRefreshError(errorText(error)); });
     return () => {
@@ -130,8 +127,8 @@ export default function PhoneLinkPanel() {
       toast("File sending is off for this phone", "error");
       return;
     }
-    for (const file of files.slice(0, 8)) await sendDrop(file);
-    toast(files.length > 1 ? "Files sent to your other screens" : "File sent to your other screens", "success");
+    const queued = enqueue(files);
+    if (queued) toast(queued > 1 ? `Sending ${queued} files to your other screens` : "Sending to your other screens", "info");
   }
 
   const online = device ? freshIso(device.last_seen, 90_000) : false;
@@ -341,7 +338,7 @@ export default function PhoneLinkPanel() {
                   const file = (form.elements.namedItem("file") as HTMLInputElement).files?.[0];
                   const task = async () => {
                     if (text.trim()) await sendToComputers("share", text);
-                    if (file) await sendDrop(file);
+                    if (file) enqueue([file]);
                   };
                   void task().then(() => { toast("Sent to your computer", "success"); form.reset(); }).catch((err: Error) => toast(err.message, "error"));
                 }}>
@@ -418,17 +415,8 @@ export default function PhoneLinkPanel() {
         </section>
 
         <section className="mt-4">
-          <Card title="Files waiting">
-            <ul className="space-y-1 text-sm">
-              {drops.map((drop) => (
-                <li key={drop.id}>
-                  <button type="button" className="text-[#7ee0c6]" onClick={() => void openAndClaimDrop(drop).then(refresh).catch((error: Error) => toast(error.message, "error"))}>
-                    {drop.name} · {fmtBytes(drop.bytes)}
-                  </button>
-                </li>
-              ))}
-              {drops.length === 0 && <p className="text-sm text-[#8d8880]">No unopened drops.</p>}
-            </ul>
+          <Card title="Nexus Drop">
+            <DropCenter showTitle={false} />
           </Card>
         </section>
         <p className="mt-6 text-sm"><Link href="/locator" className="text-[#7ee0c6]">Open Locator</Link></p>

@@ -1,3 +1,4 @@
+import { levelFromBytes, elapsedMs, clock } from "./voiceWave.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { VOICE_BARS, decodePeaks, downsamplePeaks, encodePeaks, isFlat, parseVoiceName, voiceName } from "./voiceWave.ts";
@@ -39,4 +40,20 @@ test("voice wave: a silent or broken decode counts as flat", () => {
   assert.equal(isFlat([NaN, 0.5]), true);
   assert.equal(isFlat([]), true);
   assert.equal(isFlat([0.12, 0.9, 0.3]), false);
+});
+
+test("level from samples", () => {
+  assert.equal(levelFromBytes(new Uint8Array(64).fill(128)), 0.08);
+  const loud = new Uint8Array(64).map((_, i) => (i % 2 ? 250 : 6));
+  assert.ok(levelFromBytes(loud) > 0.9);
+  const soft = new Uint8Array(64).map((_, i) => (i % 2 ? 138 : 118));
+  const l = levelFromBytes(soft);
+  assert.ok(l > 0.08 && l < 0.7);
+  assert.equal(levelFromBytes([]), 0.08);
+});
+test("elapsed ignores pauses", () => {
+  assert.equal(elapsedMs(1000, 0, null, 6000), 5000);
+  assert.equal(elapsedMs(1000, 2000, null, 6000), 3000);
+  assert.equal(elapsedMs(1000, 0, 4000, 9000), 3000, "frozen while paused");
+  assert.equal(clock(65_400), "1:05");
 });

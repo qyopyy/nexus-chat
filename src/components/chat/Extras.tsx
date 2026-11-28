@@ -1,7 +1,7 @@
 "use client";
 
 import { ScheduleSheet } from "./ScheduleMessage";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Hourglass, Lock, Play, Plus, Square, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
 import { useChat } from "@/store/chat";
@@ -22,7 +22,10 @@ import { wumpCreateMeetup } from "@/lib/wumpTogether";
 import LocationPicker from "@/components/maps/LocationPicker";
 
 // ------------------------------------------------------------------ composer "+" menu
-export function ComposerPlus({ conversationId }: { conversationId: string }) {
+export type MenuItem = (emoji: string, label: string, sub: string, fn: () => void) => ReactNode;
+
+/** `phoneItems` are extra menu entries that only show on phones, where the chat bar keeps just + / text / send. */
+export function ComposerPlus({ conversationId, phoneItems }: { conversationId: string; phoneItems?: (item: MenuItem) => ReactNode }) {
   const me = useApp((s) => s.userId);
   const friendships = useApp((s) => s.friendships);
   const profiles = useApp((s) => s.profiles);
@@ -54,7 +57,8 @@ export function ComposerPlus({ conversationId }: { conversationId: string }) {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute bottom-12 left-0 z-50 w-72 animate-pop rounded-2xl bg-menu p-1.5 shadow-2xl ring-1 ring-white/10">
+          <div className="absolute bottom-12 left-0 z-50 max-h-[62vh] w-72 max-w-[calc(100vw-1rem)] animate-pop overflow-y-auto overscroll-contain rounded-2xl bg-menu p-1.5 shadow-2xl ring-1 ring-white/10">
+            {phoneItems && <div className="min-[521px]:hidden">{phoneItems(item)}</div>}
             {item("🥁", "Start a Jam", "A beat everyone in this chat edits live", () => void startJam(conversationId))}
             {item("🎹", "FL Studio lab", "Shortcuts, scales, MIDI export for producers", () => {
               useApp.setState({ hub: "apps", appsTool: "flstudio", mobileTab: "apps" });

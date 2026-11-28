@@ -22,7 +22,17 @@ export type NexusDrop = {
 
 const MAX = 100 * 1024 * 1024;
 
-export async function sendDrop(input: File, toUsername?: string) {
+export type SendDropOpts = {
+  /** 0..1 while the file uploads. */
+  onProgress?: (ratio: number) => void;
+  /** Cancel an upload in flight. Nothing is sent and nothing is left in storage. */
+  signal?: AbortSignal;
+};
+
+const isAbort = (error: unknown) => (error as { name?: string } | null)?.name === "AbortError";
+const isNetwork = (error: unknown) => /network error|timed out|failed to fetch|load failed/i.test(error instanceof Error ? error.message : "");
+
+export async function sendDrop(input: File, toUsername?: string, opts: SendDropOpts = {}) {
   const { ensureMp4 } = await import("./compressMedia");
   const file = await ensureMp4(input);
   const me = useApp.getState().userId;
@@ -33,13 +43,26 @@ export async function sendDrop(input: File, toUsername?: string) {
   let to = me;
   const name = toUsername?.trim().replace(/^@/, "");
   if (name) {
-    const { data, error } = await supabase.from("profiles").select("id").eq("username", name).maybeSingle();
-    if (error || !data) throw new Error("No Nexus user with that name");
-    to = data.id as string;
+    let found = await supabase.from("profiles").select("id").eq("username", name).maybeSingle();
+    if (!found.error && !found.data && name !== name.toLowerCase()) found = await supabase.from("profiles").select("id").eq("username", name.toLowerCase()).maybeSingle();
+    if (found.error || !found.data) throw new Error("No Nexus user with that name");
+    to = found.data.id as string;
   }
   const safe = file.name.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "drop";
   const path = `${me}/${crypto.randomUUID()}-${safe}`;
-  await xhrStorageUpload({ bucket: "nexus-drops", path, blob: file, contentType: file.type || "application/octet-stream" });
+  const upload = () => xhrStorageUpload({ bucket: "nexus-drops", path, blob: file, contentType: file.type || "application/octet-stream", onProgress: opts.onProgress, signal: opts.signal });
+  try {
+    await upload();
+  } catch (error) {
+    if (isAbort(error)) {
+      await supabase.storage.from("nexus-drops").remove([path]).catch(() => undefined);
+      throw error;
+    }
+    // One automatic retry for a flaky connection (the partial object is replaced; the path is ours alone).
+    if (!isNetwork(error)) throw error;
+    await supabase.storage.from("nexus-drops").remove([path]).catch(() => undefined);
+    await upload();
+  }
   const { error } = await supabase.from("nexus_drops").insert({
     from_user: me,
     to_user: to,

@@ -1,15 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useApp, toast } from "@/store/app";
-import { incomingDrops, openAndClaimDrop, sendDrop, type NexusDrop } from "@/lib/nexusDrop";
-
-const fmtBytes = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
-const ago = (iso: string) => {
-  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
-};
+import { useApp } from "@/store/app";
+import DropCenter from "./DropCenter";
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -39,47 +32,6 @@ function Tile({ href, emoji, title, body }: { href: string; emoji: string; title
 /** One place for Phone Link, Nexus Drop and the cloud inbox — built to work on iPhone. */
 export default function ShareHub() {
   const userId = useApp((s) => s.userId);
-  const [drops, setDrops] = useState<NexusDrop[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [to, setTo] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const pick = useRef<HTMLInputElement>(null);
-
-  const refresh = useCallback(async () => {
-    if (!userId) return;
-    try {
-      setDrops(await incomingDrops());
-      setErr(null);
-    } catch (e) {
-      setErr((e as Error).message);
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    void refresh();
-    const t = setInterval(() => void refresh(), 20_000);
-    const vis = () => document.visibilityState === "visible" && void refresh();
-    document.addEventListener("visibilitychange", vis);
-    return () => {
-      clearInterval(t);
-      document.removeEventListener("visibilitychange", vis);
-    };
-  }, [refresh]);
-
-  const send = async () => {
-    if (!file) return;
-    setBusy(true);
-    try {
-      await sendDrop(file, to);
-      toast(to.trim() ? `Sent to @${to.trim().replace(/^@/, "")}` : "Sent to your other devices", "success");
-      setFile(null);
-      if (pick.current) pick.current.value = "";
-    } catch (e) {
-      toast((e as Error).message, "error");
-    }
-    setBusy(false);
-  };
 
   return (
     <div className="min-h-full overflow-y-auto bg-[#070709] text-[#f4f1ea]">
@@ -102,47 +54,7 @@ export default function ShareHub() {
             </Card>
           ) : (
             <>
-              <Card title="Send a file">
-                <p className="text-sm text-[#a39e96]">Goes through the cloud, so it works on any network — Wi-Fi, 5G, anywhere. Up to 100 MB. Leave the name empty to send it to your other devices.</p>
-                <input ref={pick} type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => pick.current?.click()} className="rounded-full bg-white/10 px-4 py-2.5 text-sm font-semibold active:bg-white/20">
-                    {file ? "Change file" : "Choose a file or photo"}
-                  </button>
-                  <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="@friend (optional)" autoCapitalize="none" autoCorrect="off" className="min-w-0 flex-1 rounded-full bg-[#141414] px-4 py-2.5 text-sm outline-none" />
-                </div>
-                {file && (
-                  <div className="mt-3 flex items-center gap-3 rounded-2xl bg-black/30 p-3 text-sm">
-                    <span className="min-w-0 flex-1 truncate">{file.name}</span>
-                    <span className="shrink-0 text-[#a39e96]">{fmtBytes(file.size)}</span>
-                  </div>
-                )}
-                <button disabled={!file || busy} onClick={() => void send()} className="mt-3 w-full rounded-full bg-[#f4f1ea] py-3 text-sm font-bold text-[#070709] disabled:opacity-40">
-                  {busy ? "Sending…" : to.trim() ? `Send to @${to.trim().replace(/^@/, "")}` : "Send to my other devices"}
-                </button>
-              </Card>
-
-              <Card title="Inbox">
-                {err && <p className="mb-2 text-sm text-[#ff8a8a]">{err}</p>}
-                {drops.length === 0 ? (
-                  <p className="text-sm text-[#8d8880]">Nothing waiting. Files sent to this account show up here.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {drops.map((d) => (
-                      <li key={d.id} className="flex items-center gap-3 rounded-2xl bg-black/30 p-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-semibold">{d.name}</div>
-                          <div className="text-xs text-[#8d8880]">{fmtBytes(d.bytes)} · {ago(d.created_at)}</div>
-                        </div>
-                        <button type="button" onClick={() => void openAndClaimDrop(d).then(refresh).catch((e: Error) => toast(e.message, "error"))} className="shrink-0 rounded-full bg-[#7ee0c6] px-4 py-2 text-sm font-bold text-[#06201a]">
-                          Save
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <button type="button" onClick={() => void refresh()} className="mt-3 text-xs text-[#8d8880] underline">Refresh</button>
-              </Card>
+              <DropCenter />
 
               <Card title="Set up on your iPhone">
                 <ol className="list-decimal space-y-2 pl-5 text-sm text-[#cfcac1]">

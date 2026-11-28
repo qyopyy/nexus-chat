@@ -57,3 +57,29 @@ export function isFlat(peaks: number[]): boolean {
   if (!peaks.length || peaks.some((p) => !Number.isFinite(p))) return true;
   return Math.max(...peaks) - Math.min(...peaks) < 0.02;
 }
+
+/** Loudness 0.08..1 of one slice of microphone samples (Web Audio byte samples, 128 = silence). */
+export function levelFromBytes(buf: ArrayLike<number>): number {
+  if (!buf.length) return 0.08;
+  let sum = 0;
+  let peak = 0;
+  for (let i = 0; i < buf.length; i++) {
+    const v = (buf[i] - 128) / 128;
+    sum += v * v;
+    peak = Math.max(peak, Math.abs(v));
+  }
+  const rms = Math.sqrt(sum / buf.length);
+  const x = Math.pow(Math.min(1, rms * 3.4 + peak * 0.5), 0.8);
+  return Math.max(0.08, Math.min(1, x));
+}
+
+/** Recorded time in ms, not counting pauses. `pauseAt` is when the current pause began (null = running). */
+export function elapsedMs(started: number, pausedTotal: number, pauseAt: number | null, now: number): number {
+  const end = pauseAt ?? now;
+  return Math.max(0, end - started - pausedTotal);
+}
+
+export const clock = (ms: number) => {
+  const s = Math.floor(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};

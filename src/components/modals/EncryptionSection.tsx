@@ -4,9 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 import { Lock, ShieldCheck } from "lucide-react";
 import { toast } from "@/store/app";
 import { Label, Toggle } from "./settingsUi";
+import { AUTO_LOCK_CHOICES, validPin } from "@/lib/e2eePin";
 import {
   changePassphrase,
   clearPinnedKeys,
+  disableE2eePin,
+  e2eeAutoLock,
+  hasE2eePin,
+  setE2eeAutoLock,
+  unlockE2eeWithPin,
+  enableE2eePin,
   e2eeStrict,
   lockE2ee,
   myE2eeState,
@@ -32,12 +39,20 @@ export default function EncryptionSection() {
   const [oldPass, setOldPass] = useState("");
   const [busy, setBusy] = useState(false);
   const [strict, setStrict] = useState(false);
-  const [mode, setMode] = useState<"idle" | "change" | "reset">("idle");
+  const [mode, setMode] = useState<"idle" | "change" | "reset" | "pin">("idle");
+  const [pin, setPin] = useState("");
+  const [pin2, setPin2] = useState("");
+  const [hasPin, setHasPin] = useState(false);
+  const [auto, setAuto] = useState(0);
 
-  const refresh = useCallback(() => void myE2eeState().then(setSt), []);
+  const refresh = useCallback(() => {
+    setHasPin(hasE2eePin());
+    void myE2eeState().then(setSt);
+  }, []);
   useEffect(() => {
     refresh();
     setStrict(e2eeStrict());
+    setAuto(e2eeAutoLock());
     return onE2eeChange(refresh);
   }, [refresh]);
 
@@ -49,6 +64,8 @@ export default function EncryptionSection() {
       setPass("");
       setPass2("");
       setOldPass("");
+      setPin("");
+      setPin2("");
       setMode("idle");
     } catch (e) {
       toast(e instanceof Error ? e.message : "Something went wrong", "error");
@@ -91,6 +108,17 @@ export default function EncryptionSection() {
 
       {st.published && !st.unlocked && (
         <>
+          {hasPin && (
+            <div className="mb-4">
+              <Label>Unlock with your PIN</Label>
+              <input type="password" inputMode="numeric" autoComplete="off" maxLength={8} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} placeholder="PIN" className={field} />
+              <div className="mt-2">
+                <button className={primary} disabled={busy || !validPin(pin)} onClick={() => void run(() => unlockE2eeWithPin(pin), "Unlocked")}>
+                  Unlock with PIN
+                </button>
+              </div>
+            </div>
+          )}
           <Label>Unlock on this device</Label>
           <input type="password" autoComplete="current-password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Your encryption passphrase" className={field} />
           <div className="mt-3 flex flex-wrap gap-2">
@@ -123,6 +151,50 @@ export default function EncryptionSection() {
               setStrict(v);
             }}
           />
+          <div className="mt-3 rounded-lg bg-side p-3 text-sm">
+            <div className="font-semibold">Quick-unlock PIN {hasPin && <span className="ml-1 rounded-full bg-[#23a55a]/20 px-2 py-0.5 text-[11px] text-[#23a55a]">On</span>}</div>
+            <p className="mt-1 text-xs text-sub">Lock your encrypted chats and open them again with 4 to 8 digits instead of the long passphrase. The PIN stays on this device only; five wrong tries wait 30 seconds and ten remove the PIN. Use 6 or more digits if you can.</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button className={btn} onClick={() => setMode(mode === "pin" ? "idle" : "pin")}>
+                {hasPin ? "Change PIN" : "Set a PIN"}
+              </button>
+              {hasPin && (
+                <button className={btn} onClick={() => void run(async () => disableE2eePin(), "PIN removed")}>
+                  Remove PIN
+                </button>
+              )}
+            </div>
+            {hasPin && (
+              <label className="mt-3 flex items-center justify-between gap-3 text-xs">
+                <span>Lock automatically after the app was away for</span>
+                <select
+                  value={auto}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setE2eeAutoLock(v);
+                    setAuto(v);
+                  }}
+                  className="rounded-lg bg-chat px-2 py-1 text-sm outline-none"
+                >
+                  {AUTO_LOCK_CHOICES.map((m) => (
+                    <option key={m} value={m}>
+                      {m === 0 ? "never" : m >= 60 ? "1 hour" : `${m} min`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+          {mode === "pin" && (
+            <div className="mt-3 space-y-2">
+              <input type="password" autoComplete="current-password" value={oldPass} onChange={(e) => setOldPass(e.target.value)} placeholder="Your encryption passphrase" className={field} />
+              <input type="password" inputMode="numeric" autoComplete="off" maxLength={8} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} placeholder="New PIN (4 to 8 digits)" className={field} />
+              <input type="password" inputMode="numeric" autoComplete="off" maxLength={8} value={pin2} onChange={(e) => setPin2(e.target.value.replace(/\D/g, ""))} placeholder="Repeat PIN" className={field} />
+              <button className={primary} disabled={busy || !oldPass || !validPin(pin) || pin !== pin2} onClick={() => void run(() => enableE2eePin(oldPass, pin), "PIN saved")}>
+                Save PIN
+              </button>
+            </div>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
             <button className={btn} onClick={() => setMode(mode === "change" ? "idle" : "change")}>
               Change passphrase
