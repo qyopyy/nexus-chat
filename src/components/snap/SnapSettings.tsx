@@ -114,6 +114,8 @@ export default function SnapSettings({ onClose }: { onClose: () => void }) {
             <Switch label="Use the iPhone Camera app" hint="Off = the Nexus Snap camera (effects, avatar, timer, zoom dial). On = the shutter opens the real iPhone Camera instead." on={p.nativeCamera} onChange={(v) => set("nativeCamera", v)} />
           )}
           <Switch label="Enhance zoomed photos" hint="When you zoom in digitally, the photo is enlarged in gentle steps and its edges are sharpened so it stays crisp. Done on your phone, nothing is uploaded." on={p.zoomEnhance} onChange={(v) => set("zoomEnhance", v)} />
+          <Switch label="Keyboard shutter" hint="Space or Enter takes the photo on a computer or with a Bluetooth remote" on={p.keyboardShutter} onChange={(v) => set("keyboardShutter", v)} />
+          <Switch label="Date stamp on photos" hint="Prints the date and time in the corner of each photo" on={p.dateStamp} onChange={(v) => set("dateStamp", v)} />
           <Switch label="Zoom buttons and dial" hint="Lens buttons (.5 1× 2 3 5) with a ruler dial you can drag, like the iPhone camera" on={p.zoomControl} onChange={(v) => set("zoomControl", v)} />
           <Switch label="Double-tap to flip camera" on={p.doubleTapFlip} onChange={(v) => set("doubleTapFlip", v)} />
           <Switch label="Level guide" hint="A line that turns green when the phone is straight" on={p.levelGuide} onChange={(v) => void toggleLevel(v)} />

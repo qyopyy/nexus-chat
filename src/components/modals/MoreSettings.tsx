@@ -428,6 +428,7 @@ export function ChatPrefsBlock() {
       <Toggle label="Always reveal spoilers" hint="Text wrapped in ||double bars|| is hidden until clicked." checked={p.spoilersAutoReveal} onChange={(v) => setPref("spoilersAutoReveal", v)} />
       <Toggle label="Play message effects" checked={p.chatEffects} onChange={(v) => setPref("chatEffects", v)} />
       <Toggle label="Show link previews" hint="Cards for links in DMs and groups. Off saves data." checked={p.linkPreviews} onChange={(v) => setPref("linkPreviews", v)} />
+      <Toggle label="Ask before opening links" hint="Asks before opening a link to a site outside Nexus. Tricky-looking links always ask, even when this is off." checked={p.askBeforeLinks} onChange={(v) => setPref("askBeforeLinks", v)} />
       <Toggle label="Ask before deleting a message" checked={p.confirmDelete} onChange={(v) => setPref("confirmDelete", v)} />
       <Hr />
       <PremiumQualityBlock />

@@ -10,6 +10,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePrefs } from "./prefs";
+import { linkRisk, shouldAsk, warningText } from "./linkSafety";
 import { URL_RE } from "./unfurl";
 import { cn } from "./utils";
 import { CustomEmojiImg } from "@/components/ui/CustomEmoji";
@@ -169,7 +170,17 @@ function renderTokens(tokens: Token[], keyBase: string, createdAt?: string): Rea
         return <span key={k}>{tok.v}</span>;
       case "link":
         return (
-          <a key={k} href={tok.href} target="_blank" rel="noreferrer noopener" className="text-[#6ab7ff] underline-offset-2 hover:underline">
+          <a
+            key={k}
+            href={tok.href}
+            target="_blank"
+            rel="noreferrer noopener"
+            onClick={(e) => {
+              const risk = linkRisk(tok.href);
+              if (shouldAsk(risk, usePrefs.getState().askBeforeLinks) && !window.confirm(warningText(tok.href, risk))) e.preventDefault();
+            }}
+            className="text-[#6ab7ff] underline-offset-2 hover:underline"
+          >
             {tok.href}
           </a>
         );

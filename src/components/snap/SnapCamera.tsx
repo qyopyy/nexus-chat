@@ -43,6 +43,7 @@ import { roundPosition, sendText, snapNote, type GridStyle, type SnapPrefs } fro
 import { getPrefs, setLastGeo, setPrefs, usePrefs } from "@/lib/snapPrefsStore";
 import { SnapZoom } from "./SnapZoom";
 import { drawEnhanced, ENHANCE_FROM_ZOOM } from "@/lib/snapEnhance";
+import { drawStamp } from "@/lib/snapStamp";
 import { DIGITAL_ZOOM, clampZoom, digitalCrop, easeZoom, wheelFactor } from "@/lib/snapZoom";
 import { isIOSDevice, streamIsDead } from "@/lib/snapDevice";
 import { constraintLadder, effectiveQualityKey, isCompactHeight, isLevel, pinchDistance, pinchZoom, rollFromGravity, tapToVideoPoint, upgradeTo, type DeviceInfo } from "@/lib/snapDevice";
@@ -806,6 +807,7 @@ export default function SnapCamera({
     }
     const when = new Date();
     if (hasDeco({ overlay, caption, sticker })) decorate(ctx, cv.width, cv.height, { overlay, caption, sticker, when });
+    if (prefsRef.current.dateStamp) drawStamp(ctx, cv.width, cv.height, when);
     if (prefsRef.current.screenFlash && !prefsRef.current.reduceMotion) {
       setFlash(true);
       setTimeout(() => setFlash(false), 160);
@@ -994,6 +996,24 @@ export default function SnapCamera({
       }
     }, 1000);
   };
+
+  // Space / Enter (or a Bluetooth remote) works as the shutter on the camera screen
+  const shootRef = useRef(shoot);
+  shootRef.current = shoot;
+  const keyOk = prefs.keyboardShutter && !shot && !gallery && panel === null;
+  useEffect(() => {
+    if (!keyOk) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || (e.key !== " " && e.key !== "Enter")) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(input|textarea|select|button|a)$/i.test(t.tagName))) return;
+      if (!ready && !avatarReady) return;
+      e.preventDefault();
+      shootRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [keyOk, ready, avatarReady]);
 
   const retake = () => {
     saveSeq.current++; // an upload still running no longer touches the screen

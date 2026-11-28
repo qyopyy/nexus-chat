@@ -44,6 +44,8 @@ export type Prefs = {
   linkPreviews: boolean;
   /** ask before deleting a message */
   confirmDelete: boolean;
+  /** ask before opening links to sites outside Nexus (tricky-looking links always ask) */
+  askBeforeLinks: boolean;
   /** blur message previews, emails and phone numbers — for streaming / screen sharing */
   streamerMode: boolean;
   /** vibration feedback on taps (phones) */
@@ -87,6 +89,7 @@ export const PREF_DEFAULTS: Prefs = {
   hideBlocked: true,
   linkPreviews: true,
   confirmDelete: true,
+  askBeforeLinks: false,
   streamerMode: false,
   haptics: true,
   uiSounds: true,

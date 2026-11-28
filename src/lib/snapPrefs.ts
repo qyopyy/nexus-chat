@@ -13,6 +13,8 @@ export type SnapPrefs = {
   pinchZoom: boolean;
   zoomControl: boolean;
   zoomEnhance: boolean;
+  keyboardShutter: boolean;
+  dateStamp: boolean;
   nativeCamera: boolean;
   doubleTapFlip: boolean;
   shutterSound: boolean;
@@ -57,6 +59,8 @@ export const DEFAULT_PREFS: SnapPrefs = {
   pinchZoom: true,
   zoomControl: true,
   zoomEnhance: true,
+  keyboardShutter: true,
+  dateStamp: false,
   nativeCamera: false,
   doubleTapFlip: true,
   shutterSound: false,
