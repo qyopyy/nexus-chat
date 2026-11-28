@@ -24,6 +24,7 @@ import {
   ImageUpscale,
   KeyRound,
   Globe,
+  HardDrive,
   Link2,
   MapPin,
   Megaphone,
@@ -55,6 +56,7 @@ import BpmTap from "./BpmTap";
 import JsonLab from "./JsonLab";
 import TokenGen from "./TokenGen";
 import PassApp from "./PassApp";
+import DriveApp from "./DriveApp";
 import Base64Lab from "./Base64Lab";
 import UpcGenerator from "./UpcGenerator";
 import PitchSheet from "./PitchSheet";
@@ -102,6 +104,7 @@ type ToolId =
   | "json"
   | "token"
   | "pass"
+  | "drive"
   | "base64"
   | "focus"
   | "units"
@@ -328,6 +331,15 @@ const TOOLS: {
     Icon: Braces,
   },
   {
+    id: "drive",
+    name: "Nexus Drive",
+    tag: "Cloud drive · stream · share",
+    desc: "Your files in the cloud. Resumable uploads for huge files, folder sync, offline copies, built-in video and lossless audio streaming, and share links with passwords and expiry.",
+    bg: "linear-gradient(135deg,#38bdf8,#0b3a5c)",
+    emoji: "☁️",
+    Icon: HardDrive,
+  },
+  {
     id: "pass",
     name: "Nexus Pass",
     tag: "Passwords · 2FA · notes",
@@ -546,6 +558,7 @@ export default function AppsHub({ mobile }: { mobile?: boolean }) {
   if (tool === "metronome") return <Metronome mobile={mobile} onBack={backToGrid} />;
   if (tool === "bpm") return <BpmTap mobile={mobile} onBack={backToGrid} />;
   if (tool === "json") return <JsonLab mobile={mobile} onBack={backToGrid} />;
+  if (tool === "drive") return <DriveApp mobile={mobile} onBack={backToGrid} />;
   if (tool === "pass") return <PassApp mobile={mobile} onBack={backToGrid} />;
   if (tool === "token") return <TokenGen mobile={mobile} onBack={backToGrid} />;
   if (tool === "base64") return <Base64Lab mobile={mobile} onBack={backToGrid} />;
