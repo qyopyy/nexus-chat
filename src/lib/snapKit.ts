@@ -38,14 +38,21 @@ export const ALL_OVERLAYS = [...SNAP_OVERLAYS, ...PACK_FRAMES.map((f) => ({ key:
 export const overlayKeyAll = (k: string | null | undefined) => (ALL_OVERLAYS.some((o) => o.key === k) ? (k as string) : "none");
 export const stickerKeyAll = (s: string | null | undefined) => (s && (SNAP_STICKERS.includes(s) || ALL_PACK_STICKERS.includes(s)) ? s : "");
 
-export type DecoAll = Deco;
-export const hasDecoAll = (d: Pick<Deco, "overlay" | "caption" | "sticker"> & { watermark?: string }) =>
+export type DecoAll = Deco & {
+  frameColor?: string;
+  capStyle?: string;
+  capPos?: string;
+  stickerSize?: string;
+  stickerCorner?: string;
+  watermark?: string;
+};
+export const hasDecoAll = (d: Pick<DecoAll, "overlay" | "caption" | "sticker" | "watermark">) =>
   overlayKeyAll(d.overlay) !== "none" || !!cleanCaption(d.caption) || !!stickerKeyAll(d.sticker) || !!d.watermark?.trim();
 
 export const isClassicSticker = (s: string) => SNAP_STICKERS.includes(s);
 
 /** Is anything beyond the classic look in play? (the live preview then draws exactly what will be saved) */
-export function usesPack(d: Pick<Deco, "overlay" | "sticker" | "capStyle" | "capPos" | "stickerSize" | "stickerCorner" | "watermark">): boolean {
+export function usesPack(d: Pick<DecoAll, "overlay" | "sticker" | "capStyle" | "capPos" | "stickerSize" | "stickerCorner" | "watermark">): boolean {
   return (
     isPackFrame(d.overlay) ||
     (!!d.sticker && !isClassicSticker(d.sticker)) ||
@@ -58,7 +65,7 @@ export function usesPack(d: Pick<Deco, "overlay" | "sticker" | "capStyle" | "cap
 }
 
 /** Burn frame, sticker, caption and watermark into the picture. The classic look goes through the classic code unchanged. */
-export function decorateAll(g: CanvasRenderingContext2D, w: number, h: number, d: Deco) {
+export function decorateAll(g: CanvasRenderingContext2D, w: number, h: number, d: DecoAll) {
   const ov = overlayKeyAll(d.overlay);
   const sticker = stickerKeyAll(d.sticker);
   const cap = cleanCaption(d.caption);

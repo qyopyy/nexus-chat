@@ -28,8 +28,8 @@ import {
   snapShareText,
   type Facing,
 } from "@/lib/snap";
-import { CAPTION_MAX, SNAP_STICKERS, cleanCaption, stampText, type Deco } from "@/lib/snapFx";
-import { ALL_EFFECTS, ALL_OVERLAYS, BASE_EFFECT_KEYS, applyEffectAll, decorateAll, effectByKeyAll, hasDecoAll, overlayKeyAll, stickerKeyAll, usesPack } from "@/lib/snapKit";
+import { CAPTION_MAX, SNAP_STICKERS, cleanCaption, stampText } from "@/lib/snapFx";
+import { ALL_EFFECTS, ALL_OVERLAYS, BASE_EFFECT_KEYS, applyEffectAll, decorateAll, effectByKeyAll, hasDecoAll, overlayKeyAll, stickerKeyAll, usesPack, type DecoAll } from "@/lib/snapKit";
 import {
   CAPTION_POSITIONS,
   CAPTION_STYLES,
@@ -894,7 +894,7 @@ export default function SnapCamera({
       ctx.putImageData(img, 0, 0);
     }
     const when = new Date();
-    const deco: Deco = { overlay, caption: capShown, sticker, when, frameColor, capStyle, capPos, stickerSize, stickerCorner, watermark: flags.watermark };
+    const deco: DecoAll = { overlay, caption: capShown, sticker, when, frameColor, capStyle, capPos, stickerSize, stickerCorner, watermark: flags.watermark };
     if (hasDecoAll(deco)) decorateAll(ctx, cv.width, cv.height, deco);
     if (prefsRef.current.dateStamp) drawStamp(ctx, cv.width, cv.height, when);
     if (prefsRef.current.screenFlash && !prefsRef.current.reduceMotion) {
@@ -1751,7 +1751,7 @@ function Tool({ label, on, onClick, children }: { label: string; on: boolean; on
 }
 
 /** what the photo will look like: the classic look is plain CSS; anything from the Snap Pack is drawn by the same code that burns it in */
-function PreviewDeco({ deco, grid }: { deco: Deco; grid: GridStyle | null }) {
+function PreviewDeco({ deco, grid }: { deco: DecoAll; grid: GridStyle | null }) {
   const { overlay, sticker } = deco;
   const cap = cleanCaption(deco.caption);
   const pack = usesPack(deco);
@@ -1780,7 +1780,7 @@ function PreviewDeco({ deco, grid }: { deco: Deco; grid: GridStyle | null }) {
   );
 }
 
-function PackCanvas({ deco }: { deco: Deco }) {
+function PackCanvas({ deco }: { deco: DecoAll }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const key = [deco.overlay, deco.caption, deco.sticker, deco.frameColor, deco.capStyle, deco.capPos, deco.stickerSize, deco.stickerCorner, deco.watermark].join("|");
   useEffect(() => {

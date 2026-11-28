@@ -7,7 +7,7 @@ import { NEED, gate, useMyTier } from "@/lib/premium";
 import { updateMyProfile, uploadBanner } from "@/lib/data";
 import { MUSIC_PLATFORMS, PLATFORMS, audienceWord, fmtCount, linkLabel, normalizeLink, parseCount, platformById, spotifyEmbed } from "@/lib/links";
 import { supportsLiveFollowers } from "@/lib/followers";
-import type { ProfileLink } from "@/lib/types";
+import type { ProfileBorder, ProfileEffect, ProfileLink, ProfileTheme } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import SpotifyConnect from "@/components/music/SpotifyConnect";
 import CustomDomain from "./CustomDomain";
@@ -250,7 +250,7 @@ function ProfileStyle() {
   const me = useApp((s) => (s.userId ? s.profiles[s.userId] : undefined));
   const [preview, setPreview] = useState(0);
   // free accounts can try a look in the preview; saving it needs Nexus Lighting
-  const [pv, setPv] = useState<{ effect?: string; border?: string; theme?: string }>({});
+  const [pv, setPv] = useState<{ effect?: ProfileEffect; border?: ProfileBorder; theme?: ProfileTheme }>({});
   const tier = useMyTier();
   if (!me) return null;
   const locked = (id: string) => tier < NEED.flair && id !== "none";
@@ -259,7 +259,7 @@ function ProfileStyle() {
       setPv((x) => ({ ...x, [kind]: undefined }));
       return fn();
     }
-    setPv((x) => ({ ...x, [kind]: id }));
+    setPv((x) => ({ ...x, [kind]: id }) as typeof x);
     if (kind === "effect") setPreview((n) => n + 1);
     toast("Previewing. Saving it needs Nexus Lighting.", "info");
   };
