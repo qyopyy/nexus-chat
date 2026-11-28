@@ -1,5 +1,6 @@
 "use client";
 
+import { bannerStyle } from "@/lib/profileLook";
 import { useRef } from "react";
 import { AppWindow, Bell, ChevronRight, Copy, Crown, Disc3, Download, Gamepad2, Globe, Headphones, LayoutDashboard, Link2, LogOut, MapPin, Megaphone, Mic, Moon, Palette, Radio, Settings, Shield, Sparkles, Tv, UserPen, Users, Vault, Volume2, VolumeX } from "lucide-react";
 import { openDistributionHub } from "@/components/distribution/DistributionPanelHub";
@@ -48,7 +49,6 @@ export default function MobileMe() {
   if (!me) return null;
   const staff = roleRank(me.site_role) >= 2;
   const vipPlus = roleRank(me.site_role) >= 1;
-  const banner = me.banner_color || me.avatar_color;
 
   const row = (icon: React.ReactNode, tint: string, label: string, onClick: () => void, right?: React.ReactNode) => (
     <button onClick={onClick} className="flex w-full items-center gap-3.5 px-4 py-3 text-left active:bg-white/[.06]">
@@ -75,7 +75,7 @@ export default function MobileMe() {
 
       {/* profile hero */}
       <div className="mx-4 overflow-hidden rounded-3xl bg-side">
-        <div className="relative h-28" style={{ background: banner.startsWith("linear") ? banner : `linear-gradient(135deg, ${banner}, ${banner}55)` }}>
+        <div className="relative h-28" style={bannerStyle(me.banner_url, me.banner_color, me.avatar_color)}>
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(255,255,255,.25),transparent_50%)]" />
         </div>
         <div className="-mt-12 flex items-end gap-3 px-4">

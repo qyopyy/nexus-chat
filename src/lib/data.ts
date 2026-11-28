@@ -67,31 +67,49 @@ export async function updateMyProfile(
   if (!quiet) toast("Profile updated", "success");
 }
 
-/** Banner image (public avatars bucket, under your own folder) */
-export async function uploadBanner(file: File) {
+/** Shared by banner + avatar: keeps animated GIF/WebP animated, shrinks the rest, refuses what browsers can't show. */
+async function uploadProfileImage(kind: "banner" | "avatar", file: File): Promise<boolean> {
   const id = get().userId;
-  if (!id) return;
-  if (file.size > 1024 * 1024 * 1024) return toast("Banner must be under 1 GB", "error");
-  const { compressImage } = await import("./compressMedia");
-  const { blob } = await compressImage(file, 1920, 0.86);
-  const path = `${id}/banner-${Date.now()}.jpg`;
-  const { error } = await supabase.storage.from("avatars").upload(path, blob, { upsert: true, contentType: blob.type || "image/jpeg" });
-  if (error) return toast(errorText(error), "error");
-  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-  await updateMyProfile({ banner_url: data.publicUrl });
+  if (!id) return false;
+  try {
+    const { planProfileImage, isAnimatedWebp, uploadable } = await import("./profileLook");
+    const head = file.type === "image/webp" ? new Uint8Array(await file.slice(0, 256).arrayBuffer()) : new Uint8Array();
+    const plan = planProfileImage(file, isAnimatedWebp(head));
+    if (!plan.ok) {
+      toast(plan.error, "error");
+      return false;
+    }
+    let blob: Blob = file;
+    let ext = plan.ext;
+    if (!plan.keepOriginal) {
+      const { compressImage } = await import("./compressMedia");
+      blob = (await compressImage(file, kind === "banner" ? 1920 : 720, kind === "banner" ? 0.86 : 0.88)).blob;
+      const e = uploadable(blob.type);
+      if (!e) {
+        toast("This picture format isn't supported here. Use JPG, PNG or WebP.", "error");
+        return false;
+      }
+      ext = e;
+    }
+    const path = `${id}/${kind}-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("avatars").upload(path, blob, { upsert: true, contentType: blob.type || `image/${ext === "jpg" ? "jpeg" : ext}` });
+    if (error) {
+      toast(errorText(error), "error");
+      return false;
+    }
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    await updateMyProfile(kind === "banner" ? { banner_url: data.publicUrl } : { avatar_url: data.publicUrl });
+    return true;
+  } catch (error) {
+    toast(`Couldn't upload that picture: ${errorText(error)}`, "error");
+    return false;
+  }
 }
 
-export async function uploadAvatar(file: File) {
-  const id = get().userId;
-  if (!id) return;
-  const { compressImage } = await import("./compressMedia");
-  const { blob } = await compressImage(file, 720, 0.88);
-  const path = `${id}/avatar-${Date.now()}.jpg`;
-  const { error } = await supabase.storage.from("avatars").upload(path, blob, { upsert: true, contentType: blob.type || "image/jpeg" });
-  if (error) return toast(errorText(error), "error");
-  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-  await updateMyProfile({ avatar_url: data.publicUrl });
-}
+/** Banner image (public avatars bucket, under your own folder) */
+export const uploadBanner = (file: File) => uploadProfileImage("banner", file);
+
+export const uploadAvatar = (file: File) => uploadProfileImage("avatar", file);
 
 // ------------------------------------------------------------------ friends
 

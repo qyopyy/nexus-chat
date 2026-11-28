@@ -116,6 +116,8 @@ export const SNAP_EFFECTS: SnapEffect[] = [
   { key: "mono", label: "Mono", css: "grayscale(1)" },
   { key: "noir", label: "Noir", css: "grayscale(1) contrast(1.4)" },
 ];
+/** The ten original looks (always available); the Snap Pack adds more in snapKit.ts. */
+export const BASE_EFFECT_KEYS_LIST: readonly string[] = SNAP_EFFECTS.map((e) => e.key);
 export const effectByKey = (k: string | null | undefined) => SNAP_EFFECTS.find((e) => e.key === k) ?? SNAP_EFFECTS[0];
 
 const clamp = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : v);

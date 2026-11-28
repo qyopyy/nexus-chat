@@ -10,6 +10,16 @@ export const LIVE_DEFS: readonly LiveDef[] = [
   { key: "snap.zoom_enhance", kind: "bool", def: true, label: "Zoom enhance allowed", hint: "Off turns the zoomed-photo sharpening off for everyone" },
   { key: "snap.max_video_sec", kind: "choice", def: 180, options: [30, 60, 180, 300], label: "Longest Snap video (seconds)", hint: "Caps what people pick in their own settings" },
   { key: "snap.notice", kind: "text", def: "", max: 140, label: "Snap notice", hint: "A short line shown on top of the camera (empty = none)" },
+  { key: "snap.pack_looks", kind: "bool", def: true, label: "Snap Pack: extra looks", hint: "14 extra photo and video looks (Golden, Cyber, HDR…). Off keeps the original ten" },
+  { key: "snap.pack_frames", kind: "bool", def: true, label: "Snap Pack: extra frames", hint: "Neon, Scanlines, Cinema, Viewfinder, Rounded, Light leak, Glow, Film strip" },
+  { key: "snap.pack_stickers", kind: "bool", def: true, label: "Snap Pack: sticker packs", hint: "72 more stickers in 6 packs, with size and corner choices" },
+  { key: "snap.pack_captions", kind: "bool", def: true, label: "Snap Pack: caption styles", hint: "Bold, Neon, Outline, Typewriter, Meme, plus top / middle / bottom" },
+  { key: "snap.featured_look", kind: "text", def: "", max: 20, label: "Look of the day", hint: "A look key such as cyber or golden: it moves to the front of the list" },
+  { key: "snap.featured_frame", kind: "text", def: "", max: 20, label: "Frame of the day", hint: "A frame key such as neon or strip: shown with a star" },
+  { key: "snap.featured_sticker", kind: "text", def: "", max: 8, label: "Sticker of the day", hint: "One emoji, shown first in the sticker tray" },
+  { key: "snap.daily_prompt", kind: "text", def: "", max: 100, label: "Daily prompt", hint: "A photo idea shown on the camera (empty = none)" },
+  { key: "snap.event_caption", kind: "text", def: "", max: 60, label: "Event caption", hint: "Added to every photo that has no caption of its own (empty = none)" },
+  { key: "snap.watermark", kind: "text", def: "", max: 30, label: "Photo watermark", hint: "Small corner mark on every Snap photo, such as @nexus (empty = none)" },
   { key: "nexus.max_voice_sec", kind: "choice", def: 300, options: [60, 120, 300, 600], label: "Longest voice message (seconds)", hint: "Applies to chat voice messages" },
 ];
 

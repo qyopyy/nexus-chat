@@ -24,6 +24,7 @@ import Avatar, { statusLabel } from "./Avatar";
 import NameTag, { VerifiedCheck } from "./NameTag";
 import Sheet from "./Sheet";
 import { useIsMobile } from "@/lib/useMobile";
+import { bannerStyle } from "@/lib/profileLook";
 import { cn } from "@/lib/utils";
 import { BorderRing, EffectCanvas, themeBg } from "@/components/profile/ProfileFx";
 import { NowPlayingCard, liveNow } from "@/components/profile/NowPlaying";
@@ -121,7 +122,6 @@ export function CardBody({ userId }: { userId: string }) {
   const rank = myRank();
   const canModerate = userId !== me && rank >= 2 && roleRank(p.site_role) < rank;
   const canBadge = rank >= 3;
-  const banner = p.banner_color || p.avatar_color;
   const close = () => useApp.setState({ profileCard: null });
   const embed = spotifyEmbed(p.profile_song);
   const links = (p.links ?? []).filter((l) => l && l.url);
@@ -156,11 +156,7 @@ export function CardBody({ userId }: { userId: string }) {
     <div className="relative z-10 max-h-[min(86dvh,720px)] overflow-y-auto overscroll-contain md:max-h-[calc(100dvh-24px)]">
       <div
         className="relative h-28 bg-cover bg-center"
-        style={
-          p.banner_url
-            ? { backgroundImage: `url("${p.banner_url}")` }
-            : { background: banner.startsWith("linear") ? banner : `linear-gradient(135deg, ${banner}, ${banner}66)` }
-        }
+        style={bannerStyle(p.banner_url, p.banner_color, p.avatar_color)}
       >
         {p.member_no != null && (
           <button

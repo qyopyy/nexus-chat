@@ -1,5 +1,6 @@
 "use client";
 
+import { bannerBackground } from "@/lib/profileLook";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BadgeCheck, Camera, Clapperboard, Copy, Grid3x3, Heart, ImagePlus, MessageCircle, Play, UserPlus, X } from "lucide-react";
 import { useApp, toast } from "@/store/app";
@@ -35,7 +36,7 @@ export default function Profile({ username }: { username: string }) {
   return (
     <div className="pb-10">
       {/* background */}
-      <div className="relative h-44 w-full overflow-hidden sm:h-56 sm:rounded-b-3xl" style={{ background: banner ? undefined : `linear-gradient(135deg, ${p.banner_color || p.avatar_color || "#5865f2"}, #12062b)` }}>
+      <div className="relative h-44 w-full overflow-hidden sm:h-56 sm:rounded-b-3xl" style={{ background: banner ? undefined : bannerBackground(p.banner_color || p.avatar_color, "#5865f2", "#12062b") }}>
         {banner && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={banner} alt="" className="h-full w-full object-cover" />

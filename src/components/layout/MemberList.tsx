@@ -1,5 +1,6 @@
 "use client";
 
+import { bannerStyle } from "@/lib/profileLook";
 import { ActivityText, NowPlayingCard, liveNow } from "@/components/profile/NowPlaying";
 import { useEffect, useMemo } from "react";
 import { Crown, LogOut, MessageCircle, Phone, Video } from "lucide-react";
@@ -101,7 +102,7 @@ function ProfilePanel({ userId, conversationId }: { userId: string; conversation
   if (!p) return null;
   return (
     <div className="flex h-full flex-col overflow-y-auto">
-      <div className="h-28 shrink-0" style={{ background: `linear-gradient(135deg, ${p.banner_color || p.avatar_color}, #1e1f22)` }} />
+      <div className="h-28 shrink-0" style={bannerStyle(p.banner_url, p.banner_color, p.avatar_color)} />
       <div className="-mt-12 px-4">
         <Avatar userId={userId} size={88} showStatus ringClass="ring-side" className="rounded-full ring-[6px] ring-side" />
         <div className="mt-3 text-xl font-bold">

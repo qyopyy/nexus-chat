@@ -6,16 +6,13 @@ import { toast, useApp, conversationTitle, openModal } from "@/store/app";
 import { sendMessage } from "@/lib/data";
 import { createShare, removeVault, shareLink, uploadVault, type VaultFile, type VaultShare } from "@/lib/protect";
 import {
-  SNAP_EFFECTS,
   SNAP_EXPIRY,
   SNAP_FOLDER,
   SNAP_QUALITY,
   SNAP_RATIOS,
-  applyEffect,
   baseMime,
   cameraErrorMessage,
   cropRect,
-  effectByKey,
   expiryKey,
   fitBox,
   fitWithin,
@@ -31,7 +28,30 @@ import {
   snapShareText,
   type Facing,
 } from "@/lib/snap";
-import { CAPTION_MAX, SNAP_OVERLAYS, SNAP_STICKERS, cleanCaption, decorate, hasDeco, overlayKey, stampText, stickerKey } from "@/lib/snapFx";
+import { CAPTION_MAX, SNAP_STICKERS, cleanCaption, stampText, type Deco } from "@/lib/snapFx";
+import { ALL_EFFECTS, ALL_OVERLAYS, BASE_EFFECT_KEYS, applyEffectAll, decorateAll, effectByKeyAll, hasDecoAll, overlayKeyAll, stickerKeyAll, usesPack } from "@/lib/snapKit";
+import {
+  CAPTION_POSITIONS,
+  CAPTION_STYLES,
+  FRAME_COLORS,
+  PACK_FRAMES,
+  STICKER_CORNERS,
+  STICKER_PACKS,
+  STICKER_SIZES,
+  availableLooks,
+  captionPosKey,
+  captionStyleKey,
+  effectiveCaption,
+  frameAllowed,
+  frameColorKey,
+  lookAllowed,
+  packFlags,
+  parseRecents,
+  pushRecent,
+  stickerCornerKey,
+  stickerSizeKey,
+  surprise,
+} from "@/lib/snapPack";
 import { CUSTOM_SCENE, normalizeSceneKey, fileToSceneImage, sceneImageFromUrl, type SceneImage } from "@/lib/snapAvatar";
 import { DEFAULT_AVATAR, normalizeAvatar, type VAvatar } from "@/lib/vavatar";
 import { cn } from "@/lib/utils";
@@ -179,7 +199,7 @@ export default function SnapCamera({
   const evTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [quality, setQuality] = useState(() => qualityByKey(store.get("snap.quality")).key);
   const [ratio, setRatio] = useState(() => ratioByKey(store.get("snap.ratio")).key);
-  const [effect, setEffect] = useState(() => effectByKey(store.get("snap.effect")).key);
+  const [effectRaw, setEffect] = useState(() => effectByKeyAll(store.get("snap.effect")).key);
   const [expiry, setExpiry] = useState<number | null>(() => parseExpiry(store.get("snap.expiry")));
   const [panel, setPanel] = useState<null | "effects" | "settings" | "caption">(null);
   const [timer, setTimer] = useState(() => parseTimer(store.get("snap.timer")));
@@ -199,9 +219,17 @@ export default function SnapCamera({
   const hwZoom = useRef<{ busy: boolean; pending: number | null }>({ busy: false, pending: null });
   const zoomBoxRef = useRef<HTMLDivElement>(null);
   const [mirror, setMirror] = useState(() => store.get("snap.mirror") === "1");
-  const [overlay, setOverlay] = useState(() => overlayKey(store.get("snap.overlay")));
+  const [overlayRaw, setOverlay] = useState(() => overlayKeyAll(store.get("snap.overlay")));
   const [caption, setCaption] = useState("");
-  const [sticker, setSticker] = useState("");
+  const [stickerRaw, setSticker] = useState("");
+  // Snap Pack choices (remembered on this device; the server can switch whole groups off)
+  const [frameColor, setFrameColor] = useState(() => frameColorKey(store.get("snap.fcolor")));
+  const [capStyleRaw, setCapStyle] = useState(() => captionStyleKey(store.get("snap.capstyle")));
+  const [capPosRaw, setCapPos] = useState(() => captionPosKey(store.get("snap.cappos")));
+  const [stickerSizeRaw, setStickerSize] = useState(() => stickerSizeKey(store.get("snap.ssize")));
+  const [stickerCornerRaw, setStickerCorner] = useState(() => stickerCornerKey(store.get("snap.scorner")));
+  const [packTab, setPackTab] = useState<string>("classic");
+  const [recents, setRecents] = useState<string[]>(() => parseRecents(store.get("snap.recents")));
   const [avatarOn, setAvatarOn] = useState(false);
   const [avatarReady, setAvatarReady] = useState(false);
   const [scene, setScene] = useState(() => normalizeSceneKey(store.get("snap.scene")));
@@ -231,7 +259,16 @@ export default function SnapCamera({
   const qKey = effectiveQualityKey(quality, prefs.autoQuality, prefs.dataSaver, dev);
   const q = qualityByKey(qKey);
   const ratioDef = ratioByKey(ratio);
-  const fx = effectByKey(effect);
+  const flags = useMemo(() => packFlags(liveMap), [liveMap]);
+  const effect = lookAllowed(effectRaw, BASE_EFFECT_KEYS, flags);
+  const overlay = frameAllowed(overlayRaw, flags);
+  const sticker = flags.stickers || SNAP_STICKERS.includes(stickerRaw) ? stickerRaw : "";
+  const capStyle = flags.captions ? capStyleRaw : "bar";
+  const capPos = flags.captions ? capPosRaw : "bottom";
+  const stickerSize = flags.stickers ? stickerSizeRaw : "m";
+  const stickerCorner = flags.stickers ? stickerCornerRaw : "tr";
+  const capShown = effectiveCaption(caption, flags);
+  const fx = effectByKeyAll(effect);
   const recording = recMs !== null;
 
   const pick = {
@@ -244,7 +281,7 @@ export default function SnapCamera({
       store.set("snap.ratio", k);
     },
     effect(k: string) {
-      setEffect(effectByKey(k).key);
+      setEffect(effectByKeyAll(k).key);
       store.set("snap.effect", k);
     },
     timer() {
@@ -265,8 +302,54 @@ export default function SnapCamera({
       store.set("snap.mirror", on ? "1" : "0");
     },
     overlay(k: string) {
-      setOverlay(overlayKey(k));
-      store.set("snap.overlay", overlayKey(k));
+      setOverlay(overlayKeyAll(k));
+      store.set("snap.overlay", overlayKeyAll(k));
+    },
+    frameColor(k: string) {
+      setFrameColor(frameColorKey(k));
+      store.set("snap.fcolor", frameColorKey(k));
+    },
+    capStyle(k: string) {
+      setCapStyle(captionStyleKey(k));
+      store.set("snap.capstyle", captionStyleKey(k));
+    },
+    capPos(k: string) {
+      setCapPos(captionPosKey(k));
+      store.set("snap.cappos", captionPosKey(k));
+    },
+    stickerSize(k: string) {
+      setStickerSize(stickerSizeKey(k));
+      store.set("snap.ssize", stickerSizeKey(k));
+    },
+    stickerCorner(k: string) {
+      setStickerCorner(stickerCornerKey(k));
+      store.set("snap.scorner", stickerCornerKey(k));
+    },
+    sticker(e: string) {
+      const next = stickerKeyAll(e) === sticker ? "" : stickerKeyAll(e);
+      setSticker(next);
+      if (next) {
+        const r = pushRecent(recents, next);
+        setRecents(r);
+        store.set("snap.recents", JSON.stringify(r));
+      }
+    },
+    surprise() {
+      const r = surprise(flags, BASE_EFFECT_KEYS);
+      pick.effect(r.look);
+      pick.overlay(r.frame);
+      pick.frameColor(r.color);
+      setSticker(r.sticker);
+    },
+    reset() {
+      pick.effect("none");
+      pick.overlay("none");
+      pick.capStyle("bar");
+      pick.capPos("bottom");
+      pick.stickerSize("m");
+      pick.stickerCorner("tr");
+      setSticker("");
+      setCaption("");
     },
     scene(k: string) {
       setScene(normalizeSceneKey(k));
@@ -807,11 +890,12 @@ export default function SnapCamera({
     if (!ctx) return;
     if (pixelFx) {
       const img = ctx.getImageData(0, 0, cv.width, cv.height);
-      applyEffect(img.data, effect);
+      applyEffectAll(img.data, effect);
       ctx.putImageData(img, 0, 0);
     }
     const when = new Date();
-    if (hasDeco({ overlay, caption, sticker })) decorate(ctx, cv.width, cv.height, { overlay, caption, sticker, when });
+    const deco: Deco = { overlay, caption: capShown, sticker, when, frameColor, capStyle, capPos, stickerSize, stickerCorner, watermark: flags.watermark };
+    if (hasDecoAll(deco)) decorateAll(ctx, cv.width, cv.height, deco);
     if (prefsRef.current.dateStamp) drawStamp(ctx, cv.width, cv.height, when);
     if (prefsRef.current.screenFlash && !prefsRef.current.reduceMotion) {
       setFlash(true);
@@ -837,7 +921,7 @@ export default function SnapCamera({
       "image/jpeg",
       q.jpeg,
     );
-  }, [avatarOn, ready, ratioDef.r, q.maxEdge, q.jpeg, effect, facing, mirror, overlay, caption, sticker, finish]);
+  }, [avatarOn, ready, ratioDef.r, q.maxEdge, q.jpeg, effect, facing, mirror, overlay, capShown, sticker, frameColor, capStyle, capPos, stickerSize, stickerCorner, flags.watermark, finish]);
 
   const stopRecording = useCallback(() => {
     const r = recRef.current;
@@ -1099,6 +1183,11 @@ export default function SnapCamera({
           {limits.notice}
         </div>
       )}
+      {flags.dailyPrompt && !limits.notice && (
+        <div role="status" className="pointer-events-none absolute inset-x-0 top-0 z-[34] mx-auto mt-safe-3 w-fit max-w-[92%] rounded-full bg-white/90 px-3 py-1 text-center text-xs font-bold text-black shadow-lg">
+          📸 {flags.dailyPrompt}
+        </div>
+      )}
       {!limits.enabled && (
         <div role="alert" className="absolute inset-0 z-[36] grid place-items-center bg-black/95 p-8 text-center">
           <div>
@@ -1171,7 +1260,7 @@ export default function SnapCamera({
               {avatarOn && (
                 <SnapAvatarStage ref={avatarRef} cfg={avCfg} sceneKey={scene} bg={bg} ratio={ratioDef.r} longEdge={Math.min(q.maxEdge, 1920)} fxCss={fx.css} onReady={setAvatarReady} />
               )}
-              <PreviewDeco overlay={overlay} caption={caption} sticker={sticker} grid={grid && !avatarOn && prefs.gridStyle !== "off" ? prefs.gridStyle : null} />
+              <PreviewDeco deco={{ overlay, caption: capShown, sticker, when: new Date(), frameColor, capStyle, capPos, stickerSize, stickerCorner, watermark: flags.watermark }} grid={grid && !avatarOn && prefs.gridStyle !== "off" ? prefs.gridStyle : null} />
               {gestureOn && (
                 <div
                   className="absolute inset-0 z-[5] touch-none"
@@ -1300,8 +1389,12 @@ export default function SnapCamera({
           <div className={cn("relative z-20 px-4 pb-safe-2", compact ? "pt-1.5" : "pt-3")}>
             {panel === "effects" && (
               <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 text-[11px]">
-                {SNAP_EFFECTS.map((e) => (
+                <button type="button" onClick={() => pick.surprise()} className="shrink-0 rounded-full bg-gradient-to-r from-fuchsia-500 to-amber-400 px-3 py-1.5 font-bold text-black">
+                  🎲 Surprise me
+                </button>
+                {availableLooks(ALL_EFFECTS, BASE_EFFECT_KEYS, flags).map((e) => (
                   <button key={e.key} type="button" onClick={() => pick.effect(e.key)} className={cn("shrink-0 rounded-full px-3 py-1.5 font-semibold", effect === e.key ? "bg-white text-black" : "bg-white/10 text-white/80")}>
+                    {e.key !== "none" && e.key === flags.featuredLook ? "★ " : ""}
                     {e.label}
                   </button>
                 ))}
@@ -1316,23 +1409,88 @@ export default function SnapCamera({
                   maxLength={CAPTION_MAX}
                   className="w-full rounded-full bg-white/10 px-4 py-2 text-sm outline-none placeholder:text-white/40 focus:bg-white/15"
                 />
+                {flags.captions && (
+                  <>
+                    <Row label="Style">
+                      {CAPTION_STYLES.map((o) => (
+                        <Chip key={o.key} on={capStyle === o.key} onClick={() => pick.capStyle(o.key)}>
+                          {o.label}
+                        </Chip>
+                      ))}
+                    </Row>
+                    <Row label="Place">
+                      {CAPTION_POSITIONS.map((o) => (
+                        <Chip key={o.key} on={capPos === o.key} onClick={() => pick.capPos(o.key)}>
+                          {o.label}
+                        </Chip>
+                      ))}
+                    </Row>
+                  </>
+                )}
+                {flags.stickers && (
+                  <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="Sticker packs">
+                    {[{ key: "classic", label: "Classic" }, ...(recents.length ? [{ key: "recent", label: "Recent" }] : []), ...STICKER_PACKS].map((o) => (
+                      <Chip key={o.key} on={packTab === o.key} onClick={() => setPackTab(o.key)}>
+                        {o.label}
+                      </Chip>
+                    ))}
+                  </div>
+                )}
                 <div className="flex gap-1.5 overflow-x-auto pb-1">
                   <button type="button" onClick={() => setSticker("")} className={cn("shrink-0 rounded-full px-3 py-1.5 font-semibold", !sticker ? "bg-white text-black" : "bg-white/10")}>
                     No sticker
                   </button>
-                  {SNAP_STICKERS.map((e) => (
-                    <button key={e} type="button" onClick={() => setSticker(stickerKey(e) === sticker ? "" : e)} className={cn("shrink-0 rounded-full px-2.5 py-1 text-base", sticker === e ? "bg-white" : "bg-white/10")}>
+                  {[
+                    ...(flags.stickers && stickerKeyAll(flags.featuredSticker) ? [flags.featuredSticker] : []),
+                    ...(!flags.stickers || packTab === "classic" ? SNAP_STICKERS : packTab === "recent" ? recents : (STICKER_PACKS.find((p) => p.key === packTab)?.items ?? SNAP_STICKERS)),
+                  ].filter((e, i, arr) => arr.indexOf(e) === i).map((e) => (
+                    <button key={e} type="button" onClick={() => pick.sticker(e)} aria-label={`Sticker ${e}`} className={cn("shrink-0 rounded-full px-2.5 py-1 text-base", sticker === e ? "bg-white" : "bg-white/10")}>
+                      {e === flags.featuredSticker ? "★" : ""}
                       {e}
                     </button>
                   ))}
                 </div>
+                {flags.stickers && !!sticker && (
+                  <>
+                    <Row label="Size">
+                      {STICKER_SIZES.map((o) => (
+                        <Chip key={o.key} on={stickerSize === o.key} onClick={() => pick.stickerSize(o.key)}>
+                          {o.label}
+                        </Chip>
+                      ))}
+                    </Row>
+                    <Row label="Corner">
+                      {STICKER_CORNERS.map((o) => (
+                        <Chip key={o.key} on={stickerCorner === o.key} onClick={() => pick.stickerCorner(o.key)}>
+                          {o.label}
+                        </Chip>
+                      ))}
+                    </Row>
+                  </>
+                )}
                 <Row label="Frame">
-                  {SNAP_OVERLAYS.map((o) => (
+                  {ALL_OVERLAYS.filter((o) => flags.frames || !PACK_FRAMES.some((f) => f.key === o.key)).map((o) => (
                     <Chip key={o.key} on={overlay === o.key} onClick={() => pick.overlay(o.key)}>
+                      {o.key === flags.featuredFrame && o.key !== "none" ? "★ " : ""}
                       {o.label}
                     </Chip>
                   ))}
                 </Row>
+                {(PACK_FRAMES.some((f) => f.key === overlay && f.tinted) || capStyle === "neon" || capStyle === "outline") && (
+                  <Row label="Color">
+                    {FRAME_COLORS.map((o) => (
+                      <button key={o.key} type="button" aria-label={o.label} onClick={() => pick.frameColor(o.key)} className={cn("size-6 rounded-full ring-offset-2 ring-offset-black", frameColor === o.key ? "ring-2 ring-white" : "")} style={{ background: o.hex }} />
+                    ))}
+                  </Row>
+                )}
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={() => pick.surprise()} className="font-semibold text-white/80 underline">
+                    🎲 Surprise me
+                  </button>
+                  <button type="button" onClick={() => pick.reset()} className="font-semibold text-white/80 underline">
+                    Reset
+                  </button>
+                </div>
                 <p className="text-white/40">Captions, stickers and frames are burned into photos.</p>
               </div>
             )}
@@ -1592,26 +1750,59 @@ function Tool({ label, on, onClick, children }: { label: string; on: boolean; on
   );
 }
 
-/** what the photo will look like: caption bar, sticker, frame and grid drawn over the live preview (burned in at capture) */
-function PreviewDeco({ overlay, caption, sticker, grid }: { overlay: string; caption: string; sticker: string; grid: GridStyle | null }) {
-  const cap = cleanCaption(caption);
+/** what the photo will look like: the classic look is plain CSS; anything from the Snap Pack is drawn by the same code that burns it in */
+function PreviewDeco({ deco, grid }: { deco: Deco; grid: GridStyle | null }) {
+  const { overlay, sticker } = deco;
+  const cap = cleanCaption(deco.caption);
+  const pack = usesPack(deco);
   return (
     <div className="pointer-events-none absolute inset-0">
       {grid && <div className="absolute inset-0 opacity-40" style={{ backgroundImage: gridImage(grid) }} />}
-      {(overlay === "vignette" || overlay === "film") && <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.5) 100%)" }} />}
-      {overlay === "polaroid" && (
+      {pack ? (
+        <PackCanvas deco={deco} />
+      ) : (
         <>
-          <div className="absolute inset-x-0 top-0 h-[4.5%] bg-[#f6f3ec]" />
-          <div className="absolute inset-y-0 left-0 w-[4.5%] bg-[#f6f3ec]" />
-          <div className="absolute inset-y-0 right-0 w-[4.5%] bg-[#f6f3ec]" />
-          <div className="absolute inset-x-0 bottom-0 h-[15%] bg-[#f6f3ec]" />
+          {(overlay === "vignette" || overlay === "film") && <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.5) 100%)" }} />}
+          {overlay === "polaroid" && (
+            <>
+              <div className="absolute inset-x-0 top-0 h-[4.5%] bg-[#f6f3ec]" />
+              <div className="absolute inset-y-0 left-0 w-[4.5%] bg-[#f6f3ec]" />
+              <div className="absolute inset-y-0 right-0 w-[4.5%] bg-[#f6f3ec]" />
+              <div className="absolute inset-x-0 bottom-0 h-[15%] bg-[#f6f3ec]" />
+            </>
+          )}
+          {overlay === "date" && <span className="absolute bottom-3 right-4 font-mono text-sm font-bold text-[#ff9a1f]" style={{ textShadow: "0 0 6px rgba(255,120,0,.9)" }}>{stampText(new Date())}</span>}
+          {sticker && <span className="absolute right-[10%] top-[12%] rotate-12 text-5xl">{sticker}</span>}
+          {cap && <div className="absolute inset-x-0 top-[76%] bg-black/60 px-2 py-1.5 text-center text-sm font-bold">{cap}</div>}
         </>
       )}
-      {overlay === "date" && <span className="absolute bottom-3 right-4 font-mono text-sm font-bold text-[#ff9a1f]" style={{ textShadow: "0 0 6px rgba(255,120,0,.9)" }}>{stampText(new Date())}</span>}
-      {sticker && <span className="absolute right-[10%] top-[12%] rotate-12 text-5xl">{sticker}</span>}
-      {cap && <div className="absolute inset-x-0 top-[76%] bg-black/60 px-2 py-1.5 text-center text-sm font-bold">{cap}</div>}
     </div>
   );
+}
+
+function PackCanvas({ deco }: { deco: Deco }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const key = [deco.overlay, deco.caption, deco.sticker, deco.frameColor, deco.capStyle, deco.capPos, deco.stickerSize, deco.stickerCorner, deco.watermark].join("|");
+  useEffect(() => {
+    const c = ref.current;
+    if (!c) return;
+    const draw = () => {
+      const r = c.getBoundingClientRect();
+      const k = Math.min(2, window.devicePixelRatio || 1);
+      c.width = Math.max(1, Math.round(r.width * k));
+      c.height = Math.max(1, Math.round(r.height * k));
+      const g = c.getContext("2d");
+      if (!g) return;
+      g.clearRect(0, 0, c.width, c.height);
+      decorateAll(g, c.width, c.height, { ...deco, when: new Date() });
+    };
+    draw();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(draw) : null;
+    ro?.observe(c);
+    return () => ro?.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return <canvas ref={ref} className="absolute inset-0 size-full" data-testid="pack-preview" />;
 }
 
 const line = (dir: "right" | "bottom", at: number) => `linear-gradient(to ${dir}, transparent ${at - 0.15}%, #fff ${at}%, transparent ${at + 0.15}%)`;

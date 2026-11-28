@@ -79,16 +79,19 @@ export default function ProfileExtras() {
             e.target.value = "";
             if (!f) return;
             setBusy(true);
-            await uploadBanner(f);
-            setBusy(false);
+            try {
+              await uploadBanner(f);
+            } finally {
+              setBusy(false);
+            }
           }}
         />
-        <p className="mt-1 text-xs text-sub">Wide images look best (e.g. 1500×500). GIFs animate. Up to 8 MB.</p>
+        <p className="mt-1 text-xs text-sub">Wide images look best (e.g. 1500×500). GIFs and animated WebPs stay animated (up to 8 MB); other pictures are shrunk for you.</p>
       </div>
 
       {/* social links */}
       <div>
-        <Label>Links & artist profiles ({links.length}/20)</Label>
+        <Label>Links & artist profiles ({links.length}/30)</Label>
         <div className="space-y-1.5">
           {links.map((l, i) => (
             <LinkEditRow key={`${l.url}${i}`} link={l} onFollowers={(n) => void updateMyProfile({ links: links.map((x, j) => (j === i ? { ...x, followers: n } : x)) }, true)} onRemove={() => removeLink(i)} onUp={i > 0 ? () => move(i, -1) : undefined} onDown={i < links.length - 1 ? () => move(i, 1) : undefined} />
@@ -246,10 +249,24 @@ function LinkEditRow({ link, onRemove, onUp, onDown, onFollowers }: { link: Prof
 function ProfileStyle() {
   const me = useApp((s) => (s.userId ? s.profiles[s.userId] : undefined));
   const [preview, setPreview] = useState(0);
+  // free accounts can try a look in the preview; saving it needs Nexus Lighting
+  const [pv, setPv] = useState<{ effect?: string; border?: string; theme?: string }>({});
   const tier = useMyTier();
   if (!me) return null;
   const locked = (id: string) => tier < NEED.flair && id !== "none";
-  const tryPick = (id: string, fn: () => void) => (locked(id) ? void gate(NEED.flair, "Profile animations, borders and themes") : fn());
+  const tryPick = (id: string, fn: () => void, kind: "effect" | "border" | "theme") => {
+    if (!locked(id)) {
+      setPv((x) => ({ ...x, [kind]: undefined }));
+      return fn();
+    }
+    setPv((x) => ({ ...x, [kind]: id }));
+    if (kind === "effect") setPreview((n) => n + 1);
+    toast("Previewing. Saving it needs Nexus Lighting.", "info");
+  };
+  const shownEffect = pv.effect ?? me.profile_effect;
+  const shownBorder = pv.border ?? me.profile_border;
+  const shownTheme = pv.theme ?? me.profile_theme;
+  const pending = Object.values(pv).some(Boolean);
   const chip = (on: boolean) => cn("rounded-full px-3 py-1.5 text-sm font-semibold transition active:scale-95", on ? "bg-accent text-white" : "bg-rail hover:bg-hover");
   return (
     <div>
@@ -265,7 +282,7 @@ function ProfileStyle() {
             <div className="mb-1.5 text-xs text-sub">Background animation — plays when someone opens your profile</div>
             <div className="flex flex-wrap gap-1.5">
               {EFFECTS.map((e) => (
-                <button key={e.id} onClick={() => tryPick(e.id, () => (void updateMyProfile({ profile_effect: e.id === "none" ? null : e.id }, true), setPreview((n) => n + 1)))} className={chip((me.profile_effect ?? "none") === e.id)}>
+                <button key={e.id} onClick={() => tryPick(e.id, () => (void updateMyProfile({ profile_effect: e.id === "none" ? null : e.id }, true), setPreview((n) => n + 1)), "effect")} className={chip((shownEffect ?? "none") === e.id)}>
                   {e.emoji} {e.label}
                 </button>
               ))}
@@ -275,7 +292,7 @@ function ProfileStyle() {
             <div className="mb-1.5 text-xs text-sub">Animated border</div>
             <div className="flex flex-wrap gap-1.5">
               {BORDERS.map((b) => (
-                <button key={b.id} onClick={() => tryPick(b.id, () => void updateMyProfile({ profile_border: b.id === "none" ? null : b.id }, true))} className={chip((me.profile_border ?? "none") === b.id)}>
+                <button key={b.id} onClick={() => tryPick(b.id, () => void updateMyProfile({ profile_border: b.id === "none" ? null : b.id }, true), "border")} className={chip((shownBorder ?? "none") === b.id)}>
                   {b.css && <span className="mr-1 inline-block size-3 rounded-full align-[-1px]" style={{ background: b.css }} />}
                   {b.label}
                 </button>
@@ -286,7 +303,7 @@ function ProfileStyle() {
             <div className="mb-1.5 text-xs text-sub">Card theme</div>
             <div className="flex flex-wrap gap-1.5">
               {THEMES.map((t) => (
-                <button key={t.id} onClick={() => tryPick(t.id, () => void updateMyProfile({ profile_theme: t.id === "none" ? null : t.id }, true))} className={chip((me.profile_theme ?? "none") === t.id)}>
+                <button key={t.id} onClick={() => tryPick(t.id, () => void updateMyProfile({ profile_theme: t.id === "none" ? null : t.id }, true), "theme")} className={chip((shownTheme ?? "none") === t.id)}>
                   {t.bg && <span className="mr-1 inline-block size-3 rounded-full align-[-1px] ring-1 ring-white/20" style={{ background: t.bg }} />}
                   {t.label}
                 </button>
@@ -295,16 +312,21 @@ function ProfileStyle() {
           </div>
         </div>
         <div>
+          {pending && (
+            <button onClick={() => gate(NEED.flair, "Profile animations, borders and themes")} className="mb-2 w-full rounded-lg bg-[#ffd400]/15 px-2 py-1.5 text-xs font-semibold text-[#ffd400]">
+              Get Lighting to keep this look
+            </button>
+          )}
           <div className="mb-1.5 flex items-center justify-between text-xs text-sub">
             <span>Preview</span>
             <button onClick={() => setPreview((n) => n + 1)} className="font-semibold text-accent">
               Replay
             </button>
           </div>
-          <div className={cn("relative rounded-2xl", me.profile_border && me.profile_border !== "none" && "p-[2px]")}>
-            <BorderRing border={me.profile_border} />
-            <div className={cn("relative h-56 overflow-hidden rounded-2xl", !themeBg(me.profile_theme) && "bg-menu")} style={themeBg(me.profile_theme) ? { background: themeBg(me.profile_theme) } : undefined}>
-              <EffectCanvas key={preview} effect={me.profile_effect} accent={me.avatar_color} seed={String(preview)} />
+          <div className={cn("relative rounded-2xl", shownBorder && shownBorder !== "none" && "p-[2px]")}>
+            <BorderRing border={shownBorder} />
+            <div className={cn("relative h-56 overflow-hidden rounded-2xl", !themeBg(shownTheme) && "bg-menu")} style={themeBg(shownTheme) ? { background: themeBg(shownTheme) } : undefined}>
+              <EffectCanvas key={preview} effect={shownEffect} accent={me.avatar_color} seed={String(preview)} />
               <div className="relative z-10 flex h-full flex-col items-center justify-center gap-2 text-center">
                 <div className="grid size-16 place-items-center rounded-full text-2xl font-bold text-white" style={{ background: me.avatar_color }}>
                   {me.avatar_url ? <img src={me.avatar_url} alt="" className="size-full rounded-full object-cover" /> : me.display_name.slice(0, 1)}

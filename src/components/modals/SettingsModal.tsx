@@ -12,6 +12,8 @@ import { CAMERA_QUALITY_OPTIONS, effectiveCameraQuality, pickCameraQuality, useC
 import AvatarStudio from "@/components/vavatar/AvatarStudio";
 import DevelopmentModePanel from "@/components/admin/DevelopmentModePanel";
 import { updateMyProfile, uploadAvatar } from "@/lib/data";
+import { bannerBackground, bannerStyle, normalizeHex } from "@/lib/profileLook";
+import ColorPick from "@/components/ui/ColorPick";
 import { DECORATIONS, roleRank } from "@/lib/theme";
 import AppearanceSection from "./AppearanceSection";
 import { ArtistAlertsBlock, NotificationPrefsBlock } from "./ExtraSettings";
@@ -300,7 +302,6 @@ function AccountSection() {
     else d.setMinutes(d.getMinutes() + Number(v));
     return d.toISOString();
   };
-  const banner = me.banner_color || me.avatar_color;
   const animated = !!me.avatar_url && /\.(gif|webp|apng)(\?|$)/i.test(me.avatar_url);
 
   return (
@@ -316,7 +317,7 @@ function AccountSection() {
       <div className="overflow-hidden rounded-xl bg-rail">
         <div
           className="h-28 bg-cover bg-center"
-          style={me.banner_url ? { backgroundImage: `url("${me.banner_url}")` } : { background: banner.startsWith("linear") ? banner : `linear-gradient(135deg, ${banner}, ${banner}66)` }}
+          style={bannerStyle(me.banner_url, me.banner_color, me.avatar_color)}
         />
         <div className="flex flex-wrap items-end gap-4 px-4 pb-4">
           <div className="-mt-12">
@@ -428,14 +429,11 @@ function AccountSection() {
                   key={b || "default"}
                   onClick={() => void updateMyProfile({ banner_color: b || null })}
                   className={cn("h-9 w-16 rounded-lg transition hover:scale-105", (me.banner_color ?? "") === b && "ring-2 ring-white ring-offset-2 ring-offset-side")}
-                  style={{ background: b || me.avatar_color }}
+                  style={{ background: bannerBackground(b || me.avatar_color, me.avatar_color) }}
                   aria-label={b || "Default banner"}
                 />
               ))}
-              <label className="relative h-9 w-16 cursor-pointer overflow-hidden rounded-lg border-2 border-dashed border-sub" title="Custom color">
-                <input type="color" value={me.banner_color?.startsWith("#") ? me.banner_color : "#5865f2"} onChange={(e) => void updateMyProfile({ banner_color: e.target.value })} className="absolute inset-0 size-full cursor-pointer opacity-0" />
-                <span className="grid size-full place-items-center text-sm text-sub">+</span>
-              </label>
+              <ColorPick value={normalizeHex(me.banner_color) ?? "#5865f2"} onCommit={(hex) => void updateMyProfile({ banner_color: hex })} />
             </div>
           </div>
 
