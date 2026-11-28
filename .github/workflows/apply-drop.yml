@@ -1,46 +1,78 @@
-# One-upload deploys: upload drop.zip to the repo root (Add file > Upload files) and this unpacks it,
-# clears the stray root folders that flattened uploads leave behind, commits, and Vercel redeploys.
-name: Apply drop
+# Self-healing uploads. Every push to main runs this: files uploaded at the wrong level (for example "app/" instead of
+# "src/app/", which breaks the Next.js build) are moved to the right place, and a drop.zip in the repo root is unpacked.
+name: Fix upload layout
 on:
   push:
     branches: [main]
-    paths: ["drop.zip"]
 permissions:
   contents: write
 concurrency:
-  group: apply-drop
+  group: fix-layout
   cancel-in-progress: false
 jobs:
-  apply:
+  fix:
     if: github.actor == github.repository_owner
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Unpack drop.zip
+        with:
+          ref: main
+      - name: Repair layout
         run: |
+          #!/usr/bin/env bash
+          # Puts files that were uploaded at the wrong level back where Next.js expects them (src/...),
+          # newest upload wins, then applies drop.zip if there is one.
           set -euo pipefail
-          test -f drop.zip
-          mkdir /tmp/drop
-          unzip -q drop.zip -d /tmp/drop
-          # a zip made from a folder has one top folder: step into it
-          n=$(ls -A /tmp/drop | wc -l)
-          if [ "$n" = "1" ] && [ -d "/tmp/drop/$(ls -A /tmp/drop)" ] && [ ! -d /tmp/drop/src ]; then
-            mv "/tmp/drop/$(ls -A /tmp/drop)" /tmp/drop2
-            rm -rf /tmp/drop
-            mv /tmp/drop2 /tmp/drop
+          shopt -s nullglob
+
+          mv_into() { # mv_into <stray root dir> <real dir>: merge (stray files win, they are the newest) then remove the stray dir
+            mkdir -p "$2"
+            cp -a "$1"/. "$2"/
+            rm -rf -- "$1"
+            echo "moved $1 -> $2"
+          }
+
+          [ -d src ] || { echo "no src/ folder: nothing to repair"; exit 0; }
+
+          # 1) src/app, src/lib, src/store, src/components uploaded without the src/ part
+          for d in app lib store components; do
+            if [ -d "$d" ]; then mv_into "$d" "src/$d"; fi
+          done
+
+          # 2) src/components/<folder> uploaded without src/components/
+          for d in acetate admin apps browser bump call chat cloud distribution distro effects games gram guard layout linkbio live locator maps media modals music phone premium profile protect pulse radio share site snap space staff studio ui untitled vavatar videos; do
+            if [ -d "$d" ]; then mv_into "$d" "src/components/$d"; fi
+          done
+          # the one folder name that is also a real root folder: only loose .tsx files in it belong to src/components/mobile
+          for f in mobile/*.tsx; do mkdir -p src/components/mobile; mv -f "$f" src/components/mobile/; echo "moved $f"; done
+
+          # 3) loose component files and proxy.ts at the root
+          for f in *.tsx; do mkdir -p src/components; mv -f "$f" src/components/; echo "moved $f"; done
+          if [ -f proxy.ts ]; then mv -f proxy.ts src/proxy.ts; echo "moved proxy.ts"; fi
+
+          # 4) supabase/functions and supabase/migrations uploaded without supabase/
+          for d in functions migrations; do
+            if [ -d "$d" ]; then mv_into "$d" "supabase/$d"; fi
+          done
+
+          # 5) drop.zip (optional, full overlay)
+          if [ -f drop.zip ]; then
+            tmp=$(mktemp -d)
+            unzip -q drop.zip -d "$tmp"
+            n=$(ls -A "$tmp" | wc -l)
+            if [ "$n" = "1" ] && [ -d "$tmp/$(ls -A "$tmp")" ] && [ ! -d "$tmp/src" ]; then tmp="$tmp/$(ls -A "$tmp")"; fi
+            test -d "$tmp/src" || { echo "drop.zip has no src/ folder"; exit 1; }
+            rm -rf -- "$tmp/.git" "$tmp/.github"
+            cp -a "$tmp"/. ./
+            rm -f drop.zip
+            echo "applied drop.zip"
           fi
-          # safety: the app source must be inside, or stop before touching anything
-          test -f /tmp/drop/src/lib/ipaServer.ts || { echo "drop.zip has no src/ folder"; exit 1; }
-          # stray copies of src/* and supabase/* left at the root by flattened uploads
-          # (Next.js would pick a root app/ over src/app and break the build)
-          rm -rf app components lib store functions migrations workflows snap-ipa.yml
-          rsync -a --exclude '.git' --exclude '.github' /tmp/drop/ ./
-          rm -f drop.zip
       - name: Commit
         run: |
-          git config user.name "nexus-drop"
-          git config user.email "nexus-drop@users.noreply.github.com"
+          git config user.name "nexus-fix"
+          git config user.email "nexus-fix@users.noreply.github.com"
           git add -A
-          git diff --cached --quiet && { echo "nothing to change"; exit 0; }
-          git commit -q -m "Apply drop: unpack drop.zip, remove stray root folders"
+          git diff --cached --quiet && { echo "nothing to fix"; exit 0; }
+          git commit -q -m "Fix upload layout (move files into src/, unpack drop.zip)"
+          git pull -q --rebase origin main || true
           git push
