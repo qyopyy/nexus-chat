@@ -55,6 +55,17 @@ jobs:
             if [ -d "$d" ]; then mv_into "$d" "supabase/$d"; fi
           done
 
+          # 4b) leftovers of old experiments that older uploads put in the root lib/ and components/ folders: nothing imports them,
+          #     they pull in packages this app doesn't have (e.g. @upstash/redis) and break the type check
+          for p in src/lib/core src/lib/supabaseClient.ts \
+            src/components/ai_agents src/components/device_sync src/components/devtools src/components/enterprise src/components/gaming \
+            src/components/health src/components/nexusgram src/components/social src/components/spatial_ar_vr src/components/tiktok_studio \
+            src/components/web3 src/components/wump \
+            src/components/browser/BuiltInVPN.tsx src/components/browser/CommandPalette.tsx src/components/browser/CryptoWallet.tsx \
+            src/components/browser/PrivacyShield.tsx src/components/browser/SplitWorkspace.tsx src/components/chat/ChatTranslatorInput.tsx; do
+            if [ -e "$p" ]; then rm -rf -- "$p"; echo "removed $p"; fi
+          done
+
           # 5) drop.zip (optional, full overlay)
           if [ -f drop.zip ]; then
             tmp=$(mktemp -d)
