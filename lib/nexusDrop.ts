@@ -1,0 +1,157 @@
+"use client";
+
+import { supabase, errorText } from "./supabase";
+import { xhrStorageUpload } from "./storageUpload";
+import { scanUpload } from "./malwareGuard";
+import { useApp } from "@/store/app";
+import { thisDeviceId } from "./handset";
+
+export type NexusDrop = {
+  id: string;
+  from_user: string;
+  to_user: string;
+  from_device: string | null;
+  name: string;
+  path: string;
+  mime: string | null;
+  bytes: number;
+  created_at: string;
+  expires_at: string;
+  claimed_at: string | null;
+};
+
+const MAX = 100 * 1024 * 1024;
+
+export type SendDropOpts = {
+  /** 0..1 while the file uploads. */
+  onProgress?: (ratio: number) => void;
+  /** Cancel an upload in flight. Nothing is sent and nothing is left in storage. */
+  signal?: AbortSignal;
+};
+
+const isAbort = (error: unknown) => (error as { name?: string } | null)?.name === "AbortError";
+const isNetwork = (error: unknown) => /network error|timed out|failed to fetch|load failed/i.test(error instanceof Error ? error.message : "");
+
+export async function sendDrop(input: File, toUsername?: string, opts: SendDropOpts = {}) {
+  const { ensureMp4 } = await import("./compressMedia");
+  const file = await ensureMp4(input);
+  const me = useApp.getState().userId;
+  if (!me) throw new Error("Sign in required");
+  if (file.size <= 0 || file.size > MAX) throw new Error("Drops are limited to 100 MB");
+  const scan = await scanUpload(file, { fileName: file.name, context: "any" });
+  if (!scan.ok) throw new Error(scan.reason);
+  let to = me;
+  const name = toUsername?.trim().replace(/^@/, "");
+  if (name) {
+    let found = await supabase.from("profiles").select("id").eq("username", name).maybeSingle();
+    if (!found.error && !found.data && name !== name.toLowerCase()) found = await supabase.from("profiles").select("id").eq("username", name.toLowerCase()).maybeSingle();
+    if (found.error || !found.data) throw new Error("No Nexus user with that name");
+    to = found.data.id as string;
+  }
+  const safe = file.name.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "drop";
+  const path = `${me}/${crypto.randomUUID()}-${safe}`;
+  const upload = () => xhrStorageUpload({ bucket: "nexus-drops", path, blob: file, contentType: file.type || "application/octet-stream", onProgress: opts.onProgress, signal: opts.signal });
+  try {
+    await upload();
+  } catch (error) {
+    if (isAbort(error)) {
+      await supabase.storage.from("nexus-drops").remove([path]).catch(() => undefined);
+      throw error;
+    }
+    // One automatic retry for a flaky connection (the partial object is replaced; the path is ours alone).
+    if (!isNetwork(error)) throw error;
+    await supabase.storage.from("nexus-drops").remove([path]).catch(() => undefined);
+    await upload();
+  }
+  const { error } = await supabase.from("nexus_drops").insert({
+    from_user: me,
+    to_user: to,
+    from_device: thisDeviceId(),
+    name: safe,
+    path,
+    mime: file.type || null,
+    bytes: file.size,
+  });
+  if (error) {
+    await supabase.storage.from("nexus-drops").remove([path]);
+    throw new Error(errorText(error));
+  }
+}
+
+export async function incomingDrops() {
+  const me = useApp.getState().userId;
+  if (!me) return [] as NexusDrop[];
+  const { data, error } = await supabase
+    .from("nexus_drops")
+    .select("*")
+    .eq("to_user", me)
+    .is("claimed_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error) throw new Error(errorText(error));
+  return ((data ?? []) as NexusDrop[]).filter((row) => row.from_device !== thisDeviceId());
+}
+
+export async function openDrop(row: NexusDrop) {
+  const { data, error } = await supabase.storage.from("nexus-drops").createSignedUrl(row.path, 120, { download: row.name });
+  if (error) throw new Error(errorText(error));
+  if (!data?.signedUrl) throw new Error("Couldn't open that drop");
+  return data.signedUrl;
+}
+
+/** Mark a drop taken after its download tab has been navigated successfully. */
+export async function claimDrop(id: string) {
+  const { error } = await supabase.from("nexus_drops").update({ claimed_at: new Date().toISOString() }).eq("id", id).is("claimed_at", null);
+  if (error) throw new Error(errorText(error));
+}
+
+const isIosLike = () => typeof navigator !== "undefined" && (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+
+/** iPhone / iPad (Safari and the Nexus app): pop-up tabs are unreliable, so use the share sheet ("Save to Files", Photos, AirDrop) or a plain download. */
+async function saveDropIos(row: NexusDrop) {
+  const url = await openDrop(row);
+  if (row.bytes <= 50 * 1024 * 1024 && typeof navigator.share === "function" && typeof navigator.canShare === "function") {
+    try {
+      const blob = await (await fetch(url)).blob();
+      const file = new File([blob], row.name, { type: row.mime || blob.type || "application/octet-stream" });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: row.name });
+        await claimDrop(row.id);
+        return url;
+      }
+    } catch (error) {
+      if ((error as Error).name === "AbortError") throw new Error("Save cancelled. The file is still in your inbox.");
+      // any other failure (blocked share, fetch error): fall through to a normal download
+    }
+  }
+  window.location.assign(url);
+  await claimDrop(row.id);
+  return url;
+}
+
+export async function openAndClaimDrop(row: NexusDrop) {
+  if (isIosLike()) return saveDropIos(row);
+  // Reserve the tab while this call still has the click's user activation.
+  // The `noopener` window feature always returns null in modern browsers, so
+  // detach the blank tab's opener ourselves before requesting the signed URL.
+  const opened = window.open("about:blank", "_blank");
+  if (!opened) throw new Error("Allow pop-ups to open this drop. It is still in your inbox.");
+  let url: string;
+  try {
+    opened.opener = null;
+    url = await openDrop(row);
+    if (opened.closed) throw new Error("The download tab was closed. This drop is still in your inbox.");
+    opened.location.replace(url);
+  } catch (error) {
+    try { opened.close(); } catch { /* A detached tab must not hide the original error. */ }
+    throw error;
+  }
+  try {
+    await claimDrop(row.id);
+  } catch (error) {
+    // A claim failure must not close the download or pretend it never opened.
+    throw new Error(`The download opened, but we couldn't update your inbox: ${errorText(error)}`);
+  }
+  return url;
+}
